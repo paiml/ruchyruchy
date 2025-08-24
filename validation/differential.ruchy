@@ -1,0 +1,310 @@
+// Differential Testing Framework - Toyota Way Quality Validation
+// 
+// Validates that bootstrap compiler output matches production Ruchy compiler
+// bit-for-bit. This ensures correctness and self-compilation success.
+
+use std::process::{Command, Output, Stdio};
+use std::io::Write;
+use std::fs;
+use std::path::Path;
+use std::error::Error;
+use std::fmt;
+
+#[derive(Debug)]
+pub enum DiffError {
+    ProductionCompilerFailed(String),
+    BootstrapCompilerFailed(String), 
+    OutputMismatch { expected: String, actual: String },
+    RustCompilationFailed(String),
+    FileIOError(String),
+}
+
+impl fmt::Display for DiffError {
+    fun fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DiffError::ProductionCompilerFailed(msg) => {
+                write!(f, "Production Ruchy compiler failed: {}", msg)
+            }
+            DiffError::BootstrapCompilerFailed(msg) => {
+                write!(f, "Bootstrap compiler failed: {}", msg)
+            }
+            DiffError::OutputMismatch { expected, actual } => {
+                write!(f, "Output mismatch:\nExpected: {}\nActual: {}", expected, actual)
+            }
+            DiffError::RustCompilationFailed(msg) => {
+                write!(f, "Generated Rust code failed to compile: {}", msg)
+            }
+            DiffError::FileIOError(msg) => {
+                write!(f, "File I/O error: {}", msg)
+            }
+        }
+    }
+}
+
+impl Error for DiffError {}
+
+pub struct DifferentialTester {
+    production_compiler: String,
+    bootstrap_compiler: String,
+    temp_dir: String,
+}
+
+impl DifferentialTester {
+    pub fun new() -> Self {
+        Self {
+            production_compiler: "ruchy".to_string(),
+            bootstrap_compiler: "./target/debug/ruchyruchy".to_string(), 
+            temp_dir: "/tmp/ruchyruchy_diff".to_string(),
+        }
+    }
+    
+    pub fun with_compilers(production: &str, bootstrap: &str) -> Self {
+        Self {
+            production_compiler: production.to_string(),
+            bootstrap_compiler: bootstrap.to_string(),
+            temp_dir: "/tmp/ruchyruchy_diff".to_string(),
+        }
+    }
+    
+    // Main validation function - bit-identical output verification
+    pub fun validate_equivalence(&self, source: &str) -> Result<(), DiffError> {
+        // Ensure temp directory exists
+        fs::create_dir_all(&self.temp_dir)
+            .map_err(|e| DiffError::FileIOError(format!("Failed to create temp dir: {}", e)))?;
+        
+        // Write source to temp file
+        let source_path = format!("{}/test_source.ruchy", self.temp_dir);
+        fs::write(&source_path, source)
+            .map_err(|e| DiffError::FileIOError(format!("Failed to write source: {}", e)))?;
+        
+        // Compile with production Ruchy compiler
+        let expected_output = self.compile_with_production(&source_path)?;
+        
+        // Compile with bootstrap compiler
+        let actual_output = self.compile_with_bootstrap(&source_path)?;
+        
+        // Compare generated Rust code - MUST BE IDENTICAL
+        if expected_output != actual_output {
+            return Err(DiffError::OutputMismatch {
+                expected: String::from_utf8_lossy(&expected_output).to_string(),
+                actual: String::from_utf8_lossy(&actual_output).to_string(),
+            });
+        }
+        
+        // Verify both outputs compile with rustc
+        self.validate_rust_compilation(&actual_output)?;
+        
+        println!("✅ Differential validation passed: outputs are bit-identical");
+        Ok(())
+    }
+    
+    fun compile_with_production(&self, source_path: &str) -> Result<Vec<u8>, DiffError> {
+        let output = Command::new(&self.production_compiler)
+            .arg("compile")
+            .arg("--emit=rust")
+            .arg("-o")
+            .arg("-") // Output to stdout
+            .arg(source_path)
+            .output()
+            .map_err(|e| DiffError::ProductionCompilerFailed(format!("Failed to execute: {}", e)))?;
+        
+        if !output.status.success() {
+            return Err(DiffError::ProductionCompilerFailed(
+                String::from_utf8_lossy(&output.stderr).to_string()
+            ));
+        }
+        
+        Ok(output.stdout)
+    }
+    
+    fun compile_with_bootstrap(&self, source_path: &str) -> Result<Vec<u8>, DiffError> {
+        let output = Command::new(&self.bootstrap_compiler)
+            .arg("compile")
+            .arg("--emit=rust")
+            .arg("-o")
+            .arg("-") // Output to stdout
+            .arg(source_path)
+            .output()
+            .map_err(|e| DiffError::BootstrapCompilerFailed(format!("Failed to execute: {}", e)))?;
+        
+        if !output.status.success() {
+            return Err(DiffError::BootstrapCompilerFailed(
+                String::from_utf8_lossy(&output.stderr).to_string()
+            ));
+        }
+        
+        Ok(output.stdout)
+    }
+    
+    fun validate_rust_compilation(&self, rust_code: &[u8]) -> Result<(), DiffError> {
+        let rust_path = format!("{}/generated.rs", self.temp_dir);
+        fs::write(&rust_path, rust_code)
+            .map_err(|e| DiffError::FileIOError(format!("Failed to write Rust code: {}", e)))?;
+        
+        let output = Command::new("rustc")
+            .arg("--emit=metadata")
+            .arg("--crate-type=lib")
+            .arg(&rust_path)
+            .output()
+            .map_err(|e| DiffError::RustCompilationFailed(format!("Failed to execute rustc: {}", e)))?;
+        
+        if !output.status.success() {
+            return Err(DiffError::RustCompilationFailed(
+                String::from_utf8_lossy(&output.stderr).to_string()
+            ));
+        }
+        
+        Ok(())
+    }
+    
+    // Test suite for systematic validation
+    pub fun run_test_suite(&self) -> Result<(), DiffError> {
+        println!("🧪 Running differential test suite...");
+        
+        let test_cases = vec![
+            // Basic expressions
+            "fun main() { let x = 42; }",
+            
+            // Function definitions
+            "fun add(a: i32, b: i32) -> i32 { a + b }",
+            
+            // Control flow
+            "fun factorial(n: i32) -> i32 {
+                if n <= 1 {
+                    1
+                } else {
+                    n * factorial(n - 1)
+                }
+            }",
+            
+            // Pattern matching
+            "fun fibonacci(n: i32) -> i32 {
+                match n {
+                    0 => 0,
+                    1 => 1,
+                    _ => fibonacci(n - 1) + fibonacci(n - 2)
+                }
+            }",
+            
+            // Struct definitions
+            "struct Point {
+                x: i32,
+                y: i32,
+            }
+            
+            fun distance(p1: Point, p2: Point) -> f64 {
+                let dx = (p1.x - p2.x) as f64;
+                let dy = (p1.y - p2.y) as f64;
+                (dx * dx + dy * dy).sqrt()
+            }",
+        ];
+        
+        let mut passed = 0;
+        let mut failed = 0;
+        
+        for (i, test_case) in test_cases.iter().enumerate() {
+            print!("  Test {}: ", i + 1);
+            match self.validate_equivalence(test_case) {
+                Ok(()) => {
+                    println!("✅ PASS");
+                    passed += 1;
+                }
+                Err(e) => {
+                    println!("❌ FAIL - {}", e);
+                    failed += 1;
+                }
+            }
+        }
+        
+        println!("\n📊 Test Results: {} passed, {} failed", passed, failed);
+        
+        if failed > 0 {
+            Err(DiffError::OutputMismatch {
+                expected: format!("All {} tests to pass", test_cases.len()),
+                actual: format!("{} tests passed, {} failed", passed, failed),
+            })
+        } else {
+            println!("🎉 All differential tests passed!");
+            Ok(())
+        }
+    }
+    
+    // Performance comparison testing
+    pub fun benchmark_comparison(&self, source: &str, iterations: usize) -> Result<(), DiffError> {
+        println!("⚡ Running performance comparison benchmark...");
+        
+        let source_path = format!("{}/benchmark_source.ruchy", self.temp_dir);
+        fs::write(&source_path, source)
+            .map_err(|e| DiffError::FileIOError(format!("Failed to write source: {}", e)))?;
+        
+        // Benchmark production compiler
+        let start = std::time::Instant::now();
+        for _ in 0..iterations {
+            self.compile_with_production(&source_path)?;
+        }
+        let production_time = start.elapsed();
+        
+        // Benchmark bootstrap compiler
+        let start = std::time::Instant::now();
+        for _ in 0..iterations {
+            self.compile_with_bootstrap(&source_path)?;
+        }
+        let bootstrap_time = start.elapsed();
+        
+        let ratio = bootstrap_time.as_secs_f64() / production_time.as_secs_f64();
+        
+        println!("Production compiler: {:.2}ms per iteration", 
+                 production_time.as_secs_f64() * 1000.0 / iterations as f64);
+        println!("Bootstrap compiler: {:.2}ms per iteration", 
+                 bootstrap_time.as_secs_f64() * 1000.0 / iterations as f64);
+        println!("Performance ratio: {:.2}x", ratio);
+        
+        // Toyota Way: Performance target is <5% overhead (ratio < 1.05)
+        if ratio > 1.05 {
+            println!("⚠️  Performance target not met (>5% overhead)");
+        } else {
+            println!("✅ Performance target achieved (<5% overhead)");
+        }
+        
+        Ok(())
+    }
+}
+
+// Main function for CLI usage
+fun main() -> Result<(), Box<dyn Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    
+    let tester = DifferentialTester::new();
+    
+    match args.get(1).map(|s| s.as_str()) {
+        Some("suite") => {
+            tester.run_test_suite()?;
+        }
+        Some("benchmark") => {
+            let source = "fun factorial(n: i32) -> i32 {
+                if n <= 1 { 1 } else { n * factorial(n - 1) }
+            }";
+            tester.benchmark_comparison(source, 100)?;
+        }
+        Some("file") => {
+            if let Some(file_path) = args.get(2) {
+                let source = fs::read_to_string(file_path)?;
+                tester.validate_equivalence(&source)?;
+            } else {
+                eprintln!("Usage: {} file <path>", args[0]);
+                std::process::exit(1);
+            }
+        }
+        _ => {
+            println!("RuchyRuchy Differential Tester");
+            println!("Usage: {} [suite|benchmark|file <path>]", args[0]);
+            println!();
+            println!("Commands:");
+            println!("  suite     - Run complete differential test suite");
+            println!("  benchmark - Run performance comparison benchmark");
+            println!("  file      - Test specific file for equivalence");
+        }
+    }
+    
+    Ok(())
+}
