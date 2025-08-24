@@ -1,0 +1,168 @@
+// Extension: Generic Types and Constraints - BOOTSTRAP-021
+// Add support for parameterized types with trait constraints
+//
+// Working version for ruchy 1.9.3
+
+fn main() {
+    println("Extension: Generic Types and Constraints - BOOTSTRAP-021");
+    println("=========================================================");
+    
+    // Generic types overview
+    println("\n🔤 Generic Types Overview:");
+    println("  - Parameterized types for code reuse");
+    println("  - Type constraints and bounds");
+    println("  - Monomorphization for zero-cost abstractions");
+    println("  - Integration with existing type system");
+    println("  - Hindley-Milner inference with generics");
+    println("  - Rust-style trait bounds");
+    
+    // Generic syntax design
+    println("\n📝 Generic Syntax Design:");
+    println("  Generic function declaration:");
+    println("    fun map<T, U>(list: List<T>, f: fn(T) -> U) -> List<U> {");
+    println("      // Transform each element using f");
+    println("    }");
+    println("  ");
+    println("  Generic struct declaration:");
+    println("    struct Box<T> {");
+    println("      value: T");
+    println("    }");
+    println("  ");
+    println("  Generic with constraints:");
+    println("    fun sort<T: Ord>(list: List<T>) -> List<T> {");
+    println("      // Sort elements that implement Ord trait");
+    println("    }");
+    
+    // Type parameter inference
+    println("\n🔍 Type Parameter Inference:");
+    println("  Inference algorithm extension:");
+    println("    1. Collect type parameters from function signatures");
+    println("    2. Generate fresh type variables for each parameter");
+    println("    3. Apply constraints from trait bounds");
+    println("    4. Unify with call site types");
+    println("    5. Instantiate generic functions with concrete types");
+    println("  ");
+    println("  Example inference:");
+    println("    let numbers = [1, 2, 3];");
+    println("    let doubled = map(numbers, |x| x * 2);");
+    println("    // Infers: map<i32, i32>([i32], fn(i32) -> i32) -> [i32]");
+    
+    // Trait system integration
+    println("\n🎯 Trait System Integration:");
+    println("  Core traits for generic programming:");
+    println("    trait Eq<T> {");
+    println("      fun equals(self: T, other: T) -> bool;");
+    println("    }");
+    println("    ");
+    println("    trait Ord<T>: Eq<T> {");
+    println("      fun compare(self: T, other: T) -> Ordering;");
+    println("    }");
+    println("    ");
+    println("    trait Clone<T> {");
+    println("      fun clone(self: T) -> T;");
+    println("    }");
+    
+    // Generic collections
+    println("\n📦 Generic Collections:");
+    println("  List implementation:");
+    println("    struct List<T> {");
+    println("      items: [T],");
+    println("      length: i32");
+    println("    }");
+    println("    ");
+    println("    impl<T> List<T> {");
+    println("      fun new() -> List<T> { List { items: [], length: 0 } }");
+    println("      fun push(mut self: List<T>, item: T) -> () { ... }");
+    println("      fun get(self: List<T>, index: i32) -> Option<T> { ... }");
+    println("      fun map<U>(self: List<T>, f: fn(T) -> U) -> List<U> { ... }");
+    println("    }");
+    
+    // Monomorphization strategy
+    println("\n⚡ Monomorphization Strategy:");
+    println("  Code generation approach:");
+    println("    1. Collect all instantiations of generic functions");
+    println("    2. Generate specialized versions for each type combination");
+    println("    3. Replace generic calls with calls to specialized versions");
+    println("    4. Eliminate unused instantiations");
+    println("  ");
+    println("  Example:");
+    println("    // Generic source:");
+    println("    fun identity<T>(x: T) -> T { x }");
+    println("    ");
+    println("    // Generated specialized versions:");
+    println("    fun identity_i32(x: i32) -> i32 { x }");
+    println("    fun identity_string(x: String) -> String { x }");
+    
+    // Type bounds checking
+    println("\n🔒 Type Bounds Checking:");
+    println("  Constraint satisfaction:");
+    println("    fun requires_ord<T: Ord>(x: T, y: T) -> bool {");
+    println("      x.compare(y) == Ordering::Less");
+    println("    }");
+    println("    ");
+    println("    // At call site:");
+    println("    requires_ord(5, 3)     // ✅ i32 implements Ord");
+    println("    requires_ord(\"a\", \"b\") // ✅ String implements Ord");
+    println("    requires_ord([], [])   // ❌ List<T> doesn't implement Ord");
+    
+    // Higher-kinded types (future)
+    println("\n🚀 Higher-Kinded Types (Future):");
+    println("  Advanced generic programming:");
+    println("    trait Functor<F<_>> {");
+    println("      fun map<A, B>(self: F<A>, f: fn(A) -> B) -> F<B>;");
+    println("    }");
+    println("    ");
+    println("    trait Monad<M<_>>: Functor<M<_>> {");
+    println("      fun pure<A>(value: A) -> M<A>;");
+    println("      fun bind<A, B>(self: M<A>, f: fn(A) -> M<B>) -> M<B>;");
+    println("    }");
+    
+    // Integration with existing compiler stages
+    println("\n🔗 Integration with Existing Compiler Stages:");
+    println("  Stage 1: Parser extensions:");
+    println("    - Parse generic type parameters <T, U, ...>");
+    println("    - Parse trait bounds T: Trait + OtherTrait");
+    println("    - Parse generic struct and function declarations");
+    println("  ");
+    println("  Stage 2: Type checker extensions:");
+    println("    - Extend unification for generic types");
+    println("    - Implement trait bound checking");
+    println("    - Generate instantiation constraints");
+    println("  ");
+    println("  Stage 3: Code generator extensions:");
+    println("    - Monomorphization pass before Rust emission");
+    println("    - Generate specialized function names");
+    println("    - Emit Rust generics or concrete types");
+    
+    // Performance considerations
+    println("\n⚡ Performance Considerations:");
+    println("  Compile-time performance:");
+    println("    - Lazy instantiation: Only generate used specializations");
+    println("    - Caching: Reuse generated specializations");
+    println("    - Incremental: Only recompile changed instantiations");
+    println("  ");
+    println("  Runtime performance:");
+    println("    - Zero-cost abstractions through monomorphization");
+    println("    - Inline specialized functions when beneficial");
+    println("    - Eliminate boxing where possible");
+    
+    // Testing strategy
+    println("\n🧪 Testing Strategy:");
+    println("  Generic function tests:");
+    println("    - Identity functions with various types");
+    println("    - Container operations (map, filter, reduce)");
+    println("    - Trait-constrained functions");
+    println("  ");
+    println("  Type inference tests:");
+    println("    - Automatic type parameter deduction");
+    println("    - Complex constraint solving");
+    println("    - Error cases and helpful messages");
+    
+    println("\n✅ BOOTSTRAP-021 Complete: Generic types architecture designed");
+    println("   - Comprehensive generic type system design");
+    println("   - Integration with existing type inference");
+    println("   - Monomorphization strategy for zero-cost abstractions");
+    println("   - Trait bounds and constraint checking");
+    println("   - Ready for implementation in compiler pipeline");
+    println("   Ready for BOOTSTRAP-022: Pattern matching extensions");
+}
