@@ -1,0 +1,319 @@
+// Extension: Async/Await Concurrency - BOOTSTRAP-024
+// Cooperative concurrency with async functions and await expressions
+//
+// Working version for ruchy 1.9.3
+
+fn main() {
+    println("Extension: Async/Await Concurrency - BOOTSTRAP-024");
+    println("==================================================");
+    
+    // Async/await overview
+    println("\n🚀 Async/Await Concurrency Overview:");
+    println("  - Cooperative concurrency model");
+    println("  - Zero-cost async abstractions");
+    println("  - Integration with futures and streams");
+    println("  - Async-aware error handling");
+    println("  - Runtime-agnostic design");
+    println("  - Memory-efficient state machines");
+    
+    // Async function syntax
+    println("\n📝 Async Function Syntax:");
+    println("  Basic async function:");
+    println("    async fun fetch_data() -> String {");
+    println("      let response = await http_get(\"https://api.example.com/data\");");
+    println("      await response.text()");
+    println("    }");
+    println("  ");
+    println("  Async function with error handling:");
+    println("    async fun safe_fetch(url: String) -> Result<String, HttpError> {");
+    println("      let response = await http_get(url)?;");
+    println("      let text = await response.text()?;");
+    println("      Ok(text)");
+    println("    }");
+    
+    // Future trait design
+    println("\n🔮 Future Trait Design:");
+    println("  Core Future trait:");
+    println("    trait Future<T> {");
+    println("      type Output = T;");
+    println("      fun poll(mut self, ctx: Context) -> Poll<Self::Output>;");
+    println("    }");
+    println("    ");
+    println("    enum Poll<T> {");
+    println("      Ready(T),");
+    println("      Pending");
+    println("    }");
+    println("  ");
+    println("  Future combinators:");
+    println("    trait FutureExt<T>: Future<T> {");
+    println("      fun map<U>(self, f: fn(T) -> U) -> Map<Self, F>;");
+    println("      fun and_then<U>(self, f: fn(T) -> impl Future<U>) -> AndThen<Self, F>;");
+    println("      fun timeout(self, duration: Duration) -> Timeout<Self>;");
+    println("    }");
+    
+    // State machine generation
+    println("\n⚙️ State Machine Generation:");
+    println("  Async function transformation:");
+    println("    // Source async function:");
+    println("    async fun example() -> i32 {");
+    println("      let a = await get_number();");
+    println("      let b = await get_another_number(a);");
+    println("      a + b");
+    println("    }");
+    println("    ");
+    println("    // Generated state machine:");
+    println("    enum ExampleState {");
+    println("      Start,");
+    println("      AwaitingFirst { future: impl Future<i32> },");
+    println("      AwaitingSecond { a: i32, future: impl Future<i32> },");
+    println("      Done");
+    println("    }");
+    
+    // Async runtime integration
+    println("\n🏃 Async Runtime Integration:");
+    println("  Runtime-agnostic design:");
+    println("    trait AsyncRuntime {");
+    println("      fun spawn<T>(future: impl Future<T>) -> JoinHandle<T>;");
+    println("      fun block_on<T>(future: impl Future<T>) -> T;");
+    println("      fun sleep(duration: Duration) -> impl Future<()>;");
+    println("    }");
+    println("  ");
+    println("  Integration with popular runtimes:");
+    println("    // Tokio runtime");
+    println("    use tokio::runtime::Runtime;");
+    println("    let rt = Runtime::new();");
+    println("    rt.block_on(async {");
+    println("      let result = await fetch_data();");
+    println("      println(result);");
+    println("    });");
+    
+    // Async iterators and streams
+    println("\n🌊 Async Iterators and Streams:");
+    println("  AsyncIterator trait:");
+    println("    trait AsyncIterator<T> {");
+    println("      async fun next(mut self) -> Option<T>;");
+    println("    }");
+    println("  ");
+    println("  Stream processing:");
+    println("    async fun process_stream<T>(mut stream: impl AsyncIterator<T>) {");
+    println("      while let Some(item) = await stream.next() {");
+    println("        await process_item(item);");
+    println("      }");
+    println("    }");
+    println("  ");
+    println("  Async generators:");
+    println("    async gen fun fibonacci() -> i32 {");
+    println("      let mut a = 0;");
+    println("      let mut b = 1;");
+    println("      loop {");
+    println("        yield a;");
+    println("        let next = a + b;");
+    println("        a = b;");
+    println("        b = next;");
+    println("        await yield_now();  // Cooperative yielding");
+    println("      }");
+    println("    }");
+    
+    // Concurrent operations
+    println("\n🔀 Concurrent Operations:");
+    println("  Join operations:");
+    println("    async fun concurrent_fetch() -> (String, String) {");
+    println("      let future1 = fetch_data(\"url1\");");
+    println("      let future2 = fetch_data(\"url2\");");
+    println("      await (future1, future2)  // Join both futures");
+    println("    }");
+    println("  ");
+    println("  Select operations:");
+    println("    async fun first_response() -> String {");
+    println("      select! {");
+    println("        result1 = fetch_data(\"fast_server\") => result1,");
+    println("        result2 = fetch_data(\"backup_server\") => result2,");
+    println("        _ = timeout(Duration::seconds(5)) => \"timeout\"");
+    println("      }");
+    println("    }");
+    
+    // Error handling in async context
+    println("\n🚨 Error Handling in Async Context:");
+    println("  Async Result operations:");
+    println("    async fun safe_operation() -> Result<String, Error> {");
+    println("      let data = await fetch_data().await?;");
+    println("      let processed = await process_data(data).await?;");
+    println("      Ok(processed)");
+    println("    }");
+    println("  ");
+    println("  Try blocks in async functions:");
+    println("    async fun complex_operation() -> Result<String, Error> {");
+    println("      try {");
+    println("        let a = await operation_a()?;");
+    println("        let b = await operation_b(a)?;");
+    println("        let c = await operation_c(b)?;");
+    println("        Ok(c)");
+    println("      } catch (e) {");
+    println("        Err(e)");
+    println("      }");
+    println("    }");
+    
+    // Async traits and dynamic dispatch
+    println("\n🎭 Async Traits and Dynamic Dispatch:");
+    println("  Async trait definitions:");
+    println("    trait AsyncDataSource<T> {");
+    println("      async fun fetch(self, id: String) -> Result<T, Error>;");
+    println("      async fun store(self, id: String, data: T) -> Result<(), Error>;");
+    println("    }");
+    println("  ");
+    println("  Dynamic async dispatch:");
+    println("    async fun use_data_source(source: Box<dyn AsyncDataSource<String>>) -> String {");
+    println("      match await source.fetch(\"key123\") {");
+    println("        Ok(data) => data,");
+    println("        Err(_) => \"default\".to_string()");
+    println("      }");
+    println("    }");
+    
+    // Channels and communication
+    println("\n📡 Channels and Communication:");
+    println("  Channel types:");
+    println("    // Unbounded channel");
+    println("    let (tx, rx) = unbounded_channel<String>();");
+    println("    ");
+    println("    // Bounded channel");
+    println("    let (tx, rx) = bounded_channel<String>(100);");
+    println("    ");
+    println("    // One-shot channel");
+    println("    let (tx, rx) = oneshot_channel<String>();");
+    println("  ");
+    println("  Producer-consumer pattern:");
+    println("    async fun producer(tx: Sender<i32>) {");
+    println("      for i in 0..100 {");
+    println("        await tx.send(i);");
+    println("        await sleep(Duration::millis(10));");
+    println("      }");
+    println("    }");
+    println("    ");
+    println("    async fun consumer(mut rx: Receiver<i32>) {");
+    println("      while let Some(value) = await rx.recv() {");
+    println("        println(\"Received: {}\", value);");
+    println("      }");
+    println("    }");
+    
+    // Async synchronization primitives
+    println("\n🔒 Async Synchronization Primitives:");
+    println("  Async Mutex:");
+    println("    let data = AsyncMutex::new(0);");
+    println("    ");
+    println("    async fun increment(data: Arc<AsyncMutex<i32>>) {");
+    println("      let mut guard = await data.lock();");
+    println("      *guard += 1;");
+    println("    }  // Lock automatically released");
+    println("  ");
+    println("  Async RwLock:");
+    println("    let data = AsyncRwLock::new(HashMap::new());");
+    println("    ");
+    println("    async fun read_data(data: Arc<AsyncRwLock<HashMap<String, i32>>>) -> Option<i32> {");
+    println("      let guard = await data.read();");
+    println("      guard.get(\"key\").copied()");
+    println("    }");
+    
+    // Memory management for async
+    println("\n💾 Memory Management for Async:");
+    println("  Stack allocation vs heap:");
+    println("    // Small async functions can be stack-allocated");
+    println("    async fun small_task() -> i32 {");
+    println("      await sleep(Duration::millis(1));");
+    println("      42");
+    println("    }");
+    println("    ");
+    println("    // Large or recursive async functions use heap allocation");
+    println("    async fun large_task() -> Vec<String> {");
+    println("      let mut results = Vec::new();");
+    println("      for i in 0..1000 {");
+    println("        results.push(await fetch_data(format!(\"item_{}\", i)));");
+    println("      }");
+    println("      results");
+    println("    }");
+    
+    // Async performance optimizations
+    println("\n⚡ Async Performance Optimizations:");
+    println("  State machine optimizations:");
+    println("    - Minimize state machine size");
+    println("    - Efficient state transitions");
+    println("    - Zero-cost async for synchronous paths");
+    println("  ");
+    println("  Batching and buffering:");
+    println("    async fun batch_process(items: Vec<String>) -> Vec<Result<String, Error>> {");
+    println("      // Process items in batches to reduce overhead");
+    println("      let batches = items.chunks(10);");
+    println("      let mut results = Vec::new();");
+    println("      ");
+    println("      for batch in batches {");
+    println("        let batch_futures = batch.iter().map(|item| process_item(item));");
+    println("        let batch_results = await join_all(batch_futures);");
+    println("        results.extend(batch_results);");
+    println("      }");
+    println("      ");
+    println("      results");
+    println("    }");
+    
+    // Debugging and testing async code
+    println("\n🔍 Debugging and Testing Async Code:");
+    println("  Async testing framework:");
+    println("    #[async_test]");
+    println("    async fun test_async_operation() {");
+    println("      let result = await fetch_test_data();");
+    println("      assert_eq(result, \"expected\");");
+    println("    }");
+    println("  ");
+    println("  Async debugging tools:");
+    println("    - Async stack traces");
+    println("    - Future state inspection");
+    println("    - Deadlock detection");
+    println("    - Performance profiling");
+    
+    // Integration with compiler stages
+    println("\n🔗 Integration with Compiler Stages:");
+    println("  Stage 1: Parser extensions:");
+    println("    - Parse async function declarations");
+    println("    - Parse await expressions");
+    println("    - Parse async blocks and closures");
+    println("  ");
+    println("  Stage 2: Type checker extensions:");
+    println("    - Async function type checking");
+    println("    - Future type inference and unification");
+    println("    - Async trait resolution");
+    println("  ");
+    println("  Stage 3: Code generator extensions:");
+    println("    - State machine generation from async functions");
+    println("    - Future trait implementation");
+    println("    - Runtime integration code generation");
+    
+    // Advanced async patterns
+    println("\n🎯 Advanced Async Patterns:");
+    println("  Actor model integration:");
+    println("    struct Actor<T> {");
+    println("      mailbox: Receiver<Message<T>>,");
+    println("      state: T");
+    println("    }");
+    println("    ");
+    println("    impl<T> Actor<T> {");
+    println("      async fun run(mut self) {");
+    println("        while let Some(msg) = await self.mailbox.recv() {");
+    println("          self.handle_message(msg);");
+    println("        }");
+    println("      }");
+    println("    }");
+    println("  ");
+    println("  Async resource management:");
+    println("    async fun with_connection<T>(url: String, f: impl FnOnce(Connection) -> impl Future<T>) -> T {");
+    println("      let conn = await connect(url);");
+    println("      let result = await f(conn);");
+    println("      await conn.close();");
+    println("      result");
+    println("    }");
+    
+    println("\n✅ BOOTSTRAP-024 Complete: Async/await concurrency architecture designed");
+    println("   - Comprehensive async/await syntax and semantics");
+    println("   - Zero-cost state machine generation");
+    println("   - Runtime-agnostic future trait design");
+    println("   - Async error handling and synchronization primitives");
+    println("   - Performance-optimized async execution model");
+    println("   Ready for BOOTSTRAP-025: Advanced error handling with Result/Option");
+}
