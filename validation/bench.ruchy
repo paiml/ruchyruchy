@@ -1,0 +1,421 @@
+// Performance Benchmarking Framework - Toyota Way Empirical Validation
+//
+// Validates that each bootstrap stage meets empirical performance targets:
+// - Stage 0 Lexer: >10K LOC/s throughput
+// - Stage 1 Parser: >5K LOC/s throughput  
+// - Stage 2 TypeCheck: O(n log n) complexity
+// - Stage 3 CodeGen: >10K LOC/s throughput
+
+use std::time::{Duration, Instant};
+use std::process::Command;
+use std::fs;
+use std::path::Path;
+use std::io::{self, Write};
+
+pub struct PerformanceBenchmark {
+    iterations: usize,
+    warmup_iterations: usize,
+    target_dir: String,
+}
+
+impl PerformanceBenchmark {
+    pub fun new() -> Self {
+        Self {
+            iterations: 1000,
+            warmup_iterations: 100,
+            target_dir: "./build".to_string(),
+        }
+    }
+    
+    pub fun with_iterations(iterations: usize, warmup: usize) -> Self {
+        Self {
+            iterations,
+            warmup_iterations: warmup,
+            target_dir: "./build".to_string(),
+        }
+    }
+    
+    // Benchmark Stage 0: Lexer throughput (target: >10K LOC/s)
+    pub fun benchmark_lexer(&self) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
+        println!("⚡ Benchmarking Stage 0: Lexer throughput...");
+        
+        let lexer_path = format!("{}/stage0/lexer", self.target_dir);
+        if !Path::new(&lexer_path).exists() {
+            return Err("Stage 0 lexer not found. Run 'make stage0' first.".into());
+        }
+        
+        // Generate test input (simulate large source file)
+        let test_input = self.generate_lexer_test_input(10000); // 10K LOC
+        let input_size = test_input.lines().count();
+        
+        println!("  Test input: {} lines of code", input_size);
+        
+        // Warmup
+        for _ in 0..self.warmup_iterations {
+            self.run_lexer(&lexer_path, &test_input)?;
+        }
+        
+        // Actual benchmark
+        let start = Instant::now();
+        for _ in 0..self.iterations {
+            self.run_lexer(&lexer_path, &test_input)?;
+        }
+        let total_duration = start.elapsed();
+        
+        let avg_duration = total_duration / self.iterations as u32;
+        let throughput = (input_size as f64 / avg_duration.as_secs_f64()) as usize;
+        
+        let result = BenchmarkResult {
+            stage: "Stage 0: Lexer".to_string(),
+            throughput_loc_per_sec: throughput,
+            avg_duration,
+            target_throughput: 10000,
+            passed: throughput >= 10000,
+        };
+        
+        self.print_benchmark_result(&result);
+        Ok(result)
+    }
+    
+    // Benchmark Stage 1: Parser throughput (target: >5K LOC/s)
+    pub fun benchmark_parser(&self) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
+        println!("⚡ Benchmarking Stage 1: Parser throughput...");
+        
+        let parser_path = format!("{}/stage1/parser", self.target_dir);
+        if !Path::new(&parser_path).exists() {
+            return Err("Stage 1 parser not found. Run 'make stage1' first.".into());
+        }
+        
+        // Generate test input (valid Ruchy syntax)
+        let test_input = self.generate_parser_test_input(5000); // 5K LOC
+        let input_size = test_input.lines().count();
+        
+        println!("  Test input: {} lines of code", input_size);
+        
+        // Warmup
+        for _ in 0..self.warmup_iterations {
+            self.run_parser(&parser_path, &test_input)?;
+        }
+        
+        // Actual benchmark
+        let start = Instant::now();
+        for _ in 0..self.iterations {
+            self.run_parser(&parser_path, &test_input)?;
+        }
+        let total_duration = start.elapsed();
+        
+        let avg_duration = total_duration / self.iterations as u32;
+        let throughput = (input_size as f64 / avg_duration.as_secs_f64()) as usize;
+        
+        let result = BenchmarkResult {
+            stage: "Stage 1: Parser".to_string(),
+            throughput_loc_per_sec: throughput,
+            avg_duration,
+            target_throughput: 5000,
+            passed: throughput >= 5000,
+        };
+        
+        self.print_benchmark_result(&result);
+        Ok(result)
+    }
+    
+    // Benchmark Stage 2: Type checker complexity (target: O(n log n))
+    pub fun benchmark_type_checker(&self) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
+        println!("⚡ Benchmarking Stage 2: Type inference complexity...");
+        
+        let infer_path = format!("{}/stage2/infer", self.target_dir);
+        if !Path::new(&infer_path).exists() {
+            return Err("Stage 2 type checker not found. Run 'make stage2' first.".into());
+        }
+        
+        // Test complexity scaling with different input sizes
+        let test_sizes = vec![100, 500, 1000, 2000, 5000];
+        let mut measurements = Vec::new();
+        
+        for size in test_sizes {
+            let test_input = self.generate_type_checker_test_input(size);
+            
+            // Warmup
+            for _ in 0..10 {
+                self.run_type_checker(&infer_path, &test_input)?;
+            }
+            
+            // Measure
+            let start = Instant::now();
+            for _ in 0..50 {
+                self.run_type_checker(&infer_path, &test_input)?;
+            }
+            let avg_duration = start.elapsed() / 50;
+            
+            measurements.push((size, avg_duration));
+            println!("  {} LOC: {:.2}ms", size, avg_duration.as_secs_f64() * 1000.0);
+        }
+        
+        // Analyze complexity (rough O(n log n) validation)
+        let complexity_valid = self.validate_complexity(&measurements);
+        
+        let result = BenchmarkResult {
+            stage: "Stage 2: Type Checker".to_string(),
+            throughput_loc_per_sec: 0, // Not applicable for complexity test
+            avg_duration: measurements.last().unwrap().1,
+            target_throughput: 0, // Not applicable
+            passed: complexity_valid,
+        };
+        
+        println!("  Complexity validation: {}", if complexity_valid { "✅ O(n log n)" } else { "❌ Worse than O(n log n)" });
+        Ok(result)
+    }
+    
+    // Benchmark Stage 3: Code generator throughput (target: >10K LOC/s)
+    pub fun benchmark_code_generator(&self) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
+        println!("⚡ Benchmarking Stage 3: Code generation throughput...");
+        
+        let emit_path = format!("{}/stage3/emit", self.target_dir);
+        if !Path::new(&emit_path).exists() {
+            return Err("Stage 3 code generator not found. Run 'make stage3' first.".into());
+        }
+        
+        // Generate test input (typed AST)
+        let test_input = self.generate_codegen_test_input(10000); // 10K LOC equivalent
+        let input_size = test_input.lines().count();
+        
+        println!("  Test input: {} AST nodes", input_size);
+        
+        // Warmup
+        for _ in 0..self.warmup_iterations {
+            self.run_code_generator(&emit_path, &test_input)?;
+        }
+        
+        // Actual benchmark
+        let start = Instant::now();
+        for _ in 0..self.iterations {
+            self.run_code_generator(&emit_path, &test_input)?;
+        }
+        let total_duration = start.elapsed();
+        
+        let avg_duration = total_duration / self.iterations as u32;
+        let throughput = (input_size as f64 / avg_duration.as_secs_f64()) as usize;
+        
+        let result = BenchmarkResult {
+            stage: "Stage 3: Code Generator".to_string(),
+            throughput_loc_per_sec: throughput,
+            avg_duration,
+            target_throughput: 10000,
+            passed: throughput >= 10000,
+        };
+        
+        self.print_benchmark_result(&result);
+        Ok(result)
+    }
+    
+    // Run complete benchmark suite
+    pub fun run_complete_suite(&self) -> Result<Vec<BenchmarkResult>, Box<dyn std::error::Error>> {
+        println!("🚀 Running complete performance benchmark suite...");
+        println!("=====================================");
+        
+        let mut results = Vec::new();
+        
+        // Run all stage benchmarks
+        if let Ok(result) = self.benchmark_lexer() {
+            results.push(result);
+        }
+        
+        if let Ok(result) = self.benchmark_parser() {
+            results.push(result);
+        }
+        
+        if let Ok(result) = self.benchmark_type_checker() {
+            results.push(result);
+        }
+        
+        if let Ok(result) = self.benchmark_code_generator() {
+            results.push(result);
+        }
+        
+        // Summary report
+        println!("\n📊 Performance Benchmark Summary");
+        println!("=====================================");
+        
+        let passed = results.iter().filter(|r| r.passed).count();
+        let total = results.len();
+        
+        for result in &results {
+            let status = if result.passed { "✅ PASS" } else { "❌ FAIL" };
+            println!("  {}: {}", result.stage, status);
+        }
+        
+        println!("\nOverall: {}/{} stages meet performance targets", passed, total);
+        
+        Ok(results)
+    }
+    
+    // Helper functions for running individual stages
+    fun run_lexer(&self, lexer_path: &str, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let output = Command::new(lexer_path)
+            .arg("-")
+            .input(input)
+            .output()?;
+        
+        if !output.status.success() {
+            return Err(format!("Lexer failed: {}", String::from_utf8_lossy(&output.stderr)).into());
+        }
+        
+        Ok(())
+    }
+    
+    fun run_parser(&self, parser_path: &str, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let output = Command::new(parser_path)
+            .arg("-")
+            .input(input)
+            .output()?;
+        
+        if !output.status.success() {
+            return Err(format!("Parser failed: {}", String::from_utf8_lossy(&output.stderr)).into());
+        }
+        
+        Ok(())
+    }
+    
+    fun run_type_checker(&self, infer_path: &str, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let output = Command::new(infer_path)
+            .arg("-")
+            .input(input)
+            .output()?;
+        
+        if !output.status.success() {
+            return Err(format!("Type checker failed: {}", String::from_utf8_lossy(&output.stderr)).into());
+        }
+        
+        Ok(())
+    }
+    
+    fun run_code_generator(&self, emit_path: &str, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let output = Command::new(emit_path)
+            .arg("-")
+            .input(input)
+            .output()?;
+        
+        if !output.status.success() {
+            return Err(format!("Code generator failed: {}", String::from_utf8_lossy(&output.stderr)).into());
+        }
+        
+        Ok(())
+    }
+    
+    // Generate test inputs for benchmarking
+    fun generate_lexer_test_input(&self, lines: usize) -> String {
+        let mut input = String::new();
+        for i in 0..lines {
+            input.push_str(&format!("fun test_function_{}(param: i32) -> i32 {{\n", i));
+            input.push_str("    let result = param * 2 + 1;\n");
+            input.push_str("    return result;\n");
+            input.push_str("}\n\n");
+        }
+        input
+    }
+    
+    fun generate_parser_test_input(&self, lines: usize) -> String {
+        // Reuse lexer input - parser needs valid syntax
+        self.generate_lexer_test_input(lines)
+    }
+    
+    fun generate_type_checker_test_input(&self, lines: usize) -> String {
+        // Generate increasingly complex type inference scenarios
+        let mut input = String::new();
+        for i in 0..lines {
+            input.push_str(&format!(
+                "fun complex_{}(a: i32, b: f64) -> (i32, f64) {{\n    (a + 1, b * 2.0)\n}}\n",
+                i
+            ));
+        }
+        input
+    }
+    
+    fun generate_codegen_test_input(&self, lines: usize) -> String {
+        // Generate AST JSON for code generation
+        let mut input = String::new();
+        for i in 0..lines {
+            input.push_str(&format!(
+                "{{\"type\":\"Function\",\"name\":\"test_{}\",\"params\":[],\"body\":[]}}\n",
+                i
+            ));
+        }
+        input
+    }
+    
+    fun validate_complexity(&self, measurements: &[(usize, Duration)]) -> bool {
+        // Rough O(n log n) validation - check if time grows slower than O(n^2)
+        if measurements.len() < 3 {
+            return false;
+        }
+        
+        let (size1, time1) = measurements[0];
+        let (size2, time2) = measurements[measurements.len() - 1];
+        
+        let size_ratio = size2 as f64 / size1 as f64;
+        let time_ratio = time2.as_secs_f64() / time1.as_secs_f64();
+        
+        // For O(n log n), time_ratio should be roughly size_ratio * log(size_ratio)
+        let expected_ratio = size_ratio * (size_ratio.log2());
+        let tolerance = 2.0; // Allow 2x tolerance
+        
+        time_ratio < expected_ratio * tolerance
+    }
+    
+    fun print_benchmark_result(&self, result: &BenchmarkResult) {
+        println!("  Results:");
+        if result.throughput_loc_per_sec > 0 {
+            println!("    Throughput: {} LOC/s (target: {} LOC/s)", 
+                     result.throughput_loc_per_sec, result.target_throughput);
+        }
+        println!("    Average time: {:.2}ms", result.avg_duration.as_secs_f64() * 1000.0);
+        println!("    Status: {}", if result.passed { "✅ PASS" } else { "❌ FAIL" });
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BenchmarkResult {
+    pub stage: String,
+    pub throughput_loc_per_sec: usize,
+    pub avg_duration: Duration,
+    pub target_throughput: usize,
+    pub passed: bool,
+}
+
+// Main function for CLI usage
+fun main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    
+    let benchmark = PerformanceBenchmark::new();
+    
+    match args.get(1).map(|s| s.as_str()) {
+        Some("lexer") => {
+            benchmark.benchmark_lexer()?;
+        }
+        Some("parser") => {
+            benchmark.benchmark_parser()?;
+        }
+        Some("types") => {
+            benchmark.benchmark_type_checker()?;
+        }
+        Some("codegen") => {
+            benchmark.benchmark_code_generator()?;
+        }
+        Some("all") => {
+            benchmark.run_complete_suite()?;
+        }
+        _ => {
+            println!("RuchyRuchy Performance Benchmark Suite");
+            println!("Usage: {} [lexer|parser|types|codegen|all]", args[0]);
+            println!();
+            println!("Commands:");
+            println!("  lexer   - Benchmark Stage 0 lexer (target: >10K LOC/s)");
+            println!("  parser  - Benchmark Stage 1 parser (target: >5K LOC/s)");
+            println!("  types   - Benchmark Stage 2 type checker (target: O(n log n))");
+            println!("  codegen - Benchmark Stage 3 code generator (target: >10K LOC/s)");
+            println!("  all     - Run complete benchmark suite");
+        }
+    }
+    
+    Ok(())
+}
