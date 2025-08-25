@@ -1,0 +1,448 @@
+// Stage 0: Lexical Analysis - CLI Interface
+// Sprint 3: Self-Tokenization Validation
+// BOOTSTRAP-009: Create lexer binary with CLI interface
+// BOOTSTRAP-010: Implement self-tokenization test
+// BOOTSTRAP-011: Validate >10K LOC/s throughput target
+// BOOTSTRAP-012: Add formal verification
+
+use std::io::{self, Read};
+use std::time::Instant;
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    
+    if args.len() > 1 && args[1] == "--help" {
+        print_help();
+        return;
+    }
+    
+    if args.len() > 1 && args[1] == "--benchmark" {
+        run_benchmark();
+        return;
+    }
+    
+    if args.len() > 1 && args[1] == "--self-test" {
+        run_self_test();
+        return;
+    }
+    
+    // Default: Read from stdin and tokenize
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input).unwrap();
+    
+    let start = Instant::now();
+    let tokens = tokenize(&input);
+    let elapsed = start.elapsed();
+    
+    // Output results
+    eprintln!("=== Tokenization Complete ===");
+    eprintln!("Tokens: {}", tokens.len());
+    eprintln!("Time: {:?}", elapsed);
+    eprintln!("Throughput: {} LOC/s", calculate_throughput(&input, elapsed));
+    
+    // Print tokens
+    for (i, token) in tokens.iter().enumerate() {
+        println!("{}: {:?}", i + 1, token);
+    }
+}
+
+fn print_help() {
+    println!("RuchyRuchy Stage 0 Lexer - BOOTSTRAP-009");
+    println!("\nUsage:");
+    println!("  lexer             Read from stdin and tokenize");
+    println!("  lexer --help      Show this help message");
+    println!("  lexer --benchmark Run performance benchmark");
+    println!("  lexer --self-test Run self-tokenization test");
+    println!("\nExamples:");
+    println!("  ./lexer < file.ruchy");
+    println!("  echo 'fn main() {{}}' | ./lexer");
+}
+
+fn run_benchmark() {
+    println!("🚀 BOOTSTRAP-011: Performance Benchmark");
+    println!("========================================");
+    
+    // Generate test input (1000 lines)
+    let mut test_code = String::new();
+    for i in 0..1000 {
+        test_code.push_str(&format!("fn function_{} (x: i32, y: i32) -> i32 {{\n", i));
+        test_code.push_str("    let result = x + y * 2;\n");
+        test_code.push_str("    if result > 100 {\n");
+        test_code.push_str("        return result - 50;\n");
+        test_code.push_str("    } else {\n");
+        test_code.push_str("        return result + 50;\n");
+        test_code.push_str("    }\n");
+        test_code.push_str("}\n\n");
+    }
+    
+    let lines = test_code.lines().count();
+    println!("Test input: {} lines of code", lines);
+    
+    // Warm up
+    for _ in 0..10 {
+        let _ = tokenize(&test_code);
+    }
+    
+    // Benchmark
+    let start = Instant::now();
+    let tokens = tokenize(&test_code);
+    let elapsed = start.elapsed();
+    
+    let throughput = calculate_throughput(&test_code, elapsed);
+    
+    println!("\n📊 Results:");
+    println!("  Lines: {}", lines);
+    println!("  Tokens: {}", tokens.len());
+    println!("  Time: {:?}", elapsed);
+    println!("  Throughput: {} LOC/s", throughput);
+    
+    if throughput > 10000.0 {
+        println!("\n✅ PASSED: Throughput exceeds 10K LOC/s target!");
+    } else {
+        println!("\n⚠️  Below 10K LOC/s target (optimization needed)");
+    }
+}
+
+fn run_self_test() {
+    println!("🔄 BOOTSTRAP-010: Self-Tokenization Test");
+    println!("=========================================");
+    
+    // Read our own source code
+    let source = include_str!("lexer_cli.ruchy");
+    
+    println!("Tokenizing lexer_cli.ruchy ({} lines)...", source.lines().count());
+    
+    let start = Instant::now();
+    let tokens = tokenize(source);
+    let elapsed = start.elapsed();
+    
+    println!("\n📊 Self-Tokenization Results:");
+    println!("  Source lines: {}", source.lines().count());
+    println!("  Tokens generated: {}", tokens.len());
+    println!("  Time: {:?}", elapsed);
+    println!("  Throughput: {} LOC/s", calculate_throughput(source, elapsed));
+    
+    // Verify key tokens are present
+    let mut has_fn = false;
+    let mut has_main = false;
+    let mut has_tokenize = false;
+    
+    for token in &tokens {
+        match token {
+            Token::Fn => has_fn = true,
+            Token::Identifier(s) if s == "main" => has_main = true,
+            Token::Identifier(s) if s == "tokenize" => has_tokenize = true,
+            _ => {}
+        }
+    }
+    
+    println!("\n🔍 Validation:");
+    println!("  Found 'fn' keyword: {}", if has_fn { "✓" } else { "✗" });
+    println!("  Found 'main' identifier: {}", if has_main { "✓" } else { "✗" });
+    println!("  Found 'tokenize' identifier: {}", if has_tokenize { "✓" } else { "✗" });
+    
+    if has_fn && has_main && has_tokenize && tokens.len() > 100 {
+        println!("\n✅ PASSED: Self-tokenization successful!");
+    } else {
+        println!("\n❌ FAILED: Self-tokenization incomplete");
+    }
+}
+
+fn calculate_throughput(input: &str, elapsed: std::time::Duration) -> f64 {
+    let lines = input.lines().count() as f64;
+    let seconds = elapsed.as_secs_f64();
+    if seconds > 0.0 {
+        lines / seconds
+    } else {
+        0.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Token {
+    // Literals
+    Number(i64),
+    String(String),
+    Identifier(String),
+    
+    // Keywords
+    Fn, Let, Mut, Const, If, Else, While, For, Loop,
+    Break, Continue, Return, Match, Struct, Enum, Type,
+    Trait, Impl, Mod, Use, Pub, True, False, As, In,
+    Where, Async, Await, Dyn, Static, Ref, Move,
+    
+    // Operators
+    Plus, Minus, Star, Slash, Percent,
+    Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual,
+    And, Or, Not, Assign, PlusAssign, MinusAssign,
+    BitAnd, BitOr, BitXor, BitNot, LeftShift, RightShift,
+    
+    // Delimiters
+    LeftParen, RightParen, LeftBrace, RightBrace,
+    LeftBracket, RightBracket, Semicolon, Comma,
+    Dot, Colon, DoubleColon, Arrow, FatArrow,
+    Question, At, Hash, Dollar, Underscore,
+    
+    // Special
+    Newline, EOF,
+}
+
+fn tokenize(input: &str) -> Vec<Token> {
+    let mut tokens = Vec::new();
+    let mut chars = input.chars().peekable();
+    
+    while let Some(&ch) = chars.peek() {
+        // Skip whitespace except newlines
+        if ch == ' ' || ch == '\t' || ch == '\r' {
+            chars.next();
+            continue;
+        }
+        
+        // Newlines (track for line counting)
+        if ch == '\n' {
+            chars.next();
+            tokens.push(Token::Newline);
+            continue;
+        }
+        
+        // Comments
+        if ch == '/' {
+            chars.next();
+            if chars.peek() == Some(&'/') {
+                // Skip line comment
+                chars.next();
+                while chars.peek() != Some(&'\n') && chars.peek().is_some() {
+                    chars.next();
+                }
+                continue;
+            } else if chars.peek() == Some(&'*') {
+                // Skip block comment
+                chars.next();
+                let mut prev = ' ';
+                while let Some(c) = chars.next() {
+                    if prev == '*' && c == '/' {
+                        break;
+                    }
+                    prev = c;
+                }
+                continue;
+            } else {
+                tokens.push(Token::Slash);
+                continue;
+            }
+        }
+        
+        // Numbers
+        if ch.is_ascii_digit() {
+            let mut num = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_ascii_digit() || c == '_' {
+                    chars.next();
+                    if c != '_' {
+                        num.push(c);
+                    }
+                } else {
+                    break;
+                }
+            }
+            if let Ok(n) = num.parse::<i64>() {
+                tokens.push(Token::Number(n));
+            }
+            continue;
+        }
+        
+        // Strings
+        if ch == '"' {
+            chars.next();
+            let mut string = String::new();
+            let mut escaped = false;
+            
+            while let Some(c) = chars.next() {
+                if escaped {
+                    match c {
+                        'n' => string.push('\n'),
+                        't' => string.push('\t'),
+                        'r' => string.push('\r'),
+                        '\\' => string.push('\\'),
+                        '"' => string.push('"'),
+                        _ => {
+                            string.push('\\');
+                            string.push(c);
+                        }
+                    }
+                    escaped = false;
+                } else if c == '\\' {
+                    escaped = true;
+                } else if c == '"' {
+                    break;
+                } else {
+                    string.push(c);
+                }
+            }
+            tokens.push(Token::String(string));
+            continue;
+        }
+        
+        // Identifiers and keywords
+        if ch.is_ascii_alphabetic() || ch == '_' {
+            let mut ident = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    chars.next();
+                    ident.push(c);
+                } else {
+                    break;
+                }
+            }
+            
+            let token = match ident.as_str() {
+                "fn" => Token::Fn,
+                "let" => Token::Let,
+                "mut" => Token::Mut,
+                "const" => Token::Const,
+                "if" => Token::If,
+                "else" => Token::Else,
+                "while" => Token::While,
+                "for" => Token::For,
+                "loop" => Token::Loop,
+                "break" => Token::Break,
+                "continue" => Token::Continue,
+                "return" => Token::Return,
+                "match" => Token::Match,
+                "struct" => Token::Struct,
+                "enum" => Token::Enum,
+                "type" => Token::Type,
+                "trait" => Token::Trait,
+                "impl" => Token::Impl,
+                "mod" => Token::Mod,
+                "use" => Token::Use,
+                "pub" => Token::Pub,
+                "true" => Token::True,
+                "false" => Token::False,
+                "as" => Token::As,
+                "in" => Token::In,
+                "where" => Token::Where,
+                "async" => Token::Async,
+                "await" => Token::Await,
+                "dyn" => Token::Dyn,
+                "static" => Token::Static,
+                "ref" => Token::Ref,
+                "move" => Token::Move,
+                _ => Token::Identifier(ident),
+            };
+            tokens.push(token);
+            continue;
+        }
+        
+        // Operators and delimiters
+        chars.next();
+        match ch {
+            '+' => {
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::PlusAssign);
+                } else {
+                    tokens.push(Token::Plus);
+                }
+            },
+            '-' => {
+                if chars.peek() == Some(&'>') {
+                    chars.next();
+                    tokens.push(Token::Arrow);
+                } else if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::MinusAssign);
+                } else {
+                    tokens.push(Token::Minus);
+                }
+            },
+            '*' => tokens.push(Token::Star),
+            '%' => tokens.push(Token::Percent),
+            '=' => {
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::Equal);
+                } else if chars.peek() == Some(&'>') {
+                    chars.next();
+                    tokens.push(Token::FatArrow);
+                } else {
+                    tokens.push(Token::Assign);
+                }
+            },
+            '!' => {
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::NotEqual);
+                } else {
+                    tokens.push(Token::Not);
+                }
+            },
+            '<' => {
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::LessEqual);
+                } else if chars.peek() == Some(&'<') {
+                    chars.next();
+                    tokens.push(Token::LeftShift);
+                } else {
+                    tokens.push(Token::Less);
+                }
+            },
+            '>' => {
+                if chars.peek() == Some(&'=') {
+                    chars.next();
+                    tokens.push(Token::GreaterEqual);
+                } else if chars.peek() == Some(&'>') {
+                    chars.next();
+                    tokens.push(Token::RightShift);
+                } else {
+                    tokens.push(Token::Greater);
+                }
+            },
+            '&' => {
+                if chars.peek() == Some(&'&') {
+                    chars.next();
+                    tokens.push(Token::And);
+                } else {
+                    tokens.push(Token::BitAnd);
+                }
+            },
+            '|' => {
+                if chars.peek() == Some(&'|') {
+                    chars.next();
+                    tokens.push(Token::Or);
+                } else {
+                    tokens.push(Token::BitOr);
+                }
+            },
+            '^' => tokens.push(Token::BitXor),
+            '~' => tokens.push(Token::BitNot),
+            '(' => tokens.push(Token::LeftParen),
+            ')' => tokens.push(Token::RightParen),
+            '{' => tokens.push(Token::LeftBrace),
+            '}' => tokens.push(Token::RightBrace),
+            '[' => tokens.push(Token::LeftBracket),
+            ']' => tokens.push(Token::RightBracket),
+            ';' => tokens.push(Token::Semicolon),
+            ',' => tokens.push(Token::Comma),
+            '.' => tokens.push(Token::Dot),
+            ':' => {
+                if chars.peek() == Some(&':') {
+                    chars.next();
+                    tokens.push(Token::DoubleColon);
+                } else {
+                    tokens.push(Token::Colon);
+                }
+            },
+            '?' => tokens.push(Token::Question),
+            '@' => tokens.push(Token::At),
+            '#' => tokens.push(Token::Hash),
+            '$' => tokens.push(Token::Dollar),
+            _ => {} // Skip unknown characters
+        }
+    }
+    
+    tokens.push(Token::EOF);
+    tokens
+}
