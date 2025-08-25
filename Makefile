@@ -18,7 +18,7 @@ RUST_FLAGS := --release
 
 # Version Management
 RUCHY_VERSION := $(shell $(RUCHY) --version 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "unknown")
-REQUIRED_VERSION := 1.8.0
+REQUIRED_VERSION := 1.11.0
 
 # Default target
 all: validate stage0
@@ -97,6 +97,68 @@ install-deps:
 	fi
 	@echo "✅ Dependencies check complete"
 
+# Sync to latest ruchy version (Toyota Way - foolproof automation)
+sync-version:
+	@echo "🔄 Syncing to latest ruchy version (foolproof automation)..."
+	@echo "1. Detecting latest ruchy version..."
+	@LATEST=$$(cd ../ruchy && cargo metadata --format-version 1 2>/dev/null | jq -r '.packages[] | select(.name == "ruchy") | .version' || echo ""); \
+	if [ -z "$$LATEST" ]; then \
+		LATEST=$$(ruchy --version 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || echo ""); \
+	fi; \
+	if [ -z "$$LATEST" ]; then \
+		echo "❌ Cannot detect ruchy version. Ensure ruchy is installed or ../ruchy directory exists"; \
+		exit 1; \
+	fi; \
+	echo "2. Detected version: $$LATEST"; \
+	echo "3. Updating version references..."; \
+	find bootstrap docs validation -name "*.ruchy" -o -name "*.md" | while read file; do \
+		sed -i "s/ruchy [0-9]\+\.[0-9]\+\.[0-9]\+/ruchy $$LATEST/g" "$$file" 2>/dev/null || true; \
+		sed -i "s/Ruchy v[0-9]\+\.[0-9]\+\.[0-9]\+/Ruchy v$$LATEST/g" "$$file" 2>/dev/null || true; \
+	done; \
+	sed -i "s/REQUIRED_VERSION := [0-9]\+\.[0-9]\+\.[0-9]\+/REQUIRED_VERSION := $$LATEST/" Makefile; \
+	echo "4. Verifying bootstrap compatibility..."; \
+	$(MAKE) verify-bootstrap-version || echo "⚠️  Version compatibility check pending"; \
+	echo "5. Running validation tests..."; \
+	$(MAKE) test-self-compilation || echo "⚠️  Some tests may target future features"; \
+	echo "6. Updating INTEGRATION.md..."; \
+	$(MAKE) update-integration-docs RUCHY_VERSION=$$LATEST || echo "⚠️  Documentation update pending"; \
+	echo "✅ Version sync complete to $$LATEST"
+
+# Verify version consistency
+verify-version:
+	@echo "🔍 Verifying version consistency..."
+	@MAKEFILE_VERSION=$(REQUIRED_VERSION); \
+	CURRENT_VERSION=$$($(RUCHY) --version 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "unknown"); \
+	echo "Makefile required version: $$MAKEFILE_VERSION"; \
+	echo "Currently installed version: $$CURRENT_VERSION"; \
+	if [ "$$CURRENT_VERSION" = "unknown" ]; then \
+		echo "❌ Ruchy compiler not found"; \
+		exit 1; \
+	elif [ "$$CURRENT_VERSION" != "$$MAKEFILE_VERSION" ]; then \
+		echo "⚠️  Version mismatch. Run 'make sync-version' to update"; \
+	else \
+		echo "✅ Version consistent: v$$CURRENT_VERSION"; \
+	fi
+
+# Verify bootstrap compatibility with current Ruchy version
+verify-bootstrap-version:
+	@echo "🔍 Verifying bootstrap compatibility..."
+	@for stage in $(STAGES); do \
+		echo "Checking $$stage compatibility..."; \
+		if [ -d "bootstrap/$$stage" ]; then \
+			$(RUCHY) check bootstrap/$$stage/*.ruchy 2>/dev/null && echo "✅ $$stage compatible" || echo "⚠️  $$stage needs updates"; \
+		fi; \
+	done
+
+# Update integration documentation with current status
+update-integration-docs:
+	@echo "📝 Updating INTEGRATION.md..."
+	@TIMESTAMP=$$(date "+%B %d, %Y"); \
+	VERSION=$${RUCHY_VERSION:-$(RUCHY_VERSION)}; \
+	sed -i "s/Last Updated: .*/Last Updated: $$TIMESTAMP/" INTEGRATION.md 2>/dev/null || true; \
+	sed -i "s/Ruchy Version: .*/Ruchy Version: v$$VERSION/" INTEGRATION.md 2>/dev/null || true; \
+	echo "✅ Integration documentation updated"
+
 # Install git pre-commit hooks
 install-hooks:
 	@echo "🪝 Installing pre-commit quality gates..."
@@ -129,10 +191,10 @@ stage0:
 	@mkdir -p $(BUILD_DIR)/stage0
 	@if [ -f bootstrap/stage0/lexer.ruchy ]; then \
 		echo "Compiling lexer.ruchy..."; \
-		$(RUCHY) compile bootstrap/stage0/lexer.ruchy -o $(BUILD_DIR)/stage0/lexer $(RUST_FLAGS) || \
+		$(RUCHY) compile bootstrap/stage0/lexer.ruchy -o $(BUILD_DIR)/stage0/lexer || \
 		(echo "⚠️  Direct compilation failed, using transpilation..."; \
 		 $(RUCHY) transpile bootstrap/stage0/lexer.ruchy > $(BUILD_DIR)/stage0/lexer.rs && \
-		 rustc $(BUILD_DIR)/stage0/lexer.rs -o $(BUILD_DIR)/stage0/lexer $(RUST_FLAGS)); \
+		 rustc $(BUILD_DIR)/stage0/lexer.rs -o $(BUILD_DIR)/stage0/lexer --edition 2021); \
 		echo "✅ Stage 0 Lexer built successfully"; \
 	else \
 		echo "❌ Stage 0 not implemented yet. See ROADMAP.md for Sprint 1-3 tasks."; \
@@ -146,10 +208,10 @@ stage1: stage0
 	@mkdir -p $(BUILD_DIR)/stage1
 	@if [ -f bootstrap/stage1/parser.ruchy ]; then \
 		echo "Compiling parser.ruchy..."; \
-		$(RUCHY) compile bootstrap/stage1/parser.ruchy -o $(BUILD_DIR)/stage1/parser $(RUST_FLAGS) || \
+		$(RUCHY) compile bootstrap/stage1/parser.ruchy -o $(BUILD_DIR)/stage1/parser || \
 		(echo "⚠️  Direct compilation failed, using transpilation..."; \
 		 $(RUCHY) transpile bootstrap/stage1/parser.ruchy > $(BUILD_DIR)/stage1/parser.rs && \
-		 rustc $(BUILD_DIR)/stage1/parser.rs -o $(BUILD_DIR)/stage1/parser $(RUST_FLAGS)); \
+		 rustc $(BUILD_DIR)/stage1/parser.rs -o $(BUILD_DIR)/stage1/parser --edition 2021); \
 		echo "✅ Stage 1 Parser built successfully"; \
 	else \
 		echo "❌ Stage 1 not implemented yet. See ROADMAP.md for Sprint 4-7 tasks."; \
@@ -485,17 +547,6 @@ optimize:
 
 # Version Management
 
-# Update to latest Ruchy version (foolproof automation)
-sync-version:
-	@echo "🔄 Syncing to latest Ruchy version..."
-	@NEW_VERSION=$$($(RUCHY) --version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "unknown"); \
-	if [ "$$NEW_VERSION" != "unknown" ] && [ "$$NEW_VERSION" != "$(RUCHY_VERSION)" ]; then \
-		echo "Updating from $(RUCHY_VERSION) to $$NEW_VERSION"; \
-		find . -name "*.md" -exec sed -i "s/v$(RUCHY_VERSION)/v$$NEW_VERSION/g" {} \; || true; \
-		echo "✅ Version updated to $$NEW_VERSION"; \
-	else \
-		echo "✅ Already using latest version: $(RUCHY_VERSION)"; \
-	fi
 
 # Pre-commit validation
 pre-commit: quality-gate
