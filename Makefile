@@ -7,6 +7,7 @@
 .PHONY: quality-gate analyze-complexity kaizen-refactor quality-report
 .PHONY: install-deps install-hooks pre-commit sync-version
 .PHONY: bench profile optimize release
+.PHONY: validate-sprint1 validate-deno validate-continuous
 
 # Configuration
 RUCHY := ruchy
@@ -41,6 +42,11 @@ help:
 	@echo "  make test-stage2           - Test Stage 2 self-type-checking"
 	@echo "  make test-stage3           - Test Stage 3 self-compilation"
 	@echo "  make test-differential     - Compare output with production compiler"
+	@echo ""
+	@echo "🔬 PHASE 2 VALIDATION (NEW):"
+	@echo "  make validate-sprint1      - Run Sprint 1 validation (VALID-001 & VALID-002)"
+	@echo "  make validate-deno         - Test Deno toolchain compatibility"
+	@echo "  make validate-continuous   - Run continuous validation pipeline"
 	@echo ""
 	@echo "🔬 RUCHY FORMAL VERIFICATION:"
 	@echo "  make verify-all           - Run formal verification on all stages"
@@ -552,6 +558,24 @@ pre-commit: quality-gate
 release: validate bootstrap-all test-self-compilation
 	@echo "🚀 Release validation complete"
 	@echo "All stages built and tested successfully"
+
+# Phase 2 Validation Targets
+
+# Sprint 1 validation suite (VALID-001 & VALID-002)
+validate-sprint1:
+	@echo "🚀 Running Phase 2 Sprint 1 Validation..."
+	@echo "Testing VALID-001 (Self-Compilation) and VALID-002 (Deno Toolchain)"
+	@cd validation && deno run --allow-all run_validation_suite.ts
+
+# Deno toolchain validation
+validate-deno:
+	@echo "🦕 Running Deno Toolchain Validation..."
+	@cd validation && deno run --allow-all deno_toolchain_validator.ts
+
+# Continuous validation pipeline
+validate-continuous:
+	@echo "⚡ Running Continuous Validation Pipeline..."
+	@cd validation && deno run --allow-all continuous_pipeline.ts
 
 # Cleanup
 clean:
