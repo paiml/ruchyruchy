@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Type Inference Playground - Algorithm W</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .panel {
+            background-color: #252526;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .panel h2 {
+            color: #569cd6;
+            margin-top: 0;
+            border-bottom: 2px solid #404040;
+            padding-bottom: 10px;
+        }
+        
+        #source-input {
+            width: 100%;
+            height: 200px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #404040;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+        }
+        
+        .steps-container {
+            background-color: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .step {
+            margin: 15px 0;
+            padding: 12px;
+            background-color: #2d2d30;
+            border-radius: 4px;
+            border-left: 4px solid #0e639c;
+        }
+        
+        .step-title {
+            color: #4ec9b0;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .step-description {
+            color: #cccccc;
+            margin-bottom: 10px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .step-details {
+            background-color: #1e1e1e;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            border: 1px solid #404040;
+        }
+        
+        .constraint {
+            color: #ce9178;
+            font-style: italic;
+            margin: 3px 0;
+        }
+        
+        .substitution {
+            color: #9cdcfe;
+            margin: 3px 0;
+        }
+        
+        .type-annotation {
+            color: #4ec9b0;
+            font-weight: bold;
+        }
+        
+        .error {
+            color: #f44747;
+            background-color: #2d1b1b;
+            border-left-color: #f44747;
+        }
+        
+        .success {
+            color: #4caf50;
+            background-color: #1b2d1b;
+            border-left-color: #4caf50;
+        }
+        
+        .example-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .example-buttons button {
+            background-color: #264f78;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .example-buttons button:hover {
+            background-color: #1177bb;
+        }
+        
+        button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin-right: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background-color: #1177bb;
+        }
+        
+        .type-var {
+            color: #c586c0;
+            font-style: italic;
+        }
+        
+        .type-concrete {
+            color: #4ec9b0;
+            font-weight: bold;
+        }
+        
+        .unification-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 11px;
+        }
+        
+        .unification-table th,
+        .unification-table td {
+            padding: 4px 8px;
+            text-align: left;
+            border-bottom: 1px solid #404040;
+        }
+        
+        .unification-table th {
+            color: #569cd6;
+            font-weight: bold;
+        }
+        
+        .final-type {
+            background-color: #2d1b2d;
+            border: 2px solid #c586c0;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        
+        .final-type h3 {
+            color: #c586c0;
+            margin: 0 0 10px 0;
+        }
+        
+        .final-type .type {
+            font-size: 16px;
+            font-weight: bold;
+            color: #4ec9b0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧠 Type Inference Playground</h1>
+    <p>Explore Algorithm W (Hindley-Milner) type inference step by step</p>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>📝 Ruchy Expression</h2>
+            <div class="example-buttons">
+                <button onclick="loadExample('simple')">Simple Variable</button>
+                <button onclick="loadExample('function')">Function</button>
+                <button onclick="loadExample('application')">Application</button>
+                <button onclick="loadExample('polymorphic')">Polymorphic</button>
+                <button onclick="loadExample('complex')">Complex</button>
+            </div>
+            <textarea id="source-input" placeholder="Enter Ruchy expression...">let f = fun(x) x</textarea>
+            <div style="margin: 15px 0;">
+                <button onclick="performInference()">🔍 Infer Types</button>
+                <button onclick="clearAll()">🗑️ Clear</button>
+            </div>
+            
+            <div class="step final-type" id="final-result" style="display: none;">
+                <h3>🎉 Final Type</h3>
+                <div class="type" id="final-type-display"></div>
+                <div style="margin-top: 10px; font-size: 12px; color: #cccccc;" id="generalization-info"></div>
+            </div>
+            
+            <div style="background-color: #2d2d30; padding: 15px; border-radius: 4px; margin-top: 15px; border-left: 4px solid #0e639c;">
+                <h3 style="color: #569cd6; margin: 0 0 10px 0;">💡 Algorithm W Overview</h3>
+                <div style="color: #cccccc; font-size: 13px; line-height: 1.4;">
+                    <p><strong>1. Generate Constraints:</strong> Create type equations from syntax</p>
+                    <p><strong>2. Unify:</strong> Solve constraints by finding substitutions</p>
+                    <p><strong>3. Generalize:</strong> Abstract type variables to create polymorphic types</p>
+                    <p><strong>4. Instantiate:</strong> Create fresh type variables for polymorphic uses</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>🔧 Inference Steps</h2>
+            <div class="steps-container" id="steps-container">
+                <p style="color: #808080; font-style: italic;">Enter an expression and click "Infer Types" to see the step-by-step process...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const examples = {
+            simple: 'let x = 42',
+            function: 'let f = fun(x) x',
+            application: 'let result = f(42)',
+            polymorphic: 'let id = fun(x) x; let n = id(42); let s = id("hello")',
+            complex: 'let compose = fun(f) fun(g) fun(x) f(g(x))'
+        };
+        
+        let currentSteps = [];
+        let typeVarCounter = 0;
+        let constraints = [];
+        let substitutions = new Map();
+        
+        function loadExample(type) {
+            document.getElementById('source-input').value = examples[type];
+            performInference();
+        }
+        
+        function clearAll() {
+            document.getElementById('source-input').value = '';
+            document.getElementById('steps-container').innerHTML = 
+                '<p style="color: #808080; font-style: italic;">Enter an expression and click "Infer Types" to see the step-by-step process...</p>';
+            document.getElementById('final-result').style.display = 'none';
+            currentSteps = [];
+            typeVarCounter = 0;
+            constraints = [];
+            substitutions.clear();
+        }
+        
+        function performInference() {
+            const source = document.getElementById('source-input').value;
+            if (!source.trim()) {
+                clearAll();
+                return;
+            }
+            
+            try {
+                // Reset state
+                typeVarCounter = 0;
+                constraints = [];
+                substitutions.clear();
+                currentSteps = [];
+                
+                // Parse the expression
+                const ast = parseExpression(source);
+                
+                // Perform type inference
+                const result = inferTypes(ast);
+                
+                // Display results
+                displaySteps();
+                displayFinalResult(result);
+                
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+        
+        function parseExpression(source) {
+            // Simplified parser for demonstration
+            const tokens = tokenize(source);
+            return parseProgram(tokens);
+        }
+        
+        function tokenize(source) {
+            const tokens = [];
+            let i = 0;
+            
+            while (i < source.length) {
+                const char = source[i];
+                
+                if (/\s/.test(char)) {
+                    i++;
+                    continue;
+                }
+                
+                if (/[a-zA-Z_]/.test(char)) {
+                    let word = '';
+                    while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) {
+                        word += source[i++];
+                    }
+                    
+                    const keywords = ['let', 'fun'];
+                    tokens.push({
+                        type: keywords.includes(word) ? 'KEYWORD' : 'IDENTIFIER',
+                        value: word
+                    });
+                    continue;
+                }
+                
+                if (/[0-9]/.test(char)) {
+                    let number = '';
+                    while (i < source.length && /[0-9.]/.test(source[i])) {
+                        number += source[i++];
+                    }
+                    tokens.push({
+                        type: 'NUMBER',
+                        value: parseFloat(number)
+                    });
+                    continue;
+                }
+                
+                const operators = {
+                    '=': 'ASSIGN',
+                    '(': 'LPAREN',
+                    ')': 'RPAREN',
+                    ',': 'COMMA',
+                    ';': 'SEMICOLON'
+                };
+                
+                if (operators[char]) {
+                    tokens.push({
+                        type: operators[char],
+                        value: char
+                    });
+                    i++;
+                    continue;
+                }
+                
+                if (char === '"') {
+                    let string = '';
+                    i++; // skip opening quote
+                    while (i < source.length && source[i] !== '"') {
+                        string += source[i++];
+                    }
+                    i++; // skip closing quote
+                    tokens.push({
+                        type: 'STRING',
+                        value: string
+                    });
+                    continue;
+                }
+                
+                i++; // skip unknown characters
+            }
+            
+            tokens.push({ type: 'EOF', value: null });
+            return tokens;
+        }
+        
+        function parseProgram(tokens) {
+            const statements = [];
+            let current = 0;
+            
+            while (current < tokens.length && tokens[current].type !== 'EOF') {
+                const stmt = parseStatement(tokens, current);
+                statements.push(stmt.node);
+                current = stmt.next;
+                
+                if (tokens[current] && tokens[current].type === 'SEMICOLON') {
+                    current++; // skip semicolon
+                }
+            }
+            
+            return statements.length === 1 ? statements[0] : { type: 'Program', body: statements };
+        }
+        
+        function parseStatement(tokens, current) {
+            const token = tokens[current];
+            
+            if (token.type === 'KEYWORD' && token.value === 'let') {
+                return parseLetExpression(tokens, current);
+            } else {
+                return parseExpr(tokens, current);
+            }
+        }
+        
+        function parseLetExpression(tokens, current) {
+            current++; // skip 'let'
+            
+            if (tokens[current].type !== 'IDENTIFIER') {
+                throw new Error('Expected identifier after let');
+            }
+            
+            const name = tokens[current].value;
+            current++; // skip identifier
+            
+            if (tokens[current].type !== 'ASSIGN') {
+                throw new Error('Expected = in let expression');
+            }
+            current++; // skip '='
+            
+            const value = parseExpr(tokens, current);
+            
+            return {
+                node: {
+                    type: 'LetExpression',
+                    name,
+                    value: value.node
+                },
+                next: value.next
+            };
+        }
+        
+        function parseExpr(tokens, current) {
+            return parseFunctionOrApplication(tokens, current);
+        }
+        
+        function parseFunctionOrApplication(tokens, current) {
+            let expr = parsePrimary(tokens, current);
+            current = expr.next;
+            
+            // Handle function application
+            while (current < tokens.length && tokens[current].type === 'LPAREN') {
+                current++; // skip '('
+                
+                const args = [];
+                while (tokens[current].type !== 'RPAREN') {
+                    const arg = parseExpr(tokens, current);
+                    args.push(arg.node);
+                    current = arg.next;
+                    
+                    if (tokens[current].type === 'COMMA') {
+                        current++; // skip comma
+                    }
+                }
+                current++; // skip ')'
+                
+                expr = {
+                    node: {
+                        type: 'Application',
+                        function: expr.node,
+                        argument: args[0] // simplified to single argument
+                    },
+                    next: current
+                };
+            }
+            
+            return expr;
+        }
+        
+        function parsePrimary(tokens, current) {
+            const token = tokens[current];
+            
+            if (token.type === 'IDENTIFIER') {
+                return {
+                    node: {
+                        type: 'Variable',
+                        name: token.value
+                    },
+                    next: current + 1
+                };
+            }
+            
+            if (token.type === 'NUMBER') {
+                return {
+                    node: {
+                        type: 'Literal',
+                        value: token.value,
+                        dataType: 'Number'
+                    },
+                    next: current + 1
+                };
+            }
+            
+            if (token.type === 'STRING') {
+                return {
+                    node: {
+                        type: 'Literal',
+                        value: token.value,
+                        dataType: 'String'
+                    },
+                    next: current + 1
+                };
+            }
+            
+            if (token.type === 'KEYWORD' && token.value === 'fun') {
+                current++; // skip 'fun'
+                
+                if (tokens[current].type !== 'LPAREN') {
+                    throw new Error('Expected ( after fun');
+                }
+                current++; // skip '('
+                
+                const params = [];
+                while (tokens[current].type !== 'RPAREN') {
+                    if (tokens[current].type === 'IDENTIFIER') {
+                        params.push(tokens[current].value);
+                        current++;
+                    }
+                    if (tokens[current].type === 'COMMA') {
+                        current++;
+                    }
+                }
+                current++; // skip ')'
+                
+                const body = parseExpr(tokens, current);
+                
+                return {
+                    node: {
+                        type: 'Lambda',
+                        parameter: params[0], // simplified to single parameter
+                        body: body.node
+                    },
+                    next: body.next
+                };
+            }
+            
+            if (token.type === 'LPAREN') {
+                current++; // skip '('
+                const expr = parseExpr(tokens, current);
+                current = expr.next;
+                if (tokens[current].type !== 'RPAREN') {
+                    throw new Error('Expected )');
+                }
+                current++; // skip ')'
+                return { node: expr.node, next: current };
+            }
+            
+            throw new Error(`Unexpected token: ${token.type}`);
+        }
+        
+        function inferTypes(ast) {
+            addStep('🚀 Starting Type Inference', 
+                    'Beginning Algorithm W type inference process', 
+                    `Expression: ${formatAST(ast)}`);
+            
+            const env = new Map();
+            const result = infer(ast, env);
+            
+            addStep('🎯 Type Inference Complete', 
+                    'Successfully inferred types for the entire expression',
+                    `Final type: <span class="type-concrete">${formatType(result.type)}</span>`);
+            
+            return result;
+        }
+        
+        function infer(expr, env) {
+            switch (expr.type) {
+                case 'Variable':
+                    return inferVariable(expr, env);
+                case 'Literal':
+                    return inferLiteral(expr, env);
+                case 'Lambda':
+                    return inferLambda(expr, env);
+                case 'Application':
+                    return inferApplication(expr, env);
+                case 'LetExpression':
+                    return inferLet(expr, env);
+                default:
+                    throw new Error(`Unknown expression type: ${expr.type}`);
+            }
+        }
+        
+        function inferVariable(expr, env) {
+            addStep('📝 Variable Reference', 
+                    `Looking up variable "${expr.name}" in environment`,
+                    `Variable: <span class="type-var">${expr.name}</span>`);
+            
+            if (env.has(expr.name)) {
+                const type = instantiate(env.get(expr.name));
+                addStep('✅ Variable Found', 
+                        `Found type for "${expr.name}" in environment`,
+                        `Type: <span class="type-concrete">${formatType(type)}</span>`);
+                return { type, constraints: [] };
+            } else {
+                // Create fresh type variable for unknown variable
+                const freshType = freshTypeVar();
+                addStep('🆕 Fresh Variable', 
+                        `Creating fresh type variable for unknown "${expr.name}"`,
+                        `Type: <span class="type-var">${formatType(freshType)}</span>`);
+                return { type: freshType, constraints: [] };
+            }
+        }
+        
+        function inferLiteral(expr, env) {
+            const type = expr.dataType === 'Number' ? { type: 'Number' } : { type: 'String' };
+            addStep('📊 Literal', 
+                    `Literal value has concrete type`,
+                    `Value: ${JSON.stringify(expr.value)}<br>Type: <span class="type-concrete">${formatType(type)}</span>`);
+            return { type, constraints: [] };
+        }
+        
+        function inferLambda(expr, env) {
+            addStep('🔧 Lambda Expression', 
+                    `Inferring type for function with parameter "${expr.parameter}"`,
+                    `Lambda: fun(${expr.parameter}) ${formatAST(expr.body)}`);
+            
+            const paramType = freshTypeVar();
+            const newEnv = new Map(env);
+            newEnv.set(expr.parameter, { type: paramType, quantified: [] });
+            
+            addStep('🎯 Parameter Type', 
+                    `Assigning fresh type variable to parameter "${expr.parameter}"`,
+                    `Parameter: <span class="type-var">${expr.parameter}</span> : <span class="type-var">${formatType(paramType)}</span>`);
+            
+            const bodyResult = infer(expr.body, newEnv);
+            const functionType = {
+                type: 'Function',
+                from: paramType,
+                to: bodyResult.type
+            };
+            
+            addStep('➡️ Function Type', 
+                    'Combining parameter and body types to form function type',
+                    `Function Type: <span class="type-concrete">${formatType(functionType)}</span>`);
+            
+            return { type: functionType, constraints: bodyResult.constraints };
+        }
+        
+        function inferApplication(expr, env) {
+            addStep('🎯 Function Application', 
+                    'Inferring types for function application',
+                    `Application: (${formatAST(expr.function)}) (${formatAST(expr.argument)})`);
+            
+            const funcResult = infer(expr.function, env);
+            const argResult = infer(expr.argument, env);
+            const resultType = freshTypeVar();
+            
+            const expectedFuncType = {
+                type: 'Function',
+                from: argResult.type,
+                to: resultType
+            };
+            
+            const constraint = {
+                left: funcResult.type,
+                right: expectedFuncType,
+                description: 'Function must accept argument type'
+            };
+            
+            addStep('🔗 Constraint Generation', 
+                    'Creating constraint for function application',
+                    `<div class="constraint">Constraint: ${formatType(funcResult.type)} = ${formatType(expectedFuncType)}</div>` +
+                    `<div class="constraint">Argument: ${formatType(argResult.type)}</div>` +
+                    `<div class="constraint">Result: <span class="type-var">${formatType(resultType)}</span></div>`);
+            
+            const allConstraints = [
+                ...funcResult.constraints,
+                ...argResult.constraints,
+                constraint
+            ];
+            
+            // Solve constraints
+            const solution = unify(allConstraints);
+            const finalType = applySubstitution(solution, resultType);
+            
+            addStep('🧩 Unification Complete', 
+                    'Applied substitutions to get final result type',
+                    `Final Result Type: <span class="type-concrete">${formatType(finalType)}</span>`);
+            
+            return { type: finalType, constraints: [] };
+        }
+        
+        function inferLet(expr, env) {
+            addStep('📋 Let Expression', 
+                    `Inferring type for let binding: let ${expr.name} = ...`,
+                    `Let: ${expr.name} = ${formatAST(expr.value)}`);
+            
+            const valueResult = infer(expr.value, env);
+            
+            // Generalize the type
+            const freeVars = getFreeTypeVars(valueResult.type);
+            const scheme = {
+                type: valueResult.type,
+                quantified: Array.from(freeVars)
+            };
+            
+            if (scheme.quantified.length > 0) {
+                addStep('🔄 Generalization', 
+                        `Generalizing type for "${expr.name}" - making it polymorphic`,
+                        `Quantified vars: [${scheme.quantified.map(v => `<span class="type-var">${v}</span>`).join(', ')}]<br>` +
+                        `Polymorphic type: <span class="type-concrete">${formatType(scheme.type)}</span>`);
+            }
+            
+            const newEnv = new Map(env);
+            newEnv.set(expr.name, scheme);
+            
+            return { type: valueResult.type, constraints: valueResult.constraints };
+        }
+        
+        function unify(constraints) {
+            addStep('🧩 Unification Process', 
+                    'Starting constraint unification using Robinson\'s algorithm',
+                    `Constraints to solve: ${constraints.length}`);
+            
+            const substitution = new Map();
+            
+            for (const constraint of constraints) {
+                const sub = unifyTypes(constraint.left, constraint.right);
+                
+                // Apply existing substitutions to new constraint
+                const leftSub = applySubstitution(substitution, constraint.left);
+                const rightSub = applySubstitution(substitution, constraint.right);
+                
+                addStep('🔧 Constraint Solving', 
+                        constraint.description || 'Unifying types',
+                        `<div class="constraint">${formatType(leftSub)} = ${formatType(rightSub)}</div>`);
+                
+                // Compose substitutions
+                for (const [key, value] of sub) {
+                    substitution.set(key, applySubstitution(substitution, value));
+                }
+            }
+            
+            if (substitution.size > 0) {
+                let subDetails = '<table class="unification-table"><tr><th>Type Variable</th><th>Substituted With</th></tr>';
+                for (const [key, value] of substitution) {
+                    subDetails += `<tr><td><span class="type-var">${key}</span></td><td><span class="type-concrete">${formatType(value)}</span></td></tr>`;
+                }
+                subDetails += '</table>';
+                
+                addStep('✅ Substitutions Found', 
+                        'Unification successful - found type substitutions',
+                        subDetails);
+            }
+            
+            return substitution;
+        }
+        
+        function unifyTypes(t1, t2) {
+            const substitution = new Map();
+            
+            if (isTypeVariable(t1)) {
+                if (occurCheck(t1.name, t2)) {
+                    throw new Error(`Infinite type: ${t1.name} occurs in ${formatType(t2)}`);
+                }
+                substitution.set(t1.name, t2);
+                return substitution;
+            }
+            
+            if (isTypeVariable(t2)) {
+                if (occurCheck(t2.name, t1)) {
+                    throw new Error(`Infinite type: ${t2.name} occurs in ${formatType(t1)}`);
+                }
+                substitution.set(t2.name, t1);
+                return substitution;
+            }
+            
+            if (t1.type === 'Function' && t2.type === 'Function') {
+                const fromSub = unifyTypes(t1.from, t2.from);
+                const toSub = unifyTypes(
+                    applySubstitution(fromSub, t1.to),
+                    applySubstitution(fromSub, t2.to)
+                );
+                
+                // Compose substitutions
+                for (const [key, value] of toSub) {
+                    substitution.set(key, value);
+                }
+                for (const [key, value] of fromSub) {
+                    substitution.set(key, applySubstitution(toSub, value));
+                }
+                
+                return substitution;
+            }
+            
+            if (t1.type === t2.type && (t1.type === 'Number' || t1.type === 'String')) {
+                return substitution; // Empty substitution for matching concrete types
+            }
+            
+            throw new Error(`Cannot unify ${formatType(t1)} with ${formatType(t2)}`);
+        }
+        
+        function freshTypeVar() {
+            return { type: 'Variable', name: `t${typeVarCounter++}` };
+        }
+        
+        function isTypeVariable(type) {
+            return type.type === 'Variable';
+        }
+        
+        function occurCheck(varName, type) {
+            if (isTypeVariable(type)) {
+                return varName === type.name;
+            }
+            
+            if (type.type === 'Function') {
+                return occurCheck(varName, type.from) || occurCheck(varName, type.to);
+            }
+            
+            return false;
+        }
+        
+        function applySubstitution(substitution, type) {
+            if (isTypeVariable(type)) {
+                return substitution.get(type.name) || type;
+            }
+            
+            if (type.type === 'Function') {
+                return {
+                    type: 'Function',
+                    from: applySubstitution(substitution, type.from),
+                    to: applySubstitution(substitution, type.to)
+                };
+            }
+            
+            return type;
+        }
+        
+        function instantiate(scheme) {
+            const substitution = new Map();
+            for (const quantVar of scheme.quantified) {
+                substitution.set(quantVar, freshTypeVar());
+            }
+            return applySubstitution(substitution, scheme.type);
+        }
+        
+        function getFreeTypeVars(type) {
+            const freeVars = new Set();
+            
+            function collect(t) {
+                if (isTypeVariable(t)) {
+                    freeVars.add(t.name);
+                } else if (t.type === 'Function') {
+                    collect(t.from);
+                    collect(t.to);
+                }
+            }
+            
+            collect(type);
+            return freeVars;
+        }
+        
+        function formatType(type) {
+            if (isTypeVariable(type)) {
+                return type.name;
+            }
+            
+            if (type.type === 'Function') {
+                const fromStr = type.from.type === 'Function' ? 
+                    `(${formatType(type.from)})` : formatType(type.from);
+                return `${fromStr} → ${formatType(type.to)}`;
+            }
+            
+            return type.type;
+        }
+        
+        function formatAST(ast) {
+            switch (ast.type) {
+                case 'Variable':
+                    return ast.name;
+                case 'Literal':
+                    return JSON.stringify(ast.value);
+                case 'Lambda':
+                    return `fun(${ast.parameter}) ${formatAST(ast.body)}`;
+                case 'Application':
+                    return `${formatAST(ast.function)}(${formatAST(ast.argument)})`;
+                case 'LetExpression':
+                    return `let ${ast.name} = ${formatAST(ast.value)}`;
+                default:
+                    return ast.type;
+            }
+        }
+        
+        function addStep(title, description, details) {
+            currentSteps.push({ title, description, details });
+        }
+        
+        function displaySteps() {
+            const container = document.getElementById('steps-container');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < currentSteps.length; i++) {
+                const step = currentSteps[i];
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'step';
+                
+                stepDiv.innerHTML = `
+                    <div class="step-title">Step ${i + 1}: ${step.title}</div>
+                    <div class="step-description">${step.description}</div>
+                    <div class="step-details">${step.details}</div>
+                `;
+                
+                container.appendChild(stepDiv);
+            }
+        }
+        
+        function displayFinalResult(result) {
+            const finalType = formatType(result.type);
+            const freeVars = getFreeTypeVars(result.type);
+            
+            document.getElementById('final-type-display').innerHTML = finalType;
+            
+            let generalizationInfo = '';
+            if (freeVars.size > 0) {
+                generalizationInfo = `Polymorphic in: ${Array.from(freeVars).join(', ')}`;
+            } else {
+                generalizationInfo = 'Monomorphic type (no type variables)';
+            }
+            
+            document.getElementById('generalization-info').textContent = generalizationInfo;
+            document.getElementById('final-result').style.display = 'block';
+        }
+        
+        function displayError(message) {
+            const container = document.getElementById('steps-container');
+            container.innerHTML = `
+                <div class="step error">
+                    <div class="step-title">❌ Type Error</div>
+                    <div class="step-description">Type inference failed</div>
+                    <div class="step-details">${message}</div>
+                </div>
+            `;
+            
+            document.getElementById('final-result').style.display = 'none';
+        }
+        
+        // Load default example
+        window.addEventListener('load', () => {
+            loadExample('simple');
+        });
+    </script>
+</body>
+</html>
