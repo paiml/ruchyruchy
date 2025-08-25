@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive AST Explorer - RuchyRuchy</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 90vh;
+        }
+        
+        .panel {
+            background-color: #252526;
+            border-radius: 8px;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .panel h2 {
+            color: #569cd6;
+            margin-top: 0;
+            border-bottom: 2px solid #404040;
+            padding-bottom: 10px;
+        }
+        
+        #source-input {
+            width: 100%;
+            height: 300px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #404040;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+        }
+        
+        #ast-output {
+            background-color: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 4px;
+            padding: 10px;
+            height: 500px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .ast-node {
+            margin: 2px 0;
+            cursor: pointer;
+            border-radius: 3px;
+            padding: 2px 4px;
+        }
+        
+        .ast-node:hover {
+            background-color: #264f78;
+        }
+        
+        .ast-node.selected {
+            background-color: #094771;
+            border: 1px solid #0e639c;
+        }
+        
+        .ast-program { color: #c586c0; }
+        .ast-function { color: #4ec9b0; }
+        .ast-variable { color: #9cdcfe; }
+        .ast-literal { color: #ce9178; }
+        .ast-operator { color: #d7ba7d; }
+        .ast-keyword { color: #569cd6; }
+        
+        .indent-1 { margin-left: 20px; }
+        .indent-2 { margin-left: 40px; }
+        .indent-3 { margin-left: 60px; }
+        .indent-4 { margin-left: 80px; }
+        
+        .controls {
+            margin-bottom: 15px;
+        }
+        
+        button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin-right: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background-color: #1177bb;
+        }
+        
+        .example-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .example-buttons button {
+            background-color: #264f78;
+            font-size: 12px;
+            padding: 6px 12px;
+        }
+        
+        .info-panel {
+            background-color: #2d2d30;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            border-left: 4px solid #0e639c;
+        }
+        
+        .node-details {
+            color: #cccccc;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .node-details h3 {
+            color: #569cd6;
+            margin: 0 0 10px 0;
+            font-size: 14px;
+        }
+        
+        .node-property {
+            margin: 5px 0;
+            display: flex;
+        }
+        
+        .property-name {
+            color: #9cdcfe;
+            min-width: 80px;
+            font-weight: bold;
+        }
+        
+        .property-value {
+            color: #ce9178;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>🌳 Interactive AST Explorer</h1>
+    <p>Explore how Ruchy source code is parsed into an Abstract Syntax Tree</p>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>📝 Ruchy Source Code</h2>
+            <div class="example-buttons">
+                <button onclick="loadExample('variable')">Variable</button>
+                <button onclick="loadExample('function')">Function</button>
+                <button onclick="loadExample('conditional')">If/Else</button>
+                <button onclick="loadExample('arithmetic')">Arithmetic</button>
+                <button onclick="loadExample('complex')">Complex</button>
+            </div>
+            <textarea id="source-input" placeholder="Enter Ruchy code here...">let x = 42</textarea>
+            <div class="controls">
+                <button onclick="parseCode()">🔍 Parse Code</button>
+                <button onclick="clearAll()">🗑️ Clear</button>
+            </div>
+            <div class="info-panel">
+                <h3>💡 How to Use</h3>
+                <p>1. Type or select example Ruchy code above</p>
+                <p>2. Click "Parse Code" to generate the AST</p>
+                <p>3. Click on any AST node to see details</p>
+                <p>4. Explore how syntax becomes structure!</p>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>🌳 Abstract Syntax Tree</h2>
+            <div id="ast-output">
+                <p style="color: #808080; font-style: italic;">Parse some code to see the AST structure...</p>
+            </div>
+            <div class="info-panel">
+                <div id="node-details" class="node-details">
+                    <p style="color: #808080; font-style: italic;">Click on an AST node to see its details here...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const examples = {
+            variable: 'let x = 42',
+            function: 'fun add(a, b) {\n    a + b\n}',
+            conditional: 'if x > 0 {\n    "positive"\n} else {\n    "negative"\n}',
+            arithmetic: 'let result = (a + b) * c - d / e',
+            complex: 'fun factorial(n) {\n    if n <= 1 {\n        1\n    } else {\n        n * factorial(n - 1)\n    }\n}'
+        };
+        
+        let currentAST = null;
+        let selectedNode = null;
+        
+        function loadExample(type) {
+            document.getElementById('source-input').value = examples[type];
+            parseCode();
+        }
+        
+        function parseCode() {
+            const source = document.getElementById('source-input').value;
+            if (!source.trim()) {
+                document.getElementById('ast-output').innerHTML = '<p style="color: #808080;">No code to parse...</p>';
+                return;
+            }
+            
+            try {
+                currentAST = parseRuchyCode(source);
+                renderAST(currentAST);
+            } catch (error) {
+                document.getElementById('ast-output').innerHTML = 
+                    `<p style="color: #f44747;">Parse Error: ${error.message}</p>`;
+            }
+        }
+        
+        function clearAll() {
+            document.getElementById('source-input').value = '';
+            document.getElementById('ast-output').innerHTML = 
+                '<p style="color: #808080; font-style: italic;">Parse some code to see the AST structure...</p>';
+            document.getElementById('node-details').innerHTML = 
+                '<p style="color: #808080; font-style: italic;">Click on an AST node to see its details here...</p>';
+            selectedNode = null;
+            currentAST = null;
+        }
+        
+        function parseRuchyCode(source) {
+            // Simplified parser for demonstration - educational purposes
+            const tokens = tokenize(source);
+            return parseProgram(tokens);
+        }
+        
+        function tokenize(source) {
+            const tokens = [];
+            let i = 0;
+            
+            while (i < source.length) {
+                const char = source[i];
+                
+                if (/\s/.test(char)) {
+                    i++;
+                    continue;
+                }
+                
+                if (/[a-zA-Z_]/.test(char)) {
+                    let word = '';
+                    while (i < source.length && /[a-zA-Z0-9_]/.test(source[i])) {
+                        word += source[i++];
+                    }
+                    
+                    const keywords = ['let', 'fun', 'if', 'else'];
+                    tokens.push({
+                        type: keywords.includes(word) ? 'KEYWORD' : 'IDENTIFIER',
+                        value: word,
+                        position: i - word.length
+                    });
+                    continue;
+                }
+                
+                if (/[0-9]/.test(char)) {
+                    let number = '';
+                    while (i < source.length && /[0-9.]/.test(source[i])) {
+                        number += source[i++];
+                    }
+                    tokens.push({
+                        type: 'NUMBER',
+                        value: parseFloat(number),
+                        position: i - number.length
+                    });
+                    continue;
+                }
+                
+                const operators = {
+                    '=': 'ASSIGN',
+                    '+': 'PLUS',
+                    '-': 'MINUS',
+                    '*': 'MULTIPLY',
+                    '/': 'DIVIDE',
+                    '>': 'GREATER',
+                    '<': 'LESS',
+                    '(': 'LPAREN',
+                    ')': 'RPAREN',
+                    '{': 'LBRACE',
+                    '}': 'RBRACE',
+                    ',': 'COMMA'
+                };
+                
+                if (operators[char]) {
+                    tokens.push({
+                        type: operators[char],
+                        value: char,
+                        position: i
+                    });
+                    i++;
+                    continue;
+                }
+                
+                if (char === '"') {
+                    let string = '';
+                    i++; // skip opening quote
+                    while (i < source.length && source[i] !== '"') {
+                        string += source[i++];
+                    }
+                    i++; // skip closing quote
+                    tokens.push({
+                        type: 'STRING',
+                        value: string,
+                        position: i - string.length - 2
+                    });
+                    continue;
+                }
+                
+                i++; // skip unknown characters
+            }
+            
+            tokens.push({ type: 'EOF', value: null, position: source.length });
+            return tokens;
+        }
+        
+        function parseProgram(tokens) {
+            const ast = {
+                type: 'Program',
+                body: [],
+                position: 0,
+                description: 'Root program node containing all top-level statements'
+            };
+            
+            let current = 0;
+            
+            while (current < tokens.length && tokens[current].type !== 'EOF') {
+                const stmt = parseStatement(tokens, current);
+                ast.body.push(stmt.node);
+                current = stmt.next;
+            }
+            
+            return ast;
+        }
+        
+        function parseStatement(tokens, current) {
+            const token = tokens[current];
+            
+            if (token.type === 'KEYWORD' && token.value === 'let') {
+                return parseVariableDeclaration(tokens, current);
+            } else if (token.type === 'KEYWORD' && token.value === 'fun') {
+                return parseFunctionDeclaration(tokens, current);
+            } else if (token.type === 'KEYWORD' && token.value === 'if') {
+                return parseIfStatement(tokens, current);
+            } else {
+                return parseExpressionStatement(tokens, current);
+            }
+        }
+        
+        function parseVariableDeclaration(tokens, current) {
+            const node = {
+                type: 'VariableDeclaration',
+                position: tokens[current].position,
+                description: 'Variable declaration binding a name to a value'
+            };
+            
+            current++; // skip 'let'
+            
+            if (tokens[current].type !== 'IDENTIFIER') {
+                throw new Error('Expected identifier after let');
+            }
+            
+            node.name = {
+                type: 'Identifier',
+                value: tokens[current].value,
+                position: tokens[current].position,
+                description: `Variable name: ${tokens[current].value}`
+            };
+            current++;
+            
+            if (tokens[current].type !== 'ASSIGN') {
+                throw new Error('Expected = in variable declaration');
+            }
+            current++; // skip '='
+            
+            const expr = parseExpression(tokens, current);
+            node.init = expr.node;
+            current = expr.next;
+            
+            return { node, next: current };
+        }
+        
+        function parseFunctionDeclaration(tokens, current) {
+            const node = {
+                type: 'FunctionDeclaration',
+                position: tokens[current].position,
+                description: 'Function declaration with parameters and body'
+            };
+            
+            current++; // skip 'fun'
+            
+            if (tokens[current].type !== 'IDENTIFIER') {
+                throw new Error('Expected function name');
+            }
+            
+            node.name = {
+                type: 'Identifier',
+                value: tokens[current].value,
+                position: tokens[current].position,
+                description: `Function name: ${tokens[current].value}`
+            };
+            current++;
+            
+            if (tokens[current].type !== 'LPAREN') {
+                throw new Error('Expected ( in function declaration');
+            }
+            current++; // skip '('
+            
+            node.params = [];
+            while (tokens[current].type !== 'RPAREN') {
+                if (tokens[current].type === 'IDENTIFIER') {
+                    node.params.push({
+                        type: 'Identifier',
+                        value: tokens[current].value,
+                        position: tokens[current].position,
+                        description: `Parameter: ${tokens[current].value}`
+                    });
+                }
+                current++;
+                if (tokens[current].type === 'COMMA') current++;
+            }
+            current++; // skip ')'
+            
+            if (tokens[current].type === 'LBRACE') {
+                current++; // skip '{'
+                node.body = {
+                    type: 'BlockStatement',
+                    body: [],
+                    position: tokens[current-1].position,
+                    description: 'Function body containing statements'
+                };
+                
+                while (tokens[current].type !== 'RBRACE') {
+                    const stmt = parseStatement(tokens, current);
+                    node.body.body.push(stmt.node);
+                    current = stmt.next;
+                }
+                current++; // skip '}'
+            } else {
+                const expr = parseExpression(tokens, current);
+                node.body = expr.node;
+                current = expr.next;
+            }
+            
+            return { node, next: current };
+        }
+        
+        function parseIfStatement(tokens, current) {
+            const node = {
+                type: 'IfStatement',
+                position: tokens[current].position,
+                description: 'Conditional statement with test and branches'
+            };
+            
+            current++; // skip 'if'
+            
+            const test = parseExpression(tokens, current);
+            node.test = test.node;
+            current = test.next;
+            
+            if (tokens[current].type === 'LBRACE') {
+                current++; // skip '{'
+                node.consequent = {
+                    type: 'BlockStatement',
+                    body: [],
+                    position: tokens[current-1].position,
+                    description: 'If-branch body'
+                };
+                
+                while (tokens[current].type !== 'RBRACE') {
+                    const stmt = parseStatement(tokens, current);
+                    node.consequent.body.push(stmt.node);
+                    current = stmt.next;
+                }
+                current++; // skip '}'
+            }
+            
+            if (tokens[current] && tokens[current].type === 'KEYWORD' && tokens[current].value === 'else') {
+                current++; // skip 'else'
+                if (tokens[current].type === 'LBRACE') {
+                    current++; // skip '{'
+                    node.alternate = {
+                        type: 'BlockStatement',
+                        body: [],
+                        position: tokens[current-1].position,
+                        description: 'Else-branch body'
+                    };
+                    
+                    while (tokens[current].type !== 'RBRACE') {
+                        const stmt = parseStatement(tokens, current);
+                        node.alternate.body.push(stmt.node);
+                        current = stmt.next;
+                    }
+                    current++; // skip '}'
+                }
+            }
+            
+            return { node, next: current };
+        }
+        
+        function parseExpressionStatement(tokens, current) {
+            const expr = parseExpression(tokens, current);
+            return {
+                node: {
+                    type: 'ExpressionStatement',
+                    expression: expr.node,
+                    position: expr.node.position,
+                    description: 'Statement containing a single expression'
+                },
+                next: expr.next
+            };
+        }
+        
+        function parseExpression(tokens, current) {
+            return parseBinaryExpression(tokens, current, 0);
+        }
+        
+        function parseBinaryExpression(tokens, current, minPrec) {
+            let left = parsePrimaryExpression(tokens, current);
+            current = left.next;
+            
+            while (current < tokens.length) {
+                const token = tokens[current];
+                const prec = getOperatorPrecedence(token.type);
+                
+                if (prec < minPrec) break;
+                
+                current++; // consume operator
+                const right = parseBinaryExpression(tokens, current, prec + 1);
+                
+                left = {
+                    node: {
+                        type: 'BinaryExpression',
+                        operator: token.value,
+                        left: left.node,
+                        right: right.node,
+                        position: token.position,
+                        description: `Binary operation: ${left.node.type} ${token.value} ${right.node.type}`
+                    },
+                    next: right.next
+                };
+                current = right.next;
+            }
+            
+            return left;
+        }
+        
+        function parsePrimaryExpression(tokens, current) {
+            const token = tokens[current];
+            
+            if (token.type === 'NUMBER') {
+                return {
+                    node: {
+                        type: 'Literal',
+                        value: token.value,
+                        raw: token.value.toString(),
+                        position: token.position,
+                        description: `Number literal: ${token.value}`
+                    },
+                    next: current + 1
+                };
+            }
+            
+            if (token.type === 'STRING') {
+                return {
+                    node: {
+                        type: 'Literal',
+                        value: token.value,
+                        raw: `"${token.value}"`,
+                        position: token.position,
+                        description: `String literal: "${token.value}"`
+                    },
+                    next: current + 1
+                };
+            }
+            
+            if (token.type === 'IDENTIFIER') {
+                const node = {
+                    type: 'Identifier',
+                    value: token.value,
+                    position: token.position,
+                    description: `Identifier: ${token.value}`
+                };
+                
+                // Check for function call
+                if (tokens[current + 1] && tokens[current + 1].type === 'LPAREN') {
+                    current += 2; // skip identifier and '('
+                    const callNode = {
+                        type: 'CallExpression',
+                        callee: node,
+                        arguments: [],
+                        position: token.position,
+                        description: `Function call: ${token.value}()`
+                    };
+                    
+                    while (tokens[current].type !== 'RPAREN') {
+                        const arg = parseExpression(tokens, current);
+                        callNode.arguments.push(arg.node);
+                        current = arg.next;
+                        if (tokens[current].type === 'COMMA') current++;
+                    }
+                    current++; // skip ')'
+                    
+                    return { node: callNode, next: current };
+                }
+                
+                return { node, next: current + 1 };
+            }
+            
+            if (token.type === 'LPAREN') {
+                current++; // skip '('
+                const expr = parseExpression(tokens, current);
+                current = expr.next;
+                if (tokens[current].type !== 'RPAREN') {
+                    throw new Error('Expected )');
+                }
+                current++; // skip ')'
+                return { node: expr.node, next: current };
+            }
+            
+            throw new Error(`Unexpected token: ${token.type}`);
+        }
+        
+        function getOperatorPrecedence(tokenType) {
+            const precedence = {
+                'PLUS': 1,
+                'MINUS': 1,
+                'MULTIPLY': 2,
+                'DIVIDE': 2,
+                'GREATER': 0,
+                'LESS': 0
+            };
+            return precedence[tokenType] || -1;
+        }
+        
+        function renderAST(ast) {
+            const output = document.getElementById('ast-output');
+            output.innerHTML = '';
+            renderNode(ast, output, 0);
+        }
+        
+        function renderNode(node, container, depth) {
+            const div = document.createElement('div');
+            div.className = `ast-node ast-${node.type.toLowerCase()} indent-${Math.min(depth, 4)}`;
+            div.dataset.nodeType = node.type;
+            div.dataset.nodeId = Math.random().toString(36).substr(2, 9);
+            
+            let nodeText = `${node.type}`;
+            if (node.value !== undefined) {
+                nodeText += `: ${JSON.stringify(node.value)}`;
+            }
+            if (node.operator) {
+                nodeText += ` (${node.operator})`;
+            }
+            if (node.name && node.name.value) {
+                nodeText += ` (${node.name.value})`;
+            }
+            
+            div.textContent = nodeText;
+            div.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectNode(node, div);
+            });
+            
+            container.appendChild(div);
+            
+            // Render children
+            const childProperties = ['body', 'init', 'name', 'params', 'test', 'consequent', 'alternate', 'expression', 'left', 'right', 'callee', 'arguments'];
+            
+            for (const prop of childProperties) {
+                if (node[prop]) {
+                    if (Array.isArray(node[prop])) {
+                        for (const child of node[prop]) {
+                            renderNode(child, container, depth + 1);
+                        }
+                    } else {
+                        renderNode(node[prop], container, depth + 1);
+                    }
+                }
+            }
+        }
+        
+        function selectNode(node, element) {
+            // Remove previous selection
+            const prevSelected = document.querySelector('.ast-node.selected');
+            if (prevSelected) {
+                prevSelected.classList.remove('selected');
+            }
+            
+            // Add selection to new node
+            element.classList.add('selected');
+            selectedNode = node;
+            
+            // Show node details
+            showNodeDetails(node);
+        }
+        
+        function showNodeDetails(node) {
+            const details = document.getElementById('node-details');
+            let html = `<h3>${node.type}</h3>`;
+            
+            if (node.description) {
+                html += `<p style="color: #cccccc; margin-bottom: 15px;">${node.description}</p>`;
+            }
+            
+            const properties = [
+                { name: 'Type', value: node.type },
+                { name: 'Position', value: node.position || 'N/A' }
+            ];
+            
+            if (node.value !== undefined) {
+                properties.push({ name: 'Value', value: JSON.stringify(node.value) });
+            }
+            if (node.operator) {
+                properties.push({ name: 'Operator', value: node.operator });
+            }
+            if (node.name && node.name.value) {
+                properties.push({ name: 'Name', value: node.name.value });
+            }
+            if (node.params && node.params.length > 0) {
+                properties.push({ name: 'Parameters', value: node.params.map(p => p.value).join(', ') });
+            }
+            if (node.arguments && node.arguments.length > 0) {
+                properties.push({ name: 'Arguments', value: `${node.arguments.length} arguments` });
+            }
+            
+            for (const prop of properties) {
+                html += `
+                    <div class="node-property">
+                        <span class="property-name">${prop.name}:</span>
+                        <span class="property-value">${prop.value}</span>
+                    </div>
+                `;
+            }
+            
+            details.innerHTML = html;
+        }
+        
+        // Load default example
+        window.addEventListener('load', () => {
+            loadExample('variable');
+        });
+    </script>
+</body>
+</html>
