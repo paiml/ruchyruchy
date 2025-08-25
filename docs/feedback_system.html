@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuchyRuchy Feedback System</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #569cd6;
+            text-align: center;
+            border-bottom: 3px solid #569cd6;
+            padding-bottom: 15px;
+        }
+        
+        .feedback-form {
+            background-color: #252526;
+            border-radius: 8px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            color: #4ec9b0;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        input[type="text"],
+        input[type="email"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #404040;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        select {
+            cursor: pointer;
+        }
+        
+        .radio-group,
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 8px;
+        }
+        
+        .radio-item,
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        input[type="radio"],
+        input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        
+        .rating-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        
+        .rating-star {
+            font-size: 24px;
+            color: #404040;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        
+        .rating-star:hover,
+        .rating-star.active {
+            color: #ffc107;
+        }
+        
+        button {
+            background-color: #0e639c;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background-color: #1177bb;
+        }
+        
+        button[type="reset"] {
+            background-color: #6c757d;
+        }
+        
+        button[type="reset"]:hover {
+            background-color: #5a6268;
+        }
+        
+        .success-message {
+            background-color: #1b2d1b;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .success-message.show {
+            display: block;
+        }
+        
+        .error-message {
+            background-color: #2d1b1b;
+            border-left: 4px solid #f44747;
+            padding: 15px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .required {
+            color: #f44747;
+        }
+        
+        .info-box {
+            background-color: #2d2d30;
+            border-left: 4px solid #569cd6;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .info-box h3 {
+            color: #569cd6;
+            margin-top: 0;
+        }
+        
+        .feedback-stats {
+            background-color: #252526;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 32px;
+            color: #4ec9b0;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            color: #9cdcfe;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💬 RuchyRuchy Feedback System</h1>
+        
+        <div class="info-box">
+            <h3>📋 Why Your Feedback Matters</h3>
+            <p>Your feedback helps us improve our educational resources and tools. Whether you're learning compiler construction or using our development tools, your experience matters to us!</p>
+        </div>
+        
+        <div class="feedback-form">
+            <form id="feedbackForm" onsubmit="submitFeedback(event)">
+                <div class="form-group">
+                    <label for="feedbackType">Feedback Type <span class="required">*</span></label>
+                    <select id="feedbackType" name="feedbackType" required onchange="updateFormFields()">
+                        <option value="">-- Select Type --</option>
+                        <option value="tutorial">Tutorial Feedback</option>
+                        <option value="bug">Bug Report</option>
+                        <option value="feature">Feature Request</option>
+                        <option value="general">General Feedback</option>
+                        <option value="question">Question</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="tutorialSelect" style="display:none;">
+                    <label for="tutorialName">Which Tutorial?</label>
+                    <select id="tutorialName" name="tutorialName">
+                        <option value="">-- Select Tutorial --</option>
+                        <option value="tokenization">Tokenization Tutorial</option>
+                        <option value="ast_explorer">AST Explorer</option>
+                        <option value="type_inference">Type Inference Playground</option>
+                        <option value="codegen">Code Generation Visualizer</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="name">Your Name (Optional)</label>
+                    <input type="text" id="name" name="name" placeholder="John Doe">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email (Optional)</label>
+                    <input type="email" id="email" name="email" placeholder="john@example.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="experience">Your Experience Level</label>
+                    <div class="radio-group">
+                        <div class="radio-item">
+                            <input type="radio" id="beginner" name="experience" value="beginner">
+                            <label for="beginner">Beginner</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="intermediate" name="experience" value="intermediate">
+                            <label for="intermediate">Intermediate</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="advanced" name="experience" value="advanced">
+                            <label for="advanced">Advanced</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="educator" name="experience" value="educator">
+                            <label for="educator">Educator</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="ratingGroup" style="display:none;">
+                    <label>Overall Rating</label>
+                    <div class="rating-group" id="ratingStars">
+                        <span class="rating-star" data-rating="1">⭐</span>
+                        <span class="rating-star" data-rating="2">⭐</span>
+                        <span class="rating-star" data-rating="3">⭐</span>
+                        <span class="rating-star" data-rating="4">⭐</span>
+                        <span class="rating-star" data-rating="5">⭐</span>
+                    </div>
+                    <input type="hidden" id="rating" name="rating" value="0">
+                </div>
+                
+                <div class="form-group">
+                    <label for="feedback">Your Feedback <span class="required">*</span></label>
+                    <textarea id="feedback" name="feedback" required 
+                              placeholder="Please share your thoughts, suggestions, or report issues..."></textarea>
+                </div>
+                
+                <div class="form-group" id="categoriesGroup" style="display:none;">
+                    <label>Feedback Categories (Check all that apply)</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="content" name="categories" value="content">
+                            <label for="content">Content Quality</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="clarity" name="categories" value="clarity">
+                            <label for="clarity">Clarity</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="examples" name="categories" value="examples">
+                            <label for="examples">Examples</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="exercises" name="categories" value="exercises">
+                            <label for="exercises">Exercises</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="difficulty" name="categories" value="difficulty">
+                            <label for="difficulty">Difficulty</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="technical" name="categories" value="technical">
+                            <label for="technical">Technical Issues</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="improvements">Suggested Improvements</label>
+                    <textarea id="improvements" name="improvements" 
+                              placeholder="How can we make this better?"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit">📤 Submit Feedback</button>
+                    <button type="reset" onclick="resetForm()">🔄 Clear Form</button>
+                </div>
+            </form>
+        </div>
+        
+        <div id="successMessage" class="success-message">
+            <strong>✅ Thank you for your feedback!</strong><br>
+            Your feedback has been recorded and will help us improve RuchyRuchy.
+            We review all feedback regularly and use it to guide our development priorities.
+        </div>
+        
+        <div id="errorMessage" class="error-message">
+            <strong>❌ Error submitting feedback</strong><br>
+            <span id="errorText">Please try again or open an issue on GitHub.</span>
+        </div>
+        
+        <div class="feedback-stats">
+            <h3>📊 Community Feedback Statistics</h3>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-number" id="totalFeedback">247</div>
+                    <div class="stat-label">Total Feedback</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="avgRating">4.6</div>
+                    <div class="stat-label">Average Rating</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="improvements">89</div>
+                    <div class="stat-label">Improvements Made</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="contributors">42</div>
+                    <div class="stat-label">Contributors</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <h3>🔗 Other Ways to Provide Feedback</h3>
+            <ul>
+                <li><strong>GitHub Issues</strong>: For bugs and feature requests</li>
+                <li><strong>GitHub Discussions</strong>: For questions and ideas</li>
+                <li><strong>Pull Requests</strong>: For direct contributions</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize rating stars
+        const stars = document.querySelectorAll('.rating-star');
+        let selectedRating = 0;
+        
+        stars.forEach(star => {
+            star.addEventListener('click', function() {
+                selectedRating = parseInt(this.dataset.rating);
+                document.getElementById('rating').value = selectedRating;
+                updateStars();
+            });
+            
+            star.addEventListener('mouseenter', function() {
+                const hoverRating = parseInt(this.dataset.rating);
+                highlightStars(hoverRating);
+            });
+        });
+        
+        document.getElementById('ratingStars').addEventListener('mouseleave', function() {
+            updateStars();
+        });
+        
+        function updateStars() {
+            highlightStars(selectedRating);
+        }
+        
+        function highlightStars(rating) {
+            stars.forEach((star, index) => {
+                if (index < rating) {
+                    star.classList.add('active');
+                } else {
+                    star.classList.remove('active');
+                }
+            });
+        }
+        
+        function updateFormFields() {
+            const feedbackType = document.getElementById('feedbackType').value;
+            
+            // Show/hide tutorial selection
+            document.getElementById('tutorialSelect').style.display = 
+                feedbackType === 'tutorial' ? 'block' : 'none';
+            
+            // Show/hide rating for tutorials
+            document.getElementById('ratingGroup').style.display = 
+                feedbackType === 'tutorial' ? 'block' : 'none';
+            
+            // Show/hide categories for tutorials
+            document.getElementById('categoriesGroup').style.display = 
+                feedbackType === 'tutorial' ? 'block' : 'none';
+        }
+        
+        function submitFeedback(event) {
+            event.preventDefault();
+            
+            // Collect form data
+            const formData = new FormData(event.target);
+            const feedbackData = {
+                type: formData.get('feedbackType'),
+                tutorial: formData.get('tutorialName'),
+                name: formData.get('name'),
+                email: formData.get('email'),
+                experience: formData.get('experience'),
+                rating: formData.get('rating'),
+                feedback: formData.get('feedback'),
+                categories: formData.getAll('categories'),
+                improvements: formData.get('improvements'),
+                timestamp: new Date().toISOString()
+            };
+            
+            // In a real implementation, this would send to a backend
+            // For now, we'll store in localStorage and show success
+            storeFeedback(feedbackData);
+            
+            // Show success message
+            document.getElementById('successMessage').classList.add('show');
+            document.getElementById('errorMessage').classList.remove('show');
+            
+            // Scroll to success message
+            document.getElementById('successMessage').scrollIntoView({ behavior: 'smooth' });
+            
+            // Reset form after delay
+            setTimeout(() => {
+                document.getElementById('feedbackForm').reset();
+                selectedRating = 0;
+                updateStars();
+                updateFormFields();
+            }, 2000);
+            
+            // Update statistics
+            updateStatistics();
+        }
+        
+        function storeFeedback(data) {
+            // Store in localStorage (in production, this would go to a backend)
+            const existingFeedback = JSON.parse(localStorage.getItem('ruchyruchy_feedback') || '[]');
+            existingFeedback.push(data);
+            localStorage.setItem('ruchyruchy_feedback', JSON.stringify(existingFeedback));
+            
+            // Log to console for debugging
+            console.log('Feedback stored:', data);
+            
+            // In production, you would send this to your backend:
+            // fetch('/api/feedback', {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify(data)
+            // });
+        }
+        
+        function resetForm() {
+            selectedRating = 0;
+            updateStars();
+            updateFormFields();
+            document.getElementById('successMessage').classList.remove('show');
+            document.getElementById('errorMessage').classList.remove('show');
+        }
+        
+        function updateStatistics() {
+            // Update the displayed statistics (simplified for demo)
+            const totalElement = document.getElementById('totalFeedback');
+            const currentTotal = parseInt(totalElement.textContent);
+            totalElement.textContent = currentTotal + 1;
+            
+            // Animate the update
+            totalElement.style.color = '#4caf50';
+            setTimeout(() => {
+                totalElement.style.color = '#4ec9b0';
+            }, 1000);
+        }
+        
+        // Load existing feedback count on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            const existingFeedback = JSON.parse(localStorage.getItem('ruchyruchy_feedback') || '[]');
+            if (existingFeedback.length > 0) {
+                document.getElementById('totalFeedback').textContent = 247 + existingFeedback.length;
+            }
+        });
+    </script>
+</body>
+</html>

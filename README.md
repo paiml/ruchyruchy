@@ -226,28 +226,39 @@ See [ROADMAP.md](./ROADMAP.md) for detailed ticket-based development plan:
 
 ## 🤝 Contributing
 
-This project supports the Ruchy ecosystem through education and tooling:
+We welcome contributions! See our comprehensive [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
+
+### Quick Start for Contributors
+
+1. **Choose a ticket** from [ROADMAP.md](./ROADMAP.md)
+2. **Use our templates** in `/templates/` for new content
+3. **Follow quality gates**: `make quality-gate` must pass
+4. **Submit PR** using our [PR template](./.github/pull_request_template.md)
+
+### Contribution Framework Features
+
+#### 📝 Educational Content Templates
+- **HTML Tutorial Template**: Interactive learning experiences
+- **Markdown Tutorial Template**: Comprehensive written guides
+- Both templates include learning objectives, exercises, and feedback widgets
+
+#### 🔍 Review Process
+- Automated quality checks on all PRs
+- Peer review for educational value
+- Performance validation for code changes
+- Clear acceptance criteria for all contributions
+
+#### 💬 Feedback System
+- **Interactive feedback form**: [Provide Feedback](./docs/feedback_system.html)
+- GitHub issue templates for bugs, features, and educational content
+- Community feedback statistics and tracking
+- Multiple feedback channels for different needs
 
 ### Development Principles
 1. **Educational Focus**: All work should teach compiler concepts
 2. **Infrastructure Support**: Tools should help Ruchy ecosystem  
 3. **Quality Standards**: Toyota Way principles maintained
 4. **Ecosystem Integration**: Complement, don't compete with main project
-
-### Contribution Workflow
-```bash
-# 1. Check current roadmap tickets  
-cat ROADMAP.md
-
-# 2. Educational value validation
-make educational-value-check
-
-# 3. Infrastructure testing
-make infrastructure-test
-
-# 4. Quality gates
-make lint && make test && make performance
-```
 
 ## 📊 Success Metrics
 
