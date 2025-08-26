@@ -215,7 +215,7 @@ make quality-report     # Comprehensive quality metrics dashboard
 
 ### Stage 3 - Code Generation
 - Emits idiomatic TypeScript and Rust code
-- Generated code must pass `deno fmt` and `deno lint`
+- Generated code must pass `ruchy fmt` and `ruchy lint`
 - Target: >10K LOC/s throughput
 - Must achieve semantic equivalence with source
 - Property: Behavior preservation across targets
@@ -227,14 +227,14 @@ The project maintains an INTEGRATION.md file tracking:
 - Differential testing results comparing with production compiler
 - Performance regression tracking
 - Quality gate compliance
-- Deno tool validation results
+- Ruchy tool validation results
 
 Success is measured by:
 1. Self-compilation achieving bit-identical output
 2. All property tests passing (10,000+ cases each)
 3. Zero crashes from fuzz testing (1M+ inputs)
 4. Complete boundary documentation
-5. 80%+ test coverage via `deno coverage`
+5. 80%+ test coverage via `ruchy score`
 
 ## Project Management Protocol (Toyota Way)
 
@@ -245,7 +245,7 @@ Success is measured by:
 4. **ZERO SATD tolerance** - No TODO/FIXME/HACK comments allowed
 5. **ALWAYS use formal verification** - Every algorithm must pass `ruchy provability`
 6. **NEVER implement without specification** - All work must reference ROADMAP.md tasks
-7. **ALWAYS use Deno tools** - All tests/validation via Deno binary
+7. **ALWAYS use pure Ruchy** - All tests/validation via ruchy binary
 
 ### Sprint-Based Development Process (MANDATORY)
 **CRITICAL**: Every sprint ends with commit and push to GitHub
@@ -254,7 +254,7 @@ Success is measured by:
 # Sprint Structure (1-2 week cycles aligned with ROADMAP_PHASE2.md)
 Sprint N: VALID-XXX/PROP-XXX/FUZZ-XXX Implementation
 ├── Day 1-3: Implementation following Toyota Way
-├── Day 4-6: Property/fuzz testing via Deno  
+├── Day 4-6: Property/fuzz testing via ruchy test  
 ├── Day 7-10: Boundary analysis and documentation
 └── END: git commit && git push (MANDATORY)
 
