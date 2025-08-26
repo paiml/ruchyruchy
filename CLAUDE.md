@@ -8,18 +8,17 @@ RuchyRuchy is an educational compiler infrastructure project supporting the Ruch
 
 ## Critical Requirements
 
-### MUST Use Deno Binary Tools
-**ALL testing and validation infrastructure in this project MUST use Deno binary tools:**
-- `deno run` - Execute TypeScript/JavaScript code
-- `deno fmt` - Format code
-- `deno lint` - Lint code  
-- `deno test` - Run tests
-- `deno bench` - Run benchmarks
-- `deno compile` - Compile to executables
-- `deno doc` - Generate documentation
-- `deno coverage` - Test coverage analysis
+### MUST Use Pure Ruchy Tooling (Dogfooding)
+**ALL testing and validation infrastructure in this project MUST use Ruchy binary tools:**
+- `ruchy test` - Run tests (pure Ruchy test files)
+- `ruchy lint` - Lint code with A+ quality requirements
+- `ruchy fmt` - Format code to canonical style
+- `ruchy prove` - Formal verification and property testing
+- `ruchy score` - Quality scoring and complexity analysis
+- `ruchy runtime` - Performance analysis and boundary testing
+- `ruchy check` - Type checking and syntax validation
 
-**Rationale**: Deno provides a secure, TypeScript-first runtime with built-in tooling that aligns with our validation goals.
+**Rationale**: A Ruchy project MUST dogfood Ruchy tools. Using external toolchains undermines credibility and prevents self-hosting validation.
 
 ## Phase 2: Validation & Robustness (Current Focus)
 
@@ -28,35 +27,38 @@ Extensive validation of Ruchy tooling against Ruchy code compiled by Ruchy, with
 
 ### Core Validation Objectives
 1. **Self-Compilation Testing**: Validate tools against Ruchy-compiled code
-2. **Property-Based Testing**: Mathematical property validation
+2. **Property-Based Testing**: Mathematical property validation via `ruchy prove`
 3. **Fuzz Testing**: Boundary and edge case discovery
-4. **Deno Integration**: All tests run via Deno toolchain
-5. **Performance Analysis**: Comprehensive boundary mapping
+4. **Pure Ruchy Dogfooding**: All tests written in Ruchy using Ruchy tools
+5. **Performance Analysis**: Comprehensive boundary mapping via `ruchy runtime`
 
 ### Property Testing Requirements
 All property tests MUST:
-- Use `deno test` infrastructure
+- Be written in pure Ruchy (.ruchy files)
+- Use `ruchy prove` for mathematical property validation
 - Test mathematical properties (e.g., roundtrip: `parse(emit(ast)) = ast`)
-- Run minimum 10,000 test cases per property
+- Run minimum 10,000 test cases per property via `ruchy test`
 - Include shrinking for minimal failure cases
-- Track coverage metrics via `deno coverage`
+- Achieve >80% coverage via `ruchy score`
 
 ### Fuzz Testing Requirements
 All fuzz tests MUST:
-- Generate both valid and invalid inputs
+- Be implemented in pure Ruchy
+- Generate both valid and invalid inputs using Ruchy
 - Use grammar-based generation for valid cases
-- Track crash/hang/timeout statistics
-- Minimize failing test cases
-- Store corpus for regression testing
+- Track crash/hang/timeout statistics via `ruchy runtime`
+- Minimize failing test cases using Ruchy tooling
+- Store corpus for regression testing in .ruchy format
 
-### Validation Pipeline
+### Validation Pipeline (Pure Ruchy Only)
 ```bash
-# All validation must use Deno tools
-deno test --allow-all validation/      # Run all validation tests
-deno fmt --check generated/            # Validate generated code format
-deno lint generated/                   # Lint generated code
-deno bench validation/benchmarks/      # Performance validation
-deno coverage --lcov validation/       # Coverage analysis
+# All validation MUST use Ruchy tools
+ruchy test validation/**/*.ruchy       # Run all validation tests
+ruchy fmt validation/**/*.ruchy        # Format all validation code
+ruchy lint validation/**/*.ruchy       # Lint with A+ requirement
+ruchy prove validation/**/*.ruchy      # Formal verification
+ruchy score validation/**/*.ruchy      # Quality analysis >0.8
+ruchy runtime validation/**/*.ruchy    # Performance validation
 ```
 
 ## Architecture
@@ -76,36 +78,43 @@ ruchyruchy/
 │   ├── stage1/         # Syntax analysis (parser, AST)
 │   ├── stage2/         # Type inference (Algorithm W, unification)
 │   └── stage3/         # Code generation (TypeScript/Rust emission)
-├── validation/         # Deno-based testing and validation
-│   ├── property/       # Property-based tests
-│   ├── fuzz/          # Fuzz testing infrastructure
-│   ├── boundary/      # Boundary analysis tests
-│   └── regression/    # Regression test suite
+├── validation/         # Pure Ruchy testing and validation
+│   ├── property/       # Property-based tests (.ruchy files)
+│   ├── fuzz/          # Fuzz testing infrastructure (.ruchy files)
+│   ├── boundary/      # Boundary analysis tests (.ruchy files)
+│   └── regression/    # Regression test suite (.ruchy files)
 └── docs/              # Specifications and documentation
 ```
 
 ## Development Commands
 
-### Phase 2 Validation Commands
+### Phase 2 Validation Commands (Pure Ruchy Only)
 ```bash
-# Property Testing (via Deno)
-deno test validation/property/lexer_test.ts
-deno test validation/property/parser_test.ts
-deno test validation/property/types_test.ts
-deno test validation/property/codegen_test.ts
+# Property Testing (via Ruchy)
+ruchy test validation/property/lexer_test.ruchy
+ruchy test validation/property/parser_test.ruchy
+ruchy test validation/property/types_test.ruchy
+ruchy test validation/property/codegen_test.ruchy
 
-# Fuzz Testing (via Deno)
-deno run --allow-all validation/fuzz/fuzzer.ts
-deno run --allow-all validation/fuzz/grammar_gen.ts
-deno run --allow-all validation/fuzz/differential.ts
+# Property Verification (Mathematical Proofs)
+ruchy prove validation/property/lexer_test.ruchy
+ruchy prove validation/property/parser_test.ruchy
+ruchy prove validation/property/types_test.ruchy
+ruchy prove validation/property/codegen_test.ruchy
 
-# Boundary Analysis (via Deno)
-deno bench validation/boundary/perf_limits.ts
-deno test validation/boundary/feature_matrix.ts
-deno test validation/boundary/error_recovery.ts
+# Fuzz Testing (via Ruchy)
+ruchy test validation/fuzz/fuzzer.ruchy
+ruchy test validation/fuzz/grammar_gen.ruchy
+ruchy test validation/fuzz/differential.ruchy
 
-# Coverage Analysis
-deno coverage --lcov validation/
+# Boundary Analysis (via Ruchy)
+ruchy runtime validation/boundary/perf_limits.ruchy
+ruchy test validation/boundary/feature_matrix.ruchy
+ruchy test validation/boundary/error_recovery.ruchy
+
+# Quality Analysis
+ruchy score validation/**/*.ruchy  # Must achieve >0.8 score
+ruchy lint validation/**/*.ruchy   # Must achieve A+ grade
 ```
 
 ### Bootstrap Build Commands
@@ -129,23 +138,23 @@ make test-self-compilation  # Complete self-compilation test suite
 make test-differential   # Compare output with production compiler
 ```
 
-### Toyota Way Quality Gates (MANDATORY - BLOCKING)
+### Toyota Way Quality Gates (MANDATORY - BLOCKING - Pure Ruchy Only)
 ```bash
 make quality-gate        # Run ALL mandatory quality checks (BLOCKING)
 make validate           # Comprehensive validation including quality gates
-make lint              # Zero-warning linting with clippy -D warnings  
-make test              # All test suites (unit, integration, self-compilation)
-make complexity        # Ensure all functions <20 cyclomatic complexity
-make coverage          # Test coverage analysis (≥80% required)
-make security          # Security vulnerability scan
+make ruchy-lint         # A+ grade requirement via ruchy lint
+make ruchy-test         # All test suites via ruchy test
+make ruchy-prove        # Formal verification via ruchy prove
+make ruchy-score        # Quality score >0.8 via ruchy score
+make ruchy-runtime      # Performance analysis via ruchy runtime
 ```
 
-### Ruchy Formal Verification Integration
+### Ruchy Formal Verification Integration (Dogfooding Excellence)
 ```bash
 # Showcase Ruchy's advanced capabilities on bootstrap code
 make verify-all         # Run formal verification on all stages
 make complexity-analysis # BigO complexity analysis with ruchy runtime
-make provability-check  # Mathematical correctness proofs
+make provability-check  # Mathematical correctness proofs via ruchy prove
 make quality-scoring    # Unified quality assessment with ruchy score
 ```
 
@@ -158,13 +167,14 @@ make quality-report     # Comprehensive quality metrics dashboard
 
 ## Development Workflow
 
-### Quality Requirements
+### Quality Requirements (Pure Ruchy Dogfooding)
 - All functions must have <20 cyclomatic complexity
-- Code must pass `ruchy lint` checks
+- Code must pass `ruchy lint` checks with A+ grade
 - Performance target: <5% overhead vs production compiler
 - Memory usage: <100MB peak RSS for 10K LOC input
-- All tests must run via `deno test`
-- Coverage must exceed 80% via `deno coverage`
+- All tests must run via `ruchy test` (.ruchy files only)
+- Coverage must exceed 80% via `ruchy score`
+- All validation code must be written in pure Ruchy
 
 ### Testing Strategy
 - **Differential Testing**: Compare output with production Ruchy compiler
@@ -174,10 +184,10 @@ make quality-report     # Comprehensive quality metrics dashboard
 - **Fuzz Testing**: Grammar-based and mutation-based fuzzing
 - **Boundary Testing**: Find exact limits of functionality
 
-### File Extensions and Languages
+### File Extensions and Languages (Pure Ruchy Only)
 - `.ruchy` files contain Ruchy language source code
 - Generated output is TypeScript (`.ts`) or Rust code (`.rs`) 
-- Test files are TypeScript (`.test.ts`) run via Deno
+- Test files MUST be pure Ruchy (`.ruchy`) run via `ruchy test`
 - Build artifacts go in `build/` directory
 - JSON intermediate representations for AST and typed AST
 
@@ -194,7 +204,7 @@ make quality-report     # Comprehensive quality metrics dashboard
 - Recursive descent for declarations and statements
 - Target: >5K LOC/s throughput
 - Roundtrip property testing required
-- Property: `parse(emit(ast)) = ast`
+- Property: `parse(emit(ast)) = ast` (verified via `ruchy prove`)
 
 ### Stage 2 - Type Inference
 - Implements Algorithm W (Hindley-Milner type inference)
@@ -248,16 +258,17 @@ Sprint N: VALID-XXX/PROP-XXX/FUZZ-XXX Implementation
 ├── Day 7-10: Boundary analysis and documentation
 └── END: git commit && git push (MANDATORY)
 
-# Sprint Commit Message Format (MANDATORY)
-git commit -m "VALID-XXX: Implement [component] with Deno validation
+# Sprint Commit Message Format (MANDATORY - Pure Ruchy Only)
+git commit -m "VALID-XXX: Implement [component] with pure Ruchy validation
 
 Component: [Validation/Property/Fuzz/Boundary]
-Tests: [X] property tests, [Y] fuzz cases via deno test
-Coverage: [Z]% via deno coverage
+Tests: [X] property tests, [Y] fuzz cases via ruchy test
+Coverage: [Z]% via ruchy score (>0.8 required)
 Boundaries: [List of discovered limits]
-Performance: [actual] vs [target] metrics
+Performance: [actual] vs [target] metrics via ruchy runtime
 
 Toyota Way: [Kaizen/Genchi Genbutsu/Jidoka] principle applied
+Dogfooding: 100% pure Ruchy implementation and testing
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
@@ -271,12 +282,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 make install-hooks
 
 # Every commit automatically validates:
-# 1. Ruchy formal verification (ruchy provability)
+# 1. Ruchy formal verification (ruchy prove)
 # 2. Self-compilation tests (progressive validation)
 # 3. Complexity analysis (functions <20)
-# 4. Lint and test standards
-# 5. Deno format check (deno fmt --check)
-# 6. Deno lint (deno lint)
+# 4. Lint and test standards (ruchy lint A+ grade)
+# 5. Format check (ruchy fmt --check)
+# 6. Quality score (ruchy score >0.8)
 ```
 
 ### INTEGRATION.md Tracking (Single Source of Truth)
@@ -285,7 +296,7 @@ Following the pattern from ../ruchy-book, all progress must be tracked in `INTEG
 - **Property test results** with case counts
 - **Fuzz test statistics** (crashes, hangs, coverage)
 - **Boundary documentation** (limits and capabilities)
-- **Deno tool compatibility** results
+- **Ruchy tool dogfooding** results
 
 **MANDATORY**: Update INTEGRATION.md after every sprint completion.
 
@@ -305,7 +316,7 @@ All stages must meet empirical performance targets:
 - **Stage 1 Parser**: >5K LOC/s with roundtrip validation
 - **Stage 2 TypeCheck**: O(n log n) complexity proof via `ruchy runtime`
 - **Stage 3 CodeGen**: >10K LOC/s with bit-identical output validation
-- **Property Tests**: >1000 cases/second via `deno test`
+- **Property Tests**: >1000 cases/second via `ruchy test`
 - **Fuzz Tests**: >10K inputs/second generation rate
 
 ### Continuous Deployment Protocol
@@ -314,7 +325,7 @@ Following ../rosetta-ruchy pattern:
 2. **GitHub push MANDATORY** after stage validation
 3. **Version bumping** follows semantic versioning
 4. **Quality metrics** tracked in release notes
-5. **Deno coverage reports** included in releases
+5. **Ruchy quality reports** (score, lint, prove) included in releases
 
 ### The Kaizen Refactoring Loop
 ```bash
@@ -327,10 +338,12 @@ make kaizen-refactor --target bootstrap/stage[N]/
 # Step 3: Apply improvements and validate
 make quality-gate
 
-# Step 4: Validate with Deno tools
-deno test validation/
-deno fmt --check
-deno lint
+# Step 4: Validate with Ruchy tools
+ruchy test validation/**/*.ruchy
+ruchy fmt validation/**/*.ruchy
+ruchy lint validation/**/*.ruchy
+ruchy prove validation/**/*.ruchy
+ruchy score validation/**/*.ruchy
 ```
 - push changes at end of each sprint to GitHub
 # important-instruction-reminders
@@ -341,3 +354,5 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 
       
       IMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.
+- no feature can be added or code changed without following TDD.  All examples must be PURE ruchy and use ruchy tooling to test like ../ruchy-repl-demos.
+- lets look at the work from ../ruchy-repl-demo and ../ruchy-book and ensure we copy the style.  in particulare we want TDD.  Ruchy tooling dogfooded, and to never work on code that isn't in roadmap and doesn't have a ticket.
