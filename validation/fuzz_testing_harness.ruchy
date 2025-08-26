@@ -1,0 +1,258 @@
+// VALID-004: Fuzz Testing Harness
+// Boundary and edge case discovery using pure Ruchy
+
+// Main fuzz testing orchestrator
+fun run_fuzz_testing() {
+    println("🎯 Starting comprehensive fuzz testing...")
+    
+    let grammar_results = run_grammar_fuzzing(100000)
+    report_fuzz_results("Grammar-Based", grammar_results)
+    
+    let mutation_results = run_mutation_fuzzing(100000) 
+    report_fuzz_results("Mutation-Based", mutation_results)
+    
+    let boundary_results = run_boundary_fuzzing(50000)
+    report_fuzz_results("Boundary Values", boundary_results)
+    
+    let corpus_results = run_corpus_fuzzing()
+    report_fuzz_results("Regression Corpus", corpus_results)
+    
+    println("🏆 Fuzz testing completed - boundaries discovered!")
+}
+
+// Grammar-based fuzzing
+fun run_grammar_fuzzing(iterations: Int) {
+    let results = {
+        total_cases: 0,
+        crashes: [],
+        hangs: [],
+        errors: [],
+        timeouts: [],
+        successful: 0
+    }
+    
+    println("📝 Grammar-based fuzzing...")
+    
+    for i in 0..iterations {
+        let generated_source = generate_grammar_based_source()
+        let fuzz_result = execute_fuzz_case(generated_source, "grammar-" + str(i))
+        
+        results = record_fuzz_result(results, fuzz_result)
+        
+        if i % 10000 == 0 {
+            print(".")
+        }
+    }
+    
+    println("\n✅ Grammar fuzzing completed")
+    return results
+}
+
+// Mutation-based fuzzing
+fun run_mutation_fuzzing(iterations: Int) {
+    let results = {
+        total_cases: 0, 
+        crashes: [],
+        hangs: [],
+        errors: [],
+        timeouts: [],
+        successful: 0
+    }
+    
+    println("🧬 Mutation-based fuzzing...")
+    
+    let seed_sources = load_valid_ruchy_sources()
+    
+    for i in 0..iterations {
+        let seed = random_choice(seed_sources)
+        let mutated_source = mutate_source(seed)
+        let fuzz_result = execute_fuzz_case(mutated_source, "mutation-" + str(i))
+        
+        results = record_fuzz_result(results, fuzz_result)
+        
+        if i % 10000 == 0 {
+            print(".")  
+        }
+    }
+    
+    println("\n✅ Mutation fuzzing completed")
+    return results
+}
+
+// Boundary value fuzzing
+fun run_boundary_fuzzing(iterations: Int) {
+    let results = {
+        total_cases: 0,
+        crashes: [],
+        hangs: [],  
+        errors: [],
+        timeouts: [],
+        successful: 0
+    }
+    
+    println("🎯 Boundary value fuzzing...")
+    
+    for i in 0..iterations {
+        let boundary_source = generate_boundary_case()
+        let fuzz_result = execute_fuzz_case(boundary_source, "boundary-" + str(i))
+        
+        results = record_fuzz_result(results, fuzz_result)
+        
+        if i % 5000 == 0 {
+            print(".")
+        }
+    }
+    
+    println("\n✅ Boundary fuzzing completed")
+    return results  
+}
+
+// Regression corpus fuzzing
+fun run_corpus_fuzzing() {
+    let results = {
+        total_cases: 0,
+        crashes: [],
+        hangs: [],
+        errors: [],
+        timeouts: [],
+        successful: 0
+    }
+    
+    println("📚 Corpus-based fuzzing...")
+    
+    let corpus_files = glob("validation/corpus/*.ruchy") 
+    
+    for file in corpus_files {
+        let source = read_file(file)
+        let fuzz_result = execute_fuzz_case(source, file)
+        results = record_fuzz_result(results, fuzz_result)
+    }
+    
+    println("✅ Corpus fuzzing completed")
+    return results
+}
+
+// Execute a single fuzz test case
+fun execute_fuzz_case(source: String, case_id: String) {
+    let start_time = current_time_millis()
+    let timeout_ms = 5000
+    
+    // Test lexer resilience
+    let lexer_result = test_component_with_timeout("lexer", source, timeout_ms)
+    
+    if lexer_result["crashed"] || lexer_result["timed_out"] {
+        return {
+            case_id: case_id,
+            source: source,
+            component_failed: "lexer",
+            failure_type: if lexer_result["crashed"] { "crash" } else { "timeout" },
+            error_message: lexer_result["error"],
+            execution_time: current_time_millis() - start_time
+        }
+    }
+    
+    // Test parser resilience  
+    let parser_result = test_component_with_timeout("parser", lexer_result["result"], timeout_ms)
+    
+    if parser_result["crashed"] || parser_result["timed_out"] {
+        return {
+            case_id: case_id,
+            source: source,
+            component_failed: "parser", 
+            failure_type: if parser_result["crashed"] { "crash" } else { "timeout" },
+            error_message: parser_result["error"],
+            execution_time: current_time_millis() - start_time
+        }
+    }
+    
+    // All components handled the input successfully
+    return {
+        case_id: case_id,
+        source: source,
+        component_failed: "none",
+        failure_type: "success", 
+        error_message: "",
+        execution_time: current_time_millis() - start_time
+    }
+}
+
+// Grammar-based source generation
+fun generate_grammar_based_source() -> String {
+    let templates = [
+        "fun f(x) { x + 1 }",
+        "let x = 42",
+        "if true { 1 } else { 2 }",
+        "[1, 2, 3]",
+        "{ a: 1, b: 2 }"
+    ]
+    
+    return random_choice(templates)
+}
+
+// Generate boundary cases
+fun generate_boundary_case() -> String {
+    let patterns = [
+        "a".repeat(10000),                    // Very long identifier
+        "1" + "0".repeat(1000),              // Very large number
+        "[" + "1,".repeat(1000) + "1]",      // Very large array
+        "\"" + "a".repeat(5000) + "\""       // Very long string
+    ]
+    
+    return random_choice(patterns)
+}
+
+// Source mutation
+fun mutate_source(source: String) -> String {
+    let pos = random_int(0, len(source))
+    let insertions = ["(", ")", "{", "}", "[", "]", ";", ","]
+    let insertion = random_choice(insertions)
+    return substring(source, 0, pos) + insertion + substring(source, pos)
+}
+
+// Record fuzz result
+fun record_fuzz_result(results, fuzz_result) {
+    let updated = results
+    updated["total_cases"] = results["total_cases"] + 1
+    
+    if fuzz_result["failure_type"] == "crash" {
+        updated["crashes"] = push(results["crashes"], fuzz_result)
+    } else if fuzz_result["failure_type"] == "timeout" {
+        updated["timeouts"] = push(results["timeouts"], fuzz_result)
+    } else if fuzz_result["failure_type"] == "success" {
+        updated["successful"] = results["successful"] + 1
+    }
+    
+    return updated
+}
+
+// Results reporting
+fun report_fuzz_results(category: String, results) {
+    println("\n📊 " + category + " Fuzzing Results:")
+    println("  Total cases: " + str(results["total_cases"]))
+    println("  Successful: " + str(results["successful"]))
+    println("  Crashes: " + str(len(results["crashes"])))
+    println("  Timeouts: " + str(len(results["timeouts"])))
+    
+    if !is_empty(results["crashes"]) {
+        println("  🚨 CRITICAL: " + str(len(results["crashes"])) + " crashes discovered!")
+    }
+    
+    let failure_rate = ((len(results["crashes"]) + len(results["timeouts"])) * 100) / results["total_cases"]
+    println("  Failure rate: " + str(failure_rate) + "%")
+}
+
+// External functions
+extern fun tokenize(source: String) -> [Token]
+extern fun parse(tokens: [Token]) -> AST
+extern fun current_time_millis() -> Int
+extern fun random_int(min: Int, max: Int) -> Int
+extern fun random_choice(options: [String]) -> String
+extern fun read_file(path: String) -> String
+extern fun glob(pattern: String) -> [String]
+
+// Main entry point
+fun main() {
+    println("🎯 RuchyRuchy Fuzz Testing Harness")
+    run_fuzz_testing()
+    println("🏆 Fuzz testing discovered compiler boundaries!")
+}
