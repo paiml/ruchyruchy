@@ -54,14 +54,18 @@ help:
 	@echo "  make provability-check    - Mathematical correctness proofs"
 	@echo "  make quality-scoring      - Unified quality assessment"
 	@echo ""
-	@echo "🎯 QUALITY GATES (MANDATORY - BLOCKING):"
-	@echo "  make quality-gate     - Run ALL mandatory quality checks (BLOCKING)"
-	@echo "  make validate         - Comprehensive validation (includes quality-gate)"
-	@echo "  make lint            - Zero-warning linting with clippy -D warnings"
-	@echo "  make test            - All test suites (unit, integration, self-compilation)"
-	@echo "  make complexity      - Complexity analysis (all functions ≤20)"
-	@echo "  make coverage        - Test coverage analysis (≥80% required)"
-	@echo "  make security        - Security vulnerability scan"
+	@echo "🎯 TDD QUALITY GATES (../ruchy-book Standard - BLOCKING):"
+	@echo "  make quality-gate         - Run ALL mandatory quality checks (BLOCKING)"
+	@echo "  make tdd-quality-gates    - ../ruchy-book TDD quality gates (100% coverage required)"
+	@echo "  make tdd-harness         - Run comprehensive TDD test harness"
+	@echo "  make validate-100-coverage - Validate 100% line coverage (MANDATORY)"
+	@echo "  make validate            - Full validation with TDD standards"
+	@echo "  make sprint-commit       - Prepare sprint commit with quality validation"
+	@echo "  make lint                - A+ grade linting via ruchy lint --strict" 
+	@echo "  make test                - All validation tests via ruchy test"
+	@echo "  make complexity          - Complexity analysis (all functions ≤20)"
+	@echo "  make coverage            - Test coverage analysis (100% required)"
+	@echo "  make security            - Security vulnerability scan"
 	@echo ""
 	@echo "🔍 TOYOTA WAY ANALYSIS:"
 	@echo "  make analyze-complexity  - Find complexity hotspots (Genchi Genbutsu)"
@@ -397,13 +401,37 @@ quality-scoring:
 
 # Quality Gates (MANDATORY - BLOCKING)
 
-# Comprehensive validation including all quality gates
-validate: quality-gate verify-all
-	@echo "✅ Complete validation passed - project meets Toyota Way standards"
+# Comprehensive validation including all quality gates (Updated with ../ruchy-book TDD standards)
+validate: quality-gate tdd-harness verify-all
+	@echo "✅ Complete validation passed - project meets Toyota Way and ../ruchy-book TDD standards"
 
-# All mandatory quality checks (BLOCKING)
-quality-gate: lint test complexity coverage
+# All mandatory quality checks (BLOCKING) - Updated with 100% coverage requirements
+quality-gate: tdd-quality-gates lint test complexity coverage
 	@echo "🎯 All quality gates passed!"
+
+# TDD Quality Gates (Following ../ruchy-book pattern - MANDATORY)
+tdd-quality-gates:
+	@echo "🚀 Running ../ruchy-book TDD Quality Gates (BLOCKING)"
+	@./scripts/quality-gates.sh
+
+# TDD Test Harness (Following ../ruchy-book comprehensive testing)
+tdd-harness:
+	@echo "🔬 Running TDD Test Harness"
+	@ruchy test scripts/tdd-harness.ruchy
+
+# 100% Coverage Validation (../ruchy-book standard - MANDATORY)
+validate-100-coverage:
+	@echo "📊 Validating 100% line coverage (../ruchy-book requirement)"
+	@ruchy test --coverage --threshold 100 validation/self_compilation_harness.ruchy || (echo "❌ BLOCKED: <100% coverage" && exit 1)
+	@ruchy test --coverage --threshold 100 validation/property_test_framework.ruchy || (echo "❌ BLOCKED: <100% coverage" && exit 1) 
+	@ruchy test --coverage --threshold 100 validation/fuzz_testing_harness.ruchy || (echo "❌ BLOCKED: <100% coverage" && exit 1)
+	@echo "✅ 100% line coverage achieved on all validation files"
+
+# Sprint commit with mandatory quality validation (../ruchy-book pattern)
+sprint-commit: tdd-quality-gates validate-100-coverage
+	@echo "📋 Sprint commit with mandatory quality validation"
+	@echo "🎯 All quality gates passed - ready for commit"
+	@echo "Use: git commit -m 'VALID-XXX: Sprint completion with 100% test coverage'"
 
 # Zero-warning linting
 lint:
