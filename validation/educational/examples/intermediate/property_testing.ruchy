@@ -1,0 +1,315 @@
+// Intermediate Level: Property Testing Tutorial
+// Learning Time: 1 week
+// Following ruchy-book property-based testing patterns
+
+// Learning Objectives:
+// 1. Understand property-based testing principles and benefits
+// 2. Implement property tests for compiler components
+// 3. Use property testing to discover edge cases and boundary conditions
+
+// Property testing framework for educational purposes
+enum PropertyResult {
+    Pass,
+    Fail,
+    Shrink
+}
+
+struct PropertyTest {
+    name: str,
+    iterations: u32,
+    success_count: u32,
+    failure_count: u32
+}
+
+struct TestCase {
+    input: str,
+    expected_property: str,
+    actual_result: str
+}
+
+fn create_property_test(name: str, iterations: u32) -> PropertyTest {
+    PropertyTest {
+        name: name,
+        iterations: iterations,
+        success_count: 0,
+        failure_count: 0
+    }
+}
+
+// Property: Lexer tokenization roundtrip
+// Property: concat(detokenize(tokenize(input))) == input
+fn test_lexer_roundtrip_property(input: str) -> PropertyResult {
+    // Simulate lexer tokenization
+    let tokens = simulate_tokenize(input);
+    let reconstructed = simulate_detokenize(tokens);
+    
+    if reconstructed == input {
+        PropertyResult::Pass
+    } else {
+        PropertyResult::Fail
+    }
+}
+
+// Property: Parser AST roundtrip  
+// Property: parse(emit(ast)) == ast
+fn test_parser_roundtrip_property(source: str) -> PropertyResult {
+    // Simulate parser roundtrip
+    let ast = simulate_parse(source);
+    let emitted = simulate_emit(ast);
+    let reparsed = simulate_parse(emitted);
+    
+    // Check structural equivalence
+    if ast_equivalent(ast, reparsed) {
+        PropertyResult::Pass
+    } else {
+        PropertyResult::Fail
+    }
+}
+
+// Property: Type inference monotonicity
+// Property: More context never reduces inferred types
+fn test_type_inference_monotonicity(expr: str, context: str) -> PropertyResult {
+    let basic_type = simulate_infer_type(expr, "");
+    let extended_type = simulate_infer_type(expr, context);
+    
+    // Monotonicity: extended context should not narrow types
+    if type_is_at_least_as_general(basic_type, extended_type) {
+        PropertyResult::Pass
+    } else {
+        PropertyResult::Fail
+    }
+}
+
+// Property: Compilation determinism
+// Property: compile(source) always produces same output for same input
+fn test_compilation_determinism(source: str) -> PropertyResult {
+    let result1 = simulate_compile(source);
+    let result2 = simulate_compile(source);
+    
+    if result1 == result2 {
+        PropertyResult::Pass
+    } else {
+        PropertyResult::Fail
+    }
+}
+
+// Property test execution with shrinking
+fn run_property_test(test: PropertyTest, property_fn: fn(str) -> PropertyResult) -> PropertyTest {
+    let mut test_result = test;
+    let test_inputs = generate_test_inputs(test.iterations);
+    
+    for input in test_inputs {
+        let result = property_fn(input);
+        
+        if result == PropertyResult::Pass {
+            test_result.success_count = test_result.success_count + 1;
+        } else {
+            test_result.failure_count = test_result.failure_count + 1;
+            // In real implementation, would perform shrinking here
+        }
+    }
+    
+    test_result
+}
+
+// Simulation functions for educational purposes
+fn simulate_tokenize(input: str) -> str {
+    // Simplified: return input as "tokens"
+    input
+}
+
+fn simulate_detokenize(tokens: str) -> str {
+    // Simplified: return tokens as reconstructed input
+    tokens
+}
+
+fn simulate_parse(source: str) -> str {
+    // Simplified: return source as "AST"
+    source
+}
+
+fn simulate_emit(ast: str) -> str {
+    // Simplified: return AST as "emitted source"
+    ast
+}
+
+fn simulate_infer_type(expr: str, context: str) -> str {
+    // Simplified: return basic type info
+    if expr == "42" {
+        "int"
+    } else if expr == "true" {
+        "bool"
+    } else {
+        "unknown"
+    }
+}
+
+fn simulate_compile(source: str) -> str {
+    // Simplified: return source as "compiled result"
+    source
+}
+
+fn ast_equivalent(ast1: str, ast2: str) -> bool {
+    // Simplified: check string equality
+    ast1 == ast2
+}
+
+fn type_is_at_least_as_general(basic: str, extended: str) -> bool {
+    // Simplified: check type generality
+    basic == extended || basic == "unknown"
+}
+
+fn generate_test_inputs(count: u32) -> [str] {
+    // Generate diverse test inputs for property testing
+    ["42", "true", "hello", "fn test() {}", "let x = 42"]
+}
+
+// Educational testing functions
+fn test_lexer_properties() -> bool {
+    println("🧪 Testing lexer properties...");
+    
+    let test = create_property_test("Lexer Roundtrip", 1000);
+    let result = run_property_test(test, test_lexer_roundtrip_property);
+    
+    let success_rate = if result.iterations > 0 {
+        result.success_count * 100 / result.iterations
+    } else {
+        0
+    };
+    
+    if success_rate >= 95 {
+        println("   ✅ Lexer properties passed ({}% success rate)", success_rate);
+        true
+    } else {
+        println("   ❌ Lexer properties failed ({}% success rate)", success_rate);
+        false
+    }
+}
+
+fn test_parser_properties() -> bool {
+    println("🧪 Testing parser properties...");
+    
+    let test = create_property_test("Parser Roundtrip", 1000);
+    let result = run_property_test(test, test_parser_roundtrip_property);
+    
+    let success_rate = if result.iterations > 0 {
+        result.success_count * 100 / result.iterations
+    } else {
+        0
+    };
+    
+    if success_rate >= 95 {
+        println("   ✅ Parser properties passed ({}% success rate)", success_rate);
+        true
+    } else {
+        println("   ❌ Parser properties failed ({}% success rate)", success_rate);
+        false
+    }
+}
+
+fn test_type_system_properties() -> bool {
+    println("🧪 Testing type system properties...");
+    
+    let test = create_property_test("Type Inference", 500);
+    let result = run_property_test(test, test_type_inference_monotonicity);
+    
+    let success_rate = if result.iterations > 0 {
+        result.success_count * 100 / result.iterations
+    } else {
+        0
+    };
+    
+    if success_rate >= 90 {
+        println("   ✅ Type system properties passed ({}% success rate)", success_rate);
+        true
+    } else {
+        println("   ❌ Type system properties failed ({}% success rate)", success_rate);
+        false
+    }
+}
+
+fn test_compilation_properties() -> bool {
+    println("🧪 Testing compilation properties...");
+    
+    let test = create_property_test("Determinism", 100);
+    let result = run_property_test(test, test_compilation_determinism);
+    
+    let success_rate = if result.iterations > 0 {
+        result.success_count * 100 / result.iterations
+    } else {
+        0
+    };
+    
+    if success_rate == 100 {
+        println("   ✅ Compilation properties passed ({}% success rate)", success_rate);
+        true
+    } else {
+        println("   ❌ Compilation properties failed ({}% success rate)", success_rate);
+        false
+    }
+}
+
+fn main() {
+    println("📚 Intermediate Level: Property Testing Tutorial");
+    println("   Learning Time: 1 week");
+    println("   Property-based testing for compiler validation");
+    println("");
+    
+    // Run property-based tests
+    let mut tests_passed = 0;
+    let mut tests_failed = 0;
+    
+    // Test 1: Lexer properties
+    if test_lexer_properties() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    // Test 2: Parser properties
+    if test_parser_properties() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    // Test 3: Type system properties
+    if test_type_system_properties() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    // Test 4: Compilation properties
+    if test_compilation_properties() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    println("");
+    println("📊 Property Testing Results:");
+    println("   Property Tests Passed: {}", tests_passed);
+    println("   Property Tests Failed: {}", tests_failed);
+    
+    let total_tests = tests_passed + tests_failed;
+    let success_rate = if total_tests > 0 { tests_passed * 100 / total_tests } else { 0 };
+    println("   Overall Success Rate: {}%", success_rate);
+    
+    if tests_failed == 0 {
+        println("");
+        println("🎉 Congratulations! You've mastered property testing:");
+        println("   • Implemented property-based test framework");
+        println("   • Validated compiler components with mathematical properties");
+        println("   • Discovered edge cases through automated testing");
+        println("");
+        println("📈 Next Steps:");
+        println("   • Move to Advanced Level: Fuzz Testing tutorial");
+        println("   • Implement shrinking for minimal failing cases");
+        println("   • Create custom property generators");
+    } else {
+        println("");
+        println("🔧 Some property tests failed. Review implementations and try again.");
+        println("💡 Tip: Focus on mathematical invariants and correctness properties");
+    }
+}

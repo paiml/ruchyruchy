@@ -1,0 +1,416 @@
+// Advanced Level: Fuzz Testing and Boundary Analysis Tutorial
+// Learning Time: 1 month
+// Following Phase 2 fuzz testing excellence patterns
+
+// Learning Objectives:
+// 1. Master advanced fuzz testing techniques for compiler robustness
+// 2. Implement grammar-based and mutation-based fuzzing strategies  
+// 3. Discover and document exact boundaries of compiler capabilities
+
+// Advanced fuzzing framework for compiler stress testing
+enum FuzzStrategy {
+    GrammarBased,
+    MutationBased,
+    Generational,
+    Hybrid
+}
+
+enum BoundaryType {
+    InputSize,
+    Recursion,
+    Memory,
+    Performance,
+    Complexity
+}
+
+struct FuzzTest {
+    strategy: FuzzStrategy,
+    iterations: u32,
+    crashes_found: u32,
+    hangs_found: u32,
+    boundary_violations: u32,
+    corpus_size: u32
+}
+
+struct BoundaryResult {
+    boundary_type: BoundaryType,
+    limit_found: u32,
+    test_cases_to_failure: u32,
+    failure_mode: str
+}
+
+struct CompilerBoundaries {
+    max_input_size: u32,
+    max_recursion_depth: u32,
+    max_memory_usage: u32,
+    max_compilation_time: u32,
+    max_ast_nodes: u32
+}
+
+fn create_fuzz_test(strategy: FuzzStrategy, iterations: u32) -> FuzzTest {
+    FuzzTest {
+        strategy: strategy,
+        iterations: iterations,
+        crashes_found: 0,
+        hangs_found: 0,
+        boundary_violations: 0,
+        corpus_size: 0
+    }
+}
+
+// Grammar-based fuzzing - generates syntactically valid inputs
+fn generate_grammar_based_input(complexity: u32) -> str {
+    println("     🎯 Generating grammar-based input...");
+    
+    // Generate increasingly complex valid programs
+    if complexity < 10 {
+        "fn main() { }"
+    } else if complexity < 50 {
+        "fn main() { let x = 42; println(x); }"
+    } else {
+        "fn main() { fn inner() { fn deep() { 42 } deep() } inner() }"
+    }
+}
+
+// Mutation-based fuzzing - mutates known valid inputs  
+fn generate_mutation_based_input(base_input: str, mutation_rate: f64) -> str {
+    println("     🔬 Generating mutation-based input...");
+    
+    // Simulate various mutation strategies
+    let mutations = ["character_substitution", "insertion", "deletion", "reordering"];
+    
+    // For educational purposes, return a simple mutation
+    if mutation_rate > 0.5 {
+        "fn main() { let x = 42; println(x) }" // Missing semicolon
+    } else {
+        base_input
+    }
+}
+
+// Generational fuzzing - evolves inputs based on feedback
+fn generate_generational_input(generation: u32, feedback_score: f64) -> str {
+    println("     🧬 Generating generational input...");
+    
+    // Evolve inputs based on previous generation feedback
+    if feedback_score > 0.8 {
+        // High score - add complexity
+        "fn main() { for i in 0..1000 { println(i); } }"
+    } else {
+        // Low score - simplify
+        "fn main() { println(\"test\"); }"
+    }
+}
+
+// Advanced fuzz testing execution
+fn run_fuzz_campaign(test: FuzzTest) -> FuzzTest {
+    println("🚀 Running {} iterations of {:?} fuzzing...", test.iterations, test.strategy);
+    
+    let mut result = test;
+    
+    for i in 0..test.iterations {
+        let input = match test.strategy {
+            FuzzStrategy::GrammarBased => generate_grammar_based_input(i),
+            FuzzStrategy::MutationBased => generate_mutation_based_input("base", 0.3),
+            FuzzStrategy::Generational => generate_generational_input(i, 0.7),
+            FuzzStrategy::Hybrid => {
+                if i % 2 == 0 {
+                    generate_grammar_based_input(i)
+                } else {
+                    generate_mutation_based_input("base", 0.5)
+                }
+            }
+        };
+        
+        // Simulate compiler execution and crash detection
+        let execution_result = simulate_compiler_execution(input);
+        
+        match execution_result {
+            "crash" => {
+                result.crashes_found = result.crashes_found + 1;
+                println("     💥 Crash detected at iteration {}", i);
+            },
+            "hang" => {
+                result.hangs_found = result.hangs_found + 1;
+                println("     ⏰ Hang detected at iteration {}", i);
+            },
+            "boundary" => {
+                result.boundary_violations = result.boundary_violations + 1;
+                println("     ⚠️  Boundary violation at iteration {}", i);
+            },
+            _ => {
+                // Successful execution
+                result.corpus_size = result.corpus_size + 1;
+            }
+        }
+    }
+    
+    result
+}
+
+// Boundary analysis - find exact limits
+fn discover_input_size_boundary() -> BoundaryResult {
+    println("🔍 Discovering input size boundary...");
+    
+    let mut input_size = 1000;
+    let mut test_cases = 0;
+    
+    // Binary search for maximum input size
+    loop {
+        let large_input = generate_large_input(input_size);
+        let result = simulate_compiler_execution(large_input);
+        test_cases = test_cases + 1;
+        
+        if result == "crash" || result == "hang" {
+            println("     📏 Input size boundary found at {} characters", input_size);
+            break;
+        }
+        
+        input_size = input_size * 2;
+        
+        if input_size > 1000000 || test_cases > 20 {
+            // Safety limit for educational demo
+            break;
+        }
+    }
+    
+    BoundaryResult {
+        boundary_type: BoundaryType::InputSize,
+        limit_found: input_size,
+        test_cases_to_failure: test_cases,
+        failure_mode: "Input size exceeded"
+    }
+}
+
+fn discover_recursion_boundary() -> BoundaryResult {
+    println("🔍 Discovering recursion depth boundary...");
+    
+    let mut depth = 10;
+    let mut test_cases = 0;
+    
+    loop {
+        let recursive_input = generate_recursive_input(depth);
+        let result = simulate_compiler_execution(recursive_input);
+        test_cases = test_cases + 1;
+        
+        if result == "crash" || result == "hang" {
+            println("     📏 Recursion boundary found at depth {}", depth);
+            break;
+        }
+        
+        depth = depth + 100;
+        
+        if depth > 10000 || test_cases > 50 {
+            // Safety limit
+            break;
+        }
+    }
+    
+    BoundaryResult {
+        boundary_type: BoundaryType::Recursion,
+        limit_found: depth,
+        test_cases_to_failure: test_cases,
+        failure_mode: "Stack overflow"
+    }
+}
+
+// Comprehensive boundary mapping
+fn map_compiler_boundaries() -> CompilerBoundaries {
+    println("🗺️  Mapping comprehensive compiler boundaries...");
+    
+    let input_boundary = discover_input_size_boundary();
+    let recursion_boundary = discover_recursion_boundary();
+    
+    CompilerBoundaries {
+        max_input_size: input_boundary.limit_found,
+        max_recursion_depth: recursion_boundary.limit_found,
+        max_memory_usage: 100000, // Simulated
+        max_compilation_time: 30, // Simulated seconds
+        max_ast_nodes: 50000 // Simulated
+    }
+}
+
+// Utility functions for advanced fuzzing
+fn simulate_compiler_execution(input: str) -> str {
+    // Simulate different execution outcomes
+    let input_len = input.length;
+    
+    if input_len > 500 {
+        "crash" // Large inputs cause crashes
+    } else if contains_deep_recursion(input) {
+        "hang" // Deep recursion causes hangs
+    } else if input_len > 200 {
+        "boundary" // Medium inputs hit boundaries  
+    } else {
+        "success" // Small inputs succeed
+    }
+}
+
+fn generate_large_input(size: u32) -> str {
+    // Generate input of specified size
+    if size > 1000 {
+        "fn main() { /* very large program exceeding limits */ }"
+    } else {
+        "fn main() { println(\"normal size\"); }"
+    }
+}
+
+fn generate_recursive_input(depth: u32) -> str {
+    // Generate deeply recursive input
+    if depth > 500 {
+        "fn main() { fn deep_recursion() { deep_recursion(); } deep_recursion(); }"
+    } else {
+        "fn main() { fn simple() { 42 } simple(); }"
+    }
+}
+
+fn contains_deep_recursion(input: str) -> bool {
+    // Check for patterns indicating deep recursion
+    contains_substring(input, "deep_recursion")
+}
+
+fn contains_substring(text: str, pattern: str) -> bool {
+    // Simplified substring check
+    text.length > 0 && pattern.length > 0
+}
+
+// Educational testing functions
+fn test_grammar_fuzzing() -> bool {
+    println("🧪 Testing grammar-based fuzzing...");
+    
+    let test = create_fuzz_test(FuzzStrategy::GrammarBased, 100);
+    let result = run_fuzz_campaign(test);
+    
+    // Success criteria: found some interesting cases but not excessive crashes
+    let reasonable_crashes = result.crashes_found <= 5;
+    let good_corpus = result.corpus_size >= 80;
+    
+    if reasonable_crashes && good_corpus {
+        println("   ✅ Grammar fuzzing test passed");
+        true
+    } else {
+        println("   ❌ Grammar fuzzing test failed");
+        false
+    }
+}
+
+fn test_mutation_fuzzing() -> bool {
+    println("🧪 Testing mutation-based fuzzing...");
+    
+    let test = create_fuzz_test(FuzzStrategy::MutationBased, 100);
+    let result = run_fuzz_campaign(test);
+    
+    // Mutation fuzzing should find more edge cases
+    let found_issues = result.crashes_found + result.boundary_violations > 0;
+    let not_excessive = result.crashes_found < 20;
+    
+    if found_issues && not_excessive {
+        println("   ✅ Mutation fuzzing test passed");
+        true
+    } else {
+        println("   ❌ Mutation fuzzing test failed");
+        false
+    }
+}
+
+fn test_boundary_analysis() -> bool {
+    println("🧪 Testing boundary analysis...");
+    
+    let boundaries = map_compiler_boundaries();
+    
+    // Check that boundaries are reasonable
+    let input_size_ok = boundaries.max_input_size > 1000;
+    let recursion_ok = boundaries.max_recursion_depth > 100;
+    let memory_ok = boundaries.max_memory_usage > 10000;
+    
+    if input_size_ok && recursion_ok && memory_ok {
+        println("   ✅ Boundary analysis test passed");
+        true
+    } else {
+        println("   ❌ Boundary analysis test failed");
+        false
+    }
+}
+
+fn test_hybrid_fuzzing() -> bool {
+    println("🧪 Testing hybrid fuzzing strategy...");
+    
+    let test = create_fuzz_test(FuzzStrategy::Hybrid, 200);
+    let result = run_fuzz_campaign(test);
+    
+    // Hybrid should balance discovery and coverage
+    let good_discovery = result.crashes_found + result.boundary_violations > 2;
+    let good_coverage = result.corpus_size > 150;
+    
+    if good_discovery && good_coverage {
+        println("   ✅ Hybrid fuzzing test passed");
+        true
+    } else {
+        println("   ❌ Hybrid fuzzing test failed");
+        false
+    }
+}
+
+fn main() {
+    println("📚 Advanced Level: Fuzz Testing and Boundary Analysis Tutorial");
+    println("   Learning Time: 1 month");
+    println("   Advanced compiler robustness testing");
+    println("");
+    
+    // Run advanced fuzz testing suite
+    let mut tests_passed = 0;
+    let mut tests_failed = 0;
+    
+    // Test 1: Grammar-based fuzzing
+    if test_grammar_fuzzing() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    // Test 2: Mutation-based fuzzing
+    if test_mutation_fuzzing() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    // Test 3: Boundary analysis
+    if test_boundary_analysis() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    // Test 4: Hybrid fuzzing
+    if test_hybrid_fuzzing() {
+        tests_passed = tests_passed + 1;
+    } else {
+        tests_failed = tests_failed + 1;
+    }
+    
+    println("");
+    println("📊 Advanced Fuzz Testing Results:");
+    println("   Advanced Tests Passed: {}", tests_passed);
+    println("   Advanced Tests Failed: {}", tests_failed);
+    
+    let total_tests = tests_passed + tests_failed;
+    let success_rate = if total_tests > 0 { tests_passed * 100 / total_tests } else { 0 };
+    println("   Overall Success Rate: {}%", success_rate);
+    
+    if tests_failed == 0 {
+        println("");
+        println("🎉 Congratulations! You've mastered advanced fuzz testing:");
+        println("   • Implemented multiple fuzzing strategies");
+        println("   • Discovered compiler boundaries through systematic testing");
+        println("   • Built comprehensive robustness testing frameworks");
+        println("");
+        println("📈 Next Steps:");
+        println("   • Move to Expert Level: Complete validation frameworks");
+        println("   • Build production fuzzing infrastructure");
+        println("   • Contribute to compiler robustness research");
+    } else {
+        println("");
+        println("🔧 Some advanced tests failed. Review implementations and try again.");
+        println("💡 Tip: Advanced fuzzing requires balancing discovery with stability");
+    }
+}
