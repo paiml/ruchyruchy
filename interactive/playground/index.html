@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuchyRuchy Live Compiler Playground</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #f8f8f2;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-align: center;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            text-align: center;
+            margin-top: 0.5rem;
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 200px;
+            gap: 1rem;
+            padding: 1rem;
+            height: calc(100vh - 120px);
+        }
+
+        .editor-panel, .output-panel, .visualization-panel, .controls-panel {
+            background: rgba(40, 42, 54, 0.9);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: rgba(68, 71, 90, 0.8);
+            padding: 0.8rem 1rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #50fa7b;
+            box-shadow: 0 0 10px #50fa7b;
+        }
+
+        .status-indicator.error {
+            background: #ff5555;
+            box-shadow: 0 0 10px #ff5555;
+        }
+
+        .status-indicator.warning {
+            background: #ffb86c;
+            box-shadow: 0 0 10px #ffb86c;
+        }
+
+        .editor-container {
+            height: calc(100% - 50px);
+        }
+
+        .CodeMirror {
+            height: 100%;
+            font-size: 14px;
+        }
+
+        .output-container, .visualization-container {
+            padding: 1rem;
+            height: calc(100% - 50px);
+            overflow-y: auto;
+            font-family: 'SF Mono', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .controls-panel {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(68, 71, 90, 0.8);
+            color: #f8f8f2;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(68, 71, 90, 1);
+        }
+
+        .compilation-stats {
+            margin-left: auto;
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .ast-tree {
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .ast-node {
+            margin-left: 1rem;
+            position: relative;
+        }
+
+        .ast-node::before {
+            content: '├─';
+            position: absolute;
+            left: -1rem;
+            color: #6272a4;
+        }
+
+        .ast-node.last::before {
+            content: '└─';
+        }
+
+        .ast-type {
+            color: #8be9fd;
+            font-weight: bold;
+        }
+
+        .ast-value {
+            color: #f1fa8c;
+        }
+
+        .error-message {
+            color: #ff5555;
+            background: rgba(255, 85, 85, 0.1);
+            padding: 0.5rem;
+            border-radius: 4px;
+            border-left: 3px solid #ff5555;
+            margin: 0.5rem 0;
+        }
+
+        .success-message {
+            color: #50fa7b;
+            background: rgba(80, 250, 123, 0.1);
+            padding: 0.5rem;
+            border-radius: 4px;
+            border-left: 3px solid #50fa7b;
+            margin: 0.5rem 0;
+        }
+
+        .loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid #50fa7b;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 RuchyRuchy Live Compiler Playground</h1>
+        <p>Interactive compiler exploration powered by Ruchy 1.29.0</p>
+    </div>
+
+    <div class="container">
+        <!-- Code Editor Panel -->
+        <div class="editor-panel">
+            <div class="panel-header">
+                <span>📝 Code Editor</span>
+                <div class="status-indicator" id="editor-status"></div>
+            </div>
+            <div class="editor-container">
+                <textarea id="code-editor">// Welcome to the RuchyRuchy Live Compiler Playground!
+// Edit this code to see real-time compilation results
+
+fn main() {
+    println("Hello from RuchyRuchy!");
+    
+    let message = "Exploring compiler internals";
+    println("Status: {}", message);
+    
+    // Try modifying this code to see:
+    // • Real-time syntax checking
+    // • AST visualization
+    // • Type inference results
+    // • Compilation steps
+    
+    let numbers = [1, 2, 3, 4, 5];
+    let sum = calculate_sum(numbers);
+    println("Sum: {}", sum);
+}
+
+fn calculate_sum(nums: [u32]) -> u32 {
+    let mut total = 0;
+    let i = 0;
+    while i < nums.length {
+        total = total + nums[i];
+        i = i + 1;
+    }
+    total
+}</textarea>
+            </div>
+        </div>
+
+        <!-- Output Panel -->
+        <div class="output-panel">
+            <div class="panel-header">
+                <span>📤 Compilation Output</span>
+                <div class="status-indicator" id="output-status"></div>
+            </div>
+            <div class="output-container" id="output-content">
+                <div class="success-message">
+                    ✅ Ready to compile! Click "Compile & Run" to see results.
+                </div>
+                <div style="margin-top: 1rem; opacity: 0.7;">
+                    <strong>Features:</strong><br>
+                    • Real-time syntax validation<br>
+                    • Step-by-step compilation<br>
+                    • AST and type visualization<br>
+                    • Educational mode with explanations
+                </div>
+            </div>
+        </div>
+
+        <!-- AST Visualization Panel -->
+        <div class="visualization-panel">
+            <div class="panel-header">
+                <span>🌳 AST & Type Visualization</span>
+                <div class="status-indicator" id="viz-status"></div>
+            </div>
+            <div class="visualization-container" id="viz-content">
+                <div style="opacity: 0.7; text-align: center; margin-top: 2rem;">
+                    <p>🎯 Abstract Syntax Tree and type information will appear here</p>
+                    <p style="margin-top: 1rem; font-size: 12px;">
+                        The AST shows the parsed structure of your code,<br>
+                        while type annotations show inferred types.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="controls-panel">
+            <button class="btn btn-primary" id="compile-btn">
+                <span id="compile-text">🚀 Compile & Run</span>
+            </button>
+            <button class="btn btn-secondary" id="step-btn">
+                📋 Step Through
+            </button>
+            <button class="btn btn-secondary" id="share-btn">
+                🔗 Share Code
+            </button>
+            <button class="btn btn-secondary" id="examples-btn">
+                📚 Load Example
+            </button>
+            
+            <div class="compilation-stats">
+                <div class="stat">
+                    <span>⏱️</span>
+                    <span id="compile-time">0ms</span>
+                </div>
+                <div class="stat">
+                    <span>📊</span>
+                    <span id="tokens-count">0 tokens</span>
+                </div>
+                <div class="stat">
+                    <span>🎯</span>
+                    <span id="ast-nodes">0 nodes</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/rust/rust.min.js"></script>
+    <script src="playground.js"></script>
+</body>
+</html>
