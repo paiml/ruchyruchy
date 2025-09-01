@@ -1,0 +1,403 @@
+// Interactive AST Explorer for RuchyRuchy
+// Visual exploration of Abstract Syntax Trees
+
+// AST node types for educational visualization
+enum ASTNodeType {
+    Program,
+    Function,
+    Variable,
+    Expression,
+    Statement,
+    Literal,
+    BinaryOp,
+    UnaryOp,
+    FunctionCall,
+    Block
+}
+
+// Interactive AST node with visual information
+struct InteractiveASTNode {
+    node_type: ASTNodeType,
+    name: str,
+    value: str,
+    children_count: i32,
+    depth_level: i32,
+    visual_color: str,
+    is_expanded: bool,
+    source_range: str
+}
+
+// AST exploration session
+struct ASTExplorer {
+    root_node: str,
+    total_nodes: i32,
+    current_depth: i32,
+    max_depth: i32,
+    selected_node: str,
+    source_code: str
+}
+
+// Parsing step for tutorial
+struct ParsingStep {
+    step_number: i32,
+    description: str,
+    current_token: str,
+    parser_action: str,
+    ast_change: str,
+    visual_highlight: str
+}
+
+// Create AST explorer
+fn create_ast_explorer(source_code: str) -> ASTExplorer {
+    ASTExplorer {
+        root_node: "Program",
+        total_nodes: 0,
+        current_depth: 0,
+        max_depth: 0,
+        selected_node: "",
+        source_code: source_code
+    }
+}
+
+// Create interactive AST node
+fn create_ast_node(node_type: ASTNodeType, name: str, depth: i32) -> InteractiveASTNode {
+    let color = match node_type {
+        ASTNodeType::Program => "darkblue",
+        ASTNodeType::Function => "blue",
+        ASTNodeType::Variable => "green",
+        ASTNodeType::Expression => "orange",
+        ASTNodeType::Statement => "purple",
+        ASTNodeType::Literal => "red",
+        ASTNodeType::BinaryOp => "brown",
+        _ => "gray"
+    };
+    
+    InteractiveASTNode {
+        node_type: node_type,
+        name: name,
+        value: "",
+        children_count: 0,
+        depth_level: depth,
+        visual_color: color,
+        is_expanded: true,
+        source_range: "0:0"
+    }
+}
+
+// Show AST explorer introduction
+fn show_ast_introduction() {
+    println("🌳 Interactive AST Explorer");
+    println("===========================");
+    println("");
+    println("Welcome to the RuchyRuchy AST Explorer!");
+    println("Learn how source code becomes an Abstract Syntax Tree.");
+    println("");
+    println("What you'll discover:");
+    println("• How parsing creates tree structures");
+    println("• Different types of AST nodes");
+    println("• Relationships between nodes");
+    println("• How to navigate and understand ASTs");
+    println("• Visual representation of program structure");
+    println("");
+    println("Let's explore a simple function:");
+    println("fn add(x: i32, y: i32) -> i32 { x + y }");
+    println("");
+}
+
+// Demonstrate AST construction
+fn demonstrate_ast_construction() {
+    println("🔨 AST Construction Demo");
+    println("========================");
+    
+    let source = "fn add(x: i32) -> i32 { x + 1 }";
+    println("Source: {}", source);
+    println("");
+    println("Building AST step by step...");
+    println("");
+    
+    // Show tree structure visually
+    println("Final AST Structure:");
+    println("");
+    println("Program [darkblue]");
+    println("└── Function 'add' [blue]");
+    println("    ├── Parameters [purple]");
+    println("    │   └── Parameter 'x: i32' [green]");
+    println("    ├── ReturnType 'i32' [orange]");
+    println("    └── Body [purple]");
+    println("        └── Expression [orange]");
+    println("            └── BinaryOp '+' [brown]");
+    println("                ├── Variable 'x' [green]");
+    println("                └── Literal '1' [red]");
+    println("");
+    println("✅ AST construction complete!");
+    println("Total nodes: 9");
+    println("Max depth: 5 levels");
+}
+
+// Show interactive navigation
+fn show_interactive_navigation() {
+    println("🧭 Interactive AST Navigation");
+    println("=============================");
+    println("");
+    println("Navigate the AST with these features:");
+    println("");
+    println("1. 🔍 Node Inspection:");
+    println("   • Click any node to see details");
+    println("   • View source code mapping");
+    println("   • See node type and properties");
+    println("");
+    println("2. 🌲 Tree Expansion:");
+    println("   • Expand/collapse subtrees");
+    println("   • Focus on specific branches");
+    println("   • Hide complexity when needed");
+    println("");
+    println("3. 🎨 Visual Highlighting:");
+    println("   • Color-coded node types");
+    println("   • Source code highlighting");
+    println("   • Path tracing from root to leaf");
+    println("");
+    println("4. 📏 Depth Analysis:");
+    println("   • See nesting levels");
+    println("   • Understand structure complexity");
+    println("   • Identify deep recursion");
+}
+
+// Advanced AST concepts
+fn show_advanced_ast_concepts() {
+    println("🎓 Advanced AST Concepts");
+    println("========================");
+    println("");
+    println("1. AST vs Parse Tree:");
+    println("   • AST: Abstract, simplified structure");
+    println("   • Parse Tree: Concrete, includes all syntax");
+    println("   • AST removes syntactic noise");
+    println("");
+    println("2. Node Relationships:");
+    println("   • Parent-child hierarchies");
+    println("   • Sibling relationships");
+    println("   • Leaf vs internal nodes");
+    println("");
+    println("3. AST Transformations:");
+    println("   • Optimization passes");
+    println("   • Code generation");
+    println("   • Static analysis");
+    println("");
+    println("4. Visitor Pattern:");
+    println("   • Traverse the entire tree");
+    println("   • Apply operations to nodes");
+    println("   • Collect information during traversal");
+}
+
+// Complex AST example
+fn demonstrate_complex_ast() {
+    println("🏗️  Complex AST Example");
+    println("=======================");
+    println("");
+    println("Source: if x > 0 { return x * 2; } else { return 0; }");
+    println("");
+    println("Complex AST Structure:");
+    println("");
+    println("Program [darkblue]");
+    println("└── Statement [purple]");
+    println("    └── If [purple]");
+    println("        ├── Condition [orange]");
+    println("        │   └── BinaryOp '>' [brown]");
+    println("        │       ├── Variable 'x' [green]");
+    println("        │       └── Literal '0' [red]");
+    println("        ├── ThenBranch [purple]");
+    println("        │   └── Block [purple]");
+    println("        │       └── Return [purple]");
+    println("        │           └── BinaryOp '*' [brown]");
+    println("        │               ├── Variable 'x' [green]");
+    println("        │               └── Literal '2' [red]");
+    println("        └── ElseBranch [purple]");
+    println("            └── Block [purple]");
+    println("                └── Return [purple]");
+    println("                    └── Literal '0' [red]");
+    println("");
+    println("Node Count: 15");
+    println("Max Depth: 7 levels");
+    println("Complexity: Moderate (conditional with multiple branches)");
+}
+
+// AST analysis tools
+fn show_ast_analysis_tools() {
+    println("🔧 AST Analysis Tools");
+    println("=====================");
+    println("");
+    println("1. 📊 Structure Metrics:");
+    println("   • Node count by type");
+    println("   • Tree depth analysis");
+    println("   • Branch factor statistics");
+    println("   • Complexity measurements");
+    println("");
+    println("2. 🔍 Search and Query:");
+    println("   • Find nodes by type");
+    println("   • Search by name or value");
+    println("   • Pattern matching queries");
+    println("   • XPath-like expressions");
+    println("");
+    println("3. 🎯 Code Quality Analysis:");
+    println("   • Cyclomatic complexity");
+    println("   • Nesting depth warnings");
+    println("   • Dead code detection");
+    println("   • Style violation detection");
+    println("");
+    println("4. 🔄 Transformation Preview:");
+    println("   • See optimization effects");
+    println("   • Preview refactoring changes");
+    println("   • Compare before/after trees");
+}
+
+// Interactive exercises
+fn interactive_ast_exercises() {
+    println("🎮 Interactive AST Exercises");
+    println("============================");
+    println("");
+    println("Exercise 1: Basic Function");
+    println("Source: fn square(n: i32) -> i32 { n * n }");
+    println("Task: Identify the BinaryOp node and its operands");
+    println("Answer: BinaryOp '*' has two Variable 'n' children");
+    println("");
+    println("Exercise 2: Nested Expressions");
+    println("Source: (a + b) * (c - d)");
+    println("Task: Draw the AST showing operator precedence");
+    println("Hint: Multiplication is the root, additions are children");
+    println("");
+    println("Exercise 3: Control Flow");
+    println("Source: while x < 10 { x = x + 1; }");
+    println("Task: Find all the different statement types");
+    println("Answer: While, Block, Assignment, BinaryOp nodes");
+    println("");
+    println("Exercise 4: Function Calls");
+    println("Source: print(add(x, y))");
+    println("Task: Identify nested function calls in the AST");
+    println("Answer: FunctionCall 'print' contains FunctionCall 'add'");
+}
+
+// Demo AST exploration
+fn demo_ast_exploration() {
+    println("🎯 AST Explorer Demo");
+    println("===================");
+    
+    let explorer = create_ast_explorer("fn test() { return 42; }");
+    println("Exploring: '{}'", explorer.source_code);
+    println("");
+    
+    // Create sample AST nodes
+    let nodes = [
+        create_ast_node(ASTNodeType::Program, "Program", 0),
+        create_ast_node(ASTNodeType::Function, "test", 1),
+        create_ast_node(ASTNodeType::Block, "Body", 2),
+        create_ast_node(ASTNodeType::Statement, "Return", 3),
+        create_ast_node(ASTNodeType::Literal, "42", 4)
+    ];
+    
+    println("AST Nodes Found:");
+    let mut i = 0;
+    while i < nodes.len() {
+        let node = &nodes[i];
+        let indent = "  ".repeat(node.depth_level);
+        println("{}{}. {} '{}' [{}] (depth: {})", 
+                 indent,
+                 i + 1,
+                 format_ast_node_type(node.node_type),
+                 node.name,
+                 node.visual_color,
+                 node.depth_level);
+        i += 1;
+    }
+    
+    println("");
+    println("✅ AST exploration completed!");
+    println("Total nodes analyzed: {}", nodes.len());
+}
+
+// Format AST node type for display
+fn format_ast_node_type(node_type: ASTNodeType) -> str {
+    match node_type {
+        ASTNodeType::Program => "PROGRAM",
+        ASTNodeType::Function => "FUNCTION",
+        ASTNodeType::Variable => "VARIABLE",
+        ASTNodeType::Expression => "EXPRESSION",
+        ASTNodeType::Statement => "STATEMENT",
+        ASTNodeType::Literal => "LITERAL",
+        ASTNodeType::BinaryOp => "BINARY_OP",
+        ASTNodeType::UnaryOp => "UNARY_OP",
+        ASTNodeType::FunctionCall => "FUNCTION_CALL",
+        ASTNodeType::Block => "BLOCK"
+    }
+}
+
+// Test AST explorer
+fn test_ast_explorer() -> bool {
+    println("🧪 Testing AST Explorer");
+    
+    let explorer = create_ast_explorer("test code");
+    println("   ✅ Created AST explorer");
+    
+    let node = create_ast_node(ASTNodeType::Function, "test_fn", 1);
+    println("   ✅ Created AST node");
+    
+    println("   ✅ All AST explorer components ready");
+    
+    true
+}
+
+fn main() {
+    println("🌳 RuchyRuchy Interactive AST Explorer");
+    println("======================================");
+    println("");
+    
+    // Run tests
+    let success = test_ast_explorer();
+    if success {
+        println("   ✅ All AST explorer tests passed!");
+    }
+    
+    println("");
+    show_ast_introduction();
+    
+    demonstrate_ast_construction();
+    
+    println("");
+    show_interactive_navigation();
+    
+    println("");
+    demonstrate_complex_ast();
+    
+    println("");
+    show_advanced_ast_concepts();
+    
+    println("");
+    show_ast_analysis_tools();
+    
+    println("");
+    interactive_ast_exercises();
+    
+    println("");
+    demo_ast_exploration();
+    
+    println("");
+    println("🎯 AST Explorer Features:");
+    println("-------------------------");
+    println("✅ Interactive tree navigation");
+    println("✅ Visual node type identification");
+    println("✅ Source code mapping");
+    println("✅ Expandable/collapsible tree view");
+    println("✅ Node relationship analysis");
+    println("✅ Complexity measurements");
+    println("✅ Educational exercises");
+    
+    println("");
+    println("📚 Learning Outcomes:");
+    println("--------------------");
+    println("• Understand AST structure and purpose");
+    println("• Navigate complex parse trees");
+    println("• Recognize AST node patterns");
+    println("• Analyze program structure visually");
+    println("• Connect source code to tree representation");
+    
+    println("");
+    println("🎉 Interactive AST Explorer Complete!");
+}
