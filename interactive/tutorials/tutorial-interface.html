@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuchyRuchy Interactive Tutorials</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #f8f8f2;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .user-progress {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(40, 42, 54, 0.6);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+        }
+
+        .progress-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.9rem;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .sidebar {
+            background: rgba(40, 42, 54, 0.9);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .tutorial-list {
+            list-style: none;
+            margin-top: 1rem;
+        }
+
+        .tutorial-item {
+            background: rgba(68, 71, 90, 0.5);
+            margin: 0.5rem 0;
+            padding: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .tutorial-item:hover {
+            background: rgba(68, 71, 90, 0.8);
+            transform: translateX(5px);
+        }
+
+        .tutorial-item.active {
+            border-color: #50fa7b;
+            background: rgba(80, 250, 123, 0.1);
+        }
+
+        .tutorial-item.completed {
+            border-color: #8be9fd;
+            position: relative;
+        }
+
+        .tutorial-item.completed::after {
+            content: '✓';
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #50fa7b;
+            font-size: 1.2rem;
+        }
+
+        .difficulty-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
+        }
+
+        .difficulty-beginner { background: #50fa7b; color: #282a36; }
+        .difficulty-intermediate { background: #ffb86c; color: #282a36; }
+        .difficulty-advanced { background: #ff79c6; color: #282a36; }
+
+        .content-area {
+            background: rgba(40, 42, 54, 0.9);
+            border-radius: 12px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .tutorial-header {
+            margin-bottom: 2rem;
+        }
+
+        .tutorial-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tutorial-meta {
+            display: flex;
+            gap: 2rem;
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        .step-container {
+            background: rgba(68, 71, 90, 0.5);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .instruction-box {
+            background: rgba(139, 233, 253, 0.1);
+            border-left: 3px solid #8be9fd;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .code-editor-container {
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .CodeMirror {
+            height: 300px;
+            font-size: 14px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .btn {
+            padding: 0.7rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #50fa7b, #5af78e);
+            color: #282a36;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(80, 250, 123, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(68, 71, 90, 0.8);
+            color: #f8f8f2;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-hint {
+            background: linear-gradient(135deg, #ffb86c, #ff9f43);
+            color: #282a36;
+        }
+
+        .hints-panel {
+            background: rgba(255, 184, 108, 0.1);
+            border: 1px solid #ffb86c;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            display: none;
+        }
+
+        .hints-panel.show {
+            display: block;
+        }
+
+        .hint-item {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .hint-item::before {
+            content: '💡';
+            position: absolute;
+            left: 0;
+        }
+
+        .output-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            min-height: 100px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        .success-message {
+            color: #50fa7b;
+            padding: 1rem;
+            background: rgba(80, 250, 123, 0.1);
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .error-message {
+            color: #ff5555;
+            padding: 1rem;
+            background: rgba(255, 85, 85, 0.1);
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .progress-bar {
+            background: rgba(68, 71, 90, 0.5);
+            height: 8px;
+            border-radius: 4px;
+            margin: 1rem 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #50fa7b, #8be9fd);
+            transition: width 0.3s ease;
+        }
+
+        .badges-earned {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+
+        .badge {
+            background: rgba(139, 233, 253, 0.1);
+            border: 2px solid #8be9fd;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .badge-icon {
+            font-size: 1.2rem;
+        }
+
+        .achievement-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            padding: 2rem;
+            border-radius: 16px;
+            text-align: center;
+            z-index: 1000;
+            animation: popIn 0.5s ease forwards;
+        }
+
+        @keyframes popIn {
+            to {
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .achievement-popup h3 {
+            font-size: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .achievement-icon {
+            font-size: 4rem;
+            margin: 1rem 0;
+        }
+
+        .leaderboard {
+            background: rgba(68, 71, 90, 0.5);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 2rem;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            margin: 0.3rem 0;
+            border-radius: 4px;
+        }
+
+        .leaderboard-entry:nth-child(1) {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #282a36;
+        }
+
+        .leaderboard-entry:nth-child(2) {
+            background: linear-gradient(135deg, #c0c0c0, #d7d7d7);
+            color: #282a36;
+        }
+
+        .leaderboard-entry:nth-child(3) {
+            background: linear-gradient(135deg, #cd7f32, #e4a853);
+            color: #282a36;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎓 RuchyRuchy Interactive Tutorials</h1>
+        <div class="user-progress">
+            <div class="progress-stat">
+                <span>🏆</span>
+                <span id="total-points">0 points</span>
+            </div>
+            <div class="progress-stat">
+                <span>🏅</span>
+                <span id="badges-count">0 badges</span>
+            </div>
+            <div class="progress-stat">
+                <span>📚</span>
+                <span id="tutorials-completed">0/5 completed</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <!-- Sidebar with tutorial list -->
+        <div class="sidebar">
+            <h3>📚 Tutorial Path</h3>
+            <ul class="tutorial-list" id="tutorial-list">
+                <li class="tutorial-item active" data-tutorial="hello_world">
+                    <div class="tutorial-title">
+                        Hello, RuchyRuchy!
+                        <span class="difficulty-badge difficulty-beginner">Beginner</span>
+                    </div>
+                    <div style="font-size: 0.8rem; opacity: 0.7; margin-top: 0.3rem;">
+                        ⏱️ 10 min • Your first Ruchy program
+                    </div>
+                </li>
+                <li class="tutorial-item" data-tutorial="variables">
+                    <div class="tutorial-title">
+                        Variables and Types
+                        <span class="difficulty-badge difficulty-beginner">Beginner</span>
+                    </div>
+                    <div style="font-size: 0.8rem; opacity: 0.7; margin-top: 0.3rem;">
+                        ⏱️ 15 min • Learn about data types
+                    </div>
+                </li>
+                <li class="tutorial-item" data-tutorial="functions">
+                    <div class="tutorial-title">
+                        Functions in Ruchy
+                        <span class="difficulty-badge difficulty-intermediate">Intermediate</span>
+                    </div>
+                    <div style="font-size: 0.8rem; opacity: 0.7; margin-top: 0.3rem;">
+                        ⏱️ 20 min • Create reusable code
+                    </div>
+                </li>
+                <li class="tutorial-item" data-tutorial="structs">
+                    <div class="tutorial-title">
+                        Working with Structs
+                        <span class="difficulty-badge difficulty-intermediate">Intermediate</span>
+                    </div>
+                    <div style="font-size: 0.8rem; opacity: 0.7; margin-top: 0.3rem;">
+                        ⏱️ 25 min • Data structures
+                    </div>
+                </li>
+                <li class="tutorial-item" data-tutorial="compiler">
+                    <div class="tutorial-title">
+                        Compiler Basics
+                        <span class="difficulty-badge difficulty-advanced">Advanced</span>
+                    </div>
+                    <div style="font-size: 0.8rem; opacity: 0.7; margin-top: 0.3rem;">
+                        ⏱️ 30 min • Understand compilation
+                    </div>
+                </li>
+            </ul>
+
+            <div class="leaderboard">
+                <h4>🏆 Top Learners</h4>
+                <div class="leaderboard-entry">
+                    <span>1. Alice</span>
+                    <span>2450 pts</span>
+                </div>
+                <div class="leaderboard-entry">
+                    <span>2. Bob</span>
+                    <span>2100 pts</span>
+                </div>
+                <div class="leaderboard-entry">
+                    <span>3. Charlie</span>
+                    <span>1850 pts</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main content area -->
+        <div class="content-area">
+            <div class="tutorial-header">
+                <h2 id="tutorial-title">Hello, RuchyRuchy!</h2>
+                <div class="tutorial-meta">
+                    <span>📊 Step 1 of 1</span>
+                    <span>⏱️ Estimated: 10 minutes</span>
+                    <span>🎯 Difficulty: Beginner</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="step-container">
+                <div class="step-header">
+                    <h3>
+                        <span class="step-number">1</span>
+                        Your First Ruchy Program
+                    </h3>
+                    <span id="step-status">🔄 In Progress</span>
+                </div>
+
+                <div class="instruction-box">
+                    <strong>📝 Instructions:</strong><br>
+                    Write a simple program that prints 'Hello, World!' to the console.
+                    Use the <code>println</code> function to display text.
+                </div>
+
+                <div class="code-editor-container">
+                    <textarea id="code-editor">fn main() {
+    // Write your code here
+    
+}</textarea>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="run-btn">
+                        ▶️ Run Code
+                    </button>
+                    <button class="btn btn-secondary" id="check-btn">
+                        ✓ Check Answer
+                    </button>
+                    <button class="btn btn-hint" id="hint-btn">
+                        💡 Get Hint (0/3)
+                    </button>
+                    <button class="btn btn-secondary" id="reset-btn">
+                        🔄 Reset Code
+                    </button>
+                </div>
+
+                <div class="hints-panel" id="hints-panel">
+                    <h4>💡 Hints:</h4>
+                    <div id="hints-content"></div>
+                </div>
+
+                <div class="output-panel" id="output-panel">
+                    <strong>Output:</strong><br>
+                    <span id="output-content">Run your code to see the output...</span>
+                </div>
+
+                <div id="feedback-panel"></div>
+            </div>
+
+            <div class="badges-earned">
+                <h4>🏅 Your Badges:</h4>
+                <div class="badge">
+                    <span class="badge-icon">🎯</span>
+                    <span>First Steps</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Achievement popup -->
+    <div class="achievement-popup" id="achievement-popup" style="display: none;">
+        <div class="achievement-icon">🏆</div>
+        <h3>Achievement Unlocked!</h3>
+        <p id="achievement-text">You completed your first tutorial!</p>
+        <div style="margin-top: 1rem;">+50 points</div>
+    </div>
+
+    <!-- CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/rust/rust.min.js"></script>
+    <script src="tutorial-system.js"></script>
+</body>
+</html>
