@@ -305,6 +305,45 @@
 
 ---
 
+## 🔬 Boundaries Discovered (Dogfooding Results)
+
+### Ruchy v3.89.0 Language Boundaries
+
+Through comprehensive dogfooding and BOOTSTRAP-001 implementation, we discovered important language boundaries:
+
+#### ✅ Parser Capabilities (WORKING)
+- **Enum Syntax**: ✅ `ruchy check` passes - parser fully supports enum declarations
+- **Struct Syntax**: ✅ `ruchy check` passes - parser fully supports struct declarations
+- **Lint Validation**: ✅ `ruchy lint` achieves A+ grade on enum/struct code
+- **Syntax Completeness**: 70+ token types defined and validated
+
+#### ❌ Runtime Limitations (NOT YET IMPLEMENTED)
+- **Enum Execution**: ❌ Runtime error: "Expression type not yet implemented: Enum"
+- **Struct Execution**: ❌ Runtime error: "Expression type not yet implemented: Struct"
+- **Impact**: Code validates syntactically but cannot execute yet
+
+**Evidence** (BOOTSTRAP-001):
+```bash
+$ ruchy check bootstrap/stage0/token_v2.ruchy
+✓ Syntax is valid  # ✅ Parser works!
+
+$ ruchy run bootstrap/stage0/token_v2.ruchy
+Error: Expression type not yet implemented: Enum  # ❌ Runtime doesn't support it
+```
+
+#### 📋 Documented in BOUNDARIES.md
+
+Complete boundary analysis available in [BOUNDARIES.md](BOUNDARIES.md):
+- Parser vs Runtime maturity gap
+- Comment placement restrictions
+- Unicode handling limitations
+- Workarounds for current implementation
+- Recommendations for Ruchy language development
+
+**Key Finding**: Ruchy's **parser is production-ready** for enums/structs, but **runtime support is pending**. This is an important discovery for both this project and Ruchy language development.
+
+---
+
 ## 🔧 Automation Status
 
 ### PMAT Integration
