@@ -1,0 +1,54 @@
+#!/bin/bash
+# RuchyRuchy Commit Message Validation
+# Enforces ticket ID format in commit messages
+
+set -e
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Skip merge commits and revert commits
+if echo "$COMMIT_MSG" | grep -qE "^Merge |^Revert "; then
+    exit 0
+fi
+
+# Check for ticket ID in commit message
+# Valid formats: INFRA-XXX, VALID-XXX, BOOTSTRAP-XXX, PROP-XXX, FUZZ-XXX, BOUND-XXX, FIX, DOCS
+if ! echo "$COMMIT_MSG" | grep -qE '^(INFRA|VALID|BOOTSTRAP|PROP|FUZZ|BOUND|FIX|DOCS|PHASE)-[0-9]{3}'; then
+    echo "❌ ERROR: Missing ticket ID in commit message!"
+    echo ""
+    echo "Commit message must start with a ticket ID:"
+    echo "  INFRA-XXX:     Infrastructure tickets"
+    echo "  VALID-XXX:     Validation tickets"
+    echo "  BOOTSTRAP-XXX: Bootstrap implementation tickets"
+    echo "  PROP-XXX:      Property testing tickets"
+    echo "  FUZZ-XXX:      Fuzz testing tickets"
+    echo "  BOUND-XXX:     Boundary analysis tickets"
+    echo "  FIX:           Bug fixes (use FIX-XXX)"
+    echo "  DOCS:          Documentation (use DOCS-XXX)"
+    echo "  PHASE-XXX:     Phase completion commits"
+    echo ""
+    echo "Example:"
+    echo "  BOOTSTRAP-001: Implement token type definitions"
+    echo ""
+    echo "Your commit message:"
+    echo "  $COMMIT_MSG"
+    echo ""
+    echo "💡 Check roadmap.yaml for available ticket IDs"
+    exit 1
+fi
+
+# Validate ticket exists in roadmap.yaml
+TICKET_ID=$(echo "$COMMIT_MSG" | grep -oE '^[A-Z]+-[0-9]{3}' | head -1)
+
+if [ -f "roadmap.yaml" ]; then
+    if ! grep -q "id: $TICKET_ID" roadmap.yaml; then
+        echo "⚠️  WARNING: Ticket ID '$TICKET_ID' not found in roadmap.yaml"
+        echo "   Consider adding it to maintain traceability"
+        echo ""
+        # Non-blocking warning for now
+    fi
+fi
+
+echo "✅ Commit message format valid: $TICKET_ID"
+exit 0

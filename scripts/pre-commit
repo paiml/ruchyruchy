@@ -1,0 +1,230 @@
+#!/bin/bash
+# RuchyRuchy Pre-commit Quality Gates
+# Extreme TDD with Zero Tolerance + Ticket-Driven Development
+
+set -e
+
+echo "🔍 RuchyRuchy Quality Gates - Ticket-Driven Development"
+echo "========================================================="
+echo ""
+
+# Get staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# 1. TICKET ID ENFORCEMENT
+echo "1️⃣  Checking for ticket ID in commit message..."
+
+# Check if TICKET_ID is in the commit message template
+# Note: We can't check the message before commit, so we validate staged files linkage
+# The actual ticket ID check happens in commit-msg hook
+
+if echo "$STAGED_FILES" | grep -qE '\.(ruchy|rs|md|yaml)$'; then
+    echo "  📋 Code changes detected - ticket ID will be validated in commit message"
+    echo "  ℹ️  Format: INFRA-XXX, VALID-XXX, BOOTSTRAP-XXX, etc."
+fi
+echo ""
+
+# 2. SATD ZERO TOLERANCE
+echo "2️⃣  Checking for SATD (zero tolerance)..."
+
+SATD_FOUND=false
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        if echo "$file" | grep -qE '\.(ruchy|rs|sh|yaml)$'; then
+            if grep -nE "TODO|FIXME|HACK|XXX" "$file" 2>/dev/null; then
+                echo "  ❌ SATD detected in $file"
+                SATD_FOUND=true
+            fi
+        fi
+    fi
+done
+
+if [ "$SATD_FOUND" = true ]; then
+    echo ""
+    echo "❌ ERROR: SATD comments detected!"
+    echo "   Zero-tolerance policy violated"
+    echo "   Please remove all TODO/FIXME/HACK/XXX comments before committing"
+    echo ""
+    echo "💡 Alternative: Create a ticket in roadmap.yaml instead"
+    exit 1
+fi
+echo "  ✅ Zero SATD verified"
+echo ""
+
+# 3. DOCUMENTATION SYNC
+echo "3️⃣  Checking documentation synchronization..."
+
+if echo "$STAGED_FILES" | grep -qE '\.(ruchy|rs)$'; then
+    DOC_UPDATED=false
+
+    # Check if roadmap.yaml or INTEGRATION.md is updated
+    if echo "$STAGED_FILES" | grep -qE '(roadmap\.yaml|INTEGRATION\.md|CHANGELOG\.md)'; then
+        DOC_UPDATED=true
+    fi
+
+    if [ "$DOC_UPDATED" = false ]; then
+        echo "  ❌ ERROR: Code changes require documentation updates!"
+        echo "  📋 Must update at least one of:"
+        echo "     - roadmap.yaml (mark ticket complete)"
+        echo "     - INTEGRATION.md (update status)"
+        echo "     - CHANGELOG.md (document changes)"
+        echo ""
+        echo "💡 Quick fix:"
+        echo "   1. Update roadmap.yaml with ticket status"
+        echo "   2. Update INTEGRATION.md with metrics"
+        echo "   3. Add entry to CHANGELOG.md"
+        exit 1
+    fi
+    echo "  ✅ Documentation updated"
+fi
+echo ""
+
+# 4. RUCHY SYNTAX CHECK
+echo "4️⃣  Running Ruchy syntax validation..."
+
+RUCHY_FILES=$(echo "$STAGED_FILES" | grep '\.ruchy$' || true)
+if [ -n "$RUCHY_FILES" ]; then
+    SYNTAX_FAIL=false
+    for file in $RUCHY_FILES; do
+        if [ -f "$file" ]; then
+            echo -n "  Checking $file... "
+            if ruchy check "$file" 2>/dev/null; then
+                echo "✅"
+            else
+                echo "❌"
+                SYNTAX_FAIL=true
+            fi
+        fi
+    done
+
+    if [ "$SYNTAX_FAIL" = true ]; then
+        echo ""
+        echo "❌ ERROR: Syntax errors detected!"
+        echo "   Fix syntax errors before committing"
+        exit 1
+    fi
+else
+    echo "  ⏭️  No .ruchy files to check"
+fi
+echo ""
+
+# 5. RUCHY LINT CHECK
+echo "5️⃣  Running Ruchy lint validation..."
+
+if [ -n "$RUCHY_FILES" ]; then
+    LINT_FAIL=false
+    for file in $RUCHY_FILES; do
+        # Skip educational examples (they may have demonstration syntax)
+        if echo "$file" | grep -qE 'validation/educational/examples/'; then
+            echo "  ⏭️  Skipping educational example: $file"
+            continue
+        fi
+
+        if [ -f "$file" ]; then
+            echo -n "  Linting $file... "
+            if ruchy lint "$file" 2>/dev/null; then
+                echo "✅"
+            else
+                echo "❌"
+                LINT_FAIL=true
+            fi
+        fi
+    done
+
+    if [ "$LINT_FAIL" = true ]; then
+        echo ""
+        echo "❌ ERROR: Lint violations detected!"
+        echo "   Target: A+ grade required"
+        echo "   Run: ruchy lint <file> for details"
+        exit 1
+    fi
+fi
+echo ""
+
+# 6. PMAT TDG SCORE
+echo "6️⃣  Running PMAT TDG quality check..."
+
+if command -v pmat &> /dev/null; then
+    TDG_SCORE=$(pmat tdg . --format=json 2>/dev/null | grep -o '"score":[0-9.]*' | cut -d: -f2 || echo "0")
+    TDG_MIN=85
+
+    if [ -n "$TDG_SCORE" ]; then
+        TDG_INT=$(echo "$TDG_SCORE" | cut -d. -f1)
+        if [ "$TDG_INT" -lt "$TDG_MIN" ]; then
+            echo "  ❌ TDG Score: $TDG_SCORE (minimum: $TDG_MIN)"
+            echo "   Run: make pmat-analyze for details"
+            exit 1
+        else
+            echo "  ✅ TDG Score: $TDG_SCORE (exceeds $TDG_MIN)"
+        fi
+    else
+        echo "  ⚠️  Could not determine TDG score (non-blocking)"
+    fi
+else
+    echo "  ⏭️  PMAT not installed (skipping TDG check)"
+fi
+echo ""
+
+# 7. ROADMAP VALIDATION
+echo "7️⃣  Validating roadmap.yaml structure..."
+
+if echo "$STAGED_FILES" | grep -q "roadmap\.yaml"; then
+    if [ -f "scripts/validate-roadmap.sh" ]; then
+        if ./scripts/validate-roadmap.sh; then
+            echo "  ✅ roadmap.yaml structure valid"
+        else
+            echo "  ❌ roadmap.yaml validation failed"
+            exit 1
+        fi
+    else
+        echo "  ⚠️  roadmap validator not found (skipping)"
+    fi
+else
+    echo "  ⏭️  roadmap.yaml not modified"
+fi
+echo ""
+
+# 8. FILE SIZE CHECK
+echo "8️⃣  Checking file sizes..."
+
+SIZE_WARNING=false
+for file in $STAGED_FILES; do
+    if [ -f "$file" ] && echo "$file" | grep -qE '\.(ruchy|rs)$'; then
+        # Skip test files
+        if echo "$file" | grep -qE 'test|validation/'; then
+            continue
+        fi
+
+        lines=$(wc -l < "$file" 2>/dev/null || echo "0")
+        if [ "$lines" -gt 500 ]; then
+            echo "  ⚠️  $file has $lines lines (>500)"
+            echo "     Consider breaking into smaller modules"
+            SIZE_WARNING=true
+        fi
+    fi
+done
+
+if [ "$SIZE_WARNING" = false ]; then
+    echo "  ✅ All files within size limits"
+fi
+echo ""
+
+# Summary
+echo "========================================================="
+echo "✅ All quality gates passed!"
+echo ""
+echo "Quality Metrics Enforced:"
+echo "  • Ticket-driven development (commit message check pending)"
+echo "  • Zero SATD tolerance"
+echo "  • Documentation synchronization"
+echo "  • Ruchy syntax validation"
+echo "  • Ruchy lint (A+ grade)"
+echo "  • PMAT TDG score (≥85)"
+echo "  • Roadmap structure validation"
+echo "  • File size recommendations"
+echo ""
+echo "Ready to commit! 🚀"
+echo "Remember: Include ticket ID in commit message (e.g., BOOTSTRAP-001)"
+echo ""
+
+exit 0
