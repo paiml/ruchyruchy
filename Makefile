@@ -5,7 +5,7 @@
 .PHONY: stage0 stage1 stage2 stage3 test-stage0 test-stage1 test-stage2 test-stage3
 .PHONY: bootstrap-all test-self-compilation test-differential
 .PHONY: quality-gate analyze-complexity kaizen-refactor quality-report
-.PHONY: install-deps install-hooks pre-commit sync-version
+.PHONY: install-deps install-hooks validate-roadmap pre-commit sync-version
 .PHONY: bench profile optimize release
 .PHONY: validate-sprint1 validate-deno validate-continuous
 
@@ -198,27 +198,10 @@ update-integration-docs:
 
 # Install git pre-commit hooks
 install-hooks:
-	@echo "🪝 Installing pre-commit quality gates..."
-	@mkdir -p .git/hooks
-	@echo '#!/bin/bash' > .git/hooks/pre-commit
-	@echo 'set -e' >> .git/hooks/pre-commit
-	@echo 'echo "🔒 RuchyRuchy Quality Gates (Toyota Way - BLOCKING)"' >> .git/hooks/pre-commit
-	@echo 'echo ""' >> .git/hooks/pre-commit
-	@echo 'echo "Gate 1: Ruchy formal verification..."' >> .git/hooks/pre-commit
-	@echo 'make verify-all || (echo "❌ BLOCKED: Formal verification failed" && exit 1)' >> .git/hooks/pre-commit
-	@echo 'echo ""' >> .git/hooks/pre-commit
-	@echo 'echo "Gate 2: Self-compilation tests..."' >> .git/hooks/pre-commit
-	@echo 'make test-self-compilation || (echo "❌ BLOCKED: Self-compilation failed" && exit 1)' >> .git/hooks/pre-commit
-	@echo 'echo ""' >> .git/hooks/pre-commit
-	@echo 'echo "Gate 3: Complexity analysis..."' >> .git/hooks/pre-commit
-	@echo 'make complexity || (echo "❌ BLOCKED: Complexity violations found" && exit 1)' >> .git/hooks/pre-commit
-	@echo 'echo ""' >> .git/hooks/pre-commit
-	@echo 'echo "Gate 4: Quality standards..."' >> .git/hooks/pre-commit
-	@echo 'make lint test || (echo "❌ BLOCKED: Quality standards not met" && exit 1)' >> .git/hooks/pre-commit
-	@echo 'echo ""' >> .git/hooks/pre-commit
-	@echo 'echo "✅ All quality gates passed - ready to commit"' >> .git/hooks/pre-commit
-	@chmod +x .git/hooks/pre-commit
-	@echo "✅ Pre-commit hooks installed"
+	@./scripts/install-hooks.sh
+
+validate-roadmap:
+	@./scripts/validate-roadmap.sh
 
 # Bootstrap Stage Implementations
 
