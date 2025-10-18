@@ -1,0 +1,66 @@
+# PMAT Configuration for RuchyRuchy Bootstrap Compiler
+# Following patterns from ../ruchy with bootstrap-specific adjustments
+
+[quality]
+# Bootstrap compiler quality thresholds (slightly relaxed for educational code)
+cyclomatic_complexity = 20          # CLAUDE.md requirement: all functions <20
+cognitive_complexity = 15           # Lower than cyclomatic for maintainability
+halstead_effort = 3000              # Lower than ../ruchy due to smaller codebase
+maintainability_index = 75          # Higher requirement for educational code
+test_coverage = 80                  # Minimum 80% coverage requirement
+mutation_score = 70                 # Property-based testing target
+
+[rules]
+no_satd = true                      # Zero tolerance: No TODO/FIXME/HACK
+max_line_length = 120               # Consistent with Rust standards
+max_function_lines = 50             # Keep functions focused and testable
+
+[exclusions]
+# Exclude educational examples from strict SATD checking (may have TODOs for learning)
+satd_paths = [
+    "validation/educational/**",
+    "docs/examples/**"
+]
+
+# Exclude validation infrastructure from complexity checks (test harnesses can be complex)
+complexity_paths = [
+    "validation/tests/**",
+    "validation/educational/**"
+]
+
+[testing]
+require_property_tests = true       # All validation must include property tests
+require_doctests = true             # Documentation examples must be tested
+require_examples = true             # All APIs must have usage examples
+min_test_coverage = 80              # 80% minimum, 100% target for core validation
+
+[benchmarks]
+# Bootstrap compiler performance targets (from CLAUDE.md)
+lexer_speed = "10000"               # Stage 0: >10K LOC/sec
+parser_speed = "5000"               # Stage 1: >5K LOC/sec
+typechecker_complexity = "nlogn"    # Stage 2: O(n log n) Algorithm W
+codegen_speed = "10000"             # Stage 3: >10K LOC/sec
+
+[ci]
+fail_on_violation = true            # Block commits on quality violations
+generate_reports = true             # Auto-generate quality reports
+block_merge_on_failure = true       # Toyota Way: Jidoka (quality gates)
+
+[validation]
+# Phase 2 validation requirements
+require_self_compilation = true     # All stages must self-compile
+require_property_proofs = true      # Mathematical property validation
+require_fuzz_testing = true         # Boundary discovery via fuzzing
+min_fuzz_cases = 10000              # Minimum fuzz test cases per component
+
+[tdg]
+# TDG (Technical Debt Grade) targets
+min_grade = "A-"                    # Minimum A- grade (85+ score)
+track_hot_tier = true               # Monitor hot data tier performance
+track_warm_tier = true              # Monitor warm data tier usage
+track_cold_tier = true              # Monitor cold data archival
+
+[profiling]
+enable_flame_graphs = true          # Performance profiling visualization
+track_memory_usage = true           # Memory allocation tracking
+track_compilation_time = true       # Build time regression detection
