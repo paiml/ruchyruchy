@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Runtime Enhancements - RuchyRuchy Bootstrap Compiler: A TDD Journey</title>
+        <title>Bootstrap Stage 1: Parser - RuchyRuchy Bootstrap Compiler: A TDD Journey</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../favicon.svg">
-        <link rel="shortcut icon" href="../favicon.png">
-        <link rel="stylesheet" href="../css/variables.css">
-        <link rel="stylesheet" href="../css/general.css">
-        <link rel="stylesheet" href="../css/chrome.css">
-        <link rel="stylesheet" href="../css/print.css" media="print">
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="../fonts/fonts.css">
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../";
+            const path_to_root = "../../";
             const default_light_theme = "rust";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex.js";
+            window.path_to_searchindex_js = "../../searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc.js"></script>
+        <script src="../../toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,13 +141,13 @@
                     <h1 class="menu-title">RuchyRuchy Bootstrap Compiler: A TDD Journey</h1>
 
                     <div class="right-buttons">
-                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/paiml/ruchyruchy" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/paiml/ruchyruchy/edit/main/book/src/discoveries/runtime-enhancements.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                        <a href="https://github.com/paiml/ruchyruchy/edit/main/book/src/phase3_bootstrap/stage1/chapter.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -181,101 +181,104 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="runtime-enhancements-discovered"><a class="header" href="#runtime-enhancements-discovered">Runtime Enhancements Discovered</a></h1>
-<p>This page documents runtime enhancements discovered through dogfooding and the Bug Discovery Protocol.</p>
-<h2 id="v3930-enum-tuple-variant-pattern-matching"><a class="header" href="#v3930-enum-tuple-variant-pattern-matching">v3.93.0: Enum Tuple Variant Pattern Matching</a></h2>
-<p><strong>Discovered During</strong>: BOOTSTRAP-002 (Character Stream Processing)</p>
-<p><strong>Issue</strong>: Pattern matching on enum tuple variants failed in v3.92.0</p>
-<pre><code>Error: Runtime error: No match arm matched the value
-</code></pre>
-<p><strong>Minimal Reproduction</strong>:</p>
-<pre><code class="language-ruchy">enum Position {
-    Pos(i32, i32, i32)
-}
-
-fn get_line(pos: Position) -&gt; i32 {
-    match pos {
-        Position::Pos(line, _, _) =&gt; line  // Failed in v3.92.0
-    }
-}
-</code></pre>
-<p><strong>Resolution</strong>: Fixed in Ruchy v3.93.0</p>
-<p><strong>Impact</strong>: Enabled type-safe position tracking for lexer implementation</p>
-<p><strong>Validation</strong>:</p>
-<pre><code class="language-bash">$ ruchy --version
-ruchy 3.93.0
-
-$ ruchy run bug_reproduction_enum_tuple.ruchy
-Line: 1  # ✅ Works!
-</code></pre>
-<p><strong>Bug Report</strong>: <a href="https://github.com/paiml/ruchyruchy/blob/main/GITHUB_ISSUE_enum_tuple_pattern_matching.md">GITHUB_ISSUE_enum_tuple_pattern_matching.md</a></p>
-<hr />
-<h2 id="v3940-string-iterator-nth-method"><a class="header" href="#v3940-string-iterator-nth-method">v3.94.0: String Iterator .nth() Method</a></h2>
-<p><strong>Discovered During</strong>: BOOTSTRAP-002 (Character Stream Processing)</p>
-<p><strong>Issue</strong>: String character iterator <code>.nth()</code> method not implemented in v3.93.0</p>
-<pre><code>Error: Runtime error: Unknown array method: nth
-</code></pre>
-<p><strong>Minimal Reproduction</strong>:</p>
-<pre><code class="language-ruchy">fn main() {
-    let input = "hello";
-    let c = input.chars().nth(0);  // Failed in v3.93.0
-    match c {
-        Some(ch) =&gt; println("Char: {}", ch.to_string()),
-        None =&gt; println("No char")
-    }
-}
-</code></pre>
-<p><strong>Resolution</strong>: Fixed in Ruchy v3.94.0</p>
-<p><strong>Impact</strong>: Enabled O(1) character-by-index access for lexer</p>
-<p><strong>Validation</strong>:</p>
-<pre><code class="language-bash">$ ruchy --version
-ruchy 3.94.0
-
-$ ruchy run bug_reproduction_string_nth.ruchy
-Char: "h"  # ✅ Works!
-</code></pre>
-<p><strong>Bug Report</strong>: <a href="https://github.com/paiml/ruchyruchy/blob/main/GITHUB_ISSUE_string_nth_method.md">GITHUB_ISSUE_string_nth_method.md</a></p>
-<hr />
-<h2 id="bug-discovery-protocol"><a class="header" href="#bug-discovery-protocol">Bug Discovery Protocol</a></h2>
-<p>All discoveries followed the mandatory Bug Discovery Protocol from CLAUDE.md:</p>
+                        <h1 id="bootstrap-stage-1-parser"><a class="header" href="#bootstrap-stage-1-parser">Bootstrap Stage 1: Parser</a></h1>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>Stage 1 implements a complete parser for Ruchy source code, transforming token streams into Abstract Syntax Trees (ASTs). The parser uses two complementary techniques:</p>
 <ol>
-<li>🚨 <strong>STOP THE LINE</strong> - Immediately halt all work</li>
-<li>📋 <strong>FILE GITHUB ISSUE</strong> - Create detailed reproduction</li>
-<li>🔬 <strong>MINIMAL REPRO</strong> - Provide standalone test case</li>
-<li>⏸️ <strong>WAIT FOR FIX</strong> - No workarounds, wait for proper fix</li>
-<li>✅ <strong>VERIFY FIX</strong> - Test and confirm before resuming</li>
+<li><strong>Pratt Parsing</strong> for expressions (operator precedence)</li>
+<li><strong>Recursive Descent</strong> for statements (top-down parsing)</li>
 </ol>
-<p>This protocol ensures:</p>
+<h2 id="stage-1-components"><a class="header" href="#stage-1-components">Stage 1 Components</a></h2>
+<h3 id="bootstrap-006-full-recursive-ast"><a class="header" href="#bootstrap-006-full-recursive-ast">BOOTSTRAP-006: Full Recursive AST</a></h3>
+<p>Status: ✅ Complete (4/4 tests passing)</p>
+<p>Defines the complete Abstract Syntax Tree node types using <code>Box&lt;T&gt;</code> for recursive structures. This enables:</p>
 <ul>
-<li>Bugs are documented with extreme detail</li>
-<li>Runtime improvements benefit all users</li>
-<li>No workarounds that hide issues</li>
-<li>Clean codebase without hacks</li>
+<li>Nested expressions: <code>1 + (2 * 3)</code></li>
+<li>Recursive unary operators: <code>-(-(42))</code></li>
+<li>Full expression trees with arbitrary depth</li>
 </ul>
-<h2 id="impact-on-project"><a class="header" href="#impact-on-project">Impact on Project</a></h2>
-<p>These runtime enhancements were critical for:</p>
+<p><strong>Key Achievement</strong>: Ruchy v3.96.0 added <code>Box&lt;T&gt;</code> support, unblocking recursive AST implementation.</p>
+<p>See <a href="./bootstrap-006-recursive-ast.html">BOOTSTRAP-006 chapter</a> for full details.</p>
+<h3 id="bootstrap-007-pratt-parser"><a class="header" href="#bootstrap-007-pratt-parser">BOOTSTRAP-007: Pratt Parser</a></h3>
+<p>Status: ✅ Complete (7/7 tests passing)</p>
+<p>Implements expression parsing with operator precedence using the Pratt parsing algorithm. Features:</p>
 <ul>
-<li><strong>Position Tracking</strong>: Type-safe line/column/offset tracking</li>
-<li><strong>Character Access</strong>: Efficient lexer implementation</li>
-<li><strong>Code Quality</strong>: Clean enum-based design patterns</li>
-<li><strong>Educational Value</strong>: Demonstrates real-world dogfooding</li>
+<li>Binding power (precedence levels)</li>
+<li>Left associativity</li>
+<li>Prefix expressions (literals, unary operators)</li>
+<li>Infix expressions (binary operators)</li>
+<li>Recursive expression tree construction</li>
 </ul>
-<h2 id="related-documentation"><a class="header" href="#related-documentation">Related Documentation</a></h2>
+<h3 id="bootstrap-008-statement-parser"><a class="header" href="#bootstrap-008-statement-parser">BOOTSTRAP-008: Statement Parser</a></h3>
+<p>Status: ✅ Complete (6/6 tests passing)</p>
+<p>Implements recursive descent statement parsing for:</p>
 <ul>
-<li><a href="https://github.com/paiml/ruchyruchy/blob/main/BOUNDARIES.md">BOUNDARIES.md</a> - Complete boundary analysis</li>
-<li><a href="https://github.com/paiml/ruchyruchy/blob/main/INTEGRATION.md">INTEGRATION.md</a> - Integration status</li>
-<li><a href="https://github.com/paiml/ruchyruchy/blob/main/CLAUDE.md">CLAUDE.md</a> - Bug Discovery Protocol</li>
+<li>Variable declarations (<code>let</code>)</li>
+<li>Assignments</li>
+<li>Expression statements</li>
+<li>Return statements</li>
+<li>Control flow (<code>break</code>, etc.)</li>
 </ul>
+<h3 id="bootstrap-009-parser-roundtrip-validation"><a class="header" href="#bootstrap-009-parser-roundtrip-validation">BOOTSTRAP-009: Parser Roundtrip Validation</a></h3>
+<p>Status: ✅ Complete (11/11 tests passing)</p>
+<p>Validates the fundamental parser property: <code>parse(emit(ast)) = ast</code></p>
+<p>This guarantees that:</p>
+<ul>
+<li>Parser and code emitter are true inverses</li>
+<li>Parsing is lossless</li>
+<li>AST structure is preserved through roundtrip</li>
+</ul>
+<p>See <a href="./bootstrap-009-roundtrip-validation.html">BOOTSTRAP-009 chapter</a> for full details.</p>
+<h2 id="key-achievements"><a class="header" href="#key-achievements">Key Achievements</a></h2>
+<ol>
+<li><strong>Full Recursive AST</strong>: <code>Box&lt;T&gt;</code> support enables unlimited expression nesting</li>
+<li><strong>Operator Precedence</strong>: Pratt parser correctly handles <code>1 + 2 * 3</code> → <code>Add(1, Mul(2, 3))</code></li>
+<li><strong>Left Associativity</strong>: Correctly parses <code>1 - 2 - 3</code> → <code>Sub(Sub(1, 2), 3)</code></li>
+<li><strong>Roundtrip Property</strong>: Validated with 11 tests covering literals, operators, statements</li>
+<li><strong>Pure Ruchy</strong>: All implementations use Ruchy with full dogfooding</li>
+</ol>
+<h2 id="performance-targets"><a class="header" href="#performance-targets">Performance Targets</a></h2>
+<ul>
+<li><strong>Throughput</strong>: &gt;5K LOC/s (to be measured)</li>
+<li><strong>Self-Parsing</strong>: Parser must parse its own source code (~1,500 LOC)</li>
+<li><strong>Roundtrip</strong>: 100% structural identity preservation</li>
+</ul>
+<h2 id="test-coverage"><a class="header" href="#test-coverage">Test Coverage</a></h2>
+<p>Total Stage 1 Tests: <strong>28 tests</strong> across 4 components</p>
+<ul>
+<li>BOOTSTRAP-006: 4/4 tests (AST construction)</li>
+<li>BOOTSTRAP-007: 7/7 tests (expression parsing)</li>
+<li>BOOTSTRAP-008: 6/6 tests (statement parsing)</li>
+<li>BOOTSTRAP-009: 11/11 tests (roundtrip validation)</li>
+</ul>
+<p><strong>Success Rate</strong>: 100% (28/28 tests passing)</p>
+<h2 id="stage-1-completion"><a class="header" href="#stage-1-completion">Stage 1 Completion</a></h2>
+<p>Stage 1 is <strong>80% complete</strong>:</p>
+<ul>
+<li>✅ BOOTSTRAP-006: Full Recursive AST</li>
+<li>✅ BOOTSTRAP-007: Pratt Parser (expressions)</li>
+<li>✅ BOOTSTRAP-008: Statement Parser (recursive descent)</li>
+<li>✅ BOOTSTRAP-009: Roundtrip Validation</li>
+<li>⏸️ BOOTSTRAP-004: Error Recovery (deferred)</li>
+</ul>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<p>With Stage 1 parser foundation complete:</p>
+<ol>
+<li><strong>Stage 2: Type Checker</strong> - Algorithm W type inference (BLOCKED by parser bug)</li>
+<li><strong>Stage 3: Code Generator</strong> - Emit TypeScript/Rust code</li>
+<li><strong>Full Self-Hosting</strong>: Complete bootstrap compiler</li>
+</ol>
+<p>The parser infrastructure is solid and ready for type checking!</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../phase3_bootstrap/stage0/bootstrap-005-self-tokenization.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../discoveries/boundaries.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../phase3_bootstrap/stage1/bootstrap-006-recursive-ast.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -285,11 +288,11 @@ Char: "h"  # ✅ Works!
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../phase3_bootstrap/stage0/bootstrap-005-self-tokenization.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../discoveries/boundaries.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../phase3_bootstrap/stage1/bootstrap-006-recursive-ast.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -304,13 +307,13 @@ Char: "h"  # ✅ Works!
         </script>
 
 
-        <script src="../elasticlunr.min.js"></script>
-        <script src="../mark.min.js"></script>
-        <script src="../searcher.js"></script>
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
 
-        <script src="../clipboard.min.js"></script>
-        <script src="../highlight.js"></script>
-        <script src="../book.js"></script>
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
 
         <!-- Custom JS scripts -->
 
