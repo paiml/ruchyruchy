@@ -1122,6 +1122,107 @@ Total Tests: 5, Passed: 5, Failed: 0
 
 ---
 
+## ⚠️ BOOTSTRAP-010: Type Environment (RED PHASE COMPLETE - GREEN BLOCKED)
+
+### Status: RED Phase Complete, GREEN Phase Blocked by Parser Issue
+
+BOOTSTRAP-010 aims to implement the type environment for Hindley-Milner type inference (Algorithm W). The RED phase is complete, but GREEN phase implementation encountered a Ruchy parser limitation.
+
+#### RED Phase Complete ✅
+- **File**: `bootstrap/stage2/test_type_environment.ruchy` (185 LOC)
+- **Tests**: 8 tests defined (all SKIP as expected in RED phase)
+- **Validation**: ✅ Syntax valid, executes successfully
+
+**Tests Defined**:
+1. Empty environment creation
+2. Bind variable to monomorphic type
+3. Bind variable to polymorphic type
+4. Multiple bindings (scoping)
+5. Variable shadowing
+6. Lookup non-existent variable
+7. Function type environment
+8. Type generalization
+
+**Type System Foundation Documented**:
+```ruchy
+enum Type {
+    TInt, TBool, TString,
+    TVar(String),
+    TFun(Box<Type>, Box<Type>)
+}
+
+enum Scheme {
+    Mono(Type),           // Monomorphic
+    Poly(String, Type)    // Polymorphic: forall var. type
+}
+
+enum TypeEnv {
+    Empty,
+    Extend(String, Scheme, Box<TypeEnv>)
+}
+```
+
+#### GREEN Phase Blocked ⚠️
+
+**Issue**: Box<Enum> + Match Statement Parser Error
+
+Combining recursive Box<TypeEnv> structures with match statements triggers parser error:
+```
+✗ file.ruchy:N: Syntax error: Expected RightBrace, found Match
+```
+
+**Minimal Reproduction**:
+```ruchy
+enum TypeEnv {
+    Empty,
+    Extend(String, Box<TypeEnv>)
+}
+
+fun lookup(env: TypeEnv, name: String) -> Option {
+    match env {  // ← Triggers parser error
+        TypeEnv::Empty => Option::None,
+        TypeEnv::Extend(var, rest) => Option::Some(...)
+    }
+}
+```
+
+#### Bug Discovery Protocol Applied
+
+1. 🚨 **STOPPED THE LINE** - Halted implementation immediately
+2. 📋 **Filed Bug Report**: `GITHUB_ISSUE_box_enum_match.md`
+3. 🔬 **Created Minimal Reproductions**: Multiple test files
+4. 📋 **Updated BOUNDARIES.md**: Comprehensive documentation
+5. ⏸️ **AWAITING FIX** - Cannot proceed with proper implementation
+
+#### Impact
+
+**Blocks**:
+- BOOTSTRAP-010: Type Environment
+- BOOTSTRAP-011: Unification Algorithm
+- BOOTSTRAP-012: Algorithm W Type Inference
+- **Entire Stage 2 Type Checker**
+
+**Severity**: High - Type checking is critical for self-hosting compiler
+
+#### Files Created
+- `bootstrap/stage2/test_type_environment.ruchy` (185 LOC) - RED phase ✅
+- `GITHUB_ISSUE_box_enum_match.md` - Comprehensive bug report
+- `BOUNDARIES.md` updated with discovery
+
+#### Next Steps
+
+**Recommendation**: Continue with alternative bootstrap components while awaiting fix
+
+**Options**:
+1. **Stage 3 Code Generation** - Less dependent on recursive structures
+2. **Enhanced Testing (VALID-003)** - Property-based testing framework
+3. **Stage 1 Completion** - BOOTSTRAP-010 (program parser integration)
+4. **Wait for Fix** - Return to Stage 2 after Ruchy team addresses issue
+
+**Status**: BOOTSTRAP-010 at 50% (RED complete, GREEN blocked)
+
+---
+
 ## 🔬 Boundaries Discovered (Dogfooding Results)
 
 ### Ruchy v3.89.0 Language Boundaries

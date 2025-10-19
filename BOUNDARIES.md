@@ -604,4 +604,171 @@ This document is continuously updated as we discover new boundaries through comp
 - BOOTSTRAP-003 Core Lexer complete with 100% test pass rate (8/8 tests)
 - BOOTSTRAP-006 AST types can now use Box<T> (full recursive structures)
 - Comprehensive boundary analysis framework implemented
-- Bug Discovery Protocol applied 5 times with detailed reproductions
+- Bug Discovery Protocol applied 6 times with detailed reproductions
+
+---
+
+## 📝 BOOTSTRAP-010 Discovery: Box<Enum> + Match Statement Parser Issue
+
+**Status**: ⚠️ **PARSER ERROR** (as of v3.96.0 - October 19, 2025)
+**Impact**: Blocks BOOTSTRAP-010, BOOTSTRAP-011, BOOTSTRAP-012 (Stage 2 Type Checker)
+**Severity**: High - Type inference implementation depends on this
+
+### Issue Description
+
+Combining recursive Box<Enum> structures with match statements triggers parser error.
+
+**Error Observed**:
+```
+✗ file.ruchy:N: Syntax error: Expected RightBrace, found Match
+```
+
+The error points to incorrect line (end of file instead of actual issue).
+
+### Minimal Reproduction
+
+```ruchy
+enum TypeEnv {
+    Empty,
+    Extend(String, Box<TypeEnv>)  // Recursive Box<Enum>
+}
+
+enum Option {
+    None,
+    Some(i32)
+}
+
+fun lookup(env: TypeEnv, name: String) -> Option {
+    match env {                           // Match on recursive enum
+        TypeEnv::Empty => Option::None,
+        TypeEnv::Extend(var, rest) => {
+            if var == name {
+                Option::Some(42)
+            } else {
+                Option::None
+            }
+        }
+    }
+}
+
+fun main() {
+    println("Test");
+}
+
+main();  // ← Error reported here (line N)
+```
+
+### What Works
+
+**Box<T> recursion alone** (✅ Works in v3.96.0):
+```ruchy
+enum Expr {
+    Binary(Box<Expr>, Box<Expr>)  // ✅ Works
+}
+
+fun main() {
+    let e = Expr::Binary(Box::new(Expr::Binary(...)));  // ✅ Works
+}
+```
+
+**Match statements alone** (✅ Works):
+```ruchy
+enum MyOption {
+    None,
+    Some(i32)
+}
+
+fun test() -> bool {
+    match MyOption::Some(42) {  // ✅ Works
+        MyOption::None => false,
+        MyOption::Some(_) => true
+    }
+}
+```
+
+**What Fails**: Combining recursive Box<Enum> + match on that enum in function context
+
+### Impact on Bootstrap Compiler
+
+**Blocks Stage 2 Type Checker**:
+- BOOTSTRAP-010: Type Environment (needs recursive env with lookup)
+- BOOTSTRAP-011: Unification Algorithm (needs type traversal)
+- BOOTSTRAP-012: Algorithm W (needs both)
+
+**Type environment is essential**:
+```ruchy
+// Need this structure for Hindley-Milner:
+enum TypeEnv {
+    Empty,
+    Extend(String, Scheme, Box<TypeEnv>)
+}
+
+// Need to match on it:
+fun lookup(env: TypeEnv, name: String) -> Option<Scheme> {
+    match env {
+        TypeEnv::Empty => None,
+        TypeEnv::Extend(var, scheme, rest) => {
+            if var == name {
+                Some(scheme)
+            } else {
+                lookup(*rest, name)  // Recursive lookup
+            }
+        }
+    }
+}
+```
+
+### Workarounds Attempted
+
+1. **Simplified Option enum**: Still fails
+2. **Removed Box access in match**: Still fails
+3. **Different function signatures**: Still fails
+4. **Restructured code**: Still fails
+
+**Root Cause**: Parser issue specific to Box<Enum> + match combination
+
+### Bug Discovery Protocol Applied
+
+1. 🚨 **STOPPED THE LINE** - Halted BOOTSTRAP-010 implementation
+2. 📋 **Filed Bug Report**: `GITHUB_ISSUE_box_enum_match.md`
+3. 🔬 **Created Minimal Reproductions**:
+   - `bootstrap/stage2/type_env_simple.ruchy` (fails)
+   - `/tmp/test_match.ruchy` (works - no Box recursion)
+   - Working Box examples from BOOTSTRAP-006/007
+4. 📋 **Updated BOUNDARIES.md**: This entry
+5. ⏸️ **AWAITING FIX** - Cannot proceed with proper type environment
+
+### Files
+
+**Blocked Implementation**:
+- `bootstrap/stage2/test_type_environment.ruchy` (185 LOC) - RED phase ✅
+- `bootstrap/stage2/type_environment.ruchy` (fails parsing)
+- `bootstrap/stage2/type_env_simple.ruchy` (minimal repro - fails)
+
+**Bug Report**:
+- `GITHUB_ISSUE_box_enum_match.md` (comprehensive reproduction)
+
+### Next Steps
+
+**Option A**: Wait for Ruchy team fix (recommended)
+- File issue at https://github.com/paiml/ruchy/issues
+- Continue with other bootstrap components
+- Return to Stage 2 after fix
+
+**Option B**: Simplified workaround (limited)
+- Use flat data structures (no recursion)
+- Limited type environment (single scope only)
+- Would need refactoring after fix
+
+**Option C**: Switch to Stage 3 (Code Generation)
+- Stage 3 has less dependency on recursive structures
+- Can validate code emission without full type checker
+- Return to Stage 2 after fix
+
+### Status
+
+**Current**: BOOTSTRAP-010 at 50% (RED phase complete, GREEN phase blocked)
+
+**Recommendation**: Follow Option A - file issue, document thoroughly, continue with other work
+
+**Priority**: High - This is a critical feature for any type system implementation
