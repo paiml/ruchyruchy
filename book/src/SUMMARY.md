@@ -8,6 +8,7 @@
   - [BOOTSTRAP-001: Token Type Definitions](./phase3_bootstrap/stage0/bootstrap-001-token-types.md)
   - [BOOTSTRAP-002: Character Stream Processing](./phase3_bootstrap/stage0/bootstrap-002-char-stream.md)
   - [BOOTSTRAP-003: Core Lexer Implementation](./phase3_bootstrap/stage0/bootstrap-003-core-lexer.md)
+  - [BOOTSTRAP-005: Self-Tokenization Test](./phase3_bootstrap/stage0/bootstrap-005-self-tokenization.md)
 
 # Discoveries
 
