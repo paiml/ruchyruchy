@@ -374,13 +374,75 @@ $ ruchy run validation/boundary_analysis_framework.ruchy
 
 **Evidence**: VALID-005 (Boundary Analysis Framework)
 
+## 📝 BOOTSTRAP-002 Discovery: Ruchy v3.93.0 & v3.94.0 Runtime Enhancements
+
+### Enum Tuple Variant Pattern Matching (Fixed in v3.93.0)
+- **Status**: ✅ **FULLY WORKING** (as of v3.93.0)
+- **Discovery**: Initially failed with "No match arm matched the value" in v3.92.0
+- **Resolution**: Fixed in v3.93.0 release
+- **Testing**: Comprehensive pattern matching on `Position::Pos(i32, i32, i32)`
+
+**Evidence (v3.93.0)**:
+```ruchy
+enum Position {
+    Pos(i32, i32, i32)
+}
+
+fn position_line(pos: Position) -> i32 {
+    match pos {
+        Position::Pos(line, _, _) => line  // ✅ Works in v3.93.0
+    }
+}
+```
+
+### String Iterator .nth() Method (Fixed in v3.94.0)
+- **Status**: ✅ **FULLY WORKING** (as of v3.94.0)
+- **Discovery**: Initially failed with "Unknown array method: nth" in v3.93.0
+- **Resolution**: Fixed in v3.94.0 release
+- **Use Case**: Character-by-index access for lexer implementation
+
+**Evidence (v3.94.0)**:
+```ruchy
+let input = "hello";
+let c = input.chars().nth(0);  // ✅ Works in v3.94.0
+match c {
+    Some(ch) => ch.to_string(),
+    None => "\0"
+}
+```
+
+### BOOTSTRAP-002 Success
+- **Component**: Character Stream Processing
+- **Tests**: 8/8 passed (100% success rate)
+- **Features Validated**:
+  - Enum tuple variant construction and pattern matching
+  - Position tracking with line/column/offset
+  - Character access via .nth() method
+  - Lookahead support
+  - Newline tracking
+  - EOF detection
+  - O(1) performance
+
+**Validation**:
+```bash
+$ ruchy --version
+ruchy 3.94.0
+
+$ ruchy run bootstrap/stage0/char_stream_v3.ruchy
+✅ All 8 tests passed (100% success rate)
+```
+
+**Evidence**: BOOTSTRAP-002 (Character Stream Processing)
+
 ---
 
 This document is continuously updated as we discover new boundaries through comprehensive dogfooding and testing.
 
-**Last Updated**: October 19, 2025 (VALID-005: Systematic boundary analysis complete)
-**Ruchy Version**: v3.92.0+
+**Last Updated**: October 19, 2025 (BOOTSTRAP-002: Ruchy v3.94.0 runtime enhancements confirmed)
+**Ruchy Version**: v3.94.0
 **Major Changes**:
-- Enum runtime fully supported - BOOTSTRAP-001 now executable!
+- Enum tuple variant pattern matching FULLY WORKING (v3.93.0)
+- String iterator .nth() method FULLY WORKING (v3.94.0)
+- BOOTSTRAP-002 Character Stream complete with 100% test pass rate
 - Comprehensive boundary analysis framework implemented
 - 100% boundary test success rate achieved
