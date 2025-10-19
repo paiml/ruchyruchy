@@ -5,7 +5,7 @@
 **Book Title**: RuchyRuchy Bootstrap Compiler: A TDD Journey
 **Authors**: Noah Gift, Claude Code
 **Build Tool**: mdBook
-**Deployment**: GitHub Pages (ruchyruchy.paiml.com)
+**Deployment**: GitHub Pages (paiml.github.io/ruchyruchy)
 **Status**: ✅ Ready for Publication
 
 ---
@@ -69,7 +69,7 @@
 4. Deploy to GitHub Pages (`peaceiris/actions-gh-pages@v3`)
 
 ### GitHub Pages Configuration
-**Domain**: ruchyruchy.paiml.com (CNAME configured)
+**Domain**: paiml.github.io/ruchyruchy (CNAME configured)
 **Branch**: gh-pages (auto-created by workflow)
 **Directory**: `./book/book`
 **Status**: Will deploy on next push to main
@@ -158,7 +158,7 @@ git push origin main
 GitHub Actions will:
 1. Build the book
 2. Deploy to gh-pages branch
-3. Publish to ruchyruchy.paiml.com
+3. Publish to paiml.github.io/ruchyruchy
 
 ### Manual (If Needed)
 ```bash
@@ -173,8 +173,8 @@ mdbook build
 1. ✅ Book builds successfully
 2. ✅ GitHub Actions workflow configured
 3. ✅ CNAME configured for custom domain
-4. ⏳ Next push to main will deploy to ruchyruchy.paiml.com
-5. ⏳ Verify DNS settings for ruchyruchy.paiml.com point to GitHub Pages
+4. ⏳ Next push to main will deploy to paiml.github.io/ruchyruchy
+5. ⏳ Verify DNS settings for paiml.github.io/ruchyruchy point to GitHub Pages
 
 ---
 
@@ -190,5 +190,5 @@ mdbook build
 ---
 
 **Status**: ✅ Ready for Publication
-**URL**: https://ruchyruchy.paiml.com (will be live after deployment)
+**URL**: https://paiml.github.io/ruchyruchy (will be live after deployment)
 **Last Updated**: October 19, 2025
