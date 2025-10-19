@@ -24,8 +24,8 @@ All boundaries discovered through:
 
 **Discovered**: 2025-10-19 during VALID-003-EXTENDED implementation
 **Severity**: **HIGH** - Variable type corruption at runtime
-**Status**: ❌ **BLOCKING BUG** - Workaround available
-**GitHub Issue**: https://github.com/paiml/ruchy/issues/38 ⭐ **FILED**
+**Status**: ✅ **FIXED** in Ruchy v3.98.0 (2025-10-19)
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/38 ⭐ **RESOLVED**
 
 #### Problem Description
 When unpacking tuples returned from functions with nested calls, variable names can collide with variable names in deeper call stack frames, causing type corruption.
@@ -108,7 +108,35 @@ fun next_random(seed: i32) -> i32 {
 
 ✅ **WORKAROUND VALIDATED**: Renaming variables eliminates the corruption
 
-#### Impact
+#### Resolution (v3.98.0)
+
+**Fixed**: 2025-10-19 in Ruchy v3.98.0
+
+The Ruchy team resolved this issue in version 3.98.0, released the same day as the bug report. The fix implements proper lexical scoping where inner function variables no longer affect outer scope.
+
+**Validation**: Tested with original reproduction code - now works correctly:
+```ruchy
+// Previously failed, now works in v3.98.0
+fun main() {
+    let r1 = random_string(42, 5);
+    let a = r1.0;  // ✅ Correctly maintains String type
+    let b = "world".to_string();
+    let result = a + b;  // ✅ No longer fails
+    println("result = {}", result);  // Outputs: "helloworld"
+}
+```
+
+**Test File**: `test_bug_38_fixed.ruchy` - Confirms fix in v3.98.0
+
+**Outcome**:
+- ✅ Variable collision eliminated
+- ✅ Type safety restored
+- ✅ Complex nested calls now reliable
+- ✅ No workaround needed in v3.98.0+
+
+**Recommendation**: Upgrade to Ruchy v3.98.0 or later. The workaround (renaming variables) is no longer necessary but remains harmless if kept for code clarity.
+
+#### Impact (Historical - Fixed in v3.98.0)
 - **BLOCKS**: VALID-003-EXTENDED property testing with random generation
 - **BLOCKS**: Any complex tuple-returning functions with nested calls
 - **AFFECTS**: Variable scoping and lexical closure semantics

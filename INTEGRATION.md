@@ -504,9 +504,9 @@ Extension of VALID-003 with enhanced property testing framework validating real 
 - **Result**: ✅ 100% pass rate (1000/1000)
 - **Guarantee**: Parser simulation ready for integration with BOOTSTRAP-009
 
-### Bug Discovery: Variable Name Collision (v3.96.0)
+### Bug Discovery: Variable Name Collision (v3.96.0) - ✅ RESOLVED
 
-**Critical Runtime Bug Discovered**:
+**Critical Runtime Bug Discovered and Fixed**:
 - **Issue**: Variable name collision in nested function calls with tuple unpacking
 - **Impact**: Variables from call stack corrupt outer scope variables
 - **Example**: Variable `a` in outer scope replaced by constant `a` from LCG function
@@ -514,7 +514,9 @@ Extension of VALID-003 with enhanced property testing framework validating real 
 - **Workaround**: Renamed LCG constants (`a/c/m` → `multiplier/increment/modulus`)
 - **Documentation**: Added to BOUNDARIES.md with minimal reproduction
 - **GitHub Issue**: https://github.com/paiml/ruchy/issues/38 ⭐ **FILED 2025-10-19**
-- **Status**: Bug reported upstream, workaround validated, 5000+ tests passing
+- **Fixed**: Ruchy v3.98.0 (same day fix!) ⭐ **RESOLVED 2025-10-19**
+- **Validation**: Original reproduction code now works correctly
+- **Status**: ✅ Bug fixed upstream, upgrade to v3.98.0+ recommended
 
 ### Random Generation Infrastructure
 
