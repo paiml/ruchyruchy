@@ -1,0 +1,489 @@
+// BOOTSTRAP-003: Core Lexer Implementation (GREEN Phase)
+// Minimal implementation to make tests pass
+
+enum TokenType {
+    Number,
+    Identifier,
+    Fun,
+    Let,
+    If,
+    While,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Equal,
+    EqualEqual,
+    Eof,
+    Error
+}
+
+enum Token {
+    Tok(TokenType, String)
+}
+
+fn is_digit(ch: String) -> bool {
+    ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" ||
+    ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9"
+}
+
+fn is_letter(ch: String) -> bool {
+    let first = ch.chars().nth(0);
+    match first {
+        Some(c) => {
+            let s = c.to_string();
+            s >= "a" && s <= "z" || s >= "A" && s <= "Z" || s == "_"
+        },
+        None => false
+    }
+}
+
+fn is_whitespace(ch: String) -> bool {
+    ch == " " || ch == "\t" || ch == "\n" || ch == "\r"
+}
+
+fn char_at(input: String, index: i32) -> String {
+    if index >= input.len() {
+        "\0"
+    } else {
+        let c = input.chars().nth(index);
+        match c {
+            Some(ch) => ch.to_string(),
+            None => "\0"
+        }
+    }
+}
+
+fn match_keyword(word: String) -> TokenType {
+    if word == "fun" {
+        TokenType::Fun
+    } else if word == "let" {
+        TokenType::Let
+    } else if word == "if" {
+        TokenType::If
+    } else if word == "while" {
+        TokenType::While
+    } else {
+        TokenType::Identifier
+    }
+}
+
+fn tokenize_number(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    let mut num_str = "".to_string();
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || !is_digit(ch) {
+            break;
+        }
+        num_str = num_str + ch;
+        idx = idx + 1;
+    }
+
+    (Token::Tok(TokenType::Number, num_str), idx)
+}
+
+fn tokenize_identifier(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    let mut id_str = "".to_string();
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || (!is_letter(ch) && !is_digit(ch)) {
+            break;
+        }
+        id_str = id_str + ch;
+        idx = idx + 1;
+    }
+
+    let token_type = match_keyword(id_str.to_string());
+    (Token::Tok(token_type, id_str), idx)
+}
+
+fn skip_whitespace(input: String, start: i32) -> i32 {
+    let mut idx = start;
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || !is_whitespace(ch) {
+            break;
+        }
+        idx = idx + 1;
+    }
+
+    idx
+}
+
+fn skip_line_comment(input: String, start: i32) -> i32 {
+    let mut idx = start + 2;
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || ch == "\n" {
+            break;
+        }
+        idx = idx + 1;
+    }
+
+    if char_at(input, idx) == "\n" {
+        idx = idx + 1;
+    }
+
+    idx
+}
+
+fn tokenize_single(input: String, idx: i32) -> (Token, i32) {
+    let ch = char_at(input, idx);
+
+    if ch == "+" {
+        (Token::Tok(TokenType::Plus, "+".to_string()), idx + 1)
+    } else if ch == "-" {
+        (Token::Tok(TokenType::Minus, "-".to_string()), idx + 1)
+    } else if ch == "*" {
+        (Token::Tok(TokenType::Star, "*".to_string()), idx + 1)
+    } else if ch == "/" {
+        let next = char_at(input, idx + 1);
+        if next == "/" {
+            let new_idx = skip_line_comment(input, idx);
+            tokenize_single(input, new_idx)
+        } else {
+            (Token::Tok(TokenType::Slash, "/".to_string()), idx + 1)
+        }
+    } else if ch == "=" {
+        let next = char_at(input, idx + 1);
+        if next == "=" {
+            (Token::Tok(TokenType::EqualEqual, "==".to_string()), idx + 2)
+        } else {
+            (Token::Tok(TokenType::Equal, "=".to_string()), idx + 1)
+        }
+    } else if ch == "\0" {
+        (Token::Tok(TokenType::Eof, "".to_string()), idx)
+    } else {
+        (Token::Tok(TokenType::Error, ch), idx + 1)
+    }
+}
+
+fn tokenize_one(input: String, start: i32) -> (Token, i32) {
+    let idx = skip_whitespace(input, start);
+    let ch = char_at(input, idx);
+
+    if ch == "\0" {
+        (Token::Tok(TokenType::Eof, "".to_string()), idx)
+    } else if is_digit(ch) {
+        tokenize_number(input, idx)
+    } else if is_letter(ch) {
+        tokenize_identifier(input, idx)
+    } else {
+        tokenize_single(input, idx)
+    }
+}
+
+fn token_type_name(tt: TokenType) -> String {
+    match tt {
+        TokenType::Number => "Number",
+        TokenType::Identifier => "Identifier",
+        TokenType::Fun => "Fun",
+        TokenType::Let => "Let",
+        TokenType::If => "If",
+        TokenType::While => "While",
+        TokenType::Plus => "Plus",
+        TokenType::Minus => "Minus",
+        TokenType::Star => "Star",
+        TokenType::Slash => "Slash",
+        TokenType::Equal => "Equal",
+        TokenType::EqualEqual => "EqualEqual",
+        TokenType::Eof => "Eof",
+        TokenType::Error => "Error"
+    }
+}
+
+fn test_tokenize_single_number() -> bool {
+    println("  Testing single number tokenization...");
+
+    let input = "42";
+    let result = tokenize_one(input, 0);
+    let token = result.0;
+
+    match token {
+        Token::Tok(tt, val) => {
+            let type_name = token_type_name(tt);
+            if type_name == "Number" && val == "42" {
+                println("    ✅ Tokenized '42' as Number(\"42\")");
+                true
+            } else {
+                println("    ❌ Expected Number(\"42\"), got {}(\"{}\")", type_name, val);
+                false
+            }
+        }
+    }
+}
+
+fn test_tokenize_identifier() -> bool {
+    println("  Testing identifier tokenization...");
+
+    let input = "hello";
+    let result = tokenize_one(input, 0);
+    let token = result.0;
+
+    match token {
+        Token::Tok(tt, val) => {
+            let type_name = token_type_name(tt);
+            if type_name == "Identifier" && val == "hello" {
+                println("    ✅ Tokenized 'hello' as Identifier(\"hello\")");
+                true
+            } else {
+                println("    ❌ Expected Identifier(\"hello\"), got {}(\"{}\")", type_name, val);
+                false
+            }
+        }
+    }
+}
+
+fn test_tokenize_keyword() -> bool {
+    println("  Testing keyword tokenization...");
+
+    let input = "fun";
+    let result = tokenize_one(input, 0);
+    let token = result.0;
+
+    match token {
+        Token::Tok(tt, val) => {
+            let type_name = token_type_name(tt);
+            if type_name == "Fun" {
+                println("    ✅ Tokenized 'fun' as Fun");
+                true
+            } else {
+                println("    ❌ Expected Fun, got {}", type_name);
+                false
+            }
+        }
+    }
+}
+
+fn test_tokenize_operator() -> bool {
+    println("  Testing operator tokenization...");
+
+    let input = "+";
+    let result = tokenize_one(input, 0);
+    let token = result.0;
+
+    match token {
+        Token::Tok(tt, val) => {
+            let type_name = token_type_name(tt);
+            if type_name == "Plus" {
+                println("    ✅ Tokenized '+' as Plus");
+                true
+            } else {
+                println("    ❌ Expected Plus, got {}", type_name);
+                false
+            }
+        }
+    }
+}
+
+fn test_tokenize_multi_char_operator() -> bool {
+    println("  Testing multi-character operator...");
+
+    let input = "==";
+    let result = tokenize_one(input, 0);
+    let token = result.0;
+
+    match token {
+        Token::Tok(tt, val) => {
+            let type_name = token_type_name(tt);
+            if type_name == "EqualEqual" {
+                println("    ✅ Tokenized '==' as EqualEqual (not two Equal)");
+                true
+            } else {
+                println("    ❌ Expected EqualEqual, got {}", type_name);
+                false
+            }
+        }
+    }
+}
+
+fn test_tokenize_simple_expression() -> bool {
+    println("  Testing simple expression...");
+
+    let input = "x + 1";
+
+    let r1 = tokenize_one(input, 0);
+    let t1 = r1.0;
+    let idx1 = r1.1;
+
+    let r2 = tokenize_one(input, idx1);
+    let t2 = r2.0;
+    let idx2 = r2.1;
+
+    let r3 = tokenize_one(input, idx2);
+    let t3 = r3.0;
+
+    let mut success = true;
+
+    match t1 {
+        Token::Tok(tt, val) => {
+            if token_type_name(tt) != "Identifier" || val != "x" {
+                success = false;
+            }
+        }
+    }
+
+    match t2 {
+        Token::Tok(tt, _) => {
+            if token_type_name(tt) != "Plus" {
+                success = false;
+            }
+        }
+    }
+
+    match t3 {
+        Token::Tok(tt, val) => {
+            if token_type_name(tt) != "Number" || val != "1" {
+                success = false;
+            }
+        }
+    }
+
+    if success {
+        println("    ✅ Tokenized 'x + 1' as [Identifier(\"x\"), Plus, Number(\"1\")]");
+        true
+    } else {
+        println("    ❌ Failed to tokenize 'x + 1' correctly");
+        false
+    }
+}
+
+fn test_skip_whitespace() -> bool {
+    println("  Testing whitespace skipping...");
+
+    let input = "  42  ";
+    let result = tokenize_one(input, 0);
+    let token = result.0;
+
+    match token {
+        Token::Tok(tt, val) => {
+            let type_name = token_type_name(tt);
+            if type_name == "Number" && val == "42" {
+                println("    ✅ Skipped whitespace, tokenized '42'");
+                true
+            } else {
+                println("    ❌ Failed to skip whitespace");
+                false
+            }
+        }
+    }
+}
+
+fn test_skip_line_comment() -> bool {
+    println("  Testing line comment skipping...");
+
+    let input = "42 // comment";
+
+    let r1 = tokenize_one(input, 0);
+    let t1 = r1.0;
+    let idx1 = r1.1;
+
+    let r2 = tokenize_one(input, idx1);
+    let t2 = r2.0;
+
+    let mut success = false;
+
+    match t1 {
+        Token::Tok(tt, val) => {
+            if token_type_name(tt) == "Number" && val == "42" {
+                match t2 {
+                    Token::Tok(tt2, _) => {
+                        if token_type_name(tt2) == "Eof" {
+                            success = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if success {
+        println("    ✅ Skipped comment, got [Number(\"42\"), Eof]");
+        true
+    } else {
+        println("    ❌ Failed to skip comment");
+        false
+    }
+}
+
+fn main() {
+    println("🧪 BOOTSTRAP-003: Core Lexer (GREEN Phase)");
+    println("==========================================");
+    println("Ruchy Version: v3.94.0");
+    println("Phase: GREEN - Minimal implementation");
+    println("");
+
+    println("📝 Running Lexer Tests (Expected: ALL PASS):");
+    println("============================================");
+
+    let mut passed = 0;
+    let mut total = 0;
+
+    total = total + 1;
+    if test_tokenize_single_number() {
+        passed = passed + 1;
+    }
+
+    total = total + 1;
+    if test_tokenize_identifier() {
+        passed = passed + 1;
+    }
+
+    total = total + 1;
+    if test_tokenize_keyword() {
+        passed = passed + 1;
+    }
+
+    total = total + 1;
+    if test_tokenize_operator() {
+        passed = passed + 1;
+    }
+
+    total = total + 1;
+    if test_tokenize_multi_char_operator() {
+        passed = passed + 1;
+    }
+
+    total = total + 1;
+    if test_tokenize_simple_expression() {
+        passed = passed + 1;
+    }
+
+    total = total + 1;
+    if test_skip_whitespace() {
+        passed = passed + 1;
+    }
+
+    total = total + 1;
+    if test_skip_line_comment() {
+        passed = passed + 1;
+    }
+
+    println("");
+    println("==========================================");
+    println("📊 GREEN Phase Test Results:");
+    println("==========================================");
+    println("Total Tests: {}", total);
+    println("Passed: {}", passed);
+    println("Failed: {}", total - passed);
+    println("Success Rate: {}%", (passed * 100) / total);
+    println("");
+
+    if passed == total {
+        println("✅ GREEN PHASE COMPLETE!");
+        println("");
+        println("All tests pass with minimal implementation.");
+        println("");
+        println("Next: REFACTOR Phase - Improve code quality");
+    } else {
+        println("❌ Some tests still failing");
+    }
+}
+
+main();

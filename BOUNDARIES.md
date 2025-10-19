@@ -434,15 +434,79 @@ $ ruchy run bootstrap/stage0/char_stream_v3.ruchy
 
 **Evidence**: BOOTSTRAP-002 (Character Stream Processing)
 
+## 📝 BOOTSTRAP-003 Discovery: Loop + Mutable + Tuple Return Runtime Limitation
+
+### Returning Tuple from Function with Loop and Mutable Variables
+- **Status**: ❌ **NOT WORKING** (as of v3.94.0)
+- **Discovery**: Runtime error when returning tuple from function containing loop with mutable variables
+- **Error**: "Type error: Cannot call non-function value: integer"
+
+**Evidence (v3.94.0)**:
+```ruchy
+fun test_loop_mut() -> (i32, i32) {
+    let mut idx = 0;
+    loop {
+        if idx >= 5 { break; }
+        idx = idx + 1;
+    }
+    (0, idx)  // ❌ Runtime error
+}
+```
+
+**Working Cases** (all validated):
+- ✅ Tuple return without loop
+- ✅ Tuple return without mut
+- ✅ Loop with mut without tuple return
+- ❌ Loop + mut + tuple return (FAILS)
+
+**Minimal Reproduction**:
+```bash
+$ ruchy check bug_reproduction_loop_mut_tuple.ruchy
+✓ Syntax is valid
+
+$ ruchy run bug_reproduction_loop_mut_tuple.ruchy
+Error: Type error: Cannot call non-function value: integer
+```
+
+**Impact on BOOTSTRAP-003**:
+This blocks the lexer implementation which needs to return `(Token, i32)` pairs:
+```ruchy
+fun tokenize_number(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    let mut num_str = "".to_string();
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || !is_digit(ch) { break; }
+        num_str = num_str + ch;
+        idx = idx + 1;
+    }
+
+    (Token::Tok(TokenType::Number, num_str), idx)  // ❌ Blocked
+}
+```
+
+This is a fundamental compiler construction pattern where each tokenize function returns:
+- The parsed token
+- The position after parsing (for next tokenize call)
+
+**Bug Report**: GITHUB_ISSUE_loop_mut_tuple_return.md
+**Reproductions**: bug_reproduction_loop_mut_tuple.ruchy (11 LOC minimal case)
+**Severity**: CRITICAL - Blocks BOOTSTRAP-003 and fundamental lexer/parser patterns
+**Status**: AWAITING FIX - All work on BOOTSTRAP-003 stopped
+
+**Evidence**: BOOTSTRAP-003 (Core Lexer Implementation - BLOCKED)
+
 ---
 
 This document is continuously updated as we discover new boundaries through comprehensive dogfooding and testing.
 
-**Last Updated**: October 19, 2025 (BOOTSTRAP-002: Ruchy v3.94.0 runtime enhancements confirmed)
+**Last Updated**: October 19, 2025 (BOOTSTRAP-003: Runtime limitation discovered - loop+mut+tuple)
 **Ruchy Version**: v3.94.0
 **Major Changes**:
 - Enum tuple variant pattern matching FULLY WORKING (v3.93.0)
 - String iterator .nth() method FULLY WORKING (v3.94.0)
 - BOOTSTRAP-002 Character Stream complete with 100% test pass rate
+- ❌ Loop + mut + tuple return NOT WORKING (v3.94.0) - BLOCKS BOOTSTRAP-003
 - Comprehensive boundary analysis framework implemented
-- 100% boundary test success rate achieved
+- Bug Discovery Protocol applied 3 times with detailed reproductions

@@ -520,6 +520,83 @@ char_at_index(input, idx) -> String
 
 ---
 
+## 🚨 BOOTSTRAP-003: Core Lexer (BLOCKED - Runtime Limitation)
+
+### Status: WORK STOPPED - Bug Discovery Protocol Applied
+
+Through BOOTSTRAP-003 TDD implementation, we discovered a CRITICAL runtime limitation blocking lexer development.
+
+#### RED Phase: Complete
+- **Tests Written**: 8 failing tests
+- **Test Suite**: `bootstrap/stage0/test_lexer.ruchy`
+- **Status**: ✅ All tests fail as expected (no implementation)
+- **Validation**: Proves test suite is valid
+
+#### GREEN Phase: BLOCKED
+- **Attempted**: Minimal lexer implementation
+- **File**: `bootstrap/stage0/lexer_minimal.ruchy`
+- **Status**: ❌ Runtime error prevents execution
+- **Blocker**: Loop + mut + tuple return limitation
+
+#### Bug Discovered: Loop + Mutable + Tuple Return
+
+**Issue**: Returning tuple from function containing loop with mutable variables causes runtime error
+
+**Error**: `Type error: Cannot call non-function value: integer`
+
+**Minimal Reproduction** (11 LOC):
+```ruchy
+fun test_loop_mut() -> (i32, i32) {
+    let mut idx = 0;
+    loop {
+        if idx >= 5 { break; }
+        idx = idx + 1;
+    }
+    (0, idx)  // ❌ Runtime error
+}
+```
+
+**Working Cases** (validated):
+- ✅ Tuple return without loop
+- ✅ Tuple return without mut
+- ✅ Loop with mut without tuple return
+- ❌ Loop + mut + tuple return (FAILS)
+
+**Impact on Lexer**:
+Cannot implement standard tokenization pattern:
+```ruchy
+fun tokenize_number(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    loop {
+        // ... parsing logic ...
+        idx = idx + 1;
+    }
+    (token, idx)  // ❌ Blocked
+}
+```
+
+**Bug Discovery Protocol Applied**:
+1. 🚨 **STOPPED THE LINE** - Halted all BOOTSTRAP-003 work
+2. 📋 **Filed Bug Report**: GITHUB_ISSUE_loop_mut_tuple_return.md
+3. 🔬 **Created Reproductions**:
+   - `bug_reproduction_loop_mut_tuple.ruchy` (11 LOC minimal)
+   - `bug_reproduction_tuple_destructuring.ruchy` (control - works)
+   - `bug_reproduction_enum_in_tuple.ruchy` (control - works)
+   - `test_tokenize_minimal.ruchy` (isolated test)
+4. ⏸️ **AWAITING FIX** - No workarounds, waiting for runtime fix
+
+**Severity**: CRITICAL - Blocks fundamental compiler construction patterns
+
+**Files**:
+- `bootstrap/stage0/test_lexer.ruchy` (RED phase tests)
+- `bootstrap/stage0/lexer_minimal.ruchy` (GREEN phase - blocked)
+- `bug_reproduction_loop_mut_tuple.ruchy` (minimal repro)
+- `GITHUB_ISSUE_loop_mut_tuple_return.md` (bug report)
+
+**Next Steps**: Resume GREEN phase implementation after runtime fix deployed
+
+---
+
 ## 🔬 Boundaries Discovered (Dogfooding Results)
 
 ### Ruchy v3.89.0 Language Boundaries
