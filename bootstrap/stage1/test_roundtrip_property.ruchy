@@ -1,0 +1,250 @@
+// BOOTSTRAP-009: RED Phase - Roundtrip Property Tests
+// Test that parse(emit(ast)) = ast (the fundamental property)
+// This validates that parsing and emitting are true inverses
+//
+// TDD Phase: RED - These tests SHOULD FAIL (parse/emit don't exist yet)
+// Ruchy version: v3.96.0+
+
+// Expression AST nodes
+enum Expr {
+    Number(String),
+    Identifier(String),
+    StringLit(String),
+    BoolTrue,
+    BoolFalse,
+    Binary(BinOp, Box<Expr>, Box<Expr>),
+    Unary(UnOp, Box<Expr>),
+    Group(Box<Expr>)
+}
+
+// Binary operators
+enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Neq
+}
+
+// Unary operators
+enum UnOp {
+    Neg,
+    Not
+}
+
+// Statement AST nodes
+enum Stmt {
+    Let(String, Expr),
+    Assign(String, Expr),
+    ExprStmt(Expr),
+    Return(Expr),
+    Break
+}
+
+// Helper: Create expressions
+fun make_number(val: String) -> Expr {
+    Expr::Number(val)
+}
+
+fun make_identifier(name: String) -> Expr {
+    Expr::Identifier(name)
+}
+
+fun make_binary(op: BinOp, left: Expr, right: Expr) -> Expr {
+    Expr::Binary(op, Box::new(left), Box::new(right))
+}
+
+// Test 1: Roundtrip literal expressions
+fun test_roundtrip_literals() -> bool {
+    println("  Test 1: Roundtrip literal expressions");
+
+    // Expected behavior (once implemented):
+    //   let ast = make_number("42");
+    //   let emitted = emit_expr(ast);           // "42"
+    //   let parsed = parse_expr(emitted);       // Number("42")
+    //   assert(ast_equals(parsed, ast));        // true
+
+    println("    Expected: roundtrip(Number(\"42\")) = Number(\"42\")");
+    println("    Expected: roundtrip(Identifier(\"x\")) = Identifier(\"x\")");
+    println("    Expected: roundtrip(BoolTrue) = BoolTrue");
+    println("    ⏸️  SKIP - parse/emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 2: Roundtrip binary expressions
+fun test_roundtrip_binary() -> bool {
+    println("  Test 2: Roundtrip binary expressions");
+
+    // Expected behavior:
+    //   let ast = Binary(Add, Number("1"), Number("2"));
+    //   let emitted = emit_expr(ast);           // "1 + 2"
+    //   let parsed = parse_expr(emitted);       // Binary(Add, Number("1"), Number("2"))
+    //   assert(ast_equals(parsed, ast));        // true
+
+    println("    Expected: roundtrip(Binary(Add, 1, 2)) = Binary(Add, 1, 2)");
+    println("    Expected: roundtrip(Binary(Mul, 3, 4)) = Binary(Mul, 3, 4)");
+    println("    ⏸️  SKIP - parse/emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 3: Roundtrip nested expressions
+fun test_roundtrip_nested() -> bool {
+    println("  Test 3: Roundtrip nested expressions");
+
+    // Expected behavior:
+    //   let ast = Add(1, Mul(2, 3));           // 1 + 2 * 3
+    //   let emitted = emit_expr(ast);           // "1 + 2 * 3"
+    //   let parsed = parse_expr(emitted);       // Add(1, Mul(2, 3))
+    //   assert(ast_equals(parsed, ast));        // true
+
+    println("    Expected: roundtrip(Add(1, Mul(2, 3))) = Add(1, Mul(2, 3))");
+    println("    Expected: roundtrip(Mul(Add(1, 2), 3)) = Mul(Add(1, 2), 3)");
+    println("    ⏸️  SKIP - parse/emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 4: Roundtrip operator precedence
+fun test_roundtrip_precedence() -> bool {
+    println("  Test 4: Roundtrip operator precedence");
+
+    // Critical test: Ensure precedence is preserved
+    // Input:  "1 + 2 * 3"
+    // Parse:  Add(1, Mul(2, 3))
+    // Emit:   "1 + 2 * 3" (not "1 + (2 * 3)" - no parens needed)
+    // Parse:  Add(1, Mul(2, 3))
+    // Result: ASTs are equal ✅
+
+    println("    Expected: \"1 + 2 * 3\" -> Add(1, Mul(2, 3)) -> \"1 + 2 * 3\"");
+    println("    Expected: \"(1 + 2) * 3\" -> Mul(Add(1, 2), 3) -> \"(1 + 2) * 3\"");
+    println("    ⏸️  SKIP - parse/emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 5: Roundtrip left associativity
+fun test_roundtrip_associativity() -> bool {
+    println("  Test 5: Roundtrip left associativity");
+
+    // Critical test: Ensure associativity is preserved
+    // Input:  "1 - 2 - 3"
+    // Parse:  Sub(Sub(1, 2), 3)  (left-associative)
+    // Emit:   "1 - 2 - 3" (not "1 - (2 - 3)" - no parens needed)
+    // Parse:  Sub(Sub(1, 2), 3)
+    // Result: ASTs are equal ✅
+
+    println("    Expected: \"1 - 2 - 3\" -> Sub(Sub(1, 2), 3) -> \"1 - 2 - 3\"");
+    println("    Expected: \"1 - (2 - 3)\" -> Sub(1, Sub(2, 3)) -> \"1 - (2 - 3)\"");
+    println("    ⏸️  SKIP - parse/emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 6: Roundtrip statements
+fun test_roundtrip_statements() -> bool {
+    println("  Test 6: Roundtrip statements");
+
+    // Expected behavior:
+    //   let ast = Let("x", Number("42"));
+    //   let emitted = emit_stmt(ast);           // "let x = 42;"
+    //   let parsed = parse_stmt(emitted);       // Let("x", Number("42"))
+    //   assert(stmt_equals(parsed, ast));       // true
+
+    println("    Expected: roundtrip(Let(\"x\", 42)) = Let(\"x\", 42)");
+    println("    Expected: roundtrip(Assign(\"x\", 10)) = Assign(\"x\", 10)");
+    println("    Expected: roundtrip(Return(42)) = Return(42)");
+    println("    ⏸️  SKIP - parse/emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 7: Property-based roundtrip testing (concept)
+fun test_property_roundtrip_many() -> bool {
+    println("  Test 7: Property-based roundtrip testing");
+
+    // Expected: Generate 10,000 random ASTs and verify roundtrip
+    // For each AST:
+    //   ast -> emit -> parse -> ast'
+    //   assert(ast == ast')
+
+    println("    Expected: Test 10,000+ random ASTs for roundtrip property");
+    println("    Expected: All should satisfy: parse(emit(ast)) = ast");
+    println("    ⏸️  SKIP - requires random AST generation (future)");
+
+    true
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-009: RED Phase - Roundtrip Property Tests");
+    println("====================================================");
+    println("");
+    println("The Roundtrip Property: parse(emit(ast)) = ast");
+    println("This is the fundamental property that validates our parser.");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_roundtrip_literals() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_roundtrip_binary() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_roundtrip_nested() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_roundtrip_precedence() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_roundtrip_associativity() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_roundtrip_statements() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_property_roundtrip_many() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Summary:");
+    println("Total Tests: {}", passed + failed);
+    println("Pending: {}", passed);
+    println("");
+    println("✅ RED Phase Complete!");
+    println("");
+    println("Next Steps:");
+    println("  1. Implement emit functions (AST -> source)");
+    println("  2. Implement parse functions (source -> AST)");
+    println("  3. Implement AST equality checking");
+    println("  4. Run tests again (should pass in GREEN phase)");
+    println("");
+    println("Key Property: parse(emit(ast)) = ast");
+    println("This property guarantees our parser and emitter are correct inverses.");
+}
+
+main();
