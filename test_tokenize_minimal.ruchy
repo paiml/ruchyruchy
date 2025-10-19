@@ -1,0 +1,57 @@
+// Minimal test of the tokenize pattern
+enum TokenType {
+    Number
+}
+
+enum Token {
+    Tok(TokenType, String)
+}
+
+fn char_at(input: String, index: i32) -> String {
+    if index >= input.len() {
+        "\0"
+    } else {
+        let c = input.chars().nth(index);
+        match c {
+            Some(ch) => ch.to_string(),
+            None => "\0"
+        }
+    }
+}
+
+fn is_digit(ch: String) -> bool {
+    ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4"
+}
+
+fn tokenize_number(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    let mut num_str = "".to_string();
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || !is_digit(ch) {
+            break;
+        }
+        num_str = num_str + ch;
+        idx = idx + 1;
+    }
+
+    (Token::Tok(TokenType::Number, num_str), idx)
+}
+
+fn main() {
+    let input = "42";
+    let result = tokenize_number(input, 0);
+    let token = result.0;
+    let idx = result.1;
+
+    println("Tokenized, index: {}", idx);
+
+    match token {
+        Token::Tok(tt, val) => {
+            println("Token: Number(\"{}\")", val);
+        }
+    }
+}
+
+main();

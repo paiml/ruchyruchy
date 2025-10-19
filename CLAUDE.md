@@ -96,6 +96,37 @@ Status: BOOTSTRAP-002 proceeding with simplified enum design
 
 **Rationale**: A Ruchy project MUST dogfood Ruchy tools. Using external toolchains undermines credibility and prevents self-hosting validation.
 
+### MUST Use Correct Ruchy Syntax
+
+**MANDATORY - ZERO TOLERANCE**
+
+Ruchy has specific syntax that differs from Rust. The following are **REQUIRED**:
+
+1. **Function Keyword**: MUST use `fun` (NOT `fn`)
+   ```ruchy
+   // ✅ Correct
+   fun main() {
+       println("Hello");
+   }
+
+   // ❌ Wrong - will fail ruchy check
+   fn main() {
+       println("Hello");
+   }
+   ```
+
+2. **Common Mistakes to Avoid**:
+   - ❌ `fn` - This is Rust, not Ruchy
+   - ✅ `fun` - This is the correct Ruchy keyword
+   - All function declarations MUST use `fun`
+
+3. **Enforcement**:
+   - Pre-commit hooks check for `fn` keyword usage
+   - `ruchy check` will fail if `fn` is used instead of `fun`
+   - Quality gates block commits with incorrect syntax
+
+**Discovery**: During Phase 1, 148 function declarations needed correction from `fn` to `fun`. This is now enforced at the quality gate level to prevent regression.
+
 ### MUST Maintain TDD Book Documentation
 
 **MANDATORY - ZERO TOLERANCE**
