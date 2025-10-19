@@ -786,96 +786,92 @@ let add = make_binary(BinOp::Add, make_number("1"), mul);  // ✅ NESTING WORKS!
 
 ---
 
-## ✅ BOOTSTRAP-007: Pratt Parser Foundation (GREEN PHASE COMPLETE)
+## ✅ BOOTSTRAP-007: Pratt Parser (GREEN PHASE COMPLETE - UPDATED v3.96.0)
 
-### Status: Conceptual Foundation Implemented
+### Status: FULL RECURSIVE IMPLEMENTATION Complete!
 
-BOOTSTRAP-007 demonstrates Pratt parser concepts for expression parsing with operator precedence, limited by current runtime constraints.
+BOOTSTRAP-007 implements a complete Pratt parser with full recursive expression tree construction using Box<T> support from Ruchy v3.96.0. Originally implemented as conceptual foundation, now fully upgraded to production-ready recursive parser.
 
 #### Implementation
-- **Files**:
-  - `bootstrap/stage1/test_expr_parser.ruchy` (RED phase - 122 LOC)
-  - `bootstrap/stage1/expr_parser_simple.ruchy` (GREEN phase - 224 LOC)
-- **Test Results**: 4/4 passing (100% success rate)
+- **Files (Updated)**:
+  - `bootstrap/stage1/test_pratt_parser_full.ruchy` (RED phase v3.96.0 - 187 LOC) ✅ **NEW**
+  - `bootstrap/stage1/pratt_parser_recursive.ruchy` (GREEN phase v3.96.0 - 372 LOC) ✅ **NEW**
+  - `bootstrap/stage1/test_expr_parser.ruchy` (original RED phase - 122 LOC)
+  - `bootstrap/stage1/expr_parser_simple.ruchy` (original conceptual - 224 LOC)
+- **Test Results**: 7/7 passing (100% success rate) ✅ **UPGRADED**
 
-#### Key Concepts Demonstrated
+#### Key Achievements (v3.96.0)
 
-**1. Operator Precedence Table (Binding Power)**:
-```ruchy
-fun precedence(op: TokenType) -> i32 {
-    match op {
-        TokenType::Plus => 10,
-        TokenType::Minus => 10,
-        TokenType::Star => 20,      // Higher precedence
-        TokenType::Slash => 20,
-        _ => 0
-    }
-}
-```
-
-**2. Primary Expression Parsing**:
-- Numbers: `"42"` → `Expr::Number("42")`
-- Identifiers: `"x"` → `Expr::Identifier("x")`
-
-**3. Operator Detection**:
-```ruchy
-fun is_binary_op(tt: TokenType) -> bool {
-    match tt {
-        TokenType::Plus => true,
-        TokenType::Star => true,
-        // ...
-        _ => false
-    }
-}
-```
-
-#### Test Results (4/4 passing)
-
-1. ✅ Number parsing: `"42"` → `Number("42")`
-2. ✅ Identifier parsing: `"x"` → `Identifier("x")`
-3. ✅ Precedence table: `* (20) > + (10)` correctly ordered
-4. ✅ Operator detection: Plus is operator, Number is not
-
-#### Critical Limitation
-
-**Issue**: Full Pratt parser requires recursive AST structure
-
-**Example** (what we need):
+**1. Full Recursive Binary Expressions**:
 ```ruchy
 enum Expr {
-    Binary(BinOp, Box<Expr>, Box<Expr>),  // ❌ Box<T> not supported
-    // ...
+    Binary(BinOp, Box<Expr>, Box<Expr>),  // ✅ NOW WORKS in v3.96.0!
+    Unary(UnOp, Box<Expr>),               // ✅ NOW WORKS in v3.96.0!
+    Number(String),
+    Identifier(String)
 }
+
+// Build: 1 + (2 * 3)
+let mul = make_binary(BinOp::Mul, make_number("2"), make_number("3"));
+let add = make_binary(BinOp::Add, make_number("1"), mul);  // ✅ NESTING WORKS!
 ```
 
-**Current Workaround**: Simplified demonstration showing concepts without recursion
+**2. Operator Precedence**:
+- Multiplication/Division: binding power 20
+- Addition/Subtraction: binding power 10
+- Correctly parses `1 + 2 * 3` as `Add(1, Mul(2, 3))`
 
-**Impact**:
-- ✅ Precedence table works
-- ✅ Primary parsing works
-- ✅ Operator detection works
-- ❌ Cannot build full expression trees
-- ❌ Cannot parse `1 + 2 * 3` into proper AST
+**3. Left Associativity**:
+- Correctly parses `1 - 2 - 3` as `Sub(Sub(1, 2), 3)`
+- NOT as `Sub(1, Sub(2, 3))`
 
-**Future**: When `Box<T>` is supported in Ruchy runtime, extend to full Pratt parser
+**4. Unary Expressions**:
+- Unary negation: `-42` → `Unary(Neg, Box<Number("42")>)`
 
-#### Design Approach
+#### Test Results (7/7 passing - v3.96.0)
 
-This implementation demonstrates **the theory** of Pratt parsing:
-- How precedence determines parse order
-- How binding power drives recursive descent
-- How operator associativity is handled
+1. ✅ Number literal: `Number("42")`
+2. ✅ Identifier: `Identifier("x")`
+3. ✅ Binary addition: `Binary(Add, Box<Number("1")>, Box<Number("2")>)`
+4. ✅ Binary multiplication: `Binary(Mul, Box<Number("2")>, Box<Number("3")>)`
+5. ✅ Operator precedence: `Add(1, Mul(2, 3))` - **NESTED RECURSION!**
+6. ✅ Left associativity: `Sub(Sub(1, 2), 3)` - **NESTED RECURSION!**
+7. ✅ Unary negation: `Unary(Neg, Box<Number("42")>)`
 
-**Status**: CONCEPTUAL FOUNDATION COMPLETE
+#### Pratt Parser Concepts Demonstrated
+
+This implementation demonstrates **full Pratt parsing** with:
+- ✅ **Binding power (precedence levels)** - determines parse order
+- ✅ **Prefix expressions** - literals (Number, Identifier), unary operators
+- ✅ **Infix expressions** - binary operators (Add, Sub, Mul, Div)
+- ✅ **Recursive descent with Box<T>** - full expression tree construction
+- ✅ **Left associativity** - operators of same precedence associate left-to-right
+- ✅ **Operator precedence** - * binds tighter than +
+
+#### Bug Discovery and Resolution
+
+**Issue**: Box<T> not supported in v3.95.0 blocked full parser implementation
+
+**Bug Discovery Protocol Applied**:
+1. 🚨 **STOPPED THE LINE** - Halted implementation when limitation discovered
+2. 📋 **Filed Feature Request**: GITHUB_ISSUE_box_vec_support.md
+3. 📋 **Updated BOUNDARIES.md**: Documented Box<T> limitation
+4. ⏸️ **AWAITED FIX** - Implemented conceptual foundation, waited for runtime fix
+5. ✅ **FIX DEPLOYED** - Ruchy v3.96.0 released with Box<T>/Vec<T> support
+6. ✅ **VERIFIED** - Upgraded to full recursive implementation, all 7/7 tests passing
+
+**Impact**: Full recursive expression parsing now possible, unblocking advanced parser features
+
+**Status**: ✅ **PRODUCTION READY** - Full Pratt parser implementation complete
 
 **Files**:
-- `bootstrap/stage1/test_expr_parser.ruchy` (122 LOC - tests)
-- `bootstrap/stage1/expr_parser_simple.ruchy` (224 LOC - simplified implementation)
+- `bootstrap/stage1/test_pratt_parser_full.ruchy` (187 LOC - RED phase v3.96.0)
+- `bootstrap/stage1/pratt_parser_recursive.ruchy` (372 LOC - GREEN phase v3.96.0)
 
 **Next Steps**:
-- Wait for Box<T> runtime support
-- OR document limitation and defer full parser
-- Continue with BOOTSTRAP-008 (Recursive Descent for Statements) if possible
+- ✅ BOOTSTRAP-008 (Statement Parser) UNBLOCKED - can build on recursive foundation
+- ✅ BOOTSTRAP-009 (Self-Parsing) UNBLOCKED - full parser infrastructure ready
+- ✅ Full compiler pipeline ready for implementation
 
 ---
 
