@@ -672,6 +672,65 @@ fun add(x: i32, y: i32) -> i32 { x + y }
 
 ---
 
+## ✅ BOOTSTRAP-006: AST Type Definitions (GREEN PHASE COMPLETE)
+
+### Status: Stage 1 BEGIN - AST Foundation Ready
+
+BOOTSTRAP-006 defines the Abstract Syntax Tree (AST) node types needed for the parser implementation.
+
+#### Implementation
+- **File**: `bootstrap/stage1/ast_types.ruchy` (157 LOC)
+- **Test Results**: 3/3 passing (100% success rate)
+
+#### AST Types Defined
+
+**Expression Nodes (Expr)**:
+- `Number(String)` - numeric literals
+- `Identifier(String)` - variable names
+- `StringLit(String)` - string literals
+- `BoolTrue`, `BoolFalse` - boolean literals
+
+**Binary Operators (BinOp)**:
+- Arithmetic: `Add`, `Sub`, `Mul`, `Div`
+- Comparison: `Eq`, `Neq`
+
+**Unary Operators (UnOp)**:
+- `Neg` (negation), `Not` (logical not)
+
+**Type Annotations (Type)**:
+- `I32`, `I64`, `Bool`, `String`
+
+#### Test Results (3/3 passing)
+
+1. ✅ AST literal construction: `Number("42")`, `Identifier("x")`
+2. ✅ Type definitions: `Type::I32`, `Type::Bool`, `Type::String`
+3. ✅ Operator definitions: `BinOp::Add`, `BinOp::Mul`, `UnOp::Neg`
+
+#### Key Features
+
+- **Helper functions**: `make_number`, `make_identifier` for AST construction
+- **Type checking helpers**: `is_number_expr`, `is_identifier_expr`
+- **Pattern matching validation**: All enum variants can be matched
+- **Simplified design**: Avoids `Box<T>` and `Vec<T>` (not yet supported in runtime)
+
+#### Design Decisions
+
+**Limitation Discovered**: Enum variants with nested enum parameters (e.g., `Binary(BinOp, Box<Expr>, Box<Expr>)`) caused syntax errors.
+
+**Workaround**: Simplified AST to use only String parameters and unit variants, which are fully supported in Ruchy v3.95.0.
+
+**Future**: When `Box<T>` and `Vec<T>` are supported, AST can be extended to full recursive structure.
+
+**Files**:
+- `bootstrap/stage1/ast_types.ruchy` (157 LOC)
+
+**Next Steps**:
+- BOOTSTRAP-007: Pratt Parser for Expressions
+- BOOTSTRAP-008: Recursive Descent for Statements
+- BOOTSTRAP-009: Parser Self-Parsing Test
+
+---
+
 ## 🔬 Boundaries Discovered (Dogfooding Results)
 
 ### Ruchy v3.89.0 Language Boundaries
