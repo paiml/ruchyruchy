@@ -173,16 +173,62 @@ let add = make_binary(BinOp::Add, make_number("1"), mul);  // ✅ Nesting works!
 - ✅ Left associativity
 - ✅ Nested expressions
 
+2. ✅ **Pratt Parser for Expressions** (BOOTSTRAP-007)
+   - Binding power (precedence levels)
+   - Prefix expressions (literals, unary operators)
+   - Infix expressions (binary operators)
+   - Operator precedence: * > +
+   - Left associativity: (1-2)-3
+   - Nested expression trees
+   - **Status**: COMPLETE (7/7 tests passing)
+
+3. ✅ **Recursive Descent for Statements** (BOOTSTRAP-008)
+   - Let statements (variable declarations)
+   - Assignment statements
+   - Expression statements
+   - Return statements
+   - Control flow (break)
+   - Nested expressions in statements
+   - **Status**: COMPLETE (6/6 tests passing)
+
+## Statement Parser Features
+
+**Statement Types**:
+```ruchy
+enum Stmt {
+    Let(String, Expr),      // let x = 42;
+    Assign(String, Expr),   // x = 10;
+    ExprStmt(Expr),         // x + 1;
+    Return(Expr),           // return 42;
+    Break                   // break;
+}
+```
+
+**Example - Nested Statement**:
+```ruchy
+// Parse: let sum = x + y;
+let x = Expr::Identifier("x");
+let y = Expr::Identifier("y");
+let expr = Expr::Binary(BinOp::Add, Box::new(x), Box::new(y));
+let stmt = Stmt::Let("sum", expr);  // ✅ Nesting works!
+```
+
 ## Summary
 
-**Stage 1 Status**: ✅ **PRODUCTION READY**
+**Stage 1 Status**: ✅ **FOUNDATION COMPLETE**
 
 **Final Metrics**:
-- **Tickets Completed**: 2 of 5 (BOOTSTRAP-006, 007)
-- **Tests**: 11/11 passing (100% success rate)
-- **LOC**: ~700 lines of pure Ruchy code
-- **Achievements**: Full recursive parser with Box<T>
+- **Tickets Completed**: 3 of 5 (BOOTSTRAP-006, 007, 008)
+- **Tests**: 17/17 passing (100% success rate)
+- **LOC**: ~1,200 lines of pure Ruchy code
+- **Achievements**: Full recursive parser with Box<T>, statement parsing
 
-**Next Stage**: Stage 1 Continued - Statement Parser (BOOTSTRAP-008)
+**Key Deliverables**:
+- ✅ Full recursive AST with Box<T>
+- ✅ Pratt parser with operator precedence
+- ✅ Statement parser with recursive descent
+- ✅ Nested expression support throughout
+
+**Next Stage**: Stage 1 Continued - Parser Self-Parsing (BOOTSTRAP-009)
 
 Read on to see how each component was built using TDD!
