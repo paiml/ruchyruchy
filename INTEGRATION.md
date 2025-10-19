@@ -520,29 +520,29 @@ char_at_index(input, idx) -> String
 
 ---
 
-## 🚨 BOOTSTRAP-003: Core Lexer (BLOCKED - Runtime Limitation)
+## ✅ BOOTSTRAP-003: Core Lexer (GREEN PHASE COMPLETE)
 
-### Status: WORK STOPPED - Bug Discovery Protocol Applied
+### Status: GREEN Phase Success with Ruchy v3.95.0
 
-Through BOOTSTRAP-003 TDD implementation, we discovered a CRITICAL runtime limitation blocking lexer development.
+Through BOOTSTRAP-003 TDD implementation, we discovered a runtime limitation, applied Bug Discovery Protocol, and achieved complete success after fix deployment.
 
 #### RED Phase: Complete
 - **Tests Written**: 8 failing tests
-- **Test Suite**: `bootstrap/stage0/test_lexer.ruchy`
+- **Test Suite**: `bootstrap/stage0/test_lexer.ruchy` (138 LOC)
 - **Status**: ✅ All tests fail as expected (no implementation)
 - **Validation**: Proves test suite is valid
 
-#### GREEN Phase: BLOCKED
-- **Attempted**: Minimal lexer implementation
-- **File**: `bootstrap/stage0/lexer_minimal.ruchy`
-- **Status**: ❌ Runtime error prevents execution
-- **Blocker**: Loop + mut + tuple return limitation
+#### GREEN Phase: COMPLETE ✅
+- **Implementation**: Minimal lexer implementation
+- **File**: `bootstrap/stage0/lexer_minimal.ruchy` (465 LOC)
+- **Status**: ✅ All 8/8 tests passing (100% success rate)
+- **Ruchy Version**: v3.95.0 (loop+mut+tuple fix deployed)
 
-#### Bug Discovered: Loop + Mutable + Tuple Return
+#### Bug Discovered and Fixed: Loop + Mutable + Tuple Return
 
-**Issue**: Returning tuple from function containing loop with mutable variables causes runtime error
+**Issue**: Returning tuple from function containing loop with mutable variables caused runtime error in v3.94.0
 
-**Error**: `Type error: Cannot call non-function value: integer`
+**Error (v3.94.0)**: `Type error: Cannot call non-function value: integer`
 
 **Minimal Reproduction** (11 LOC):
 ```ruchy
@@ -552,28 +552,11 @@ fun test_loop_mut() -> (i32, i32) {
         if idx >= 5 { break; }
         idx = idx + 1;
     }
-    (0, idx)  // ❌ Runtime error
+    (0, idx)  // ❌ Runtime error in v3.94.0, ✅ Works in v3.95.0
 }
 ```
 
-**Working Cases** (validated):
-- ✅ Tuple return without loop
-- ✅ Tuple return without mut
-- ✅ Loop with mut without tuple return
-- ❌ Loop + mut + tuple return (FAILS)
-
-**Impact on Lexer**:
-Cannot implement standard tokenization pattern:
-```ruchy
-fun tokenize_number(input: String, start: i32) -> (Token, i32) {
-    let mut idx = start;
-    loop {
-        // ... parsing logic ...
-        idx = idx + 1;
-    }
-    (token, idx)  // ❌ Blocked
-}
-```
+**Resolution**: Fixed in Ruchy v3.95.0 release
 
 **Bug Discovery Protocol Applied**:
 1. 🚨 **STOPPED THE LINE** - Halted all BOOTSTRAP-003 work
@@ -583,17 +566,44 @@ fun tokenize_number(input: String, start: i32) -> (Token, i32) {
    - `bug_reproduction_tuple_destructuring.ruchy` (control - works)
    - `bug_reproduction_enum_in_tuple.ruchy` (control - works)
    - `test_tokenize_minimal.ruchy` (isolated test)
-4. ⏸️ **AWAITING FIX** - No workarounds, waiting for runtime fix
+4. ⏸️ **AWAITED FIX** - No workarounds, waited for runtime fix
+5. ✅ **FIX DEPLOYED** - Ruchy v3.95.0 released, implementation unblocked
+6. ✅ **VERIFIED** - All 8/8 tests passing, lexer fully functional
 
-**Severity**: CRITICAL - Blocks fundamental compiler construction patterns
+**Impact on Lexer**:
+This pattern is essential for standard tokenization:
+```ruchy
+fun tokenize_number(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    loop {
+        // ... parsing logic ...
+        idx = idx + 1;
+    }
+    (token, idx)  // ✅ Works perfectly in v3.95.0!
+}
+```
+
+#### Test Results (v3.95.0)
+
+**All 8 Tests Passing**:
+1. ✅ Single number tokenization: "42" → Number("42")
+2. ✅ Identifier tokenization: "hello" → Identifier("hello")
+3. ✅ Keyword recognition: "fun" → Fun keyword
+4. ✅ Operator tokenization: "+" → Plus
+5. ✅ Multi-char operators: "==" → EqualEqual (not two Equal tokens)
+6. ✅ Expression tokenization: "x + 1" → [Identifier("x"), Plus, Number("1")]
+7. ✅ Whitespace skipping
+8. ✅ Line comment handling
+
+**Success Rate**: 100% (8/8 tests)
 
 **Files**:
-- `bootstrap/stage0/test_lexer.ruchy` (RED phase tests)
-- `bootstrap/stage0/lexer_minimal.ruchy` (GREEN phase - blocked)
+- `bootstrap/stage0/test_lexer.ruchy` (RED phase tests - 138 LOC)
+- `bootstrap/stage0/lexer_minimal.ruchy` (GREEN phase implementation - 465 LOC)
 - `bug_reproduction_loop_mut_tuple.ruchy` (minimal repro)
 - `GITHUB_ISSUE_loop_mut_tuple_return.md` (bug report)
 
-**Next Steps**: Resume GREEN phase implementation after runtime fix deployed
+**Next Steps**: REFACTOR phase - improve code quality while maintaining 100% test pass rate
 
 ---
 
