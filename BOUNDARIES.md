@@ -434,14 +434,14 @@ $ ruchy run bootstrap/stage0/char_stream_v3.ruchy
 
 **Evidence**: BOOTSTRAP-002 (Character Stream Processing)
 
-## 📝 BOOTSTRAP-003 Discovery: Loop + Mutable + Tuple Return Runtime Limitation
+## 📝 BOOTSTRAP-003 Discovery: Loop + Mutable + Tuple Return Runtime Enhancement
 
 ### Returning Tuple from Function with Loop and Mutable Variables
-- **Status**: ❌ **NOT WORKING** (as of v3.94.0)
-- **Discovery**: Runtime error when returning tuple from function containing loop with mutable variables
-- **Error**: "Type error: Cannot call non-function value: integer"
+- **Status**: ✅ **FULLY WORKING** (as of v3.95.0)
+- **Discovery**: Initially failed with runtime error in v3.94.0, fixed in v3.95.0
+- **Resolution**: Fixed in v3.95.0 release
 
-**Evidence (v3.94.0)**:
+**Evidence (v3.94.0 - before fix)**:
 ```ruchy
 fun test_loop_mut() -> (i32, i32) {
     let mut idx = 0;
@@ -449,15 +449,25 @@ fun test_loop_mut() -> (i32, i32) {
         if idx >= 5 { break; }
         idx = idx + 1;
     }
-    (0, idx)  // ❌ Runtime error
+    (0, idx)  // ❌ Runtime error in v3.94.0
 }
 ```
 
-**Working Cases** (all validated):
+**Evidence (v3.95.0 - after fix)**:
+```bash
+$ ruchy --version
+ruchy 3.95.0
+
+$ ruchy run bug_reproduction_loop_mut_tuple.ruchy
+Sum: 10, Index: 5
+✅ Works perfectly!
+```
+
+**Working Cases** (all validated in v3.95.0+):
 - ✅ Tuple return without loop
 - ✅ Tuple return without mut
 - ✅ Loop with mut without tuple return
-- ❌ Loop + mut + tuple return (FAILS)
+- ✅ Loop + mut + tuple return (FIXED in v3.95.0)
 
 **Minimal Reproduction**:
 ```bash
@@ -469,7 +479,7 @@ Error: Type error: Cannot call non-function value: integer
 ```
 
 **Impact on BOOTSTRAP-003**:
-This blocks the lexer implementation which needs to return `(Token, i32)` pairs:
+This pattern is essential for lexer implementation which needs to return `(Token, i32)` pairs:
 ```ruchy
 fun tokenize_number(input: String, start: i32) -> (Token, i32) {
     let mut idx = start;
@@ -482,7 +492,7 @@ fun tokenize_number(input: String, start: i32) -> (Token, i32) {
         idx = idx + 1;
     }
 
-    (Token::Tok(TokenType::Number, num_str), idx)  // ❌ Blocked
+    (Token::Tok(TokenType::Number, num_str), idx)  // ✅ Works in v3.95.0!
 }
 ```
 
@@ -492,21 +502,25 @@ This is a fundamental compiler construction pattern where each tokenize function
 
 **Bug Report**: GITHUB_ISSUE_loop_mut_tuple_return.md
 **Reproductions**: bug_reproduction_loop_mut_tuple.ruchy (11 LOC minimal case)
-**Severity**: CRITICAL - Blocks BOOTSTRAP-003 and fundamental lexer/parser patterns
-**Status**: AWAITING FIX - All work on BOOTSTRAP-003 stopped
+**Severity**: CRITICAL - Blocked BOOTSTRAP-003 (resolved in v3.95.0)
+**Status**: ✅ FIXED in v3.95.0 - BOOTSTRAP-003 unblocked
 
-**Evidence**: BOOTSTRAP-003 (Core Lexer Implementation - BLOCKED)
+**Evidence**: BOOTSTRAP-003 (Core Lexer Implementation)
+- **Tests**: 8/8 passing (100% success rate) with v3.95.0
+- **File**: bootstrap/stage0/lexer_minimal.ruchy (465 LOC)
+- **Validation**: All tokenization patterns working correctly
 
 ---
 
 This document is continuously updated as we discover new boundaries through comprehensive dogfooding and testing.
 
-**Last Updated**: October 19, 2025 (BOOTSTRAP-003: Runtime limitation discovered - loop+mut+tuple)
-**Ruchy Version**: v3.94.0
+**Last Updated**: October 19, 2025 (BOOTSTRAP-003: GREEN phase complete with v3.95.0)
+**Ruchy Version**: v3.95.0
 **Major Changes**:
 - Enum tuple variant pattern matching FULLY WORKING (v3.93.0)
 - String iterator .nth() method FULLY WORKING (v3.94.0)
+- Loop + mut + tuple return FULLY WORKING (v3.95.0)
 - BOOTSTRAP-002 Character Stream complete with 100% test pass rate
-- ❌ Loop + mut + tuple return NOT WORKING (v3.94.0) - BLOCKS BOOTSTRAP-003
+- BOOTSTRAP-003 Core Lexer complete with 100% test pass rate (8/8 tests)
 - Comprehensive boundary analysis framework implemented
-- Bug Discovery Protocol applied 3 times with detailed reproductions
+- Bug Discovery Protocol applied 3 times with detailed reproductions and fixes
