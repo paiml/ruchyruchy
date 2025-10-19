@@ -2,7 +2,7 @@
 
 **Last Updated**: October 19, 2025
 **Ruchy Version**: v3.96.0 ⭐ **BOX<T> AND VEC<T> SUPPORT**
-**RuchyRuchy Commit**: BOOTSTRAP-006 Updated (Full Recursive AST)
+**RuchyRuchy Commit**: INFRA-004 (Project Organization)
 **Project Status**: Phase 2 Complete, Sprint 4 Stage 1 Implementation In Progress
 **Major Updates**:
 - v3.93.0: Enum tuple variant pattern matching FULLY WORKING
@@ -10,6 +10,8 @@
 - v3.95.0: Loop+mut+tuple return FULLY WORKING
 - v3.96.0: Box<T> and Vec<T> in enum variants FULLY WORKING
 - BOOTSTRAP-006: Full Recursive AST COMPLETE (4/4 tests passing)
+- BOOTSTRAP-007: Full Pratt Parser COMPLETE (7/7 tests passing)
+- INFRA-004: Test files organized into validation/ structure
 
 ---
 
