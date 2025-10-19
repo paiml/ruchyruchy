@@ -21,6 +21,8 @@
 
 - [Bootstrap Stage 1: Parser](./phase3_bootstrap/stage1/chapter.md)
   - [BOOTSTRAP-006: Full Recursive AST](./phase3_bootstrap/stage1/bootstrap-006-recursive-ast.md)
+  - [BOOTSTRAP-007: Pratt Parser](./phase3_bootstrap/stage1/bootstrap-007-pratt-parser.md)
+  - [BOOTSTRAP-008: Statement Parser](./phase3_bootstrap/stage1/bootstrap-008-statement-parser.md)
   - [BOOTSTRAP-009: Parser Roundtrip Validation](./phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.md)
 
 # Discoveries
