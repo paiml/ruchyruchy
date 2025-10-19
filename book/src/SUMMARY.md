@@ -2,6 +2,11 @@
 
 [Introduction](./introduction.md)
 
+# Phase 2: Validation & Robustness
+
+- [Validation Framework](./phase2_validation/chapter.md)
+  - [VALID-003: Property-Based Testing Framework](./phase2_validation/tickets/valid-003-property-testing.md)
+
 # Phase 3: Bootstrap Compiler (Stage 0)
 
 - [Bootstrap Stage 0: Lexer](./phase3_bootstrap/chapter.md)
