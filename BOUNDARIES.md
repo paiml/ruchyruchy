@@ -266,6 +266,22 @@ Until runtime supports enums/structs:
 
 ---
 
+## 📝 VALID-003 Discovery: Code Complexity Limits
+
+### Complex Function Signatures
+- **Status**: ⚠️ **PARSER SENSITIVE**
+- **Finding**: Very large files with many functions can cause "Unexpected token: RightBrace" errors
+- **Workaround**: Keep files under ~200 lines, split complex logic into multiple files
+- **Evidence**: Property test framework worked at 52 lines, failed when expanded to 300+ lines
+
+**Best Practice**:
+- Prefer multiple small files over one large file
+- Keep function count per file under 15-20
+- Ruchy parser works best with modular, focused files
+
+---
+
 This document is continuously updated as we discover new boundaries through comprehensive dogfooding and testing.
 
+**Last Updated**: October 19, 2025 (VALID-003 completion)
 **Next Update**: When enum/struct runtime support lands in Ruchy
