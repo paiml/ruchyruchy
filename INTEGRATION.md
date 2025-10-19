@@ -1,13 +1,15 @@
 # RuchyRuchy Bootstrap Compiler Integration Report
 
 **Last Updated**: October 19, 2025
-**Ruchy Version**: v3.94.0 ⭐ **ENUM TUPLE VARIANTS + STRING.NTH() SUPPORT**
-**RuchyRuchy Commit**: BOOTSTRAP-002 Complete
-**Project Status**: Phase 2 Complete, Sprint 3 Stage 0 Implementation In Progress
+**Ruchy Version**: v3.96.0 ⭐ **BOX<T> AND VEC<T> SUPPORT**
+**RuchyRuchy Commit**: BOOTSTRAP-006 Updated (Full Recursive AST)
+**Project Status**: Phase 2 Complete, Sprint 4 Stage 1 Implementation In Progress
 **Major Updates**:
 - v3.93.0: Enum tuple variant pattern matching FULLY WORKING
 - v3.94.0: String iterator .nth() method FULLY WORKING
-- BOOTSTRAP-002: Character Stream Processing COMPLETE (8/8 tests passing)
+- v3.95.0: Loop+mut+tuple return FULLY WORKING
+- v3.96.0: Box<T> and Vec<T> in enum variants FULLY WORKING
+- BOOTSTRAP-006: Full Recursive AST COMPLETE (4/4 tests passing)
 
 ---
 
@@ -672,23 +674,27 @@ fun add(x: i32, y: i32) -> i32 { x + y }
 
 ---
 
-## ✅ BOOTSTRAP-006: AST Type Definitions (GREEN PHASE COMPLETE)
+## ✅ BOOTSTRAP-006: AST Type Definitions (GREEN PHASE COMPLETE - UPDATED v3.96.0)
 
-### Status: Stage 1 BEGIN - AST Foundation Ready
+### Status: FULL RECURSIVE AST Ready - Box<T> Support Enabled!
 
-BOOTSTRAP-006 defines the Abstract Syntax Tree (AST) node types needed for the parser implementation.
+BOOTSTRAP-006 defines the Abstract Syntax Tree (AST) node types needed for the parser implementation. Originally implemented with simplified types, now fully upgraded to recursive structures using Box<T> support from Ruchy v3.96.0.
 
 #### Implementation
-- **File**: `bootstrap/stage1/ast_types.ruchy` (157 LOC)
-- **Test Results**: 3/3 passing (100% success rate)
+- **File (Simplified)**: `bootstrap/stage1/ast_types.ruchy` (157 LOC)
+- **File (Recursive)**: `bootstrap/stage1/ast_types_recursive.ruchy` (171 LOC) ✅ **NEW**
+- **Test Results**: 4/4 passing (100% success rate) ✅ **UPGRADED**
 
-#### AST Types Defined
+#### AST Types Defined (Full Recursive Version)
 
-**Expression Nodes (Expr)**:
+**Expression Nodes (Expr)** - NOW WITH FULL RECURSION:
 - `Number(String)` - numeric literals
 - `Identifier(String)` - variable names
 - `StringLit(String)` - string literals
 - `BoolTrue`, `BoolFalse` - boolean literals
+- `Binary(BinOp, Box<Expr>, Box<Expr>)` - ✅ **RECURSIVE binary expressions**
+- `Unary(UnOp, Box<Expr>)` - ✅ **RECURSIVE unary expressions**
+- `Group(Box<Expr>)` - ✅ **RECURSIVE grouped expressions**
 
 **Binary Operators (BinOp)**:
 - Arithmetic: `Add`, `Sub`, `Mul`, `Div`
@@ -700,11 +706,60 @@ BOOTSTRAP-006 defines the Abstract Syntax Tree (AST) node types needed for the p
 **Type Annotations (Type)**:
 - `I32`, `I64`, `Bool`, `String`
 
-#### Test Results (3/3 passing)
+#### Test Results (4/4 passing - v3.96.0)
 
-1. ✅ AST literal construction: `Number("42")`, `Identifier("x")`
-2. ✅ Type definitions: `Type::I32`, `Type::Bool`, `Type::String`
-3. ✅ Operator definitions: `BinOp::Add`, `BinOp::Mul`, `UnOp::Neg`
+1. ✅ Literal expressions: `Number("42")`, `Identifier("x")`
+2. ✅ Binary expressions with Box<T>: `Binary(Add, Box<Number("1")>, Box<Number("2")>)`
+3. ✅ Unary expressions with Box<T>: `Unary(Neg, Box<Number("42")>)`
+4. ✅ Nested expressions: `Add(1, Mul(2, 3))` - **FULL RECURSION WORKING!**
+
+#### Helper Functions
+
+**Construction**:
+- `make_number(val: String) -> Expr` - create Number node
+- `make_identifier(name: String) -> Expr` - create Identifier node
+- `make_binary(op: BinOp, left: Expr, right: Expr) -> Expr` - ✅ **RECURSIVE CONSTRUCTION**
+- `make_unary(op: UnOp, operand: Expr) -> Expr` - ✅ **RECURSIVE CONSTRUCTION**
+
+#### Bug Discovery and Resolution: Box<T> Support
+
+**Issue**: Enum variants with Box<T> parameters caused syntax error in v3.95.0
+
+**Error (v3.95.0)**: `Syntax error: Expected variant name in enum`
+
+**Example that failed**:
+```ruchy
+enum Expr {
+    Binary(BinOp, Box<Expr>, Box<Expr>)  // ❌ v3.95.0, ✅ v3.96.0
+}
+```
+
+**Resolution**: Fixed in Ruchy v3.96.0 release with full Box<T> and Vec<T> support
+
+**Bug Discovery Protocol Applied**:
+1. 🚨 **STOPPED THE LINE** - Halted BOOTSTRAP-007 Pratt parser work
+2. 📋 **Filed Feature Request**: GITHUB_ISSUE_box_vec_support.md
+3. 🔬 **Created Test Cases**:
+   - `test_box_verification.ruchy` - validates Box<Tree> works
+   - `test_box_in_enum_exact.ruchy` - validates Box<LLVMType> works
+   - `test_box_expr_simple.ruchy` - validates Box<Expr> works
+   - `test_enum_with_enum_and_box.ruchy` - validates Binary(Op, Box<Expr>, Box<Expr>) works
+4. 📋 **Updated Documentation**: BOUNDARIES.md with comprehensive Box<T> limitation
+5. ⏸️ **AWAITED FIX** - No workarounds possible for true recursion
+6. ✅ **FIX DEPLOYED** - Ruchy v3.96.0 released with Box<T>/Vec<T> support
+7. ✅ **VERIFIED** - All 4/4 tests passing, full recursive AST working!
+
+**Impact on Parser**:
+Full recursive AST is essential for Pratt parser implementation:
+```ruchy
+fun make_binary(op: BinOp, left: Expr, right: Expr) -> Expr {
+    Expr::Binary(op, Box::new(left), Box::new(right))  // ✅ Works in v3.96.0!
+}
+
+// Build: 1 + (2 * 3)
+let mul = make_binary(BinOp::Mul, make_number("2"), make_number("3"));
+let add = make_binary(BinOp::Add, make_number("1"), mul);  // ✅ NESTING WORKS!
+```
 
 #### Key Features
 
