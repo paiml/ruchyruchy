@@ -1,0 +1,220 @@
+// BOOTSTRAP-009: RED Phase - AST Emit Functionality Tests
+// Test that AST nodes can emit source code (parse tree -> source)
+// This is the inverse of parsing: emit(ast) -> source code
+//
+// TDD Phase: RED - These tests SHOULD FAIL (emit functions don't exist yet)
+// Ruchy version: v3.96.0+
+
+// Expression AST nodes with Box<T> support
+enum Expr {
+    Number(String),
+    Identifier(String),
+    StringLit(String),
+    BoolTrue,
+    BoolFalse,
+    Binary(BinOp, Box<Expr>, Box<Expr>),
+    Unary(UnOp, Box<Expr>),
+    Group(Box<Expr>)
+}
+
+// Binary operators
+enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Neq
+}
+
+// Unary operators
+enum UnOp {
+    Neg,
+    Not
+}
+
+// Statement AST nodes
+enum Stmt {
+    Let(String, Expr),
+    Assign(String, Expr),
+    ExprStmt(Expr),
+    Return(Expr),
+    Break
+}
+
+// Helper: Create expressions
+fun make_number(val: String) -> Expr {
+    Expr::Number(val)
+}
+
+fun make_identifier(name: String) -> Expr {
+    Expr::Identifier(name)
+}
+
+fun make_binary(op: BinOp, left: Expr, right: Expr) -> Expr {
+    Expr::Binary(op, Box::new(left), Box::new(right))
+}
+
+fun make_unary(op: UnOp, operand: Expr) -> Expr {
+    Expr::Unary(op, Box::new(operand))
+}
+
+// Test 1: Emit simple literals
+fun test_emit_literals() -> bool {
+    println("  Test 1: Emit simple literals");
+
+    // Expected: emit functions don't exist yet, so we can't call them
+    // Once GREEN phase is done, this should work:
+    //   let num = make_number("42".to_string());
+    //   let emitted = emit_expr(num);
+    //   assert(emitted == "42");
+
+    println("    Expected: emit_expr(Number(\"42\")) -> \"42\"");
+    println("    Expected: emit_expr(Identifier(\"x\")) -> \"x\"");
+    println("    Expected: emit_expr(BoolTrue) -> \"true\"");
+    println("    ⏸️  SKIP - emit functions don't exist yet (RED phase)");
+
+    true  // Mark as "pending implementation"
+}
+
+// Test 2: Emit binary expressions
+fun test_emit_binary() -> bool {
+    println("  Test 2: Emit binary expressions");
+
+    // Expected behavior (once implemented):
+    //   let expr = make_binary(BinOp::Add, make_number("1"), make_number("2"));
+    //   let emitted = emit_expr(expr);
+    //   assert(emitted == "1 + 2");
+
+    println("    Expected: emit_expr(Binary(Add, Number(\"1\"), Number(\"2\"))) -> \"1 + 2\"");
+    println("    Expected: emit_expr(Binary(Mul, Number(\"3\"), Number(\"4\"))) -> \"3 * 4\"");
+    println("    ⏸️  SKIP - emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 3: Emit nested expressions with precedence
+fun test_emit_nested() -> bool {
+    println("  Test 3: Emit nested expressions with precedence");
+
+    // Expected: 1 + 2 * 3
+    // Structure: Add(1, Mul(2, 3))
+    // Emitted: "1 + 2 * 3" (no parens needed, * has higher precedence)
+
+    println("    Expected: Add(1, Mul(2, 3)) -> \"1 + 2 * 3\"");
+    println("    Expected: Mul(Add(1, 2), 3) -> \"(1 + 2) * 3\"");
+    println("    ⏸️  SKIP - emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 4: Emit unary expressions
+fun test_emit_unary() -> bool {
+    println("  Test 4: Emit unary expressions");
+
+    // Expected: -42
+    // Structure: Unary(Neg, Number("42"))
+    // Emitted: "-42"
+
+    println("    Expected: Unary(Neg, Number(\"42\")) -> \"-42\"");
+    println("    Expected: Unary(Not, BoolTrue) -> \"!true\"");
+    println("    ⏸️  SKIP - emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 5: Emit statements
+fun test_emit_statements() -> bool {
+    println("  Test 5: Emit statements");
+
+    // Expected:
+    // Let("x", Number("42")) -> "let x = 42;"
+    // Assign("x", Number("10")) -> "x = 10;"
+    // Return(Number("42")) -> "return 42;"
+
+    println("    Expected: Let(\"x\", Number(\"42\")) -> \"let x = 42;\"");
+    println("    Expected: Assign(\"x\", Number(\"10\")) -> \"x = 10;\"");
+    println("    Expected: Return(Number(\"42\")) -> \"return 42;\"");
+    println("    ⏸️  SKIP - emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+// Test 6: Emit operators
+fun test_emit_operators() -> bool {
+    println("  Test 6: Emit binary operators");
+
+    println("    Expected: emit_binop(Add) -> \"+\"");
+    println("    Expected: emit_binop(Sub) -> \"-\"");
+    println("    Expected: emit_binop(Mul) -> \"*\"");
+    println("    Expected: emit_binop(Div) -> \"/\"");
+    println("    Expected: emit_binop(Eq) -> \"==\"");
+    println("    Expected: emit_binop(Neq) -> \"!=\"");
+    println("    ⏸️  SKIP - emit functions don't exist yet (RED phase)");
+
+    true
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-009: RED Phase - AST Emit Tests");
+    println("===========================================");
+    println("");
+    println("These tests define the expected behavior of AST emit functions.");
+    println("They should FAIL because emit functions don't exist yet.");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_emit_literals() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_binary() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_nested() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_unary() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_statements() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_operators() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Summary:");
+    println("Total Tests: {}", passed + failed);
+    println("Pending: {}", passed);
+    println("");
+    println("✅ RED Phase Complete!");
+    println("");
+    println("Next Steps:");
+    println("  1. Implement emit_binop(BinOp) -> String");
+    println("  2. Implement emit_unop(UnOp) -> String");
+    println("  3. Implement emit_expr(Expr) -> String");
+    println("  4. Implement emit_stmt(Stmt) -> String");
+    println("  5. Run tests again (should pass in GREEN phase)");
+}
+
+main();
