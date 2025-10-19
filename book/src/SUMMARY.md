@@ -6,6 +6,7 @@
 
 - [Validation Framework](./phase2_validation/chapter.md)
   - [VALID-003: Property-Based Testing Framework](./phase2_validation/tickets/valid-003-property-testing.md)
+  - [VALID-003-EXTENDED: Enhanced Property Testing](./phase2_validation/tickets/valid-003-extended-enhanced-testing.md)
 
 # Phase 3: Bootstrap Compiler
 
