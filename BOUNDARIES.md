@@ -512,9 +512,90 @@ This is a fundamental compiler construction pattern where each tokenize function
 
 ---
 
+## 📝 BOOTSTRAP-006/007 Discovery: Box<T> and Vec<T> Not Supported
+
+### Recursive Data Structures with Box<T>
+- **Status**: ❌ **NOT WORKING** (as of v3.95.0)
+- **Discovery**: Enum variants with Box<T> parameters cause syntax errors
+- **Error**: "Syntax error: Expected variant name in enum"
+
+**Evidence (v3.95.0)**:
+```ruchy
+enum Expr {
+    Number(String),
+    Binary(BinOp, Box<Expr>, Box<Expr>)  // ❌ Syntax error
+}
+```
+
+**Minimal Reproduction**:
+```ruchy
+enum Tree {
+    Leaf(i32),
+    Node(Box<Tree>, Box<Tree>)  // ❌ Fails
+}
+```
+
+**Working Cases** (validated):
+- ✅ Enum with String parameters: `Expr::Number(String)` works
+- ✅ Enum unit variants: `Expr::BoolTrue` works
+- ✅ Enum with multiple String params: `Position(String, String, String)` works
+- ❌ Enum with Box<T> parameters: `Binary(Box<Expr>)` FAILS
+- ❌ Enum with Vec<T> parameters: `Block(Vec<Stmt>)` FAILS
+
+**Impact on BOOTSTRAP-006/007**:
+This blocks the parser implementation which needs recursive AST structures:
+
+```ruchy
+// What we need for Pratt parser:
+enum Expr {
+    Number(String),
+    Identifier(String),
+    Binary(BinOp, Box<Expr>, Box<Expr>),  // ❌ Blocked
+    Unary(UnOp, Box<Expr>),                // ❌ Blocked
+    Call(Box<Expr>, Vec<Expr>)             // ❌ Blocked (Box + Vec)
+}
+
+// What we need for statement parser:
+enum Stmt {
+    Block(Vec<Stmt>),                      // ❌ Blocked (Vec)
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>) // ❌ Blocked (Box)
+}
+```
+
+This is a fundamental compiler construction requirement. Expression trees and statement blocks inherently require recursive structures.
+
+**Workaround Applied**:
+Simplified AST using only String parameters and unit variants:
+```ruchy
+enum Expr {
+    Number(String),         // ✅ Works
+    Identifier(String),     // ✅ Works
+    BoolTrue,               // ✅ Works (unit variant)
+    BoolFalse               // ✅ Works (unit variant)
+}
+```
+
+This allows demonstrating **concepts** but cannot implement full parser:
+- ✅ Can define AST types
+- ✅ Can demonstrate operator precedence
+- ✅ Can parse primary expressions
+- ❌ Cannot build expression trees
+- ❌ Cannot parse `1 + 2 * 3` into proper AST
+- ❌ Cannot implement Pratt parser recursion
+
+**Bug Report**: GITHUB_ISSUE_box_vec_support.md
+**Severity**: CRITICAL - Blocks BOOTSTRAP-007, BOOTSTRAP-008, BOOTSTRAP-009
+**Status**: ⏸️ AWAITING IMPLEMENTATION - Parser development paused
+
+**Evidence**:
+- BOOTSTRAP-006 (AST Type Definitions - simplified)
+- BOOTSTRAP-007 (Pratt Parser - conceptual foundation only)
+
+---
+
 This document is continuously updated as we discover new boundaries through comprehensive dogfooding and testing.
 
-**Last Updated**: October 19, 2025 (BOOTSTRAP-003: GREEN phase complete with v3.95.0)
+**Last Updated**: October 19, 2025 (BOOTSTRAP-007: Box<T>/Vec<T> limitation discovered)
 **Ruchy Version**: v3.95.0
 **Major Changes**:
 - Enum tuple variant pattern matching FULLY WORKING (v3.93.0)
@@ -522,5 +603,8 @@ This document is continuously updated as we discover new boundaries through comp
 - Loop + mut + tuple return FULLY WORKING (v3.95.0)
 - BOOTSTRAP-002 Character Stream complete with 100% test pass rate
 - BOOTSTRAP-003 Core Lexer complete with 100% test pass rate (8/8 tests)
+- BOOTSTRAP-006 AST types defined (simplified without Box<T>)
+- BOOTSTRAP-007 Pratt parser foundation (conceptual, blocked by Box<T>)
+- ❌ Box<T> and Vec<T> NOT WORKING (v3.95.0) - BLOCKS parser implementation
 - Comprehensive boundary analysis framework implemented
-- Bug Discovery Protocol applied 3 times with detailed reproductions and fixes
+- Bug Discovery Protocol applied 4 times with detailed reproductions
