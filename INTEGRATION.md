@@ -513,7 +513,8 @@ Extension of VALID-003 with enhanced property testing framework validating real 
 - **Severity**: HIGH - Type corruption at runtime (String → i32)
 - **Workaround**: Renamed LCG constants (`a/c/m` → `multiplier/increment/modulus`)
 - **Documentation**: Added to BOUNDARIES.md with minimal reproduction
-- **Status**: Bug tracked, workaround validated, tests passing
+- **GitHub Issue**: https://github.com/paiml/ruchy/issues/38 ⭐ **FILED 2025-10-19**
+- **Status**: Bug reported upstream, workaround validated, 5000+ tests passing
 
 ### Random Generation Infrastructure
 
