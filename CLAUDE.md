@@ -6,6 +6,82 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RuchyRuchy is an educational compiler infrastructure project supporting the Ruchy programming language ecosystem. The project provides educational resources, development tools, and extensive validation frameworks for understanding compiler construction and testing compiler robustness.
 
+## 🚨 CRITICAL: Bug Discovery Protocol
+
+**MANDATORY PROCEDURE - ZERO TOLERANCE**
+
+When you discover ANY bug or not-implemented feature in Ruchy:
+
+1. **STOP THE LINE** - Immediately halt all work
+2. **FILE GITHUB ISSUE** - Create issue at https://github.com/paiml/ruchy/issues
+3. **EXTREME DETAIL REQUIRED** - Issue MUST contain:
+   - Exact reproduction steps
+   - Minimal reproduction code (pure Ruchy)
+   - Expected behavior vs actual behavior
+   - Ruchy version (`ruchy --version`)
+   - Full error output (copy-paste verbatim)
+   - Context: what you were trying to accomplish
+   - Impact: how this blocks current work
+   - Workaround: if any exists
+
+**Issue Template**:
+```markdown
+## Bug Report: [Short Description]
+
+**Ruchy Version**: [output of `ruchy --version`]
+**Project**: RuchyRuchy Bootstrap Compiler
+**Ticket**: [BOOTSTRAP-XXX or VALID-XXX]
+
+### Reproduction Steps
+1. [Step 1]
+2. [Step 2]
+3. [etc]
+
+### Minimal Reproduction Code
+```ruchy
+// Exact code that triggers the bug
+[paste code here]
+```
+
+### Expected Behavior
+[What should happen]
+
+### Actual Behavior
+[What actually happens]
+
+### Full Error Output
+```
+[Complete error message, copy-paste verbatim]
+```
+
+### Context
+[What you were trying to accomplish when you found this]
+
+### Impact
+[How this blocks current work - e.g., "Blocks BOOTSTRAP-002", "Prevents character stream implementation"]
+
+### Workaround
+[If any workaround exists, describe it]
+
+### Environment
+- OS: [Linux/Mac/Windows]
+- Ruchy install: [Cargo/Binary/etc]
+```
+
+**After Filing Issue**:
+1. Document the bug in BOUNDARIES.md
+2. Implement workaround if possible
+3. Continue with alternative approach
+4. Reference GitHub issue # in commit messages
+
+**Example**:
+```
+Discovered: Enum tuple variants cause "No match arm matched" runtime error
+Action: Filed https://github.com/paiml/ruchy/issues/XXX
+Workaround: Using unit variants only for Position tracking
+Status: BOOTSTRAP-002 proceeding with simplified enum design
+```
+
 ## Critical Requirements
 
 ### MUST Use Pure Ruchy Tooling (Dogfooding)
