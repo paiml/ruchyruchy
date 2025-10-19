@@ -18,28 +18,56 @@ All boundaries discovered through:
 
 ---
 
-## 📊 Ruchy v3.89.0 Boundaries
+## 📊 Ruchy v3.92.0+ Boundaries (UPDATED)
 
-### ✅ WORKING: Syntax & Parsing
+### ✅ MAJOR UPDATE: Enum Runtime Support (v3.92.0)
+
+**🎉 ENUM RUNTIME NOW FULLY SUPPORTED!**
 
 #### Enum Declarations
-- **Status**: ✅ **PARSING WORKS**
+- **Status**: ✅ **FULLY WORKING** (as of v3.92.0)
 - **Syntax Check**: ✅ `ruchy check` passes
 - **Lint Check**: ✅ `ruchy lint` passes
-- **Runtime**: ❌ **EXECUTION NOT SUPPORTED**
+- **Runtime**: ✅ **EXECUTION FULLY SUPPORTED**
 
-**Evidence**:
+**Supported Features (v3.92.0)**:
+- Unit variants: `enum Status { Success, Pending }` with `Status::Success`
+- Tuple variants: `enum Response { Ok, Error(String) }` with `Response::Error("msg")`
+- Keyword variants: `Ok`, `Err`, `Some`, `None` as variant names
+- Pattern matching on enum variants
+
+**Evidence (v3.92.0)**:
 ```bash
 $ ruchy check bootstrap/stage0/token_v2.ruchy
 ✓ Syntax is valid
 
 $ ruchy run bootstrap/stage0/token_v2.ruchy
-Error: Expression type not yet implemented: Enum
+✅ EXECUTES SUCCESSFULLY (v3.92.0+)
 ```
 
-**Discovered**: BOOTSTRAP-001 (Token Type Definitions)
-**Impact**: Enum-based code can be written and validated but not executed
+**Upgrade Impact**:
+- ✅ BOOTSTRAP-001 (Token Type Definitions) **NOW EXECUTABLE**
+- ✅ All enum-based code can now run
+- ✅ Bootstrap compiler can use real Ruchy enums
+
+---
+
+## 📊 Historical: Ruchy v3.89.0 Boundaries (SUPERSEDED)
+
+### ⚠️ DEPRECATED: Enum Runtime Limitation (v3.89.0 only)
+
+<details>
+<summary>Click to view v3.89.0 enum limitations (now resolved in v3.92.0+)</summary>
+
+#### Enum Declarations (v3.89.0)
+- **Status**: ✅ **PARSING WORKS**, ❌ **RUNTIME NOT SUPPORTED**
+- **Runtime**: ❌ Error: "Expression type not yet implemented: Enum"
+
+**Impact**: Enum-based code could be written and validated but not executed
 **Workaround**: Use match expressions on strings or implement enum-like patterns
+
+**This limitation was RESOLVED in Ruchy v3.92.0 release**
+</details>
 
 #### Struct Declarations
 - **Status**: ✅ **PARSING WORKS**
@@ -304,5 +332,6 @@ Until runtime supports enums/structs:
 
 This document is continuously updated as we discover new boundaries through comprehensive dogfooding and testing.
 
-**Last Updated**: October 19, 2025 (VALID-003 completion)
-**Next Update**: When enum/struct runtime support lands in Ruchy
+**Last Updated**: October 19, 2025 (Ruchy v3.92.0 upgrade - Enum runtime support!)
+**Ruchy Version**: v3.92.0+
+**Major Change**: Enum runtime fully supported - BOOTSTRAP-001 now executable!
