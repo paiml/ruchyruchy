@@ -279,6 +279,27 @@ Until runtime supports enums/structs:
 - Keep function count per file under 15-20
 - Ruchy parser works best with modular, focused files
 
+## 📝 VALID-004 Discovery: Runtime String Methods
+
+### String Method Support
+- **Status**: ⚠️ **RUNTIME LIMITATIONS**
+- **Finding**: Several common string methods not yet implemented in runtime
+- **Not Supported**:
+  - `String.clone()` - "Unknown zero-argument string method: clone"
+  - `String.push_str(str)` - "Unknown single-argument string method: push_str"
+- **Supported**:
+  - `String.to_string()` - ✅ Works
+  - `String.len()` - ✅ Works
+  - `String.as_str()` - ✅ Works
+  - String concatenation via `+` operator - ✅ Works
+
+**Workaround**:
+- Use `.to_string()` instead of `.clone()` for strings
+- Use `+` operator for string concatenation instead of `.push_str()`
+- Example: `let result = input.to_string() + "suffix";`
+
+**Evidence**: VALID-004 (Fuzz Testing Harness implementation)
+
 ---
 
 This document is continuously updated as we discover new boundaries through comprehensive dogfooding and testing.
