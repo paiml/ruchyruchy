@@ -1,0 +1,236 @@
+// BOOTSTRAP-007: Pratt Parser for Expressions (GREEN Phase - Simplified)
+// Demonstrates operator precedence parsing without Box<T>
+
+// AST types (simplified)
+enum Expr {
+    Number(String),
+    Identifier(String),
+    BoolTrue,
+    BoolFalse
+}
+
+enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div
+}
+
+// Token types (from lexer)
+enum TokenType {
+    Number,
+    Identifier,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    LeftParen,
+    RightParen,
+    Eof
+}
+
+enum Token {
+    Tok(TokenType, String)
+}
+
+// Operator precedence (binding power)
+// Higher number = higher precedence
+fun precedence(op: TokenType) -> i32 {
+    match op {
+        TokenType::Plus => 10,
+        TokenType::Minus => 10,
+        TokenType::Star => 20,
+        TokenType::Slash => 20,
+        _ => 0
+    }
+}
+
+// Check if token is an operator
+fun is_binary_op(tt: TokenType) -> bool {
+    match tt {
+        TokenType::Plus => true,
+        TokenType::Minus => true,
+        TokenType::Star => true,
+        TokenType::Slash => true,
+        _ => false
+    }
+}
+
+// Parse primary expression (number or identifier)
+fun parse_primary(input: String) -> Expr {
+    // Simplified: just parse the first token
+    // In real implementation, this would use the lexer
+
+    // Check if it's a number (starts with digit)
+    let first = char_at(input, 0);
+
+    if is_digit(first) {
+        Expr::Number(input)
+    } else {
+        Expr::Identifier(input)
+    }
+}
+
+// Helper: Get character at index
+fun char_at(input: String, index: i32) -> String {
+    if index >= input.len() {
+        "\0"
+    } else {
+        let c = input.chars().nth(index);
+        match c {
+            Some(ch) => ch.to_string(),
+            None => "\0"
+        }
+    }
+}
+
+// Helper: Check if character is digit
+fun is_digit(ch: String) -> bool {
+    ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" ||
+    ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9"
+}
+
+// Test 1: Parse number
+fun test_parse_number() -> bool {
+    println("  Testing number parsing...");
+
+    let input = "42";
+    let result = parse_primary(input);
+
+    match result {
+        Expr::Number(val) => {
+            if val == "42" {
+                println("    Input: \"42\"");
+                println("    Got: Number(\"42\")");
+                println("    ✅ Pass");
+                true
+            } else {
+                println("    ❌ Fail: wrong value");
+                false
+            }
+        },
+        _ => {
+            println("    ❌ Fail: not a number");
+            false
+        }
+    }
+}
+
+// Test 2: Parse identifier
+fun test_parse_identifier() -> bool {
+    println("  Testing identifier parsing...");
+
+    let input = "x";
+    let result = parse_primary(input);
+
+    match result {
+        Expr::Identifier(name) => {
+            if name == "x" {
+                println("    Input: \"x\"");
+                println("    Got: Identifier(\"x\")");
+                println("    ✅ Pass");
+                true
+            } else {
+                println("    ❌ Fail: wrong name");
+                false
+            }
+        },
+        _ => {
+            println("    ❌ Fail: not an identifier");
+            false
+        }
+    }
+}
+
+// Test 3: Precedence table
+fun test_precedence_table() -> bool {
+    println("  Testing operator precedence table...");
+
+    let prec_mul = precedence(TokenType::Star);
+    let prec_add = precedence(TokenType::Plus);
+
+    if prec_mul > prec_add {
+        println("    Mul precedence: {}", prec_mul);
+        println("    Add precedence: {}", prec_add);
+        println("    ✅ Pass: * has higher precedence than +");
+        true
+    } else {
+        println("    ❌ Fail: precedence incorrect");
+        false
+    }
+}
+
+// Test 4: Operator detection
+fun test_operator_detection() -> bool {
+    println("  Testing operator detection...");
+
+    let is_op = is_binary_op(TokenType::Plus);
+    let not_op = is_binary_op(TokenType::Number);
+
+    if is_op && !not_op {
+        println("    Plus is binary op: {}", is_op);
+        println("    Number is NOT binary op: {}", !not_op);
+        println("    ✅ Pass");
+        true
+    } else {
+        println("    ❌ Fail");
+        false
+    }
+}
+
+fun main() {
+    println("🧪 BOOTSTRAP-007: Expression Parser (GREEN Phase - Simplified)");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_parse_number() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_parse_identifier() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_precedence_table() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_operator_detection() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("Total Tests: {}", passed + failed);
+    println("Passed: {}", passed);
+    println("Failed: {}", failed);
+
+    if failed == 0 {
+        println("");
+        println("✅ GREEN PHASE: Pratt parser foundation working!");
+        println("");
+        println("Key Concepts Demonstrated:");
+        println("- Operator precedence table (binding power)");
+        println("- Primary expression parsing");
+        println("- Operator detection");
+        println("");
+        println("Limitations:");
+        println("- No recursive AST (Box<T> not supported)");
+        println("- Simplified for demonstration");
+        println("- Full Pratt parser requires Box<Expr>");
+    } else {
+        println("");
+        println("❌ {} test(s) failed", failed);
+    }
+}
+
+main();
