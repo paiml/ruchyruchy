@@ -96,6 +96,141 @@ Status: BOOTSTRAP-002 proceeding with simplified enum design
 
 **Rationale**: A Ruchy project MUST dogfood Ruchy tools. Using external toolchains undermines credibility and prevents self-hosting validation.
 
+### MUST Maintain TDD Book Documentation
+
+**MANDATORY - ZERO TOLERANCE**
+
+Following the pattern from `../ruchy-book`, `../ruchy`, and `../paiml-mcp-agent-toolkit`, this project MUST maintain a comprehensive book documenting all development via TDD:
+
+**Book Requirements**:
+1. **Location**: `book/` directory at repository root
+2. **Format**: Markdown chapters published via GitHub Pages
+3. **Structure**: `book/src/SUMMARY.md` with chapter links
+4. **Build**: mdBook or similar for GitHub Pages deployment
+5. **Publishing**: GitHub Actions workflow for automatic deployment
+
+**Content Requirements - EVERY feature must have**:
+1. **RED Phase**: Document the failing test first
+   - What test was written
+   - Why it fails
+   - Expected behavior vs actual behavior
+
+2. **GREEN Phase**: Document the minimal implementation
+   - Code that makes test pass
+   - No extra features beyond test requirements
+
+3. **REFACTOR Phase**: Document improvements
+   - What was refactored
+   - Why (performance, clarity, maintainability)
+   - Tests still passing confirmation
+
+**Book Structure**:
+```
+book/
+├── book.toml                    # mdBook configuration
+├── src/
+│   ├── SUMMARY.md              # Table of contents
+│   ├── introduction.md         # Project overview
+│   ├── phase1_infrastructure/
+│   │   ├── chapter.md
+│   │   └── tickets/
+│   │       ├── infra-001-roadmap.md
+│   │       └── infra-002-quality-gates.md
+│   ├── phase2_validation/
+│   │   ├── chapter.md
+│   │   └── tickets/
+│   │       ├── valid-001-self-compilation.md
+│   │       ├── valid-003-property-testing.md
+│   │       ├── valid-004-fuzz-testing.md
+│   │       └── valid-005-boundary-analysis.md
+│   ├── phase3_bootstrap/
+│   │   ├── chapter.md
+│   │   └── stage0/
+│   │       ├── bootstrap-001-token-types.md
+│   │       ├── bootstrap-002-char-stream.md
+│   │       └── bootstrap-003-core-lexer.md
+│   └── discoveries/
+│       ├── boundaries.md       # Links to BOUNDARIES.md
+│       └── runtime-enhancements.md
+```
+
+**Chapter Template** (for each ticket):
+```markdown
+# TICKET-XXX: Feature Name
+
+## Context
+[Why this feature is needed, what problem it solves]
+
+## RED: Write Failing Test
+[The test that was written first]
+```ruchy
+// Test code here
+```
+**Expected**: [What should happen]
+**Actual**: [What currently happens - failure]
+
+## GREEN: Minimal Implementation
+[Code that makes test pass]
+```ruchy
+// Implementation code
+```
+**Result**: ✅ Test passes
+
+## REFACTOR: Improvements
+[Any refactoring done while keeping tests green]
+
+## Validation
+- ruchy check: ✅ Pass
+- ruchy lint: ✅ A+ grade
+- ruchy test: ✅ X/X tests passing
+- ruchy run: ✅ Executes successfully
+
+## Discoveries
+[Any boundaries, bugs, or learnings discovered]
+
+## Next Steps
+[What this enables, next ticket to implement]
+```
+
+**GitHub Pages Deployment**:
+```yaml
+# .github/workflows/book.yml
+name: Deploy Book
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v1
+      - name: Build book
+        run: mdbook build
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./book/book
+```
+
+**Integration with Development**:
+- Every commit for a ticket MUST update corresponding book chapter
+- Book chapters MUST be written in TDD order (RED-GREEN-REFACTOR)
+- Book serves as living documentation of development process
+- Book published automatically to GitHub Pages on push
+
+**Examples to Follow**:
+- `../ruchy-book`: Language reference and tutorial structure
+- `../ruchy`: Compiler implementation documentation
+- `../paiml-mcp-agent-toolkit`: MCP server development documentation
+
+**Enforcement**:
+- Pre-commit hook checks for book chapter when ticket files change
+- Quality gates verify book is buildable
+- No ticket considered "complete" without book chapter
+
 ## Phase 2: Validation & Robustness (Current Focus)
 
 ### Mission
