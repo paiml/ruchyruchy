@@ -25,7 +25,7 @@ All boundaries discovered through:
 **Discovered**: 2025-10-19 during VALID-003-EXTENDED implementation
 **Severity**: **HIGH** - Variable type corruption at runtime
 **Status**: ❌ **BLOCKING BUG** - Workaround available
-**GitHub Issue**: https://github.com/paiml/ruchy/issues/[TO BE FILED]
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/38 ⭐ **FILED**
 
 #### Problem Description
 When unpacking tuples returned from functions with nested calls, variable names can collide with variable names in deeper call stack frames, causing type corruption.
