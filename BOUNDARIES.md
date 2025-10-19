@@ -2,7 +2,7 @@
 
 **Project**: RuchyRuchy Bootstrap Compiler
 **Approach**: Pure Ruchy Dogfooding (Phase 2 Validation)
-**Last Updated**: October 18, 2025
+**Last Updated**: 2025-10-19
 
 This document tracks the exact boundaries where Ruchy works and where it has limitations, discovered through comprehensive testing and dogfooding.
 
@@ -15,6 +15,109 @@ All boundaries discovered through:
 - ✅ Comprehensive test suites written in Ruchy
 - ✅ Real-world bootstrap compiler implementation
 - ✅ Property-based and fuzz testing
+
+---
+
+## 🚨 CRITICAL: Variable Name Collision Bug (v3.96.0)
+
+### ❌ Variable Corruption with Nested Function Calls and Tuple Unpacking
+
+**Discovered**: 2025-10-19 during VALID-003-EXTENDED implementation
+**Severity**: **HIGH** - Variable type corruption at runtime
+**Status**: ❌ **BLOCKING BUG** - Workaround available
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/[TO BE FILED]
+
+#### Problem Description
+When unpacking tuples returned from functions with nested calls, variable names can collide with variable names in deeper call stack frames, causing type corruption.
+
+#### Minimal Reproduction
+```ruchy
+fun next_random(seed: i32) -> i32 {
+    let a = 1103515245;  // Local variable 'a'
+    let c = 12345;
+    let m = 2147483647;
+    let temp = a * seed + c;
+    if temp < 0 {
+        (temp + m) % m
+    } else {
+        temp % m
+    }
+}
+
+fun random_in_range(seed: i32, max: i32) -> (i32, i32) {
+    let new_seed = next_random(seed);
+    let value = if max > 0 {
+        if new_seed < 0 { ((new_seed + 2147483647) % max) }
+        else { new_seed % max }
+    } else { 0 };
+    (value, new_seed)
+}
+
+fun random_string(seed: i32, max_len: i32) -> (String, i32) {
+    let result = random_in_range(seed, 100);
+    let num = result.0;
+    let new_seed = result.1;
+    if num < 10 { ("x".to_string(), new_seed) }
+    else if num < 20 { ("xy".to_string(), new_seed) }
+    else { ("hello".to_string(), new_seed) }
+}
+
+fun main() {
+    let r1 = random_string(42, 5);
+    let a = r1.0;  // Variable 'a' - SHOULD BE STRING
+    let seed1 = r1.1;
+
+    let r2 = random_string(seed1, 5);
+    let b = r2.0;  // Variable 'b'
+
+    println("a = {}", a);  // Shows: 1103515245 (integer!) ❌
+    println("b = {}", b);  // Shows: "hello" ✓
+
+    let result = a + b;  // ERROR: Cannot add integer and string
+}
+```
+
+#### Expected Behavior
+- Variable `a` in `main()` should be a String (first element of tuple)
+- Output: `a = "hello"`
+
+#### Actual Behavior
+- Variable `a` is corrupted to integer value `1103515245`
+- This is the value of the local variable `a` from within `next_random()` function
+- Type corruption causes runtime error: "Cannot add integer and string"
+
+#### Root Cause
+Variable name collision: outer scope variable `a` conflicts with inner function's local variable `a`, causing the runtime to substitute the wrong value.
+
+#### Workaround
+**Rename variables to avoid collisions across call stack**
+
+```ruchy
+fun next_random(seed: i32) -> i32 {
+    let multiplier = 1103515245;  // Renamed from 'a'
+    let increment = 12345;         // Renamed from 'c'
+    let modulus = 2147483647;      // Renamed from 'm'
+    let temp = multiplier * seed + increment;
+    if temp < 0 {
+        (temp + modulus) % modulus
+    } else {
+        temp % modulus
+    }
+}
+```
+
+✅ **WORKAROUND VALIDATED**: Renaming variables eliminates the corruption
+
+#### Impact
+- **BLOCKS**: VALID-003-EXTENDED property testing with random generation
+- **BLOCKS**: Any complex tuple-returning functions with nested calls
+- **AFFECTS**: Variable scoping and lexical closure semantics
+- **SEVERITY**: Type safety violation - critical runtime bug
+
+#### Test Case
+File: `validation/property/property_framework_extended.ruchy`
+- Original implementation: FAILED with variable corruption
+- Workaround applied: ✅ PASSES (5000+ test cases)
 
 ---
 
