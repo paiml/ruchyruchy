@@ -1,0 +1,68 @@
+// Test if GitHub issue #38 is fixed in Ruchy v3.98.0
+// Bug: Variable name collision in nested function calls
+
+fun next_random(seed: i32) -> i32 {
+    let a = 1103515245;  // Previously caused collision
+    let c = 12345;
+    let m = 2147483647;
+
+    let temp = a * seed + c;
+    if temp < 0 {
+        (temp + m) % m
+    } else {
+        temp % m
+    }
+}
+
+fun random_in_range(seed: i32, max: i32) -> (i32, i32) {
+    let new_seed = next_random(seed);
+    let value = if max > 0 {
+        if new_seed < 0 {
+            ((new_seed + 2147483647) % max)
+        } else {
+            new_seed % max
+        }
+    } else {
+        0
+    };
+    (value, new_seed)
+}
+
+fun random_string(seed: i32, max_len: i32) -> (String, i32) {
+    let result = random_in_range(seed, 100);
+    let num = result.0;
+    let new_seed = result.1;
+
+    if num < 10 {
+        ("x".to_string(), new_seed)
+    } else if num < 20 {
+        ("xy".to_string(), new_seed)
+    } else {
+        ("hello".to_string(), new_seed)
+    }
+}
+
+fun main() {
+    println("Testing GitHub issue #38 fix in Ruchy v3.98.0");
+    println("============================================");
+
+    let r1 = random_string(42, 5);
+    let a = r1.0;  // Should be String (previously corrupted to i32)
+    let seed1 = r1.1;
+
+    let r2 = random_string(seed1, 5);
+    let b = r2.0;
+
+    println("a = {}", a);
+    println("b = {}", b);
+
+    // This previously failed with "Cannot add integer and string"
+    let result = a + b;
+    println("result = {}", result);
+
+    println("");
+    println("✅ SUCCESS: Bug #38 is FIXED in v3.98.0!");
+    println("Variables maintain correct types across nested calls");
+}
+
+main();
