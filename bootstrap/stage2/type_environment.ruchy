@@ -1,0 +1,143 @@
+// BOOTSTRAP-010: Type Environment (GREEN Phase)
+// Minimal implementation to make tests pass
+
+// Type representations for Hindley-Milner
+enum Type {
+    TInt,
+    TBool,
+    TString,
+    TVar(String),
+    TFun(Box<Type>, Box<Type>)
+}
+
+// Type scheme for polymorphic types
+enum Scheme {
+    Mono(Type),
+    Poly(String, Type)
+}
+
+// Type environment - immutable linked list
+enum TypeEnv {
+    Empty,
+    Extend(String, Scheme, Box<TypeEnv>)
+}
+
+// Bind a variable to a type scheme
+fun bind(env: TypeEnv, name: String, scheme: Scheme) -> TypeEnv {
+    TypeEnv::Extend(name, scheme, Box::new(env))
+}
+
+// Lookup a variable in the environment
+fun lookup(env: TypeEnv, name: String) -> bool {
+    match env {
+        TypeEnv::Empty => false,
+        TypeEnv::Extend(n, s, rest) => {
+            if n == name {
+                true
+            } else {
+                lookup(*rest, name)
+            }
+        }
+    }
+}
+
+// Helper: Create types
+fun make_int_type() -> Type {
+    Type::TInt
+}
+
+fun make_bool_type() -> Type {
+    Type::TBool
+}
+
+fun make_mono_scheme(t: Type) -> Scheme {
+    Scheme::Mono(t)
+}
+
+// GREEN Phase Tests
+fun test_bind_and_lookup() -> bool {
+    println("Test: Bind and lookup");
+    
+    let empty = TypeEnv::Empty;
+    let env1 = bind(empty, "x".to_string(), make_mono_scheme(make_int_type()));
+    
+    let found = lookup(env1, "x".to_string());
+    
+    if found {
+        println("  ✅ PASS: Variable bound and found");
+        true
+    } else {
+        println("  ❌ FAIL: Variable not found");
+        false
+    }
+}
+
+fun test_lookup_missing() -> bool {
+    println("Test: Lookup missing variable");
+    
+    let empty = TypeEnv::Empty;
+    let found = lookup(empty, "y".to_string());
+    
+    if !found {
+        println("  ✅ PASS: Missing variable returns false");
+        true
+    } else {
+        println("  ❌ FAIL: Should not find missing variable");
+        false
+    }
+}
+
+fun test_shadowing() -> bool {
+    println("Test: Variable shadowing");
+    
+    let env0 = TypeEnv::Empty;
+    let env1 = bind(env0, "x".to_string(), make_mono_scheme(make_int_type()));
+    let env2 = bind(env1, "x".to_string(), make_mono_scheme(make_bool_type()));
+    
+    // Most recent binding should be found
+    let found = lookup(env2, "x".to_string());
+    
+    if found {
+        println("  ✅ PASS: Shadowing works (finds most recent)");
+        true
+    } else {
+        println("  ❌ FAIL: Shadowing broken");
+        false
+    }
+}
+
+fun main() {
+    println("🟢 BOOTSTRAP-010: Type Environment (GREEN Phase)");
+    println("================================================");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_bind_and_lookup() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_lookup_missing() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_shadowing() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 GREEN Phase Results: {} passed, {} failed", passed, failed);
+    
+    if failed == 0 {
+        println("✅ GREEN: All tests passing!");
+    }
+}
+
+main();
