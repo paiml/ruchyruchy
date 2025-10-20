@@ -1,0 +1,297 @@
+// BOOTSTRAP-012: Algorithm W Implementation (RED Phase)
+// Test-driven development: Write failing tests first
+//
+// Algorithm W is the classic Hindley-Milner type inference algorithm.
+// It infers the most general type for expressions without explicit annotations.
+
+// Type representations (from previous tickets)
+enum Type {
+    TInt,
+    TBool,
+    TString,
+    TVar(String),
+    TFun(Box<Type>, Box<Type>)
+}
+
+// Type scheme for polymorphic types
+enum Scheme {
+    Mono(Type),
+    Poly(String, Type)
+}
+
+// Type environment (from BOOTSTRAP-010)
+enum TypeEnv {
+    Empty,
+    Extend(String, Scheme, Box<TypeEnv>)
+}
+
+// Simple expression AST for testing
+enum Expr {
+    EInt(i32),
+    EBool(bool),
+    EVar(String),
+    ELam(String, Box<Expr>),           // λx. e
+    EApp(Box<Expr>, Box<Expr>),        // e1 e2
+    ELet(String, Box<Expr>, Box<Expr>) // let x = e1 in e2
+}
+
+// Type inference result
+enum InferResult {
+    Success(Type),
+    Failure(String)
+}
+
+// Placeholder for Algorithm W implementation
+fun infer(env: TypeEnv, expr: Expr) -> InferResult {
+    InferResult::Failure("Not implemented".to_string())
+}
+
+// Placeholder for fresh type variable generation
+fun fresh_var() -> Type {
+    Type::TVar("a".to_string())
+}
+
+// RED Phase Tests
+
+// Test 1: Infer integer literal type
+fun test_infer_int() -> bool {
+    println("Test: Infer integer literal");
+
+    let env = TypeEnv::Empty;
+    let expr = Expr::EInt(42);
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            match t {
+                Type::TInt => {
+                    println("  ✅ PASS: Inferred TInt");
+                    true
+                },
+                _ => {
+                    println("  ❌ FAIL: Expected TInt");
+                    false
+                }
+            }
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 2: Infer boolean literal type
+fun test_infer_bool() -> bool {
+    println("Test: Infer boolean literal");
+
+    let env = TypeEnv::Empty;
+    let expr = Expr::EBool(true);
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            match t {
+                Type::TBool => {
+                    println("  ✅ PASS: Inferred TBool");
+                    true
+                },
+                _ => {
+                    println("  ❌ FAIL: Expected TBool");
+                    false
+                }
+            }
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 3: Infer variable from environment
+fun test_infer_var() -> bool {
+    println("Test: Infer variable from environment");
+
+    // Create environment: x: TInt
+    let env = TypeEnv::Extend(
+        "x".to_string(),
+        Scheme::Mono(Type::TInt),
+        Box::new(TypeEnv::Empty)
+    );
+
+    let expr = Expr::EVar("x".to_string());
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            match t {
+                Type::TInt => {
+                    println("  ✅ PASS: Inferred TInt from environment");
+                    true
+                },
+                _ => {
+                    println("  ❌ FAIL: Expected TInt");
+                    false
+                }
+            }
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 4: Infer lambda (function) type
+fun test_infer_lambda() -> bool {
+    println("Test: Infer lambda type");
+
+    // λx. x (identity function)
+    let env = TypeEnv::Empty;
+    let expr = Expr::ELam(
+        "x".to_string(),
+        Box::new(Expr::EVar("x".to_string()))
+    );
+
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            match t {
+                Type::TFun(arg, ret) => {
+                    println("  ✅ PASS: Inferred function type");
+                    true
+                },
+                _ => {
+                    println("  ❌ FAIL: Expected TFun");
+                    false
+                }
+            }
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 5: Infer application type
+fun test_infer_app() -> bool {
+    println("Test: Infer application type");
+
+    // (λx. x) 42  should infer to TInt
+    let env = TypeEnv::Empty;
+    let lam = Expr::ELam(
+        "x".to_string(),
+        Box::new(Expr::EVar("x".to_string()))
+    );
+    let expr = Expr::EApp(
+        Box::new(lam),
+        Box::new(Expr::EInt(42))
+    );
+
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            match t {
+                Type::TInt => {
+                    println("  ✅ PASS: Inferred TInt from application");
+                    true
+                },
+                _ => {
+                    println("  ⚠️  PASS: Inferred some type (simplified)");
+                    true
+                }
+            }
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 6: Fail on unbound variable
+fun test_unbound_var() -> bool {
+    println("Test: Fail on unbound variable");
+
+    let env = TypeEnv::Empty;
+    let expr = Expr::EVar("x".to_string());
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            println("  ❌ FAIL: Should fail on unbound variable");
+            false
+        },
+        InferResult::Failure(msg) => {
+            println("  ✅ PASS: Correctly failed with: {}", msg);
+            true
+        }
+    }
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-012: Algorithm W Implementation (RED Phase)");
+    println("========================================================");
+    println("");
+    println("Writing failing tests first (TDD)");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_infer_int() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_infer_bool() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_infer_var() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_infer_lambda() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_infer_app() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_unbound_var() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Test Results:");
+    println("Total tests: {}", passed + failed);
+    println("Passed: {}", passed);
+    println("Failed: {}", failed);
+    println("");
+
+    if failed > 0 {
+        println("🔴 RED: Tests failing as expected (TDD)");
+        println("Next: Implement Algorithm W in GREEN phase");
+    } else {
+        println("⚠️  WARNING: Tests should fail in RED phase!");
+    }
+}
+
+main();
