@@ -512,6 +512,9 @@ Performance: [actual] vs [target] metrics via ruchy runtime
 Toyota Way: [Kaizen/Genchi Genbutsu/Jidoka] principle applied
 Dogfooding: 100% pure Ruchy implementation and testing
 
+**MANDATORY**: Updated roadmap.yaml with ticket status (completed/in_progress)
+**MANDATORY**: Updated INTEGRATION.md or CHANGELOG.md with progress
+
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
