@@ -1,0 +1,310 @@
+// BOOTSTRAP-015: Rust Code Emitter (RED Phase)
+// Test-driven development: Write failing tests first
+//
+// This ticket implements AST to Rust code generation.
+// The emitter produces idiomatic Rust with correct ownership semantics.
+
+// Expression AST (same as TypeScript emitter)
+enum Expr {
+    EInt(i32),
+    EBool(bool),
+    EString(String),
+    EVar(String),
+    EBinOp(String, Box<Expr>, Box<Expr>),
+    ELam(String, Box<Expr>),
+    EApp(Box<Expr>, Box<Expr>),
+    ELet(String, Box<Expr>, Box<Expr>)
+}
+
+// Statement AST
+enum Stmt {
+    SExpr(Expr),
+    SLet(String, Expr),
+    SFun(String, String, Expr)
+}
+
+// Placeholder for Rust emitter
+fun emit_expr_rust(expr: Expr) -> String {
+    "NOT_IMPLEMENTED".to_string()
+}
+
+fun emit_stmt_rust(stmt: Stmt) -> String {
+    "NOT_IMPLEMENTED".to_string()
+}
+
+// RED Phase Tests
+
+// Test 1: Emit integer literal
+fun test_emit_int() -> bool {
+    println("Test: Emit integer literal");
+
+    let expr = Expr::EInt(42);
+    let result = emit_expr_rust(expr);
+
+    if result == "42" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected '42', got '{}'", result);
+        false
+    }
+}
+
+// Test 2: Emit boolean literal
+fun test_emit_bool() -> bool {
+    println("Test: Emit boolean literal");
+
+    let expr = Expr::EBool(true);
+    let result = emit_expr_rust(expr);
+
+    if result == "true" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 'true', got '{}'", result);
+        false
+    }
+}
+
+// Test 3: Emit string literal
+fun test_emit_string() -> bool {
+    println("Test: Emit string literal");
+
+    let expr = Expr::EString("hello".to_string());
+    let result = emit_expr_rust(expr);
+
+    if result == "\"hello\"" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected '\"hello\"', got '{}'", result);
+        false
+    }
+}
+
+// Test 4: Emit variable
+fun test_emit_var() -> bool {
+    println("Test: Emit variable");
+
+    let expr = Expr::EVar("x".to_string());
+    let result = emit_expr_rust(expr);
+
+    if result == "x" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 'x', got '{}'", result);
+        false
+    }
+}
+
+// Test 5: Emit binary operation
+fun test_emit_binop() -> bool {
+    println("Test: Emit binary operation");
+
+    // 1 + 2
+    let expr = Expr::EBinOp(
+        "+".to_string(),
+        Box::new(Expr::EInt(1)),
+        Box::new(Expr::EInt(2))
+    );
+    let result = emit_expr_rust(expr);
+
+    if result == "(1 + 2)" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected '(1 + 2)', got '{}'", result);
+        false
+    }
+}
+
+// Test 6: Emit closure
+fun test_emit_closure() -> bool {
+    println("Test: Emit closure");
+
+    // λx. x => |x| x
+    let expr = Expr::ELam(
+        "x".to_string(),
+        Box::new(Expr::EVar("x".to_string()))
+    );
+    let result = emit_expr_rust(expr);
+
+    if result == "|x| x" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected '|x| x', got '{}'", result);
+        false
+    }
+}
+
+// Test 7: Emit function call
+fun test_emit_call() -> bool {
+    println("Test: Emit function call");
+
+    // f(x)
+    let expr = Expr::EApp(
+        Box::new(Expr::EVar("f".to_string())),
+        Box::new(Expr::EVar("x".to_string()))
+    );
+    let result = emit_expr_rust(expr);
+
+    if result == "f(x)" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 'f(x)', got '{}'", result);
+        false
+    }
+}
+
+// Test 8: Emit let binding
+fun test_emit_let_stmt() -> bool {
+    println("Test: Emit let binding");
+
+    let stmt = Stmt::SLet("x".to_string(), Expr::EInt(42));
+    let result = emit_stmt_rust(stmt);
+
+    if result == "let x = 42;" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 'let x = 42;', got '{}'", result);
+        false
+    }
+}
+
+// Test 9: Emit function declaration
+fun test_emit_fun_decl() -> bool {
+    println("Test: Emit function declaration");
+
+    // fun id(x) = x => fn id(x) -> _ { x }
+    let stmt = Stmt::SFun(
+        "id".to_string(),
+        "x".to_string(),
+        Expr::EVar("x".to_string())
+    );
+    let result = emit_stmt_rust(stmt);
+
+    if result == "fn id(x: _) -> _ { x }" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 'fn id(x: _) -> _ {{ x }}', got '{}'", result);
+        false
+    }
+}
+
+// Test 10: Emit nested expression
+fun test_emit_nested() -> bool {
+    println("Test: Emit nested expression");
+
+    // (1 + 2) + 3
+    let inner = Expr::EBinOp(
+        "+".to_string(),
+        Box::new(Expr::EInt(1)),
+        Box::new(Expr::EInt(2))
+    );
+    let expr = Expr::EBinOp(
+        "+".to_string(),
+        Box::new(inner),
+        Box::new(Expr::EInt(3))
+    );
+    let result = emit_expr_rust(expr);
+
+    if result == "((1 + 2) + 3)" {
+        println("  ✅ PASS");
+        true
+    } else {
+        println("  ❌ FAIL: Expected '((1 + 2) + 3)', got '{}'", result);
+        false
+    }
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-015: Rust Code Emitter (RED Phase)");
+    println("===============================================");
+    println("");
+    println("Writing failing tests for Rust emission");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_emit_int() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_bool() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_string() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_var() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_binop() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_closure() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_call() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_let_stmt() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_fun_decl() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_emit_nested() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Test Results:");
+    println("Total tests: {}", passed + failed);
+    println("Passed: {}", passed);
+    println("Failed: {}", failed);
+    println("");
+
+    if failed > 0 {
+        println("🔴 RED: Tests failing as expected (TDD)");
+        println("Next: Implement Rust emitter in GREEN phase");
+    } else {
+        println("⚠️  WARNING: Tests should fail in RED phase!");
+    }
+}
+
+main();
