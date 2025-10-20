@@ -1,0 +1,163 @@
+// BOOTSTRAP-011: Unification Algorithm (RED Phase)
+// Test-driven development: Write failing tests first
+//
+// Unification is the core of Hindley-Milner type inference.
+// Given two types, unification finds a substitution that makes them equal.
+//
+// Requirements from roadmap.yaml:
+// 1. Type unification
+// 2. Occurs check (prevent infinite types)
+// 3. Substitution application
+// 4. Error reporting
+
+// Type representations (from BOOTSTRAP-010)
+enum Type {
+    TInt,
+    TBool,
+    TString,
+    TVar(String),
+    TFun(Box<Type>, Box<Type>)
+}
+
+// Substitution result
+enum UnifyResult {
+    Success,
+    Failure(String)  // Error message
+}
+
+// Placeholder functions (to be implemented in GREEN phase)
+fun unify_types(t1: Type, t2: Type) -> UnifyResult {
+    // Stub: always fails
+    UnifyResult::Failure("Not implemented".to_string())
+}
+
+fun occurs_check(var_name: String, t: Type) -> bool {
+    // Stub: always returns false
+    false
+}
+
+// Test 1: Unify identical concrete types
+fun test_unify_concrete() -> bool {
+    println("Test 1: Unify identical concrete types");
+    
+    let t1 = Type::TInt;
+    let t2 = Type::TInt;
+    
+    let result = unify_types(t1, t2);
+    
+    match result {
+        UnifyResult::Success => {
+            println("  ✅ PASS: TInt unifies with TInt");
+            true
+        },
+        UnifyResult::Failure(msg) => {
+            println("  ❌ FAIL: Should unify - {}", msg);
+            false
+        }
+    }
+}
+
+// Test 2: Fail to unify different concrete types
+fun test_unify_mismatch() -> bool {
+    println("Test 2: Fail to unify different types");
+    
+    let t1 = Type::TInt;
+    let t2 = Type::TBool;
+    
+    let result = unify_types(t1, t2);
+    
+    match result {
+        UnifyResult::Success => {
+            println("  ❌ FAIL: Should not unify TInt with TBool");
+            false
+        },
+        UnifyResult::Failure(msg) => {
+            println("  ✅ PASS: Correctly fails - {}", msg);
+            true
+        }
+    }
+}
+
+// Test 3: Unify type variable with concrete type
+fun test_unify_var_concrete() -> bool {
+    println("Test 3: Unify type variable with concrete type");
+    
+    let t1 = Type::TVar("a".to_string());
+    let t2 = Type::TInt;
+    
+    let result = unify_types(t1, t2);
+    
+    match result {
+        UnifyResult::Success => {
+            println("  ✅ PASS: Type variable unifies with concrete type");
+            true
+        },
+        UnifyResult::Failure(msg) => {
+            println("  ❌ FAIL: Should unify - {}", msg);
+            false
+        }
+    }
+}
+
+// Test 4: Occurs check (prevent infinite types)
+fun test_occurs_check() -> bool {
+    println("Test 4: Occurs check");
+    
+    // Check if 'a occurs in ('a -> 'a)
+    let inner_type = Type::TVar("a".to_string());
+    let occurs = occurs_check("a".to_string(), inner_type);
+    
+    if occurs {
+        println("  ✅ PASS: Occurs check detects self-reference");
+        true
+    } else {
+        println("  ❌ FAIL: Should detect 'a in 'a");
+        false
+    }
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-011: Unification Algorithm (RED Phase)");
+    println("==================================================");
+    println("");
+    println("Writing failing tests first (TDD)");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_unify_concrete() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_unify_mismatch() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_unify_var_concrete() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_occurs_check() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Results: {} passed, {} failed", passed, failed);
+    println("");
+
+    if failed > 0 {
+        println("🔴 RED: Tests failing as expected (TDD)");
+        println("Next: Implement unification in GREEN phase");
+    }
+}
+
+main();
