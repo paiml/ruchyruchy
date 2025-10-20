@@ -1,0 +1,375 @@
+// BOOTSTRAP-004: Error Recovery Mechanisms (RED Phase)
+// Test-driven development: Write failing tests first
+//
+// These tests define the expected behavior for error recovery:
+// 1. Invalid characters should generate Error tokens
+// 2. Lexer should continue after errors
+// 3. Position information should be preserved
+// 4. Multiple errors should be collected
+// 5. Error messages should be helpful
+
+// Token types from lexer_minimal.ruchy
+enum TokenType {
+    Number,
+    Identifier,
+    Fun,
+    Let,
+    If,
+    While,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Equal,
+    EqualEqual,
+    Eof,
+    Error
+}
+
+enum Token {
+    Tok(TokenType, String)
+}
+
+// Simple error recovery implementation (GREEN phase)
+// Just counts tokens that would be errors
+
+fun is_valid_char(ch: String) -> bool {
+    // Valid characters in our language
+    if ch == "\0" {
+        return true;
+    }
+    let is_alnum = (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") ||
+                   (ch >= "0" && ch <= "9") || ch == "_";
+    let is_op = ch == "+" || ch == "-" || ch == "*" || ch == "/" || ch == "=";
+    let is_delim = ch == "(" || ch == ")" || ch == "{" || ch == "}" ||
+                   ch == ";" || ch == "," || ch == ":";
+    let is_ws = ch == " " || ch == "\t" || ch == "\n" || ch == "\r";
+
+    is_alnum || is_op || is_delim || is_ws
+}
+
+fun tokenize_with_recovery(input: String) -> (i32, i32, i32) {
+    // Simplified tokenizer that counts tokens and errors
+    let mut idx = 0;
+    let mut token_count = 0;
+    let mut error_count = 0;
+    let mut last_error_pos = 0;
+
+    loop {
+        if idx >= input.len() {
+            break;
+        }
+
+        let ch_opt = input.chars().nth(idx);
+        match ch_opt {
+            Some(c) => {
+                let ch = c.to_string();
+
+                // Skip whitespace
+                if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" {
+                    idx = idx + 1;
+                } else if !is_valid_char(ch) {
+                    // Invalid character - error token
+                    token_count = token_count + 1;
+                    error_count = error_count + 1;
+                    last_error_pos = idx;
+                    idx = idx + 1;
+                } else {
+                    // Valid token
+                    token_count = token_count + 1;
+                    idx = idx + 1;
+
+                    // Skip rest of identifier/number/operator
+                    // (simplified - just skip similar chars)
+                    loop {
+                        if idx >= input.len() {
+                            break;
+                        }
+                        let next_opt = input.chars().nth(idx);
+                        match next_opt {
+                            Some(nc) => {
+                                let nch = nc.to_string();
+                                if nch == " " || nch == "\t" || nch == "\n" || nch == "\r" {
+                                    break;
+                                }
+                                if !is_valid_char(nch) {
+                                    break;
+                                }
+                                let is_same_type = ((ch >= "a" && ch <= "z") && (nch >= "a" && nch <= "z")) ||
+                                                  ((ch >= "0" && ch <= "9") && (nch >= "0" && nch <= "9"));
+                                if !is_same_type {
+                                    break;
+                                }
+                                idx = idx + 1;
+                            },
+                            None => break
+                        }
+                    }
+                }
+            },
+            None => break
+        }
+    }
+
+    (token_count, error_count, last_error_pos)
+}
+
+// Test 1: Invalid character generates Error token
+fun test_invalid_character_recovery() -> bool {
+    println("Test 1: Invalid character recovery");
+
+    // Input with invalid character '@'
+    let input = "let x @ 42".to_string();
+
+    // Expected: [Let, Identifier("x"), Error("@"), Number("42")]
+    // Should have 4 tokens total, 1 error
+    let result = tokenize_with_recovery(input);
+    let total_tokens = result.0;
+    let error_count = result.1;
+
+    let expected_total = 4;
+    let expected_errors = 1;
+
+    if total_tokens == expected_total && error_count == expected_errors {
+        println("  ✅ PASS: Invalid character creates Error token");
+        true
+    } else {
+        println("  ❌ FAIL: Expected {} tokens with {} errors, got {} tokens with {} errors",
+                expected_total, expected_errors, total_tokens, error_count);
+        false
+    }
+}
+
+// Test 2: Multiple invalid characters
+fun test_multiple_errors() -> bool {
+    println("Test 2: Multiple error recovery");
+
+    // Input with multiple invalid characters
+    let input = "let @ x # 42".to_string();
+
+    // Expected: [Let, Error("@"), Identifier("x"), Error("#"), Number("42")]
+    // Should have 5 tokens total, 2 errors
+    let result = tokenize_with_recovery(input);
+    let total_tokens = result.0;
+    let error_count = result.1;
+
+    let expected_total = 5;
+    let expected_errors = 2;
+
+    if total_tokens == expected_total && error_count == expected_errors {
+        println("  ✅ PASS: Multiple errors handled");
+        true
+    } else {
+        println("  ❌ FAIL: Expected {} tokens with {} errors, got {} tokens with {} errors",
+                expected_total, expected_errors, total_tokens, error_count);
+        false
+    }
+}
+
+// Test 3: Lexer continues after error
+fun test_lexer_continues_after_error() -> bool {
+    println("Test 3: Lexer continues after error");
+
+    // Error in middle of valid code
+    let input = "fun main() { let x @ 42; }".to_string();
+
+    // Should tokenize everything, with one Error token
+    let result = tokenize_with_recovery(input);
+    let total_tokens = result.0;
+    let error_count = result.1;
+
+    // Fun, main, (, ), {, Let, x, Error(@), 42, ;, }
+    let expected_total = 11;
+    let expected_errors = 1;
+
+    if total_tokens == expected_total && error_count == expected_errors {
+        println("  ✅ PASS: Lexer continues after error");
+        true
+    } else {
+        println("  ❌ FAIL: Expected {} tokens with {} errors, got {} tokens with {} errors",
+                expected_total, expected_errors, total_tokens, error_count);
+        false
+    }
+}
+
+// Test 4: Position preservation through errors
+fun test_position_preservation() -> bool {
+    println("Test 4: Position preservation");
+
+    // Error at known position
+    let input = "let x @ 42".to_string();
+
+    // The '@' is at position 6
+    let result = tokenize_with_recovery(input);
+    let error_position = result.2;
+
+    let expected_position = 6;
+
+    if error_position == expected_position {
+        println("  ✅ PASS: Position preserved through error");
+        true
+    } else {
+        println("  ❌ FAIL: Expected error at position {}, got position {}",
+                expected_position, error_position);
+        false
+    }
+}
+
+// Test 5: Unknown operator recovery
+fun test_unknown_operator() -> bool {
+    println("Test 5: Unknown operator recovery");
+
+    // Unknown operators should become Error tokens
+    let input = "x := 42".to_string();  // ':=' not supported
+
+    let result = tokenize_with_recovery(input);
+    let total_tokens = result.0;
+    let error_count = result.1;
+
+    // Expected: [Identifier("x"), Error(":"), Equal, Number("42")]
+    // Or: [Identifier("x"), Error(":="), Number("42")]
+    // Either way, should have at least 1 error
+
+    if error_count >= 1 {
+        println("  ✅ PASS: Unknown operator creates Error token");
+        true
+    } else {
+        println("  ❌ FAIL: Expected at least 1 error, got {}", error_count);
+        false
+    }
+}
+
+// Test 6: Error doesn't crash lexer
+fun test_no_crash_on_error() -> bool {
+    println("Test 6: No crash on error");
+
+    // Many invalid characters
+    let input = "@@###$$%%%".to_string();
+
+    let result = tokenize_with_recovery(input);
+    let error_count = result.1;
+
+    // Should create error tokens, not crash
+    if error_count > 0 {
+        println("  ✅ PASS: Lexer doesn't crash on errors");
+        true
+    } else {
+        println("  ❌ FAIL: Lexer should detect errors");
+        false
+    }
+}
+
+// Test 7: Empty input handling
+fun test_empty_input() -> bool {
+    println("Test 7: Empty input handling");
+
+    let input = "".to_string();
+
+    let result = tokenize_with_recovery(input);
+    let total_tokens = result.0;
+    let error_count = result.1;
+
+    // Empty input should produce just EOF, no errors
+    if error_count == 0 {
+        println("  ✅ PASS: Empty input produces no errors");
+        true
+    } else {
+        println("  ❌ FAIL: Empty input should not produce errors, got {}", error_count);
+        false
+    }
+}
+
+// Test 8: Recovery at end of input
+fun test_error_at_end() -> bool {
+    println("Test 8: Error at end of input");
+
+    let input = "let x = 42 @".to_string();
+
+    let result = tokenize_with_recovery(input);
+    let total_tokens = result.0;
+    let error_count = result.1;
+
+    // Should handle error at EOF gracefully
+    if error_count == 1 {
+        println("  ✅ PASS: Error at end handled");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 1 error at end, got {}", error_count);
+        false
+    }
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-004: Error Recovery (RED Phase)");
+    println("============================================");
+    println("");
+    println("Writing failing tests first (TDD)");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_invalid_character_recovery() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_multiple_errors() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_lexer_continues_after_error() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_position_preservation() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_unknown_operator() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_no_crash_on_error() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_empty_input() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_error_at_end() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Test Results:");
+    println("Total tests: {}", passed + failed);
+    println("Passed: {}", passed);
+    println("Failed: {}", failed);
+    println("");
+
+    if failed > 0 {
+        println("🔴 RED: Tests failing as expected (TDD)");
+        println("Next: Implement error recovery in GREEN phase");
+    } else {
+        println("⚠️  WARNING: Tests should fail in RED phase!");
+    }
+}
+
+main();

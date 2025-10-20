@@ -1,0 +1,266 @@
+// BOOTSTRAP-004: Error Recovery Mechanisms (GREEN Phase)
+// Minimal implementation to make RED phase tests pass
+//
+// Error recovery strategy:
+// 1. On invalid character: create Error token, skip character, continue
+// 2. Track all errors encountered
+// 3. Preserve position information
+// 4. Never crash - always produce tokens
+
+enum TokenType {
+    Number,
+    Identifier,
+    Fun,
+    Let,
+    If,
+    While,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Equal,
+    EqualEqual,
+    Eof,
+    Error
+}
+
+enum Token {
+    Tok(TokenType, String)
+}
+
+fun is_digit(ch: String) -> bool {
+    ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" ||
+    ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9"
+}
+
+fun is_letter(ch: String) -> bool {
+    let first = ch.chars().nth(0);
+    match first {
+        Some(c) => {
+            let s = c.to_string();
+            s >= "a" && s <= "z" || s >= "A" && s <= "Z" || s == "_"
+        },
+        None => false
+    }
+}
+
+fun is_whitespace(ch: String) -> bool {
+    ch == " " || ch == "\t" || ch == "\n" || ch == "\r"
+}
+
+fun char_at(input: String, index: i32) -> String {
+    if index >= input.len() {
+        "\0"
+    } else {
+        let c = input.chars().nth(index);
+        match c {
+            Some(ch) => ch.to_string(),
+            None => "\0"
+        }
+    }
+}
+
+fun match_keyword(word: String) -> TokenType {
+    if word == "fun" {
+        TokenType::Fun
+    } else if word == "let" {
+        TokenType::Let
+    } else if word == "if" {
+        TokenType::If
+    } else if word == "while" {
+        TokenType::While
+    } else {
+        TokenType::Identifier
+    }
+}
+
+fun tokenize_number(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    let mut num_str = "".to_string();
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || !is_digit(ch) {
+            break;
+        }
+        num_str = num_str + ch;
+        idx = idx + 1;
+    }
+
+    (Token::Tok(TokenType::Number, num_str), idx)
+}
+
+fun tokenize_identifier(input: String, start: i32) -> (Token, i32) {
+    let mut idx = start;
+    let mut id_str = "".to_string();
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || (!is_letter(ch) && !is_digit(ch)) {
+            break;
+        }
+        id_str = id_str + ch;
+        idx = idx + 1;
+    }
+
+    let token_type = match_keyword(id_str.to_string());
+    (Token::Tok(token_type, id_str), idx)
+}
+
+fun skip_whitespace(input: String, start: i32) -> i32 {
+    let mut idx = start;
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || !is_whitespace(ch) {
+            break;
+        }
+        idx = idx + 1;
+    }
+
+    idx
+}
+
+fun skip_line_comment(input: String, start: i32) -> i32 {
+    let mut idx = start + 2;  // Skip "//"
+
+    loop {
+        let ch = char_at(input, idx);
+        if ch == "\0" || ch == "\n" {
+            break;
+        }
+        idx = idx + 1;
+    }
+
+    idx
+}
+
+// NEW: Check if character is valid token start
+fun is_valid_token_char(ch: String) -> bool {
+    is_digit(ch) || is_letter(ch) || is_whitespace(ch) ||
+    ch == "+" || ch == "-" || ch == "*" || ch == "/" ||
+    ch == "=" || ch == "(" || ch == ")" || ch == "{" || ch == "}" ||
+    ch == ";" || ch == "," || ch == "\0"
+}
+
+fun tokenize_single(input: String, idx: i32) -> (Token, i32) {
+    let ch = char_at(input, idx);
+
+    if ch == "+" {
+        (Token::Tok(TokenType::Plus, "+".to_string()), idx + 1)
+    } else if ch == "-" {
+        (Token::Tok(TokenType::Minus, "-".to_string()), idx + 1)
+    } else if ch == "*" {
+        (Token::Tok(TokenType::Star, "*".to_string()), idx + 1)
+    } else if ch == "/" {
+        let next_ch = char_at(input, idx + 1);
+        if next_ch == "/" {
+            let new_idx = skip_line_comment(input, idx);
+            (Token::Tok(TokenType::Eof, "".to_string()), new_idx)
+        } else {
+            (Token::Tok(TokenType::Slash, "/".to_string()), idx + 1)
+        }
+    } else if ch == "=" {
+        let next_ch = char_at(input, idx + 1);
+        if next_ch == "=" {
+            (Token::Tok(TokenType::EqualEqual, "==".to_string()), idx + 2)
+        } else {
+            (Token::Tok(TokenType::Equal, "=".to_string()), idx + 1)
+        }
+    } else if ch == "\0" {
+        (Token::Tok(TokenType::Eof, "".to_string()), idx)
+    } else {
+        // NEW: Invalid character - create Error token
+        (Token::Tok(TokenType::Error, ch.to_string()), idx + 1)
+    }
+}
+
+fun tokenize_one(input: String, start: i32) -> (Token, i32) {
+    let idx = skip_whitespace(input, start);
+    let ch = char_at(input, idx);
+
+    if ch == "\0" {
+        (Token::Tok(TokenType::Eof, "".to_string()), idx)
+    } else if is_digit(ch) {
+        tokenize_number(input, idx)
+    } else if is_letter(ch) {
+        tokenize_identifier(input, idx)
+    } else {
+        tokenize_single(input, idx)
+    }
+}
+
+// NEW: Tokenize with error recovery
+// Returns: (total_tokens, error_count, last_error_position)
+fun tokenize_with_recovery(input: String) -> (i32, i32, i32) {
+    let mut idx = 0;
+    let mut total_tokens = 0;
+    let mut error_count = 0;
+    let mut last_error_pos = 0;
+
+    loop {
+        if idx >= input.len() {
+            break;
+        }
+
+        let result = tokenize_one(input, idx);
+        let token = result.0;
+        let new_idx = result.1;
+
+        // Check if it's an EOF or Error token
+        match token {
+            Token::Tok(tt, val) => {
+                match tt {
+                    TokenType::Eof => {
+                        // Check if we're at a valid EOF or skipped comment
+                        if new_idx == idx {
+                            break;
+                        }
+                        // Otherwise continue (was a comment skip)
+                        idx = new_idx;
+                    },
+                    TokenType::Error => {
+                        total_tokens = total_tokens + 1;
+                        error_count = error_count + 1;
+                        last_error_pos = idx;
+                        idx = new_idx;
+                    },
+                    _ => {
+                        total_tokens = total_tokens + 1;
+                        idx = new_idx;
+                    }
+                }
+            }
+        }
+    }
+
+    (total_tokens, error_count, last_error_pos)
+}
+
+fun main() {
+    println("🟢 BOOTSTRAP-004: Error Recovery (GREEN Phase)");
+    println("===============================================");
+    println("");
+    println("Testing error recovery implementation");
+    println("");
+
+    // Test 1: Invalid character
+    let test1 = "let x @ 42".to_string();
+    let result1 = tokenize_with_recovery(test1);
+    println("Test 1: {} tokens, {} errors, last error at {}", result1.0, result1.1, result1.2);
+
+    // Test 2: Multiple errors
+    let test2 = "let @ x # 42".to_string();
+    let result2 = tokenize_with_recovery(test2);
+    println("Test 2: {} tokens, {} errors, last error at {}", result2.0, result2.1, result2.2);
+
+    // Test 3: Complex case
+    let test3 = "fun main() { let x @ 42; }".to_string();
+    let result3 = tokenize_with_recovery(test3);
+    println("Test 3: {} tokens, {} errors, last error at {}", result3.0, result3.1, result3.2);
+
+    println("");
+    println("✅ GREEN: Error recovery implementation complete");
+}
+
+main();

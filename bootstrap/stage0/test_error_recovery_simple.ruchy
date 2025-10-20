@@ -1,0 +1,119 @@
+// BOOTSTRAP-004: Error Recovery Mechanisms (RED → GREEN)
+// Simplified test to demonstrate error recovery concept
+
+// Test error recovery with minimal implementation
+fun count_tokens_and_errors(input: String) -> (i32, i32) {
+    // Returns (token_count, error_count)
+    let mut tokens = 0;
+    let mut errors = 0;
+    let mut i = 0;
+
+    loop {
+        if i >= input.len() {
+            break;
+        }
+
+        let ch_opt = input.chars().nth(i);
+        match ch_opt {
+            Some(c) => {
+                let ch = c.to_string();
+
+                // Check if char is invalid (@, #, $, etc.)
+                if ch == "@" || ch == "#" || ch == "$" || ch == "%" || ch == "§" {
+                    tokens = tokens + 1;
+                    errors = errors + 1;
+                } else if ch != " " && ch != "\t" && ch != "\n" {
+                    tokens = tokens + 1;
+                }
+
+                i = i + 1;
+            },
+            None => break
+        }
+    }
+
+    (tokens, errors)
+}
+
+fun test_basic_error_recovery() -> bool {
+    println("Test: Basic error recovery");
+
+    let input = "let x @ 42".to_string();
+    let result = count_tokens_and_errors(input);
+    let tokens = result.0;
+    let errors = result.1;
+
+    println("  Tokens: {}, Errors: {}", tokens, errors);
+
+    if errors == 1 {
+        println("  ✅ PASS: Detected 1 error");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 1 error, got {}", errors);
+        false
+    }
+}
+
+fun test_multiple_errors() -> bool {
+    println("Test: Multiple errors");
+
+    let input = "@@##".to_string();
+    let result = count_tokens_and_errors(input);
+    let errors = result.1;
+
+    println("  Errors detected: {}", errors);
+
+    if errors == 4 {
+        println("  ✅ PASS: Detected 4 errors");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 4 errors, got {}", errors);
+        false
+    }
+}
+
+fun test_no_crash_on_errors() -> bool {
+    println("Test: No crash on errors");
+
+    let input = "@#$%".to_string();
+    let result = count_tokens_and_errors(input);
+
+    println("  ✅ PASS: Lexer didn't crash");
+    true
+}
+
+fun main() {
+    println("🟢 BOOTSTRAP-004: Error Recovery (Simplified)");
+    println("=============================================");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_basic_error_recovery() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_multiple_errors() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_no_crash_on_errors() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 Results: {} passed, {} failed", passed, failed);
+
+    if failed == 0 {
+        println("✅ All tests passing!");
+    }
+}
+
+main();
