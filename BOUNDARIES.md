@@ -985,3 +985,91 @@ Result: 3/6 tests passing with simplified implementation.
 3. Improved error messages indicating actual missing brace location
 
 ---
+
+## Runtime Hang: String Iteration with `.chars().nth()` (Issue #40)
+
+**Date Discovered**: October 20, 2025
+**Ruchy Version**: v3.98.0 (also v3.94.0)
+**Discovered In**: BOOTSTRAP-004 (Error Recovery Mechanisms)
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/40
+
+### Symptom
+
+Runtime hangs indefinitely (never completes) when using `.chars().nth(i)` pattern in tight loops for string character iteration.
+
+### Minimal Reproduction
+
+```ruchy
+fun count_chars(input: String) -> i32 {
+    let mut count = 0;
+    let mut i = 0;
+
+    loop {
+        if i >= input.len() {
+            break;
+        }
+
+        let ch_opt = input.chars().nth(i);
+        match ch_opt {
+            Some(c) => {
+                count = count + 1;
+                i = i + 1;
+            },
+            None => break
+        }
+    }
+
+    count
+}
+
+fun main() {
+    let result = count_chars("hello".to_string());
+    println("Count: {}", result);  // Never prints - hangs before this
+}
+```
+
+**Expected**: Count 5 characters, print "Count: 5", complete in <100ms
+**Actual**: Program hangs indefinitely, must be killed
+
+### Root Cause (Suspected)
+
+Calling `.chars()` on each loop iteration creates a new iterator, and `.nth(i)` has O(n) complexity, resulting in O(n²) behavior that becomes effectively infinite for even small strings.
+
+### Patterns That Hang
+
+1. ✗ `loop { input.chars().nth(i); i = i + 1; }`
+2. ✗ `while i < len { input.chars().nth(i); i = i + 1; }`
+3. ✗ Any repeated `.chars().nth()` calls with incrementing index
+
+### Impact on RuchyRuchy Bootstrap
+
+**Blocked Features**:
+- BOOTSTRAP-004: Error Recovery Mechanisms (WIP)
+- Character-by-character string processing
+- Position-tracked string iteration
+- Lexer lookahead implementation
+
+**Current Status**: BOOTSTRAP-004 incomplete due to this blocker.
+
+### Severity
+
+**High** - Blocks fundamental string processing patterns essential for lexer/parser implementation.
+
+### Workaround
+
+**None currently available**. Attempted alternatives all failed:
+- Simplified logic - still hangs
+- Different loop constructs - still hangs
+- Minimal test cases - still hangs
+
+**Needed**: Alternative string iteration API or `.chars().nth()` performance fix.
+
+### Requested Solutions
+
+1. **Fix `.chars().nth()` performance** - Make it viable for loops
+2. **Provide iterator caching** - `let chars = input.chars()` usable
+3. **Add indexed access** - `input[i]` for direct character access
+4. **Add for-each support** - `for c in input.chars() { }`
+5. **Document recommended pattern** - What's the correct way to iterate?
+
+---
