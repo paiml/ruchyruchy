@@ -903,3 +903,85 @@ fun lookup(env: TypeEnv, name: String) -> Option<Scheme> {
 **Recommendation**: Follow Option A - file issue, document thoroughly, continue with other work
 
 **Priority**: High - This is a critical feature for any type system implementation
+
+---
+
+## Parser Limitation: Nested Match Expressions with Box<T> (Issue #39)
+
+**Date Discovered**: October 20, 2025
+**Ruchy Version**: v3.98.0
+**Discovered In**: BOOTSTRAP-012 (Algorithm W Implementation)
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/39
+
+### Symptom
+
+Parser fails with error:
+```
+✗ file.ruchy:N: Syntax error: Expected RightBrace, found Match
+```
+
+When using deeply nested match expressions combined with:
+- Box<Enum> recursive variants
+- Match arms containing if-else blocks
+- Recursive function calls with Box unwrapping (*rest)
+
+### Minimal Reproduction
+
+```ruchy
+enum TypeEnv {
+    Empty,
+    Extend(String, Box<TypeEnv>)
+}
+
+fun lookup(env: TypeEnv, name: String) -> InferResult {
+    match env {
+        TypeEnv::Empty => InferResult::Failure("Not found".to_string()),
+        TypeEnv::Extend(var, rest) => {
+            if var == name {
+                InferResult::Success
+            } else {
+                lookup(*rest, name)  // ← Triggers parser error
+            }
+        }
+    }
+}
+```
+
+### Patterns That Fail
+
+1. ✗ Match → if-else → recursive call with Box unwrap
+2. ✗ Match → match → match (3+ levels deep)
+3. ✗ Match → helper function with Box<Enum> destructuring
+
+### Patterns That Work
+
+1. ✅ Match → single expression
+2. ✅ Match → if-else → simple expression (no recursion)
+3. ✅ Two levels of nesting (match → match)
+
+### Impact on RuchyRuchy Bootstrap
+
+**Blocked Features**:
+- Full Algorithm W type inference implementation
+- Complex recursive data structure traversal
+- Idiomatic functional programming patterns
+
+**Workaround Applied**:
+Simplified BOOTSTRAP-012 implementation to avoid:
+- Helper functions with Box<Expr> parameters
+- Nested match beyond 2 levels
+- Recursive calls within nested match arms
+
+Result: 3/6 tests passing with simplified implementation.
+
+### Severity
+
+**Medium-High** - Limits expressiveness for compiler implementation patterns, but workarounds exist.
+
+### Requested Enhancement
+
+1. Support for deeper match nesting (3+ levels)
+2. Better handling of Box<T> unwrapping in recursive contexts
+3. Improved error messages indicating actual missing brace location
+
+---
