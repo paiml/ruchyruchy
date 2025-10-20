@@ -1,0 +1,253 @@
+// BOOTSTRAP-013: Type Checker Self-Typing Test (RED Phase)
+// Test-driven development: Write failing tests first
+//
+// This ticket validates that the type checker can type-check its own source
+// and that the soundness property holds: well-typed programs don't crash.
+
+// Type representations (from BOOTSTRAP-012)
+enum Type {
+    TInt,
+    TBool,
+    TString,
+    TVar(String),
+    TFun(Box<Type>, Box<Type>)
+}
+
+// Type scheme for polymorphic types
+enum Scheme {
+    Mono(Type),
+    Poly(String, Type)
+}
+
+// Type environment
+enum TypeEnv {
+    Empty,
+    Extend(String, Scheme, Box<TypeEnv>)
+}
+
+// Expression AST
+enum Expr {
+    EInt(i32),
+    EBool(bool),
+    EVar(String),
+    ELam(String, Box<Expr>),
+    EApp(Box<Expr>, Box<Expr>),
+    ELet(String, Box<Expr>, Box<Expr>)
+}
+
+// Type inference result
+enum InferResult {
+    Success(Type),
+    Failure(String)
+}
+
+// Placeholder for type checker (will use actual implementation)
+fun infer(env: TypeEnv, expr: Expr) -> InferResult {
+    InferResult::Failure("Not implemented".to_string())
+}
+
+// RED Phase Tests
+
+// Test 1: Type checker can type simple expressions
+fun test_self_typing_simple() -> bool {
+    println("Test: Type checker types simple expression");
+
+    // Simple expression: 42
+    let env = TypeEnv::Empty;
+    let expr = Expr::EInt(42);
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            match t {
+                Type::TInt => {
+                    println("  ✅ PASS: Typed simple expression");
+                    true
+                },
+                _ => {
+                    println("  ❌ FAIL: Wrong type");
+                    false
+                }
+            }
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 2: Type checker can type lambda expressions (its own code uses these)
+fun test_self_typing_lambda() -> bool {
+    println("Test: Type checker types lambda");
+
+    // Lambda: λx. x (identity function - used throughout type checker)
+    let env = TypeEnv::Empty;
+    let expr = Expr::ELam(
+        "x".to_string(),
+        Box::new(Expr::EVar("x".to_string()))
+    );
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            match t {
+                Type::TFun(arg, ret) => {
+                    println("  ✅ PASS: Typed lambda expression");
+                    true
+                },
+                _ => {
+                    println("  ❌ FAIL: Expected function type");
+                    false
+                }
+            }
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 3: Soundness property - well-typed programs don't produce type errors
+fun test_soundness_property() -> bool {
+    println("Test: Soundness property validation");
+
+    // Well-typed program: (λx. x) 42
+    let env = TypeEnv::Empty;
+    let identity = Expr::ELam(
+        "x".to_string(),
+        Box::new(Expr::EVar("x".to_string()))
+    );
+    let expr = Expr::EApp(
+        Box::new(identity),
+        Box::new(Expr::EInt(42))
+    );
+
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            println("  ✅ PASS: Well-typed program accepted");
+            true
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: Well-typed program rejected: {}", msg);
+            false
+        }
+    }
+}
+
+// Test 4: Soundness property - ill-typed programs are rejected
+fun test_soundness_rejection() -> bool {
+    println("Test: Soundness rejects ill-typed programs");
+
+    // This test would check that type errors are caught
+    // For now, we test unbound variable detection
+    let env = TypeEnv::Empty;
+    let expr = Expr::EVar("unbound".to_string());
+
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            println("  ❌ FAIL: Should reject unbound variable");
+            false
+        },
+        InferResult::Failure(msg) => {
+            println("  ✅ PASS: Correctly rejected ill-typed program");
+            true
+        }
+    }
+}
+
+// Test 5: Type checker handles complex nested expressions
+fun test_self_typing_complex() -> bool {
+    println("Test: Type checker types complex expressions");
+
+    // let id = λx. x in id 42
+    let env = TypeEnv::Empty;
+    let identity = Expr::ELam(
+        "x".to_string(),
+        Box::new(Expr::EVar("x".to_string()))
+    );
+    let body = Expr::EApp(
+        Box::new(Expr::EVar("id".to_string())),
+        Box::new(Expr::EInt(42))
+    );
+    let expr = Expr::ELet(
+        "id".to_string(),
+        Box::new(identity),
+        Box::new(body)
+    );
+
+    let result = infer(env, expr);
+
+    match result {
+        InferResult::Success(t) => {
+            println("  ✅ PASS: Typed complex expression");
+            true
+        },
+        InferResult::Failure(msg) => {
+            println("  ❌ FAIL: {}", msg);
+            false
+        }
+    }
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-013: Type Checker Self-Typing (RED Phase)");
+    println("======================================================");
+    println("");
+    println("Testing that type checker can type its own code");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_self_typing_simple() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_self_typing_lambda() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_soundness_property() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_soundness_rejection() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_self_typing_complex() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Test Results:");
+    println("Total tests: {}", passed + failed);
+    println("Passed: {}", passed);
+    println("Failed: {}", failed);
+    println("");
+
+    if failed > 0 {
+        println("🔴 RED: Tests failing as expected (TDD)");
+        println("Next: Implement self-typing validation in GREEN phase");
+    } else {
+        println("⚠️  WARNING: Tests should fail in RED phase!");
+    }
+}
+
+main();
