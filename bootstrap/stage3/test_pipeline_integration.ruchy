@@ -1,0 +1,134 @@
+// BOOTSTRAP-016: Pipeline Integration Test (RED Phase)
+// Test-driven development: Write failing test first
+//
+// This validates the entire compiler pipeline:
+// Source Code → Tokens → AST → Typed AST → Target Code
+
+// For now, we'll create a simplified pipeline test
+// that validates the key stages work together
+
+// Expression AST (simplified)
+enum Expr {
+    EInt(i32),
+    EVar(String),
+    EBinOp(String, Box<Expr>, Box<Expr>)
+}
+
+// Placeholder for pipeline integration
+fun compile_to_typescript(source: String) -> String {
+    "NOT_IMPLEMENTED".to_string()
+}
+
+fun compile_to_rust(source: String) -> String {
+    "NOT_IMPLEMENTED".to_string()
+}
+
+// RED Phase Tests
+
+// Test 1: Compile simple integer
+fun test_compile_int() -> bool {
+    println("Test: Compile integer to both targets");
+
+    let source = "42".to_string();
+    let ts_result = compile_to_typescript(source);
+    let rust_result = compile_to_rust("42".to_string());
+
+    if ts_result == "42" {
+        if rust_result == "42" {
+            println("  ✅ PASS");
+            true
+        } else {
+            println("  ❌ FAIL: Rust result '{}'", rust_result);
+            false
+        }
+    } else {
+        println("  ❌ FAIL: TS result '{}'", ts_result);
+        false
+    }
+}
+
+// Test 2: Compile simple expression
+fun test_compile_expr() -> bool {
+    println("Test: Compile expression to both targets");
+
+    let source = "1 + 2".to_string();
+    let ts_result = compile_to_typescript(source);
+    let rust_result = compile_to_rust("1 + 2".to_string());
+
+    if ts_result == "(1 + 2)" {
+        if rust_result == "(1 + 2)" {
+            println("  ✅ PASS");
+            true
+        } else {
+            println("  ❌ FAIL: Rust result '{}'", rust_result);
+            false
+        }
+    } else {
+        println("  ❌ FAIL: TS result '{}'", ts_result);
+        false
+    }
+}
+
+// Test 3: Multi-target consistency
+fun test_pipeline_consistency() -> bool {
+    println("Test: Pipeline produces consistent output");
+
+    // For now, just test that pipeline can be called
+    let source = "42".to_string();
+    let ts = compile_to_typescript(source);
+    let rust = compile_to_rust("42".to_string());
+
+    // Both should produce some output
+    if ts == "NOT_IMPLEMENTED" {
+        println("  ❌ FAIL: Pipeline not implemented yet");
+        false
+    } else {
+        println("  ✅ PASS");
+        true
+    }
+}
+
+fun main() {
+    println("🔴 BOOTSTRAP-016: Pipeline Integration (RED Phase)");
+    println("==================================================");
+    println("");
+    println("Testing end-to-end compilation pipeline");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_compile_int() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_compile_expr() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_pipeline_consistency() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 RED Phase Test Results:");
+    println("Total tests: {}", passed + failed);
+    println("Passed: {}", passed);
+    println("Failed: {}", failed);
+    println("");
+
+    if failed > 0 {
+        println("🔴 RED: Tests failing as expected (TDD)");
+        println("Next: Implement pipeline integration in GREEN phase");
+    } else {
+        println("⚠️  WARNING: Tests should fail in RED phase!");
+    }
+}
+
+main();
