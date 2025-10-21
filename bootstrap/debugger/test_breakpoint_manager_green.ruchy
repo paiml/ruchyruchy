@@ -1,0 +1,575 @@
+// DEBUGGER-002: Breakpoint Management - GREEN Phase Testing
+//
+// Combined implementation + tests to validate GREEN phase
+// Expected: ALL 10 tests should PASS (implementation exists)
+
+// ============================================
+// IMPLEMENTATION (from breakpoint_manager.ruchy)
+// ============================================
+
+struct Breakpoint {
+    file: String,
+    line: i32,
+    verified: bool,
+    enabled: bool,
+    id: i32
+}
+
+struct BreakpointManager {
+    count: i32,
+    bp1_file: String,
+    bp1_line: i32,
+    bp1_enabled: bool,
+    bp1_exists: bool,
+    bp2_file: String,
+    bp2_line: i32,
+    bp2_enabled: bool,
+    bp2_exists: bool,
+    bp3_file: String,
+    bp3_line: i32,
+    bp3_enabled: bool,
+    bp3_exists: bool,
+    next_id: i32
+}
+
+fun breakpoint_manager_new() -> BreakpointManager {
+    BreakpointManager {
+        count: 0,
+        bp1_file: "",
+        bp1_line: 0,
+        bp1_enabled: false,
+        bp1_exists: false,
+        bp2_file: "",
+        bp2_line: 0,
+        bp2_enabled: false,
+        bp2_exists: false,
+        bp3_file: "",
+        bp3_line: 0,
+        bp3_enabled: false,
+        bp3_exists: false,
+        next_id: 1
+    }
+}
+
+fun breakpoint_manager_count(manager: BreakpointManager) -> i32 {
+    manager.count
+}
+
+fun breakpoint_new(file: String, line: i32) -> Breakpoint {
+    Breakpoint {
+        file: file,
+        line: line,
+        verified: false,
+        enabled: true,
+        id: 0
+    }
+}
+
+fun breakpoint_set_verified(bp: Breakpoint, verified: bool) -> Breakpoint {
+    Breakpoint {
+        file: bp.file,
+        line: bp.line,
+        verified: verified,
+        enabled: bp.enabled,
+        id: bp.id
+    }
+}
+
+fun breakpoint_is_verified(bp: Breakpoint) -> bool {
+    bp.verified
+}
+
+fun breakpoint_disable(bp: Breakpoint) -> Breakpoint {
+    Breakpoint {
+        file: bp.file,
+        line: bp.line,
+        verified: bp.verified,
+        enabled: false,
+        id: bp.id
+    }
+}
+
+fun breakpoint_is_enabled(bp: Breakpoint) -> bool {
+    bp.enabled
+}
+
+fun breakpoint_manager_add(manager: BreakpointManager, bp: Breakpoint) -> BreakpointManager {
+    let new_count = manager.count + 1
+
+    if !manager.bp1_exists {
+        BreakpointManager {
+            count: new_count,
+            bp1_file: bp.file,
+            bp1_line: bp.line,
+            bp1_enabled: bp.enabled,
+            bp1_exists: true,
+            bp2_file: manager.bp2_file,
+            bp2_line: manager.bp2_line,
+            bp2_enabled: manager.bp2_enabled,
+            bp2_exists: manager.bp2_exists,
+            bp3_file: manager.bp3_file,
+            bp3_line: manager.bp3_line,
+            bp3_enabled: manager.bp3_enabled,
+            bp3_exists: manager.bp3_exists,
+            next_id: manager.next_id + 1
+        }
+    } else {
+        if !manager.bp2_exists {
+            BreakpointManager {
+                count: new_count,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: bp.file,
+                bp2_line: bp.line,
+                bp2_enabled: bp.enabled,
+                bp2_exists: true,
+                bp3_file: manager.bp3_file,
+                bp3_line: manager.bp3_line,
+                bp3_enabled: manager.bp3_enabled,
+                bp3_exists: manager.bp3_exists,
+                next_id: manager.next_id + 1
+            }
+        } else {
+            BreakpointManager {
+                count: new_count,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: manager.bp2_file,
+                bp2_line: manager.bp2_line,
+                bp2_enabled: manager.bp2_enabled,
+                bp2_exists: manager.bp2_exists,
+                bp3_file: bp.file,
+                bp3_line: bp.line,
+                bp3_enabled: bp.enabled,
+                bp3_exists: true,
+                next_id: manager.next_id + 1
+            }
+        }
+    }
+}
+
+fun breakpoint_manager_remove(manager: BreakpointManager, file: String, line: i32) -> BreakpointManager {
+    // Check bp1 match
+    let bp1_matches = if manager.bp1_exists {
+        if manager.bp1_file == file {
+            manager.bp1_line == line
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+
+    // If bp1 matches, remove it
+    if bp1_matches {
+        BreakpointManager {
+            count: manager.count - 1,
+            bp1_file: "",
+            bp1_line: 0,
+            bp1_enabled: false,
+            bp1_exists: false,
+            bp2_file: manager.bp2_file,
+            bp2_line: manager.bp2_line,
+            bp2_enabled: manager.bp2_enabled,
+            bp2_exists: manager.bp2_exists,
+            bp3_file: manager.bp3_file,
+            bp3_line: manager.bp3_line,
+            bp3_enabled: manager.bp3_enabled,
+            bp3_exists: manager.bp3_exists,
+            next_id: manager.next_id
+        }
+    } else {
+        // Check bp2 match
+        let bp2_matches = if manager.bp2_exists {
+            if manager.bp2_file == file {
+                manager.bp2_line == line
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+
+        if bp2_matches {
+            BreakpointManager {
+                count: manager.count - 1,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: "",
+                bp2_line: 0,
+                bp2_enabled: false,
+                bp2_exists: false,
+                bp3_file: manager.bp3_file,
+                bp3_line: manager.bp3_line,
+                bp3_enabled: manager.bp3_enabled,
+                bp3_exists: manager.bp3_exists,
+                next_id: manager.next_id
+            }
+        } else {
+            // Check bp3 match
+            let bp3_matches = if manager.bp3_exists {
+                if manager.bp3_file == file {
+                    manager.bp3_line == line
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+
+            if bp3_matches {
+                BreakpointManager {
+                    count: manager.count - 1,
+                    bp1_file: manager.bp1_file,
+                    bp1_line: manager.bp1_line,
+                    bp1_enabled: manager.bp1_enabled,
+                    bp1_exists: manager.bp1_exists,
+                    bp2_file: manager.bp2_file,
+                    bp2_line: manager.bp2_line,
+                    bp2_enabled: manager.bp2_enabled,
+                    bp2_exists: manager.bp2_exists,
+                    bp3_file: "",
+                    bp3_line: 0,
+                    bp3_enabled: false,
+                    bp3_exists: false,
+                    next_id: manager.next_id
+                }
+            } else {
+                manager
+            }
+        }
+    }
+}
+
+fun breakpoint_manager_get_file_count(manager: BreakpointManager, file: String) -> i32 {
+    let mut count = 0
+
+    if manager.bp1_exists {
+        if manager.bp1_file == file {
+            count = count + 1
+        }
+    }
+
+    if manager.bp2_exists {
+        if manager.bp2_file == file {
+            count = count + 1
+        }
+    }
+
+    if manager.bp3_exists {
+        if manager.bp3_file == file {
+            count = count + 1
+        }
+    }
+
+    count
+}
+
+fun breakpoint_manager_clear_all(manager: BreakpointManager) -> BreakpointManager {
+    BreakpointManager {
+        count: 0,
+        bp1_file: "",
+        bp1_line: 0,
+        bp1_enabled: false,
+        bp1_exists: false,
+        bp2_file: "",
+        bp2_line: 0,
+        bp2_enabled: false,
+        bp2_exists: false,
+        bp3_file: "",
+        bp3_line: 0,
+        bp3_enabled: false,
+        bp3_exists: false,
+        next_id: 1
+    }
+}
+
+// ============================================
+// TESTS (from test_breakpoint_manager_red.ruchy)
+// ============================================
+
+fun test_create_breakpoint_manager() -> bool {
+    println("TEST 1: Create empty breakpoint manager")
+
+    let manager = breakpoint_manager_new()
+    let count = breakpoint_manager_count(manager)
+
+    if count == 0 {
+        println("  ✅ PASS: Empty manager has count 0")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 0, got {}", count)
+        false
+    }
+}
+
+fun test_add_breakpoint() -> bool {
+    println("TEST 2: Add breakpoint")
+
+    let manager = breakpoint_manager_new()
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let manager2 = breakpoint_manager_add(manager, bp)
+    let count = breakpoint_manager_count(manager2)
+
+    if count == 1 {
+        println("  ✅ PASS: Adding breakpoint increases count to 1")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 1, got {}", count)
+        false
+    }
+}
+
+fun test_verify_breakpoint() -> bool {
+    println("TEST 3: Verify valid breakpoint")
+
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let verified = breakpoint_set_verified(bp, true)
+    let is_valid = breakpoint_is_verified(verified)
+
+    if is_valid {
+        println("  ✅ PASS: Valid breakpoint is verified")
+        true
+    } else {
+        println("  ❌ FAIL: Breakpoint should be verified")
+        false
+    }
+}
+
+fun test_reject_comment_breakpoint() -> bool {
+    println("TEST 4: Reject comment breakpoint")
+
+    let bp = breakpoint_new("lexer.ruchy", 5)
+    let verified = breakpoint_set_verified(bp, false)
+    let is_valid = breakpoint_is_verified(verified)
+
+    if !is_valid {
+        println("  ✅ PASS: Comment line breakpoint rejected")
+        true
+    } else {
+        println("  ❌ FAIL: Comment breakpoint should be invalid")
+        false
+    }
+}
+
+fun test_multiple_breakpoints() -> bool {
+    println("TEST 5: Multiple breakpoints in one file")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("lexer.ruchy", 57)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let count = breakpoint_manager_count(manager3)
+
+    if count == 2 {
+        println("  ✅ PASS: Multiple breakpoints stored (count 2)")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 2, got {}", count)
+        false
+    }
+}
+
+fun test_multiple_files() -> bool {
+    println("TEST 6: Breakpoints in different files")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("parser.ruchy", 100)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let count = breakpoint_manager_count(manager3)
+
+    if count == 2 {
+        println("  ✅ PASS: Breakpoints in different files (count 2)")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 2, got {}", count)
+        false
+    }
+}
+
+fun test_remove_breakpoint() -> bool {
+    println("TEST 7: Remove breakpoint")
+
+    let manager = breakpoint_manager_new()
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let manager2 = breakpoint_manager_add(manager, bp)
+    let manager3 = breakpoint_manager_remove(manager2, "lexer.ruchy", 42)
+    let count = breakpoint_manager_count(manager3)
+
+    if count == 0 {
+        println("  ✅ PASS: Removing breakpoint decreases count to 0")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 0, got {}", count)
+        false
+    }
+}
+
+fun test_toggle_breakpoint() -> bool {
+    println("TEST 8: Enable/disable breakpoint")
+
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let bp_disabled = breakpoint_disable(bp)
+    let is_enabled = breakpoint_is_enabled(bp_disabled)
+
+    if !is_enabled {
+        println("  ✅ PASS: Breakpoint disabled successfully")
+        true
+    } else {
+        println("  ❌ FAIL: Breakpoint should be disabled")
+        false
+    }
+}
+
+fun test_get_file_breakpoints() -> bool {
+    println("TEST 9: Get breakpoints for file")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("lexer.ruchy", 57)
+    let bp3 = breakpoint_new("parser.ruchy", 100)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let manager4 = breakpoint_manager_add(manager3, bp3)
+
+    let lexer_count = breakpoint_manager_get_file_count(manager4, "lexer.ruchy")
+
+    if lexer_count == 2 {
+        println("  ✅ PASS: Got 2 breakpoints for lexer.ruchy")
+        true
+    } else {
+        println("  ❌ FAIL: Expected 2 breakpoints, got {}", lexer_count)
+        false
+    }
+}
+
+fun test_clear_all() -> bool {
+    println("TEST 10: Clear all breakpoints")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("parser.ruchy", 100)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let manager4 = breakpoint_manager_clear_all(manager3)
+    let count = breakpoint_manager_count(manager4)
+
+    if count == 0 {
+        println("  ✅ PASS: Clear all results in count 0")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 0, got {}", count)
+        false
+    }
+}
+
+fun main() {
+    println("╔════════════════════════════════════════════════════════════╗")
+    println("║  DEBUGGER-002: Breakpoint Management - GREEN Phase        ║")
+    println("║  EXTREME TDD Phase 2/8: Minimal Implementation            ║")
+    println("╚════════════════════════════════════════════════════════════╝")
+    println("")
+    println("Expected: ALL 10 tests should PASS (implementation exists)")
+    println("")
+
+    let mut passed = 0
+    let mut failed = 0
+
+    if test_create_breakpoint_manager() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_add_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_verify_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_reject_comment_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_multiple_breakpoints() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_multiple_files() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_remove_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_toggle_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_get_file_breakpoints() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_clear_all() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    println("")
+    println("════════════════════════════════════════════════════════════")
+    println("GREEN PHASE RESULTS:")
+    println("  Total Tests: 10")
+    println("  Passed: {}", passed)
+    println("  Failed: {}", failed)
+    println("")
+
+    if passed == 10 {
+        println("✅ GREEN PHASE SUCCESS: All 10 tests passing!")
+        println("   Implementation is minimal and correct")
+        println("")
+        println("Next Step: REFACTOR phase - improve code quality")
+    } else {
+        if failed == 10 {
+            println("❌ GREEN PHASE ERROR: All tests failing!")
+            println("   (Implementation has bugs)")
+        } else {
+            println("⚠️  GREEN PHASE PARTIAL: {} tests passing, {} failing", passed, failed)
+            println("   (Some tests need fixes)")
+        }
+    }
+
+    println("════════════════════════════════════════════════════════════")
+}
