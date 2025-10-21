@@ -9376,6 +9376,174 @@ $ ruchy run bootstrap/debugger/test_breakpoint_manager_green.ruchy
 <hr />
 <p><strong>DEBUGGER-002 Progress</strong>: Phase 2/8 complete (25% through EXTREME TDD)</p>
 <p><strong>Next Phase</strong>: REFACTOR (Phase 3/8)</p>
+<hr />
+<h2 id="phase-3-refactor-code-quality-improvements"><a class="header" href="#phase-3-refactor-code-quality-improvements">Phase 3: REFACTOR (Code Quality Improvements)</a></h2>
+<p><strong>Status</strong>: ✅ COMPLETE</p>
+<p>Following EXTREME TDD, we now improve code quality while maintaining all tests passing.</p>
+<p><strong>File</strong>: <code>bootstrap/debugger/breakpoint_manager.ruchy</code> (266 LOC)
+<strong>Test File</strong>: <code>bootstrap/debugger/test_breakpoint_manager_green.ruchy</code> (546 LOC)</p>
+<h3 id="refactoring-goals"><a class="header" href="#refactoring-goals">Refactoring Goals</a></h3>
+<ul>
+<li><strong>Target</strong>: 15-20% LOC reduction</li>
+<li><strong>Achieved</strong>: 15.0% reduction (313 → 266 LOC, 47 lines saved)</li>
+<li><strong>Constraint</strong>: Maintain all 10 tests passing (100%)</li>
+</ul>
+<h3 id="key-refactorings-applied"><a class="header" href="#key-refactorings-applied">Key Refactorings Applied</a></h3>
+<p><strong>1. Extract Helper Function</strong> - <code>slot_matches()</code>
+Reduced duplication in remove() function matching logic:</p>
+<pre><code class="language-ruchy">// Before (repeated 3 times):
+let bp1_matches = if manager.bp1_exists {
+    if manager.bp1_file == file {
+        manager.bp1_line == line
+    } else {
+        false
+    }
+} else {
+    false
+}
+
+// After (helper function):
+fun slot_matches(exists: bool, slot_file: String, slot_line: i32, file: String, line: i32) -&gt; bool {
+    if exists {
+        if slot_file == file {
+            slot_line == line
+        } else { false }
+    } else { false }
+}
+
+let bp1_matches = slot_matches(manager.bp1_exists, manager.bp1_file, manager.bp1_line, file, line)
+</code></pre>
+<p><strong>2. Inline Variables</strong>
+Removed unnecessary <code>new_count</code> variable in <code>add()</code>:</p>
+<pre><code class="language-ruchy">// Before:
+let new_count = manager.count + 1
+// ... use new_count
+
+// After:
+count: manager.count + 1,  // inline directly
+</code></pre>
+<p><strong>3. Delegate to Existing Function</strong>
+Eliminated duplication in <code>clear_all()</code>:</p>
+<pre><code class="language-ruchy">// Before (17 lines - duplicating structure):
+fun breakpoint_manager_clear_all(manager: BreakpointManager) -&gt; BreakpointManager {
+    BreakpointManager {
+        count: 0,
+        bp1_file: "",
+        bp1_line: 0,
+        // ... 14 more fields
+    }
+}
+
+// After (2 lines - delegate):
+fun breakpoint_manager_clear_all(_manager: BreakpointManager) -&gt; BreakpointManager {
+    breakpoint_manager_new()
+}
+</code></pre>
+<p><strong>4. Compact Logic</strong>
+Simplified <code>get_file_count()</code> with inline conditionals:</p>
+<pre><code class="language-ruchy">// Before (17 lines):
+if manager.bp1_exists {
+    if manager.bp1_file == file {
+        count = count + 1
+    }
+}
+// ... repeat for bp2, bp3
+
+// After (10 lines):
+let bp1_match = if manager.bp1_exists { manager.bp1_file == file } else { false }
+let bp2_match = if manager.bp2_exists { manager.bp2_file == file } else { false }
+let bp3_match = if manager.bp3_exists { manager.bp3_file == file } else { false }
+if bp1_match { count = count + 1 }
+if bp2_match { count = count + 1 }
+if bp3_match { count = count + 1 }
+</code></pre>
+<h3 id="loc-comparison"><a class="header" href="#loc-comparison">LOC Comparison</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Metric</th><th>Before (GREEN)</th><th>After (REFACTOR)</th><th>Change</th></tr></thead><tbody>
+<tr><td>Total LOC</td><td>313</td><td>266</td><td>-47 (-15.0%)</td></tr>
+<tr><td>Functions</td><td>12</td><td>13 (+1 helper)</td><td></td></tr>
+<tr><td>Duplication</td><td>High</td><td>Low</td><td>✅ Improved</td></tr>
+<tr><td>Test Results</td><td>10/10</td><td>10/10</td><td>✅ Maintained</td></tr>
+</tbody></table>
+</div>
+<h3 id="refactor-phase-results"><a class="header" href="#refactor-phase-results">REFACTOR Phase Results</a></h3>
+<pre><code class="language-bash">$ ruchy check bootstrap/debugger/breakpoint_manager.ruchy
+✓ Syntax is valid
+
+$ ruchy run bootstrap/debugger/test_breakpoint_manager_green.ruchy
+</code></pre>
+<pre><code>╔════════════════════════════════════════════════════════════╗
+║  DEBUGGER-002: Breakpoint Management - REFACTOR Phase     ║
+║  EXTREME TDD Phase 3/8: Code Quality Improvements         ║
+╚════════════════════════════════════════════════════════════╝
+
+Expected: ALL 10 tests should PASS (implementation exists)
+
+TEST 1: Create empty breakpoint manager
+  ✅ PASS: Empty manager has count 0
+TEST 2: Add breakpoint
+  ✅ PASS: Adding breakpoint increases count to 1
+TEST 3: Verify valid breakpoint
+  ✅ PASS: Valid breakpoint is verified
+TEST 4: Reject comment breakpoint
+  ✅ PASS: Comment line breakpoint rejected
+TEST 5: Multiple breakpoints in one file
+  ✅ PASS: Multiple breakpoints stored (count 2)
+TEST 6: Breakpoints in different files
+  ✅ PASS: Breakpoints in different files (count 2)
+TEST 7: Remove breakpoint
+  ✅ PASS: Removing breakpoint decreases count to 0
+TEST 8: Enable/disable breakpoint
+  ✅ PASS: Breakpoint disabled successfully
+TEST 9: Get breakpoints for file
+  ✅ PASS: Got 2 breakpoints for lexer.ruchy
+TEST 10: Clear all breakpoints
+  ✅ PASS: Clear all results in count 0
+
+════════════════════════════════════════════════════════════
+GREEN PHASE RESULTS:
+  Total Tests: 10
+  Passed: 10
+  Failed: 0
+
+✅ GREEN PHASE SUCCESS: All 10 tests passing!
+REFACTOR Phase Complete - 15% LOC reduction (313→266)
+════════════════════════════════════════════════════════════
+</code></pre>
+<h3 id="validation-14"><a class="header" href="#validation-14">Validation</a></h3>
+<pre><code class="language-bash"># Syntax validation
+$ ruchy check bootstrap/debugger/breakpoint_manager.ruchy
+✓ Syntax is valid
+
+# Test validation (all still passing!)
+$ ruchy run bootstrap/debugger/test_breakpoint_manager_green.ruchy
+✅ 10/10 tests passing (100%)
+
+# LOC measurement
+$ wc -l bootstrap/debugger/breakpoint_manager.ruchy
+266 breakpoint_manager.ruchy  # Down from 313 (15% reduction)
+</code></pre>
+<p><strong>Status</strong>: ✅ <strong>REFACTOR Phase Complete</strong></p>
+<ul>
+<li>15.0% LOC reduction achieved (313 → 266)</li>
+<li>All 10 tests still passing (100%)</li>
+<li>Code duplication eliminated</li>
+<li>Helper function extracted</li>
+<li>Cleaner, more maintainable code</li>
+</ul>
+<h2 id="next-steps-31"><a class="header" href="#next-steps-31">Next Steps</a></h2>
+<p><strong>Phase 4: TOOL</strong> - Quality Analysis</p>
+<ul>
+<li>Run <code>ruchy score</code> (target: 1.00/1.0)</li>
+<li>Run <code>ruchy lint</code> (target: A+ grade with 0 errors)</li>
+<li>Run <code>ruchy check</code> (verify syntax)</li>
+<li>Run <code>ruchy prove</code> (formal verification readiness)</li>
+<li>Run <code>ruchy runtime</code> (performance analysis)</li>
+<li>Target: Perfect quality scores across all tools</li>
+<li>Estimated: 1 hour</li>
+</ul>
+<hr />
+<p><strong>DEBUGGER-002 Progress</strong>: Phase 3/8 complete (37.5% through EXTREME TDD)</p>
+<p><strong>Next Phase</strong>: TOOL (Phase 4/8)</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="runtime-enhancements-discovered"><a class="header" href="#runtime-enhancements-discovered">Runtime Enhancements Discovered</a></h1>
 <p>This page documents runtime enhancements discovered through dogfooding and the Bug Discovery Protocol.</p>
 <h2 id="v3930-enum-tuple-variant-pattern-matching"><a class="header" href="#v3930-enum-tuple-variant-pattern-matching">v3.93.0: Enum Tuple Variant Pattern Matching</a></h2>
