@@ -1,0 +1,632 @@
+// DEBUG-008-MINIMAL: Basic Record-Replay Engine - RED Phase (Vertical Slice 1)
+// Scope: In-memory state logging, <1000 steps, simple linked list
+//
+// Vertical Slice 1 Constraints:
+// - In-memory only (no persistence)
+// - Small programs (<1000 steps)
+// - No optimization (record everything)
+// - Simple linked list of states
+// - Tier 2 quality gates (ruchy check, ruchy test)
+//
+// Acceptance Criteria:
+// - PASS Can step backward through a 100-line program
+// - PASS Variable values are correct at each historical step
+
+// ============================================================================
+// Test 1: Create recording session
+// ============================================================================
+
+fun test_create_recording() -> bool {
+    println("Test 1: Create recording session");
+
+    let recording = create_recording();
+
+    if verify_recording(recording) {
+        println("  PASS PASS: Recording created");
+        true
+    } else {
+        println("  FAIL FAIL: Recording invalid");
+        false
+    }
+}
+
+// ============================================================================
+// Test 2: Record single step
+// ============================================================================
+
+fun test_record_single_step() -> bool {
+    println("Test 2: Record single step");
+
+    let recording = create_recording();
+    let line_num = 5;
+    let var_name = "x".to_string();
+    let var_value = 42;
+
+    record_step(recording, line_num, var_name, var_value);
+
+    let step_count = get_step_count(recording);
+
+    if step_count == 1 {
+        println("  PASS PASS: Single step recorded");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 1 step, got {}", step_count);
+        false
+    }
+}
+
+// ============================================================================
+// Test 3: Record multiple steps
+// ============================================================================
+
+fun test_record_multiple_steps() -> bool {
+    println("Test 3: Record multiple steps");
+
+    let recording = create_recording();
+
+    record_step(recording, 1, "a".to_string(), 10);
+    record_step(recording, 2, "b".to_string(), 20);
+    record_step(recording, 3, "c".to_string(), 30);
+
+    let step_count = get_step_count(recording);
+
+    if step_count == 3 {
+        println("  PASS PASS: Multiple steps recorded");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 3 steps, got {}", step_count);
+        false
+    }
+}
+
+// ============================================================================
+// Test 4: Get current step number
+// ============================================================================
+
+fun test_get_current_step() -> bool {
+    println("Test 4: Get current step number");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+    record_step(recording, 2, "y".to_string(), 20);
+
+    let current = get_current_step(recording);
+
+    if current == 2 {
+        println("  PASS PASS: Current step is 2");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 2, got {}", current);
+        false
+    }
+}
+
+// ============================================================================
+// Test 5: Get total step count
+// ============================================================================
+
+fun test_get_step_count() -> bool {
+    println("Test 5: Get total step count");
+
+    let recording = create_recording();
+
+    let mut i = 1;
+    loop {
+        if i > 10 { break; }
+        record_step(recording, i, "var".to_string(), i * 10);
+        i = i + 1;
+    }
+
+    let count = get_step_count(recording);
+
+    if count == 10 {
+        println("  PASS PASS: Step count is 10");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 10, got {}", count);
+        false
+    }
+}
+
+// ============================================================================
+// Test 6: Replay to specific step (forward)
+// ============================================================================
+
+fun test_replay_forward() -> bool {
+    println("Test 6: Replay to specific step (forward)");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+    record_step(recording, 2, "x".to_string(), 20);
+    record_step(recording, 3, "x".to_string(), 30);
+
+    replay_to_step(recording, 2);
+    let current = get_current_step(recording);
+
+    if current == 2 {
+        println("  PASS PASS: Replayed to step 2");
+        true
+    } else {
+        println("  FAIL FAIL: Expected step 2, got {}", current);
+        false
+    }
+}
+
+// ============================================================================
+// Test 7: Replay to specific step (backward)
+// ============================================================================
+
+fun test_replay_backward() -> bool {
+    println("Test 7: Replay to specific step (backward)");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+    record_step(recording, 2, "x".to_string(), 20);
+    record_step(recording, 3, "x".to_string(), 30);
+
+    replay_to_step(recording, 1);
+    let current = get_current_step(recording);
+
+    if current == 1 {
+        println("  PASS PASS: Replayed backward to step 1");
+        true
+    } else {
+        println("  FAIL FAIL: Expected step 1, got {}", current);
+        false
+    }
+}
+
+// ============================================================================
+// Test 8: Get variable value at step
+// ============================================================================
+
+fun test_get_variable_at_step() -> bool {
+    println("Test 8: Get variable value at step");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 100);
+    record_step(recording, 2, "x".to_string(), 200);
+    record_step(recording, 3, "x".to_string(), 300);
+
+    replay_to_step(recording, 2);
+    let value = get_variable_value(recording, "x".to_string());
+
+    if value == 200 {
+        println("  PASS PASS: Variable x = 200 at step 2");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 200, got {}", value);
+        false
+    }
+}
+
+// ============================================================================
+// Test 9: Get line number at step
+// ============================================================================
+
+fun test_get_line_at_step() -> bool {
+    println("Test 9: Get line number at step");
+
+    let recording = create_recording();
+    record_step(recording, 10, "x".to_string(), 42);
+    record_step(recording, 20, "y".to_string(), 84);
+    record_step(recording, 30, "z".to_string(), 126);
+
+    replay_to_step(recording, 2);
+    let line = get_line_number(recording);
+
+    if line == 20 {
+        println("  PASS PASS: Line number is 20 at step 2");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 20, got {}", line);
+        false
+    }
+}
+
+// ============================================================================
+// Test 10: Verify recording is immutable after replay
+// ============================================================================
+
+fun test_recording_immutability() -> bool {
+    println("Test 10: Verify recording immutability");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+    record_step(recording, 2, "x".to_string(), 20);
+    record_step(recording, 3, "x".to_string(), 30);
+
+    let count_before = get_step_count(recording);
+    replay_to_step(recording, 1);
+    let count_after = get_step_count(recording);
+
+    if count_before == count_after {
+        println("  PASS PASS: Recording unchanged by replay");
+        true
+    } else {
+        println("  FAIL FAIL: Recording mutated");
+        false
+    }
+}
+
+// ============================================================================
+// Property Test: Roundtrip correctness (50 test cases)
+// ============================================================================
+
+fun test_property_roundtrip() -> bool {
+    println("Test 11: Property - Roundtrip correctness (50 cases)");
+
+    let mut passed = 0;
+    let mut i = 1;
+
+    loop {
+        if i > 50 { break; }
+
+        let recording = create_recording();
+
+        let mut j = 1;
+        loop {
+            if j > i { break; }
+            record_step(recording, j, "x".to_string(), j * 10);
+            j = j + 1;
+        }
+
+        replay_to_step(recording, i);
+        let value = get_variable_value(recording, "x".to_string());
+
+        if value == i * 10 {
+            passed = passed + 1;
+        }
+
+        i = i + 1;
+    }
+
+    if passed == 50 {
+        println("  PASS PASS: All 50 roundtrip cases passed");
+        true
+    } else {
+        println("  FAIL FAIL: {}/50 cases passed", passed);
+        false
+    }
+}
+
+// ============================================================================
+// Property Test: Monotonicity (50 test cases)
+// ============================================================================
+
+fun test_property_monotonicity() -> bool {
+    println("Test 12: Property - Step monotonicity (50 cases)");
+
+    let recording = create_recording();
+
+    let mut i = 1;
+    loop {
+        if i > 50 { break; }
+        record_step(recording, i, "x".to_string(), i);
+        i = i + 1;
+    }
+
+    let mut passed = 0;
+    let mut j = 1;
+    loop {
+        if j >= 50 { break; }
+
+        replay_to_step(recording, j);
+        let step1 = get_current_step(recording);
+
+        replay_to_step(recording, j + 1);
+        let step2 = get_current_step(recording);
+
+        if step2 >= step1 {
+            passed = passed + 1;
+        }
+
+        j = j + 1;
+    }
+
+    if passed == 49 {
+        println("  PASS PASS: All 49 monotonicity cases passed");
+        true
+    } else {
+        println("  FAIL FAIL: {}/49 cases passed", passed);
+        false
+    }
+}
+
+// ============================================================================
+// Test 13: Empty recording (no steps)
+// ============================================================================
+
+fun test_empty_recording() -> bool {
+    println("Test 13: Handle empty recording");
+
+    let recording = create_recording();
+    let count = get_step_count(recording);
+
+    if count == 0 {
+        println("  PASS PASS: Empty recording handled");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 0 steps, got {}", count);
+        false
+    }
+}
+
+// ============================================================================
+// Test 14: Single step recording
+// ============================================================================
+
+fun test_single_step_recording() -> bool {
+    println("Test 14: Single step recording");
+
+    let recording = create_recording();
+    record_step(recording, 42, "answer".to_string(), 42);
+
+    let count = get_step_count(recording);
+    replay_to_step(recording, 1);
+    let value = get_variable_value(recording, "answer".to_string());
+
+    if count == 1 {
+        if value == 42 {
+            println("  PASS PASS: Single step works");
+            true
+        } else {
+            println("  FAIL FAIL: Wrong value");
+            false
+        }
+    } else {
+        println("  FAIL FAIL: Wrong step count");
+        false
+    }
+}
+
+// ============================================================================
+// Test 15: Record 1000 steps (limit test)
+// ============================================================================
+
+fun test_large_recording() -> bool {
+    println("Test 15: Record 1000 steps (limit test)");
+
+    let recording = create_recording();
+
+    let mut i = 1;
+    loop {
+        if i > 1000 { break; }
+        record_step(recording, i, "i".to_string(), i);
+        i = i + 1;
+    }
+
+    let count = get_step_count(recording);
+
+    if count == 1000 {
+        println("  PASS PASS: 1000 steps recorded");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 1000, got {}", count);
+        false
+    }
+}
+
+// ============================================================================
+// Test 16: Replay to step 0 (initial state)
+// ============================================================================
+
+fun test_replay_to_zero() -> bool {
+    println("Test 16: Replay to step 0 (initial state)");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+    record_step(recording, 2, "x".to_string(), 20);
+
+    replay_to_step(recording, 0);
+    let current = get_current_step(recording);
+
+    if current == 0 {
+        println("  PASS PASS: Replayed to initial state");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 0, got {}", current);
+        false
+    }
+}
+
+// ============================================================================
+// Test 17: Replay beyond last step (error handling)
+// ============================================================================
+
+fun test_replay_beyond_end() -> bool {
+    println("Test 17: Replay beyond last step");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+    record_step(recording, 2, "x".to_string(), 20);
+
+    replay_to_step(recording, 100);
+    let current = get_current_step(recording);
+
+    if current == 2 {
+        println("  PASS PASS: Clamped to last step");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 2, got {}", current);
+        false
+    }
+}
+
+// ============================================================================
+// Test 18: Replay to negative step (error handling)
+// ============================================================================
+
+fun test_replay_negative_step() -> bool {
+    println("Test 18: Replay to negative step");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+
+    replay_to_step(recording, -1);
+    let current = get_current_step(recording);
+
+    if current == 0 {
+        println("  PASS PASS: Clamped to 0");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 0, got {}", current);
+        false
+    }
+}
+
+// ============================================================================
+// Test 19: Multiple variables at same step
+// ============================================================================
+
+fun test_multiple_variables() -> bool {
+    println("Test 19: Multiple variables at same step");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+    record_step_with_var(recording, "y".to_string(), 20);
+    record_step_with_var(recording, "z".to_string(), 30);
+
+    replay_to_step(recording, 1);
+    let x_val = get_variable_value(recording, "x".to_string());
+    let y_val = get_variable_value(recording, "y".to_string());
+
+    if x_val == 10 {
+        if y_val == 20 {
+            println("  PASS PASS: Multiple variables tracked");
+            true
+        } else {
+            println("  FAIL FAIL: Wrong y value");
+            false
+        }
+    } else {
+        println("  FAIL FAIL: Wrong x value");
+        false
+    }
+}
+
+// ============================================================================
+// Test 20: Variable doesn't exist at step
+// ============================================================================
+
+fun test_missing_variable() -> bool {
+    println("Test 20: Variable doesn't exist at step");
+
+    let recording = create_recording();
+    record_step(recording, 1, "x".to_string(), 10);
+
+    replay_to_step(recording, 1);
+    let value = get_variable_value(recording, "nonexistent".to_string());
+
+    if value == 0 {
+        println("  PASS PASS: Missing variable returns 0");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 0, got {}", value);
+        false
+    }
+}
+
+// ============================================================================
+// Placeholder Functions (Will be implemented in GREEN phase)
+// ============================================================================
+
+fun create_recording() -> i64 {
+    0
+}
+
+fun verify_recording(recording_id: i64) -> bool {
+    false
+}
+
+fun record_step(recording_id: i64, line: i64, var_name: String, value: i64) {
+}
+
+fun record_step_with_var(var_name: String, value: i64) {
+}
+
+fun get_step_count(recording_id: i64) -> i64 {
+    0
+}
+
+fun get_current_step(recording_id: i64) -> i64 {
+    0
+}
+
+fun replay_to_step(recording_id: i64, step: i64) {
+}
+
+fun get_variable_value(recording_id: i64, var_name: String) -> i64 {
+    0
+}
+
+fun get_line_number(recording_id: i64) -> i64 {
+    0
+}
+
+// ============================================================================
+// Test Runner
+// ============================================================================
+
+fun main() {
+    println("----------------------------------------------------------------");
+    println("DEBUG-008-MINIMAL: Record-Replay Engine - RED Phase");
+    println("Scope: In-memory logging, <1000 steps, minimal implementation");
+    println("----------------------------------------------------------------");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Core functionality (Tests 1-10)
+    if test_create_recording() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_record_single_step() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_record_multiple_steps() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_get_current_step() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_get_step_count() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_replay_forward() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_replay_backward() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_get_variable_at_step() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_get_line_at_step() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_recording_immutability() { passed = passed + 1; } else { failed = failed + 1; }
+
+    // Property tests (Tests 11-12)
+    if test_property_roundtrip() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_property_monotonicity() { passed = passed + 1; } else { failed = failed + 1; }
+
+    // Edge cases (Tests 13-20)
+    if test_empty_recording() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_single_step_recording() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_large_recording() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_replay_to_zero() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_replay_beyond_end() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_replay_negative_step() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_multiple_variables() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_missing_variable() { passed = passed + 1; } else { failed = failed + 1; }
+
+    println("");
+    println("----------------------------------------------------------------");
+    println(" Test Results (RED Phase)");
+    println("----------------------------------------------------------------");
+    println("PASS Passed: {}", passed);
+    println("FAIL Failed: {}", failed);
+    println(" Total:  {}", passed + failed);
+    println("");
+
+    if failed == 20 {
+        println("PASS RED PHASE COMPLETE: All 20 tests failing as expected!");
+        println("");
+        println("Next Steps:");
+        println("  1. Implement placeholder functions (GREEN phase)");
+        println("  2. Simple linked list of program states");
+        println("  3. Naive replay (re-execute from beginning)");
+        println("  4. Run Tier 2 quality gates");
+    } else if failed > 0 {
+        println("WARNING  UNEXPECTED: Some tests passing in RED phase!");
+        println("   RED phase should have all tests failing.");
+    } else {
+        println("FAIL ERROR: All tests passing - placeholder functions not stubbed correctly");
+    }
+
+    println("----------------------------------------------------------------");
+}
