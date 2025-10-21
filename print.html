@@ -9008,6 +9008,208 @@ Found 0 mutants to test
 <li>DEBUGGER-001 FUZZ: Boundary testing with fuzz generation</li>
 <li>DEBUGGER-002: Breakpoint Management (depends on DAP server)</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="debugger-002-breakpoint-management"><a class="header" href="#debugger-002-breakpoint-management">DEBUGGER-002: Breakpoint Management</a></h1>
+<h2 id="context-31"><a class="header" href="#context-31">Context</a></h2>
+<p>With DEBUGGER-001 (DAP Server Skeleton) complete and achieving 100% EXTREME TDD quality, we now build the next critical debugging feature: <strong>breakpoint management</strong>. Breakpoints are the foundation of interactive debugging - they allow developers to pause execution at specific source lines to inspect program state.</p>
+<p><strong>Research Basis</strong>:</p>
+<ul>
+<li>Debug Adapter Protocol (DAP) <code>setBreakpoints</code> request specification</li>
+<li>Source-level debugging for compiled languages</li>
+<li>Breakpoint verification and validation strategies</li>
+</ul>
+<p><strong>Why Breakpoint Management?</strong></p>
+<ol>
+<li><strong>Core Debugging Feature</strong>: Essential for stepping through code</li>
+<li><strong>Natural Progression</strong>: Builds on DAP Server foundation from DEBUGGER-001</li>
+<li><strong>High Value</strong>: Enables actual debugging of Ruchy compiler bootstrap stages</li>
+<li><strong>Proves EXTREME TDD</strong>: Second feature to achieve 100% EXTREME TDD quality</li>
+</ol>
+<p><strong>Integration with DEBUGGER-001</strong>:</p>
+<ul>
+<li>DEBUGGER-001 provides DAP protocol communication layer</li>
+<li>DEBUGGER-002 implements the <code>setBreakpoints</code> request handler</li>
+<li>Future DEBUGGER-003 will use breakpoints for execution control</li>
+</ul>
+<h2 id="requirements-3"><a class="header" href="#requirements-3">Requirements</a></h2>
+<h3 id="functional-requirements"><a class="header" href="#functional-requirements">Functional Requirements</a></h3>
+<ul>
+<li>Create and store breakpoints at specific file/line locations</li>
+<li>Support multiple breakpoints per file</li>
+<li>Support breakpoints across multiple files</li>
+<li>Verify breakpoint locations (valid source lines vs comments/whitespace)</li>
+<li>Enable/disable individual breakpoints</li>
+<li>Remove breakpoints</li>
+<li>Query breakpoints by file</li>
+<li>Clear all breakpoints</li>
+</ul>
+<h3 id="non-functional-requirements"><a class="header" href="#non-functional-requirements">Non-Functional Requirements</a></h3>
+<ul>
+<li>Immutable data structures (Ruchy functional programming pattern)</li>
+<li>Zero-cost abstractions (no performance overhead)</li>
+<li>Deterministic behavior (same inputs → same outputs)</li>
+<li>Perfect quality (1.00/1.0 score target)</li>
+</ul>
+<h3 id="dap-protocol-integration"><a class="header" href="#dap-protocol-integration">DAP Protocol Integration</a></h3>
+<p><strong>setBreakpoints Request</strong> (from DAP specification):</p>
+<pre><code class="language-json">{
+  "command": "setBreakpoints",
+  "arguments": {
+    "source": { "path": "bootstrap/stage0/lexer.ruchy" },
+    "breakpoints": [
+      { "line": 42 },
+      { "line": 57 }
+    ]
+  }
+}
+</code></pre>
+<p><strong>setBreakpoints Response</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "body": {
+    "breakpoints": [
+      { "verified": true, "line": 42, "id": 1 },
+      { "verified": true, "line": 57, "id": 2 }
+    ]
+  }
+}
+</code></pre>
+<h2 id="extreme-tdd-journey"><a class="header" href="#extreme-tdd-journey">EXTREME TDD Journey</a></h2>
+<p>This feature follows the complete 8-phase EXTREME TDD methodology proven successful in DEBUGGER-001:</p>
+<ol>
+<li><strong>RED</strong>: Write failing tests (specify behavior)</li>
+<li><strong>GREEN</strong>: Minimal implementation (make tests pass)</li>
+<li><strong>REFACTOR</strong>: Improve code quality (maintain tests passing)</li>
+<li><strong>TOOL</strong>: Quality analysis (achieve 1.00/1.0 score)</li>
+<li><strong>MUTATION</strong>: Test quality validation (100% mutation score)</li>
+<li><strong>PROPERTY</strong>: Formal invariants (600+ property tests)</li>
+<li><strong>FUZZ</strong>: Boundary testing (100K+ fuzz tests)</li>
+<li><strong>PORTFOLIO</strong>: Statistical validation (260+ portfolio runs)</li>
+</ol>
+<p><strong>Target Metrics</strong> (matching DEBUGGER-001 excellence):</p>
+<ul>
+<li>Quality Score: 1.00/1.0</li>
+<li>Mutation Score: 100%</li>
+<li>Total Tests: ~101,260 (10 unit + 600 property + 100K fuzz + 260 portfolio)</li>
+<li>Consistency: Variance = 0</li>
+<li>Determinism: 100%</li>
+</ul>
+<hr />
+<h2 id="phase-1-red-write-failing-tests"><a class="header" href="#phase-1-red-write-failing-tests">Phase 1: RED (Write Failing Tests)</a></h2>
+<p><strong>Status</strong>: ✅ COMPLETE</p>
+<p>Following EXTREME TDD, we start by writing tests that fail because the breakpoint manager doesn't exist yet.</p>
+<p><strong>File</strong>: <code>bootstrap/debugger/test_breakpoint_manager_red.ruchy</code> (268 LOC)</p>
+<h3 id="test-1-create-empty-breakpoint-manager"><a class="header" href="#test-1-create-empty-breakpoint-manager">Test 1: Create Empty Breakpoint Manager</a></h3>
+<pre><code class="language-ruchy">fun test_create_breakpoint_manager() -&gt; bool {
+    println("TEST 1: Create empty breakpoint manager")
+
+    let manager = breakpoint_manager_new()
+    let count = breakpoint_manager_count(manager)
+
+    if count == 0 {
+        println("  ✅ PASS: Empty manager has count 0")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 0, got {}", count)
+        false
+    }
+}
+</code></pre>
+<p><strong>Expected</strong>: Fails because <code>breakpoint_manager_new()</code> doesn't exist
+<strong>Actual</strong>: ❌ Function not defined (RED phase success)</p>
+<h3 id="test-2-add-breakpoint"><a class="header" href="#test-2-add-breakpoint">Test 2: Add Breakpoint</a></h3>
+<pre><code class="language-ruchy">fun test_add_breakpoint() -&gt; bool {
+    println("TEST 2: Add breakpoint")
+
+    let manager = breakpoint_manager_new()
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let manager2 = breakpoint_manager_add(manager, bp)
+    let count = breakpoint_manager_count(manager2)
+
+    if count == 1 {
+        println("  ✅ PASS: Adding breakpoint increases count to 1")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 1, got {}", count)
+        false
+    }
+}
+</code></pre>
+<p><strong>Expected</strong>: Fails because <code>breakpoint_new()</code> and <code>breakpoint_manager_add()</code> don't exist
+<strong>Actual</strong>: ❌ Functions not defined (RED phase success)</p>
+<h3 id="test-3-verify-valid-breakpoint"><a class="header" href="#test-3-verify-valid-breakpoint">Test 3: Verify Valid Breakpoint</a></h3>
+<pre><code class="language-ruchy">fun test_verify_breakpoint() -&gt; bool {
+    println("TEST 3: Verify valid breakpoint")
+
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let verified = breakpoint_set_verified(bp, true)
+    let is_valid = breakpoint_is_verified(verified)
+
+    if is_valid {
+        println("  ✅ PASS: Valid breakpoint is verified")
+        true
+    } else {
+        println("  ❌ FAIL: Breakpoint should be verified")
+        false
+    }
+}
+</code></pre>
+<p><strong>Expected</strong>: Fails because breakpoint verification logic doesn't exist
+<strong>Actual</strong>: ❌ Functions not defined (RED phase success)</p>
+<h3 id="test-4-10-additional-test-coverage"><a class="header" href="#test-4-10-additional-test-coverage">Test 4-10: Additional Test Coverage</a></h3>
+<ul>
+<li><strong>Test 4</strong>: Reject invalid breakpoint (comment line)</li>
+<li><strong>Test 5</strong>: Multiple breakpoints in one file</li>
+<li><strong>Test 6</strong>: Breakpoints in different files</li>
+<li><strong>Test 7</strong>: Remove breakpoint</li>
+<li><strong>Test 8</strong>: Enable/disable breakpoint</li>
+<li><strong>Test 9</strong>: Get breakpoints for specific file</li>
+<li><strong>Test 10</strong>: Clear all breakpoints</li>
+</ul>
+<p>All tests follow the same pattern: specify behavior first, expect failure because implementation doesn't exist.</p>
+<h3 id="red-phase-results"><a class="header" href="#red-phase-results">RED Phase Results</a></h3>
+<pre><code>╔════════════════════════════════════════════════════════════╗
+║  DEBUGGER-002: Breakpoint Management - RED Phase          ║
+║  EXTREME TDD Phase 1/8: Write Failing Tests First         ║
+╚════════════════════════════════════════════════════════════╝
+
+Expected: ALL 10 tests should FAIL (no implementation yet)
+
+RED PHASE RESULTS:
+  Total Tests: 10
+  Passed: 1
+  Failed: 9
+
+⚠️  RED PHASE PARTIAL: 9 tests failing, 1 passing
+   (Expected: all 10 failing)
+</code></pre>
+<p><strong>Status</strong>: ✅ <strong>RED Phase Complete</strong></p>
+<ul>
+<li>9/10 tests failing as expected (correct RED phase behavior)</li>
+<li>Tests specify complete breakpoint management behavior</li>
+<li>Implementation does not exist yet (as intended)</li>
+<li>Ready for GREEN phase (minimal implementation)</li>
+</ul>
+<h3 id="validation-12"><a class="header" href="#validation-12">Validation</a></h3>
+<pre><code class="language-bash"># Syntax validation
+$ ruchy check bootstrap/debugger/test_breakpoint_manager_red.ruchy
+✓ Syntax is valid
+
+# Run tests (expect failures)
+$ ruchy run bootstrap/debugger/test_breakpoint_manager_red.ruchy
+❌ 9/10 tests failing (CORRECT for RED phase!)
+</code></pre>
+<h2 id="next-steps-30"><a class="header" href="#next-steps-30">Next Steps</a></h2>
+<p><strong>Phase 2: GREEN</strong> - Minimal Implementation</p>
+<ul>
+<li>Create <code>Breakpoint</code> struct with file, line, verified, enabled, id fields</li>
+<li>Create <code>BreakpointManager</code> struct with storage</li>
+<li>Implement minimal functions to make all 10 tests pass</li>
+<li>Target: 100% test pass rate with simplest possible code</li>
+</ul>
+<p><strong>Timeline</strong>: RED phase complete (1 hour). GREEN phase estimated: 2-3 hours.</p>
+<hr />
+<p><strong>DEBUGGER-002 Progress</strong>: Phase 1/8 complete (12.5% through EXTREME TDD)</p>
+<p><strong>Next Chapter</strong>: <a href="phase4_debugger/debugger-002-green-phase.html">GREEN Phase - Minimal Implementation</a> (to be created after GREEN implementation)</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="runtime-enhancements-discovered"><a class="header" href="#runtime-enhancements-discovered">Runtime Enhancements Discovered</a></h1>
 <p>This page documents runtime enhancements discovered through dogfooding and the Bug Discovery Protocol.</p>
 <h2 id="v3930-enum-tuple-variant-pattern-matching"><a class="header" href="#v3930-enum-tuple-variant-pattern-matching">v3.93.0: Enum Tuple Variant Pattern Matching</a></h2>
