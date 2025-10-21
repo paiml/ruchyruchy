@@ -1,0 +1,162 @@
+// Parser Debugger MVP - Issue #1 Solution (SIMPLIFIED)
+// GOAL: Help Ruchy team debug parser errors FAST
+// USE: Integrate into parser, get better error messages TODAY
+
+// Parser debugger state (simplified - just track depth and current context)
+struct ParserDebugger {
+    depth: i32,
+    current_context: String,
+    enabled: bool
+}
+
+// Create new debugger
+fun parser_debugger_new() -> ParserDebugger {
+    ParserDebugger {
+        depth: 0,
+        current_context: "Program".to_string(),
+        enabled: true
+    }
+}
+
+// Push entry when entering a parse rule
+fun parser_debugger_push(
+    debugger: ParserDebugger,
+    context: String
+) -> ParserDebugger {
+    if !debugger.enabled {
+        return debugger;
+    }
+
+    ParserDebugger {
+        depth: debugger.depth + 1,
+        current_context: context,
+        enabled: debugger.enabled
+    }
+}
+
+// Pop entry when exiting a parse rule
+fun parser_debugger_pop(debugger: ParserDebugger) -> ParserDebugger {
+    if !debugger.enabled {
+        return debugger;
+    }
+
+    ParserDebugger {
+        depth: debugger.depth - 1,
+        current_context: debugger.current_context,
+        enabled: debugger.enabled
+    }
+}
+
+// Show error with context (THE MONEY SHOT)
+fun parser_debugger_error(
+    debugger: ParserDebugger,
+    expected: String,
+    got: String,
+    line: i32,
+    column: i32
+) {
+    if !debugger.enabled {
+        return;
+    }
+
+    println("");
+    println("╔════════════════════════════════════════════════════════════╗");
+    println("║  PARSER ERROR - Enhanced Debugging                        ║");
+    println("╚════════════════════════════════════════════════════════════╝");
+    println("");
+    println("📍 Location: line {}, column {}", line, column);
+    println("❌ Expected: {}", expected);
+    println("❌ Got: {}", got);
+    println("");
+    println("📚 Parse Context:");
+    println("   Current: {} (depth: {})", debugger.current_context, debugger.depth);
+    println("");
+    println("💡 Suggestion:");
+
+    // Smart suggestions based on common patterns
+    if expected == "LeftBrace" && got == "Semicolon" {
+        println("   Add '{{' before ';' - missing block opening");
+        println("   Hint: You're inside {}", debugger.current_context);
+    } else if expected == "RightBrace" {
+        println("   Add '}}' - unclosed block");
+        println("   Hint: Close {} block", debugger.current_context);
+    } else if expected == "RightParen" {
+        println("   Add ')' - unclosed parenthesis");
+    } else if expected == "Semicolon" {
+        println("   Add ';' at end of statement");
+    } else {
+        println("   Check syntax near '{}'", got);
+        println("   Context: {}", debugger.current_context);
+    }
+
+    println("");
+    println("═══════════════════════════════════════════════════════════");
+    println("");
+}
+
+// ============================================================
+// DEMO: Show how to use with parser
+// ============================================================
+
+fun demo_parser_with_debugger() {
+    println("🧪 Parser Debugger MVP Demo");
+    println("═══════════════════════════════════════════════════════════");
+    println("");
+    println("Simulating parsing: fun broken() {{ if (x > 5) ; }}");
+    println("                                             ^");
+    println("                                      Missing '{{' here");
+    println("");
+
+    // Create debugger
+    let d1 = parser_debugger_new();
+
+    // Simulate parsing a function
+    let d2 = parser_debugger_push(d1, "FunctionDef".to_string());
+    let d3 = parser_debugger_push(d2, "Block".to_string());
+    let d4 = parser_debugger_push(d3, "IfStatement".to_string());
+
+    // ERROR: Expected LeftBrace, got Semicolon
+    parser_debugger_error(
+        d4,
+        "LeftBrace".to_string(),
+        "Semicolon".to_string(),
+        1,
+        29
+    );
+
+    println("");
+    println("✅ Demo complete! This is what Ruchy team will see.");
+}
+
+// ============================================================
+// INTEGRATION GUIDE for Ruchy Team
+// ============================================================
+
+fun show_integration_guide() {
+    println("");
+    println("╔════════════════════════════════════════════════════════════╗");
+    println("║  INTEGRATION GUIDE - How to use in your parser            ║");
+    println("╚════════════════════════════════════════════════════════════╝");
+    println("");
+    println("1. CREATE debugger at parser start:");
+    println("   let debugger = parser_debugger_new();");
+    println("");
+    println("2. PUSH when entering parse rule:");
+    println("   let debugger2 = parser_debugger_push(debugger, \"FunctionDef\");");
+    println("");
+    println("3. POP when exiting parse rule:");
+    println("   let debugger3 = parser_debugger_pop(debugger2);");
+    println("");
+    println("4. REPORT errors with context:");
+    println("   parser_debugger_error(debugger, \"RightBrace\", token, line, col);");
+    println("");
+    println("═══════════════════════════════════════════════════════════");
+    println("");
+}
+
+fun main() {
+    demo_parser_with_debugger();
+    show_integration_guide();
+}
+
+main();
