@@ -28,6 +28,11 @@
   - [BOOTSTRAP-008: Statement Parser](./phase3_bootstrap/stage1/bootstrap-008-statement-parser.md)
   - [BOOTSTRAP-009: Parser Roundtrip Validation](./phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.md)
 
+# Phase 4: Debugging Tools (Vertical Slice 1)
+
+- [Debugging Toolkit](./debugging/chapter.md)
+  - [DEBUG-001: Source Map Generation (RED Phase)](./debugging/debug-001-source-maps-red.md)
+
 # Discoveries
 
 - [Runtime Enhancements](./discoveries/runtime-enhancements.md)

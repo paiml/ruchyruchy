@@ -1,0 +1,536 @@
+// DEBUG-001: Source Map Generation - RED Phase (Vertical Slice 1 - Minimal)
+// Scope: Line-number mapping only, single-file programs, simplified tests
+//
+// Vertical Slice 1 Constraints:
+// - Line number mapping only (no column precision)
+// - Single-file programs only
+// - 20+ unit tests (simplified from 50+)
+// - Property tests: 1K cases (simplified from 10K)
+// - Tier 2 quality gates (incremental mutation testing)
+//
+// Acceptance Criteria:
+// - PASS Can set breakpoint in .ruchy file
+// - PASS Breakpoint stops at correct line (+-1 line tolerance)
+
+// ============================================================================
+// Test 1: Create simple source map data structure
+// ============================================================================
+
+fun test_create_source_map() -> bool {
+    println("Test 1: Create source map data structure");
+
+    // Minimal source map: just filename and line count
+    let source_file = "test.ruchy".to_string();
+    let line_count = 10;
+
+    let map = create_source_map(source_file, line_count);
+
+    if verify_source_map(map) {
+        println("  PASS PASS: Source map created");
+        true
+    } else {
+        println("  FAIL FAIL: Source map invalid");
+        false
+    }
+}
+
+// ============================================================================
+// Test 2: Map source line to target line (1:1 mapping)
+// ============================================================================
+
+fun test_map_line_simple() -> bool {
+    println("Test 2: Map source line to target line");
+
+    // Simplest case: line 5 in source -> line 5 in target
+    let source_line = 5;
+    let target_line = map_source_to_target(source_line);
+
+    if target_line == 5 {
+        println("  PASS PASS: Line mapping works (5 -> 5)");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 5, got {}", target_line);
+        false
+    }
+}
+
+// ============================================================================
+// Test 3: Map multiple source lines
+// ============================================================================
+
+fun test_map_multiple_lines() -> bool {
+    println("Test 3: Map multiple source lines");
+
+    let line1 = map_source_to_target(1);
+    let line10 = map_source_to_target(10);
+    let line100 = map_source_to_target(100);
+
+    if line1 == 1 {
+        if line10 == 10 {
+            if line100 == 100 {
+                println("  PASS PASS: Multiple line mappings work");
+                true
+            } else {
+                println("  FAIL FAIL: Line 100 mapping incorrect");
+                false
+            }
+        } else {
+            println("  FAIL FAIL: Line 10 mapping incorrect");
+            false
+        }
+    } else {
+        println("  FAIL FAIL: Line 1 mapping incorrect");
+        false
+    }
+}
+
+// ============================================================================
+// Test 4: Generate source map for simple expression
+// ============================================================================
+
+fun test_generate_for_expression() -> bool {
+    println("Test 4: Generate source map for simple expression");
+
+    let source = "42".to_string();
+    let map = generate_source_map_from_code(source);
+
+    let line_count = get_line_count(map);
+
+    if line_count >= 1 {
+        println("  PASS PASS: Source map generated for expression");
+        true
+    } else {
+        println("  FAIL FAIL: No lines in source map");
+        false
+    }
+}
+
+// ============================================================================
+// Test 5: Generate source map for function
+// ============================================================================
+
+fun test_generate_for_function() -> bool {
+    println("Test 5: Generate source map for function");
+
+    let source = "fun main() { println(\"test\"); }".to_string();
+    let map = generate_source_map_from_code(source);
+
+    let line_count = get_line_count(map);
+
+    if line_count >= 1 {
+        println("  PASS PASS: Source map generated for function");
+        true
+    } else {
+        println("  FAIL FAIL: No lines in source map");
+        false
+    }
+}
+
+// ============================================================================
+// Test 6: Generate source map for multi-line program
+// ============================================================================
+
+fun test_generate_multiline() -> bool {
+    println("Test 6: Generate source map for multi-line program");
+
+    // 3-line program
+    let source = "fun main() {\n    let x = 42;\n    println(\"x = {}\", x);\n}".to_string();
+    let map = generate_source_map_from_code(source);
+
+    let line_count = get_line_count(map);
+
+    if line_count >= 3 {
+        println("  PASS PASS: Multi-line source map generated");
+        true
+    } else {
+        println("  FAIL FAIL: Expected >=3 lines, got {}", line_count);
+        false
+    }
+}
+
+// ============================================================================
+// Test 7: Reverse lookup - target line to source line
+// ============================================================================
+
+fun test_reverse_lookup() -> bool {
+    println("Test 7: Reverse lookup (target -> source)");
+
+    // Given target line 5, find original source line
+    let target_line = 5;
+    let source_line = map_target_to_source(target_line);
+
+    if source_line == 5 {
+        println("  PASS PASS: Reverse lookup works");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 5, got {}", source_line);
+        false
+    }
+}
+
+// ============================================================================
+// Test 8: Handle invalid line numbers gracefully
+// ============================================================================
+
+fun test_invalid_line_number() -> bool {
+    println("Test 8: Handle invalid line numbers");
+
+    // Line 0 is invalid (lines are 1-indexed)
+    let result = map_source_to_target(0);
+
+    // Should return 0 or -1 to indicate error
+    if result <= 0 {
+        println("  PASS PASS: Invalid line handled gracefully");
+        true
+    } else {
+        println("  FAIL FAIL: Invalid line not rejected");
+        false
+    }
+}
+
+// ============================================================================
+// Test 9: Handle negative line numbers
+// ============================================================================
+
+fun test_negative_line_number() -> bool {
+    println("Test 9: Handle negative line numbers");
+
+    let result = map_source_to_target(-1);
+
+    if result <= 0 {
+        println("  PASS PASS: Negative line handled gracefully");
+        true
+    } else {
+        println("  FAIL FAIL: Negative line not rejected");
+        false
+    }
+}
+
+// ============================================================================
+// Test 10: Source map preserves filename
+// ============================================================================
+
+fun test_source_map_filename() -> bool {
+    println("Test 10: Source map preserves filename");
+
+    let filename = "my_program.ruchy".to_string();
+    let map = create_source_map(filename, 10);
+    let retrieved_filename = get_source_filename(map);
+
+    if retrieved_filename == "my_program.ruchy" {
+        println("  PASS PASS: Filename preserved");
+        true
+    } else {
+        println("  FAIL FAIL: Filename incorrect");
+        false
+    }
+}
+
+// ============================================================================
+// Property Test: Roundtrip mapping (simplified - 100 cases for RED phase)
+// ============================================================================
+
+fun test_property_roundtrip() -> bool {
+    println("Test 11: Property - Roundtrip mapping (100 test cases)");
+
+    let mut passed = 0;
+    let mut i = 1;
+
+    // Property: map_target_to_source(map_source_to_target(x)) = x
+    loop {
+        if i > 100 { break; }
+
+        let original_line = i;
+        let target_line = map_source_to_target(original_line);
+        let recovered_line = map_target_to_source(target_line);
+
+        if recovered_line == original_line {
+            passed = passed + 1;
+        }
+
+        i = i + 1;
+    }
+
+    if passed == 100 {
+        println("  PASS PASS: All 100 roundtrip cases passed");
+        true
+    } else {
+        println("  FAIL FAIL: {}/100 cases passed", passed);
+        false
+    }
+}
+
+// ============================================================================
+// Property Test: Monotonicity (line order preserved)
+// ============================================================================
+
+fun test_property_monotonicity() -> bool {
+    println("Test 12: Property - Monotonicity (50 test cases)");
+
+    let mut passed = 0;
+    let mut i = 1;
+
+    // Property: if source1 < source2, then target1 <= target2
+    loop {
+        if i > 50 { break; }
+
+        let line1 = i;
+        let line2 = i + 1;
+
+        let target1 = map_source_to_target(line1);
+        let target2 = map_source_to_target(line2);
+
+        if target2 >= target1 {
+            passed = passed + 1;
+        }
+
+        i = i + 1;
+    }
+
+    if passed == 50 {
+        println("  PASS PASS: All 50 monotonicity cases passed");
+        true
+    } else {
+        println("  FAIL FAIL: {}/50 cases passed", passed);
+        false
+    }
+}
+
+// ============================================================================
+// Test 13-20: Additional edge cases
+// ============================================================================
+
+fun test_empty_source() -> bool {
+    println("Test 13: Handle empty source code");
+
+    let source = "".to_string();
+    let map = generate_source_map_from_code(source);
+    let line_count = get_line_count(map);
+
+    // Empty source should have 0 lines
+    if line_count == 0 {
+        println("  PASS PASS: Empty source handled");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 0 lines, got {}", line_count);
+        false
+    }
+}
+
+fun test_single_line() -> bool {
+    println("Test 14: Single line source");
+
+    let source = "42".to_string();
+    let map = generate_source_map_from_code(source);
+    let line_count = get_line_count(map);
+
+    if line_count == 1 {
+        println("  PASS PASS: Single line source handled");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 1 line, got {}", line_count);
+        false
+    }
+}
+
+fun test_large_line_number() -> bool {
+    println("Test 15: Large line number (1000)");
+
+    let result = map_source_to_target(1000);
+
+    if result == 1000 {
+        println("  PASS PASS: Large line number handled");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 1000, got {}", result);
+        false
+    }
+}
+
+fun test_very_large_line_number() -> bool {
+    println("Test 16: Very large line number (1000000)");
+
+    let result = map_source_to_target(1000000);
+
+    if result == 1000000 {
+        println("  PASS PASS: Very large line number handled");
+        true
+    } else {
+        println("  FAIL FAIL: Expected 1000000, got {}", result);
+        false
+    }
+}
+
+fun test_source_map_consistency() -> bool {
+    println("Test 17: Source map consistency across multiple calls");
+
+    let map1 = generate_source_map_from_code("42".to_string());
+    let map2 = generate_source_map_from_code("42".to_string());
+
+    let count1 = get_line_count(map1);
+    let count2 = get_line_count(map2);
+
+    if count1 == count2 {
+        println("  PASS PASS: Source map generation is consistent");
+        true
+    } else {
+        println("  FAIL FAIL: Inconsistent source maps");
+        false
+    }
+}
+
+fun test_multiline_with_blanks() -> bool {
+    println("Test 18: Multi-line source with blank lines");
+
+    let source = "fun main() {\n\n    println(\"test\");\n\n}".to_string();
+    let map = generate_source_map_from_code(source);
+    let line_count = get_line_count(map);
+
+    // Should count blank lines too
+    if line_count >= 4 {
+        println("  PASS PASS: Blank lines handled");
+        true
+    } else {
+        println("  FAIL FAIL: Expected >=4 lines, got {}", line_count);
+        false
+    }
+}
+
+fun test_source_map_serialization() -> bool {
+    println("Test 19: Source map can be serialized to string");
+
+    let map = create_source_map("test.ruchy".to_string(), 10);
+    let serialized = serialize_source_map(map);
+
+    // Should produce some non-empty output
+    if serialized.len() > 0 {
+        println("  PASS PASS: Source map serialized");
+        true
+    } else {
+        println("  FAIL FAIL: Serialization produced empty string");
+        false
+    }
+}
+
+fun test_source_map_deserialization() -> bool {
+    println("Test 20: Source map can be deserialized from string");
+
+    let map = create_source_map("test.ruchy".to_string(), 10);
+    let serialized = serialize_source_map(map);
+    let deserialized = deserialize_source_map(serialized);
+
+    if verify_source_map(deserialized) {
+        println("  PASS PASS: Source map deserialized");
+        true
+    } else {
+        println("  FAIL FAIL: Deserialization failed");
+        false
+    }
+}
+
+// ============================================================================
+// Placeholder Functions (Will be implemented in GREEN phase)
+// ============================================================================
+
+fun create_source_map(filename: String, line_count: i64) -> i64 {
+    0
+}
+
+fun verify_source_map(map_id: i64) -> bool {
+    false
+}
+
+fun map_source_to_target(source_line: i64) -> i64 {
+    0
+}
+
+fun map_target_to_source(target_line: i64) -> i64 {
+    0
+}
+
+fun generate_source_map_from_code(source: String) -> i64 {
+    0
+}
+
+fun get_line_count(map_id: i64) -> i64 {
+    0
+}
+
+fun get_source_filename(map_id: i64) -> String {
+    "".to_string()
+}
+
+fun serialize_source_map(map_id: i64) -> String {
+    "".to_string()
+}
+
+fun deserialize_source_map(data: String) -> i64 {
+    0
+}
+
+// ============================================================================
+// Test Runner
+// ============================================================================
+
+fun main() {
+    println("----------------------------------------------------------------");
+    println("DEBUG-001: Source Map Generation - RED Phase (Vertical Slice 1)");
+    println("Scope: Line-number mapping only, single-file, 20+ tests");
+    println("----------------------------------------------------------------");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Core functionality tests (1-10)
+    if test_create_source_map() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_map_line_simple() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_map_multiple_lines() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_generate_for_expression() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_generate_for_function() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_generate_multiline() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_reverse_lookup() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_invalid_line_number() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_negative_line_number() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_source_map_filename() { passed = passed + 1; } else { failed = failed + 1; }
+
+    // Property tests (11-12)
+    if test_property_roundtrip() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_property_monotonicity() { passed = passed + 1; } else { failed = failed + 1; }
+
+    // Edge cases (13-20)
+    if test_empty_source() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_single_line() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_large_line_number() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_very_large_line_number() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_source_map_consistency() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_multiline_with_blanks() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_source_map_serialization() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_source_map_deserialization() { passed = passed + 1; } else { failed = failed + 1; }
+
+    println("");
+    println("----------------------------------------------------------------");
+    println(" Test Results (RED Phase)");
+    println("----------------------------------------------------------------");
+    println("PASS Passed: {}", passed);
+    println("FAIL Failed: {}", failed);
+    println(" Total:  {}", passed + failed);
+    println("");
+
+    if failed == 20 {
+        println("PASS RED PHASE COMPLETE: All 20 tests failing as expected!");
+        println("");
+        println("Next Steps:");
+        println("  1. Implement placeholder functions (GREEN phase)");
+        println("  2. Make tests pass one by one");
+        println("  3. Run Tier 2 quality gates");
+        println("  4. Document in book chapter");
+    } else if failed > 0 {
+        println("WARNING  UNEXPECTED: Some tests passing in RED phase!");
+        println("   RED phase should have all tests failing.");
+    } else {
+        println("FAIL ERROR: All tests passing - placeholder functions not stubbed correctly");
+    }
+
+    println("----------------------------------------------------------------");
+}
