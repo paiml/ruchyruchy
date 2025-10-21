@@ -1,0 +1,300 @@
+// DEBUGGER-002: Breakpoint Management - RED Phase (Phase 1/8 EXTREME TDD)
+//
+// Purpose: Write failing tests FIRST to specify breakpoint management behavior
+// Expected: ALL 10 tests should FAIL (no implementation exists yet)
+//
+// Test-Driven Development: RED → GREEN → REFACTOR
+// This is the RED phase - tests fail because implementation doesn't exist
+
+// Test 1: Create empty breakpoint manager
+fun test_create_breakpoint_manager() -> bool {
+    println("TEST 1: Create empty breakpoint manager")
+
+    let manager = breakpoint_manager_new()
+    let count = breakpoint_manager_count(manager)
+
+    if count == 0 {
+        println("  ✅ PASS: Empty manager has count 0")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 0, got {}", count)
+        false
+    }
+}
+
+// Test 2: Add breakpoint to manager
+fun test_add_breakpoint() -> bool {
+    println("TEST 2: Add breakpoint")
+
+    let manager = breakpoint_manager_new()
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let manager2 = breakpoint_manager_add(manager, bp)
+    let count = breakpoint_manager_count(manager2)
+
+    if count == 1 {
+        println("  ✅ PASS: Adding breakpoint increases count to 1")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 1, got {}", count)
+        false
+    }
+}
+
+// Test 3: Verify valid breakpoint
+fun test_verify_breakpoint() -> bool {
+    println("TEST 3: Verify valid breakpoint")
+
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let verified = breakpoint_set_verified(bp, true)
+    let is_valid = breakpoint_is_verified(verified)
+
+    if is_valid {
+        println("  ✅ PASS: Valid breakpoint is verified")
+        true
+    } else {
+        println("  ❌ FAIL: Breakpoint should be verified")
+        false
+    }
+}
+
+// Test 4: Reject invalid breakpoint (comment line)
+fun test_reject_comment_breakpoint() -> bool {
+    println("TEST 4: Reject comment breakpoint")
+
+    let bp = breakpoint_new("lexer.ruchy", 5)
+    let verified = breakpoint_set_verified(bp, false)
+    let is_valid = breakpoint_is_verified(verified)
+
+    if !is_valid {
+        println("  ✅ PASS: Comment line breakpoint rejected")
+        true
+    } else {
+        println("  ❌ FAIL: Comment breakpoint should be invalid")
+        false
+    }
+}
+
+// Test 5: Multiple breakpoints in one file
+fun test_multiple_breakpoints() -> bool {
+    println("TEST 5: Multiple breakpoints in one file")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("lexer.ruchy", 57)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let count = breakpoint_manager_count(manager3)
+
+    if count == 2 {
+        println("  ✅ PASS: Multiple breakpoints stored (count 2)")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 2, got {}", count)
+        false
+    }
+}
+
+// Test 6: Breakpoints in different files
+fun test_multiple_files() -> bool {
+    println("TEST 6: Breakpoints in different files")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("parser.ruchy", 100)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let count = breakpoint_manager_count(manager3)
+
+    if count == 2 {
+        println("  ✅ PASS: Breakpoints in different files (count 2)")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 2, got {}", count)
+        false
+    }
+}
+
+// Test 7: Remove breakpoint
+fun test_remove_breakpoint() -> bool {
+    println("TEST 7: Remove breakpoint")
+
+    let manager = breakpoint_manager_new()
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let manager2 = breakpoint_manager_add(manager, bp)
+    let manager3 = breakpoint_manager_remove(manager2, "lexer.ruchy", 42)
+    let count = breakpoint_manager_count(manager3)
+
+    if count == 0 {
+        println("  ✅ PASS: Removing breakpoint decreases count to 0")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 0, got {}", count)
+        false
+    }
+}
+
+// Test 8: Enable/disable breakpoint
+fun test_toggle_breakpoint() -> bool {
+    println("TEST 8: Enable/disable breakpoint")
+
+    let bp = breakpoint_new("lexer.ruchy", 42)
+    let bp_disabled = breakpoint_disable(bp)
+    let is_enabled = breakpoint_is_enabled(bp_disabled)
+
+    if !is_enabled {
+        println("  ✅ PASS: Breakpoint disabled successfully")
+        true
+    } else {
+        println("  ❌ FAIL: Breakpoint should be disabled")
+        false
+    }
+}
+
+// Test 9: Get breakpoints for specific file
+fun test_get_file_breakpoints() -> bool {
+    println("TEST 9: Get breakpoints for file")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("lexer.ruchy", 57)
+    let bp3 = breakpoint_new("parser.ruchy", 100)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let manager4 = breakpoint_manager_add(manager3, bp3)
+
+    let lexer_count = breakpoint_manager_get_file_count(manager4, "lexer.ruchy")
+
+    if lexer_count == 2 {
+        println("  ✅ PASS: Got 2 breakpoints for lexer.ruchy")
+        true
+    } else {
+        println("  ❌ FAIL: Expected 2 breakpoints, got {}", lexer_count)
+        false
+    }
+}
+
+// Test 10: Clear all breakpoints
+fun test_clear_all() -> bool {
+    println("TEST 10: Clear all breakpoints")
+
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("lexer.ruchy", 42)
+    let bp2 = breakpoint_new("parser.ruchy", 100)
+
+    let manager2 = breakpoint_manager_add(manager, bp1)
+    let manager3 = breakpoint_manager_add(manager2, bp2)
+    let manager4 = breakpoint_manager_clear_all(manager3)
+    let count = breakpoint_manager_count(manager4)
+
+    if count == 0 {
+        println("  ✅ PASS: Clear all results in count 0")
+        true
+    } else {
+        println("  ❌ FAIL: Expected count 0, got {}", count)
+        false
+    }
+}
+
+// Main test runner
+fun main() {
+    println("╔════════════════════════════════════════════════════════════╗")
+    println("║  DEBUGGER-002: Breakpoint Management - RED Phase          ║")
+    println("║  EXTREME TDD Phase 1/8: Write Failing Tests First         ║")
+    println("╚════════════════════════════════════════════════════════════╝")
+    println("")
+    println("Expected: ALL 10 tests should FAIL (no implementation yet)")
+    println("")
+
+    let mut passed = 0
+    let mut failed = 0
+
+    // Run all tests
+    if test_create_breakpoint_manager() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_add_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_verify_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_reject_comment_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_multiple_breakpoints() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_multiple_files() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_remove_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_toggle_breakpoint() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_get_file_breakpoints() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    if test_clear_all() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    println("")
+    println("════════════════════════════════════════════════════════════")
+    println("RED PHASE RESULTS:")
+    println("  Total Tests: 10")
+    println("  Passed: {}", passed)
+    println("  Failed: {}", failed)
+    println("")
+
+    if failed == 10 {
+        println("✅ RED PHASE SUCCESS: All 10 tests failing as expected!")
+        println("   (This is CORRECT for RED phase - tests should fail)")
+        println("")
+        println("Next Step: GREEN phase - implement minimal code to pass tests")
+    } else {
+        if passed == 10 {
+            println("❌ RED PHASE ERROR: All tests passing!")
+            println("   (This is WRONG for RED phase - tests should fail)")
+            println("   Implementation exists when it shouldn't!")
+        } else {
+            println("⚠️  RED PHASE PARTIAL: {} tests failing, {} passing", failed, passed)
+            println("   (Expected: all 10 failing)")
+        }
+    }
+
+    println("════════════════════════════════════════════════════════════")
+}
