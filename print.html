@@ -4507,23 +4507,33 @@ Failed: 0
 </ul>
 <h2 id="implementation-progress"><a class="header" href="#implementation-progress">Implementation Progress</a></h2>
 <h3 id="completed"><a class="header" href="#completed">Completed</a></h3>
-<p>None yet - starting with DEBUG-001 RED phase.</p>
-<h3 id="in-progress"><a class="header" href="#in-progress">In Progress</a></h3>
 <ul>
-<li><strong>DEBUG-001: Source Map Generation</strong> (Week 2-3)
+<li><strong>DEBUG-001: Source Map Generation</strong> (Weeks 1-3)
 <ul>
 <li>Status: GREEN Phase Complete ✅</li>
 <li>Tests: 20 tests (100% passing)</li>
 <li>Property Tests: 150 cases (100 roundtrip + 50 monotonicity)</li>
 <li>Implementation: 1:1 line mapping, minimal serialization</li>
 <li>File: <code>validation/debugging/test_source_maps.ruchy</code> (628 lines)</li>
-<li>Next: REFACTOR Phase - Improve while keeping tests green</li>
+<li>Next: REFACTOR Phase (deferred to post-MVP)</li>
+</ul>
+</li>
+</ul>
+<h3 id="in-progress"><a class="header" href="#in-progress">In Progress</a></h3>
+<ul>
+<li><strong>DEBUG-008-MINIMAL: Basic Record-Replay Engine</strong> (Weeks 5-8)
+<ul>
+<li>Status: RED Phase Complete ✅</li>
+<li>Tests: 20 tests (14 failing, 6 accidentally passing)</li>
+<li>Property Tests: 99 cases (50 roundtrip + 49 monotonicity)</li>
+<li>Scope: In-memory logging, &lt;1000 steps, naive replay</li>
+<li>File: <code>validation/debugging/test_record_replay.ruchy</code> (620+ lines)</li>
+<li>Next: GREEN Phase - Implement recording/replay engine</li>
 </ul>
 </li>
 </ul>
 <h3 id="planned"><a class="header" href="#planned">Planned</a></h3>
 <ul>
-<li>DEBUG-008-MINIMAL: Basic Record-Replay Engine (Weeks 5-8)</li>
 <li>DEBUG-003-MINIMAL: Basic DAP Server (Weeks 9-12)</li>
 </ul>
 <h2 id="references"><a class="header" href="#references">References</a></h2>
@@ -5145,6 +5155,242 @@ if ch == '\n' {
 <strong>File</strong>: <code>validation/debugging/test_source_maps.ruchy</code> (628 lines, 9 functions implemented)
 <strong>Tests</strong>: 20 unit tests + 2 property tests (150 total cases) - 100% pass rate
 <strong>Next</strong>: REFACTOR Phase - Improve implementation while keeping tests green</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="debug-008-minimal-basic-record-replay-engine-red-phase"><a class="header" href="#debug-008-minimal-basic-record-replay-engine-red-phase">DEBUG-008-MINIMAL: Basic Record-Replay Engine (RED Phase)</a></h1>
+<h2 id="context-14"><a class="header" href="#context-14">Context</a></h2>
+<p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 5-8)</strong></p>
+<p>The Record-Replay Engine is the <strong>killer feature</strong> of the debugging toolkit - it enables time-travel debugging with backward stepping. This is what makes RuchyRuchy's debugger special and generates developer excitement.</p>
+<p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
+<ul>
+<li>In-memory state logging only (no persistence)</li>
+<li>Small programs only (&lt;1000 steps)</li>
+<li>No optimization (record everything)</li>
+<li>Simple linked list of program states</li>
+<li>Naive replay (re-execute from beginning to target step)</li>
+</ul>
+<p><strong>Acceptance Criteria</strong>:</p>
+<ul>
+<li>✅ Can step backward through a 100-line program</li>
+<li>✅ Variable values are correct at each historical step</li>
+</ul>
+<h2 id="red-write-failing-tests-8"><a class="header" href="#red-write-failing-tests-8">RED: Write Failing Tests</a></h2>
+<p>Following Extreme TDD methodology, we write comprehensive tests FIRST, before any implementation exists.</p>
+<h3 id="test-file-1"><a class="header" href="#test-file-1">Test File</a></h3>
+<p><code>validation/debugging/test_record_replay.ruchy</code></p>
+<h3 id="test-coverage-20-tests-1"><a class="header" href="#test-coverage-20-tests-1">Test Coverage (20 Tests)</a></h3>
+<p><strong>Core Functionality</strong> (Tests 1-10):</p>
+<ol>
+<li>Create recording session</li>
+<li>Record single step</li>
+<li>Record multiple steps</li>
+<li>Get current step number</li>
+<li>Get total step count</li>
+<li>Replay to specific step (forward)</li>
+<li>Replay to specific step (backward)</li>
+<li>Get variable value at step</li>
+<li>Get line number at step</li>
+<li>Verify recording is immutable after replay</li>
+</ol>
+<p><strong>Property Tests</strong> (Tests 11-12):
+11. <strong>Roundtrip Property</strong> (50 cases): <code>replay(record(execution), step) = execution[step]</code>
+12. <strong>Monotonicity Property</strong> (49 cases): Step numbers increase monotonically</p>
+<p><strong>Edge Cases</strong> (Tests 13-20):
+13. Handle empty recording (no steps)
+14. Single step recording
+15. Record 1000 steps (limit test)
+16. Replay to step 0 (initial state)
+17. Replay beyond last step (error handling - clamp to max)
+18. Replay to negative step (error handling - clamp to 0)
+19. Multiple variables at same step
+20. Variable doesn't exist at step (return 0)</p>
+<h3 id="placeholder-functions-1"><a class="header" href="#placeholder-functions-1">Placeholder Functions</a></h3>
+<p>All functions return minimal placeholder values to ensure tests fail:</p>
+<pre><code class="language-ruchy">fun create_recording() -&gt; i64 {
+    0
+}
+
+fun verify_recording(recording_id: i64) -&gt; bool {
+    false
+}
+
+fun record_step(recording_id: i64, line: i64, var_name: String, value: i64) {
+    // No-op
+}
+
+fun record_step_with_var(var_name: String, value: i64) {
+    // No-op
+}
+
+fun get_step_count(recording_id: i64) -&gt; i64 {
+    0
+}
+
+fun get_current_step(recording_id: i64) -&gt; i64 {
+    0
+}
+
+fun replay_to_step(recording_id: i64, step: i64) {
+    // No-op
+}
+
+fun get_variable_value(recording_id: i64, var_name: String) -&gt; i64 {
+    0
+}
+
+fun get_line_number(recording_id: i64) -&gt; i64 {
+    0
+}
+</code></pre>
+<h3 id="test-execution-2"><a class="header" href="#test-execution-2">Test Execution</a></h3>
+<pre><code class="language-bash">$ ruchy run validation/debugging/test_record_replay.ruchy
+</code></pre>
+<p><strong>Expected Result</strong>: Most tests should fail because implementations don't exist yet.</p>
+<p><strong>Actual Result</strong>:</p>
+<pre><code>----------------------------------------------------------------
+DEBUG-008-MINIMAL: Record-Replay Engine - RED Phase
+Scope: In-memory logging, &lt;1000 steps, minimal implementation
+----------------------------------------------------------------
+
+Test 1: Create recording session
+  FAIL FAIL: Recording invalid
+Test 2: Record single step
+  FAIL FAIL: Expected 1 step, got 0
+Test 3: Record multiple steps
+  FAIL FAIL: Expected 3 steps, got 0
+Test 4: Get current step number
+  FAIL FAIL: Expected 2, got 0
+Test 5: Get total step count
+  FAIL FAIL: Expected 10, got 0
+Test 6: Replay to specific step (forward)
+  FAIL FAIL: Expected step 2, got 0
+Test 7: Replay to specific step (backward)
+  FAIL FAIL: Expected step 1, got 0
+Test 8: Get variable value at step
+  FAIL FAIL: Expected 200, got 0
+Test 9: Get line number at step
+  FAIL FAIL: Expected 20, got 0
+Test 10: Verify recording immutability
+  PASS PASS: Recording unchanged by replay
+Test 11: Property - Roundtrip correctness (50 cases)
+  FAIL FAIL: 0/50 cases passed
+Test 12: Property - Step monotonicity (49 cases)
+  PASS PASS: All 49 monotonicity cases passed
+Test 13: Handle empty recording
+  PASS PASS: Empty recording handled
+Test 14: Single step recording
+  FAIL FAIL: Wrong step count
+Test 15: Record 1000 steps (limit test)
+  FAIL FAIL: Expected 1000, got 0
+Test 16: Replay to step 0 (initial state)
+  PASS PASS: Replayed to initial state
+Test 17: Replay beyond last step
+  FAIL FAIL: Expected 2, got 0
+Test 18: Replay to negative step
+  PASS PASS: Clamped to 0
+Test 19: Multiple variables at same step
+  FAIL FAIL: Wrong x value
+Test 20: Variable doesn't exist at step
+  PASS PASS: Missing variable returns 0
+
+----------------------------------------------------------------
+ Test Results (RED Phase)
+----------------------------------------------------------------
+PASS Passed: 6
+FAIL Failed: 14
+ Total:  20
+</code></pre>
+<h3 id="analysis-1"><a class="header" href="#analysis-1">Analysis</a></h3>
+<p><strong>Tests Failing (14)</strong>: ✅ Core functionality not implemented</p>
+<ul>
+<li>Tests 1-9: Basic recording/replay operations</li>
+<li>Test 11: Roundtrip property</li>
+<li>Tests 14-15, 17, 19: Various edge cases</li>
+</ul>
+<p><strong>Tests Passing (6)</strong>: ⚠️ Accidental passes due to placeholder values</p>
+<ul>
+<li>Test 10: Immutability passes because both calls return 0</li>
+<li>Test 12: Monotonicity passes because 0 &gt;= 0 for all cases</li>
+<li>Test 13: Empty recording expects 0 steps, placeholder returns 0</li>
+<li>Test 16: Replay to 0 expects current step = 0, placeholder returns 0</li>
+<li>Test 18: Negative step handled (clamps to 0), placeholder returns 0</li>
+<li>Test 20: Missing variable expects 0, placeholder returns 0</li>
+</ul>
+<p><strong>Verdict</strong>: <strong>RED Phase Successful</strong> - Core functionality tests are failing, ready for GREEN phase implementation.</p>
+<h2 id="implementation-design-for-green-phase"><a class="header" href="#implementation-design-for-green-phase">Implementation Design (for GREEN Phase)</a></h2>
+<h3 id="data-structures"><a class="header" href="#data-structures">Data Structures</a></h3>
+<p><strong>Step State</strong>:</p>
+<pre><code class="language-ruchy">struct StepState {
+    step_number: i64,
+    line_number: i64,
+    variables: Vec&lt;Variable&gt;,
+}
+
+struct Variable {
+    name: String,
+    value: i64,
+}
+</code></pre>
+<p><strong>Recording Session</strong>:</p>
+<pre><code class="language-ruchy">struct Recording {
+    steps: Vec&lt;StepState&gt;,
+    current_step: i64,
+    valid: bool,
+}
+</code></pre>
+<h3 id="minimal-implementation-strategy"><a class="header" href="#minimal-implementation-strategy">Minimal Implementation Strategy</a></h3>
+<ol>
+<li><strong>Storage</strong>: Simple vector/array of <code>StepState</code> (up to 1000 steps)</li>
+<li><strong>Recording</strong>: Append new state to vector on each step</li>
+<li><strong>Replay</strong>: Set <code>current_step</code> index, return state at that index</li>
+<li><strong>Naive approach</strong>: No delta compression, record full state each time</li>
+</ol>
+<h3 id="key-design-decisions"><a class="header" href="#key-design-decisions">Key Design Decisions</a></h3>
+<p><strong>Why use i64 for recording_id?</strong></p>
+<ul>
+<li>Following same pattern as DEBUG-001 (encode metadata in return value)</li>
+<li>For Vertical Slice 1, we can encode step count in the ID</li>
+<li>Real implementation will use HashMap/proper storage</li>
+</ul>
+<p><strong>Why record full state each time?</strong></p>
+<ul>
+<li>Simplest implementation (Vertical Slice 1 philosophy)</li>
+<li>No need for delta compression for &lt;1000 steps</li>
+<li>Optimization deferred to REFACTOR phase</li>
+</ul>
+<p><strong>Why only i64 variable values?</strong></p>
+<ul>
+<li>Minimal scope for Vertical Slice 1</li>
+<li>Strings, booleans, structs can be added later</li>
+<li>Proves the concept works</li>
+</ul>
+<h2 id="next-steps-13"><a class="header" href="#next-steps-13">Next Steps</a></h2>
+<p><strong>GREEN Phase</strong> (Week 7):</p>
+<ol>
+<li>Implement <code>Recording</code> struct with Vec<StepState></li>
+<li>Implement <code>record_step</code> - append to vector</li>
+<li>Implement <code>replay_to_step</code> - set current_step index</li>
+<li>Implement <code>get_variable_value</code> - lookup in current step's variables</li>
+<li>Implement helper functions (get_step_count, get_line_number, etc.)</li>
+</ol>
+<p><strong>Target</strong>: Get all 20 tests passing with minimal implementation.</p>
+<p><strong>REFACTOR Phase</strong> (Week 7):</p>
+<ol>
+<li>Optimize storage if needed</li>
+<li>Add delta compression (if performance requires it)</li>
+<li>Improve error handling</li>
+<li>Keep all 20 tests passing throughout refactoring</li>
+</ol>
+<p><strong>VERIFY Phase</strong> (Week 8):</p>
+<ol>
+<li>Integration test: Record a 100-line program</li>
+<li>Step backward through entire execution</li>
+<li>Verify variable values at each step</li>
+<li>Property testing with 10K+ cases</li>
+<li>Differential testing vs GDB's reverse debugging</li>
+</ol>
+<hr />
+<p><strong>Status</strong>: ✅ RED Phase Complete - 14 tests failing as expected
+<strong>File</strong>: <code>validation/debugging/test_record_replay.ruchy</code> (620+ lines, 20 tests)
+<strong>Next</strong>: GREEN Phase - Implement record/replay engine</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="runtime-enhancements-discovered"><a class="header" href="#runtime-enhancements-discovered">Runtime Enhancements Discovered</a></h1>
 <p>This page documents runtime enhancements discovered through dogfooding and the Bug Discovery Protocol.</p>
 <h2 id="v3930-enum-tuple-variant-pattern-matching"><a class="header" href="#v3930-enum-tuple-variant-pattern-matching">v3.93.0: Enum Tuple Variant Pattern Matching</a></h2>
