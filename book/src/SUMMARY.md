@@ -62,6 +62,7 @@
   - [DEBUG-008: Record-Replay Engine (RED Phase)](./debugging/debug-008-record-replay-red.md)
   - [DEBUG-008: Record-Replay Engine (GREEN Phase)](./debugging/debug-008-record-replay-green.md)
   - [DEBUG-INTEGRATION: Production Integration Success](./debugging/debug-integration-success.md)
+  - [DEBUGGER-001: DAP Server Skeleton](./phase4_debugger/debugger-001-dap-server-skeleton.md)
 
 # Discoveries
 
