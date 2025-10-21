@@ -25,6 +25,18 @@ Educational Stages:
 
 ## 🚀 Quick Start
 
+### Install via Cargo (Recommended)
+
+```bash
+# Install the debugging toolkit
+cargo install ruchyruchy
+
+# Validate debugging tools
+ruchydbg validate
+```
+
+### Install from Source
+
 ```bash
 # Install the production Ruchy compiler (required)
 cargo install ruchy
@@ -33,8 +45,12 @@ cargo install ruchy
 git clone https://github.com/pragmatic-ai-labs/ruchyruchy.git
 cd ruchyruchy
 
+# Build and install
+cargo build --release
+cargo install --path .
+
 # Explore educational examples
-make stage0-demo      # Learn tokenization  
+make stage0-demo      # Learn tokenization
 make performance-demo # See code generation benchmarks
 make concepts-demo    # Understand bootstrap principles
 ```
@@ -85,10 +101,18 @@ ruchyruchy/
 4. **Architecture Patterns**: Real examples of compiler pipeline design
 
 ### 🛠️ Infrastructure Tools
-1. **Ruchy→Rust Code Generator**: Working tool for transpilation
-2. **Performance Benchmarks**: Validation of code generation speeds
-3. **Development Examples**: Templates for ecosystem development
-4. **Integration Testing**: Tools for validating compilation pipelines
+1. **Debugging Toolkit**: Source map generation, time-travel debugging infrastructure
+2. **Ruchy→Rust Code Generator**: Working tool for transpilation
+3. **Performance Benchmarks**: Validation of code generation speeds
+4. **Development Examples**: Templates for ecosystem development
+5. **Integration Testing**: Tools for validating compilation pipelines
+
+### 🔍 Debugging Tools (Phase 1 Complete)
+- **Source Map Generation**: Line-number mapping for debugging (DEBUG-001)
+- **Record-Replay Engine**: Time-travel debugging proof of concept (DEBUG-008)
+- **CLI Validation Tool**: Fast-feedback debugging validation (`ruchydbg`)
+- **Pre-commit Integration**: Continuous validation in production workflow
+- **Performance**: 0.013s validation (461x faster than target!)
 
 ### 📊 Validated Performance
 - **Code Generation**: 24,082,232 LOC/s measured throughput
