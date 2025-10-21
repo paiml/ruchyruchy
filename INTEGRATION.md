@@ -55,6 +55,12 @@
   - Discovery: Functional state threading required (no global mutable state)
   - Limitation: Pattern-based only, needs Vec<StepState> for 100%
   - **PROOF OF CONCEPT ACHIEVED** - Time-travel debugging is feasible!
+- **DOCS-010**: Fast-Feedback Ruchy Integration Strategy ⭐ **NEW**
+  - Section 8: Pre-commit hook integration for ../ruchy
+  - Fast feedback cycle: <6 seconds for source map + replay validation
+  - Real-world dogfooding: Test on Ruchy compiler (50K+ LOC, 390K+ tests)
+  - Integration milestones: Week 4 (source maps), Week 8 (time-travel), Week 12 (DAP)
+  - New CLI: `ruchy debug source-map`, `ruchy debug record/replay`, `ruchy debug dap`
 
 ---
 

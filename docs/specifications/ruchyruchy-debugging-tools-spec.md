@@ -38,8 +38,9 @@ This specification defines a **world-class debugging toolkit** for the Ruchy pro
 5. [Feature Specifications](#5-feature-specifications)
 6. [Quality Assurance Framework](#6-quality-assurance-framework)
 7. [Implementation Roadmap](#7-implementation-roadmap)
-8. [Formal Verification Requirements](#8-formal-verification-requirements)
-9. [References](#9-references)
+8. [**Fast-Feedback Ruchy Integration**](#8-fast-feedback-ruchy-integration) ⭐ **NEW**
+9. [Formal Verification Requirements](#9-formal-verification-requirements)
+10. [References](#10-references)
 
 ---
 
@@ -1606,9 +1607,259 @@ $ ruchydbg my_program.ruchy
 
 ---
 
-## 8. Formal Verification Requirements
+## 8. Fast-Feedback Ruchy Integration
 
-### 8.1 Theorem Proving (Coq)
+### 8.1 Philosophy: Dogfooding for Rapid Validation
+
+**Critical Insight**: The fastest way to validate debugging tools is to **use them immediately** in the Ruchy compiler itself.
+
+**Integration Strategy**:
+1. **Embed debugging tools into `../ruchy` pre-commit hooks**
+2. **Fast feedback cycle**: <5 seconds for source map validation
+3. **Real-world validation**: Test on Ruchy compiler codebase (50K+ LOC)
+4. **Continuous dogfooding**: Every Ruchy commit validates our tools
+
+**Value Proposition**:
+- ✅ Immediate real-world testing (no synthetic test cases)
+- ✅ Fast iteration (catch bugs in minutes, not weeks)
+- ✅ Production validation (if it works on Ruchy, it works anywhere)
+- ✅ Developer enthusiasm (see tools working immediately)
+
+### 8.2 Pre-Commit Hook Integration
+
+**Location**: `../ruchy/.git/hooks/pre-commit`
+
+**Hook Responsibilities**:
+```bash
+#!/bin/bash
+# Ruchy Pre-Commit Hook with Debugging Tools Integration
+
+# 1. Source Map Validation (DEBUG-001)
+#    - Generate source maps for all .ruchy files
+#    - Verify line number mappings are correct
+#    - Validate breakpoint accuracy (±1 line tolerance)
+#    - Runtime: <2 seconds for 100 files
+
+echo "🗺️  Validating source maps..."
+ruchydbg validate-maps --fast src/**/*.ruchy
+if [ $? -ne 0 ]; then
+    echo "❌ Source map validation failed"
+    exit 1
+fi
+
+# 2. Record-Replay Smoke Test (DEBUG-008)
+#    - Record execution of simple test case
+#    - Replay and verify correctness
+#    - Ensure backward stepping works
+#    - Runtime: <3 seconds
+
+echo "⏮️  Testing time-travel debugging..."
+ruchydbg test-replay --smoke tests/integration/simple.ruchy
+if [ $? -ne 0 ]; then
+    echo "❌ Record-replay test failed"
+    exit 1
+fi
+
+# 3. Performance Regression Check
+#    - Ensure tools don't add >10% overhead
+#    - Benchmark critical paths
+#    - Runtime: <1 second
+
+echo "⚡ Performance regression check..."
+ruchydbg benchmark --threshold 1.10
+if [ $? -ne 0 ]; then
+    echo "⚠️  Performance regression detected (>10% overhead)"
+    # Non-blocking warning for now
+fi
+
+echo "✅ All debugging tool validations passed!"
+```
+
+### 8.3 Ruchy CLI Integration
+
+**New Subcommands** (added to `ruchy` binary):
+
+```bash
+# Source Map Commands
+ruchy debug source-map <file.ruchy>        # Generate source map
+ruchy debug validate-maps <pattern>        # Validate all source maps
+ruchy debug show-mapping <file>:<line>     # Show source→target mapping
+
+# Record-Replay Commands
+ruchy debug record <file.ruchy>            # Record execution
+ruchy debug replay <recording>             # Replay recording
+ruchy debug step-back <recording>          # Step backward
+ruchy debug test-replay --smoke <file>     # Smoke test
+
+# Performance Commands
+ruchy debug benchmark                      # Benchmark tools
+ruchy debug overhead                       # Measure overhead
+
+# DAP Server (future)
+ruchy debug dap --port 8080               # Start DAP server
+```
+
+**Implementation Path**:
+1. Week 1-2: Add `ruchy debug source-map` command
+2. Week 3-4: Add `ruchy debug validate-maps` for pre-commit
+3. Week 5-8: Add record-replay commands
+4. Week 9-12: Add DAP server integration
+
+### 8.4 Fast Feedback Cycle
+
+**Development Loop** (Developer Experience):
+
+```bash
+# 1. Developer makes changes to Ruchy compiler
+$ vim src/compiler/typechecker.ruchy
+
+# 2. Commit triggers pre-commit hook
+$ git commit -m "Fix type inference bug"
+
+🗺️  Validating source maps...
+   ✅ src/compiler/typechecker.ruchy (342 lines, 342 mappings)
+   ✅ All mappings within ±1 line tolerance
+
+⏮️  Testing time-travel debugging...
+   ✅ Recording: 1247 steps
+   ✅ Replay: All steps match
+   ✅ Backward stepping: Functional
+
+⚡ Performance regression check...
+   ✅ Overhead: 3.2% (within 10% threshold)
+
+✅ All debugging tool validations passed!
+
+[main 3a2f9b1] Fix type inference bug
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+# 3. Tools validated in <5 seconds!
+```
+
+**Feedback Metrics**:
+- ⚡ Source map validation: <2 seconds
+- ⏮️  Record-replay smoke test: <3 seconds
+- 📊 Performance check: <1 second
+- **Total**: <6 seconds (acceptable pre-commit time)
+
+### 8.5 Real-World Validation Targets
+
+**Ruchy Codebase Statistics**:
+- 📁 Files: ~200 .ruchy files
+- 📏 LOC: ~50,000 lines
+- 🧪 Tests: 390,156+ tests
+- 🎯 Complexity: Real-world compiler (lexer, parser, typechecker, codegen)
+
+**Validation Strategy**:
+
+**Phase 1: Source Maps (DEBUG-001)**:
+- ✅ Validate line mappings for all Ruchy compiler files
+- ✅ Test breakpoint accuracy on real code
+- ✅ Measure overhead (<5% target)
+- 📍 Target: Week 3-4 integration
+
+**Phase 2: Record-Replay (DEBUG-008)**:
+- ✅ Record Ruchy compiling itself (self-compilation)
+- ✅ Replay and verify correctness
+- ✅ Test backward stepping through type inference
+- 📍 Target: Week 7-8 integration
+
+**Phase 3: DAP Server (DEBUG-003)**:
+- ✅ Debug Ruchy compiler with VS Code
+- ✅ Set breakpoints in actual compiler code
+- ✅ Step backward through compilation
+- 📍 Target: Week 11-12 integration
+
+### 8.6 Integration Milestones
+
+**Milestone 1: Source Map Dogfooding (Week 4)**
+```bash
+# Goal: Source maps working on real Ruchy code
+$ ruchy debug source-map src/compiler/parser.ruchy
+✅ Generated source map: 847 lines, 847 mappings
+✅ Breakpoint accuracy: 100% (±1 line)
+✅ Integration test: PASSED
+
+# Pre-commit hook activated
+$ git commit
+🗺️  Validating source maps... ✅
+```
+
+**Milestone 2: Time-Travel Dogfooding (Week 8)**
+```bash
+# Goal: Backward stepping through Ruchy compiler
+$ ruchy debug record src/compiler/typechecker.ruchy
+✅ Recorded 12,847 steps
+✅ Memory: 45 MB
+✅ Overhead: 8.2%
+
+$ ruchy debug step-back recording.rdb
+✅ Stepped back 100 steps
+✅ Variable values correct at all steps
+```
+
+**Milestone 3: Full Stack Dogfooding (Week 12)**
+```bash
+# Goal: Debug Ruchy compiler in VS Code with time-travel
+$ ruchy debug dap --port 8080 &
+$ code --debug-port 8080 src/compiler/
+
+# In VS Code:
+# - Set breakpoint at line 342
+# - Run compiler
+# - Hit breakpoint
+# - Step backward to see how we got here
+# - Inspect variable history
+# ✅ Full time-travel debugging working!
+```
+
+### 8.7 Benefits of Fast Integration
+
+**1. Real-World Validation**:
+- ✅ Test on actual compiler code (not toy examples)
+- ✅ Discover edge cases immediately
+- ✅ Validate performance on realistic workloads
+
+**2. Fast Feedback**:
+- ✅ <6 second pre-commit validation
+- ✅ Catch regressions before they merge
+- ✅ Continuous validation on every commit
+
+**3. Developer Enthusiasm**:
+- ✅ See tools working immediately
+- ✅ Use own tools while building them (dogfooding)
+- ✅ Generate excitement and adoption
+
+**4. Production Readiness**:
+- ✅ If it works on Ruchy, it works anywhere
+- ✅ Battle-tested on real codebase
+- ✅ Proven at scale (50K+ LOC)
+
+### 8.8 Implementation Priority
+
+**Immediate (Week 3-4)**:
+1. Add `ruchy debug source-map` command to `../ruchy`
+2. Implement fast source map validation (<2s)
+3. Add pre-commit hook to `../ruchy/.git/hooks/pre-commit`
+4. Test on Ruchy compiler codebase
+
+**Near-term (Week 7-8)**:
+1. Add `ruchy debug record/replay` commands
+2. Implement smoke test (<3s)
+3. Update pre-commit hook with replay validation
+4. Dogfood on self-compilation
+
+**Medium-term (Week 11-12)**:
+1. Add `ruchy debug dap` server
+2. VS Code integration
+3. Full time-travel debugging demo
+4. Production release
+
+---
+
+## 9. Formal Verification Requirements
+
+### 9.1 Theorem Proving (Coq)
 
 **Required Proofs**:
 
@@ -1638,7 +1889,7 @@ Theorem type_preservation:
     well_typed (eval expr state) state.
 ```
 
-### 8.2 Model Checking
+### 9.2 Model Checking
 
 **Properties to Verify**:
 
@@ -1652,7 +1903,7 @@ Theorem type_preservation:
 
 **Tool**: TLA+ or SPIN model checker
 
-### 8.3 Refinement Verification
+### 9.3 Refinement Verification
 
 **Specification-Implementation Refinement**:
 - Prove implementation refines specification
@@ -1661,9 +1912,9 @@ Theorem type_preservation:
 
 ---
 
-## 9. References
+## 10. References
 
-### 9.1 Live Programming and Interactive Development
+### 10.1 Live Programming and Interactive Development
 
 1. Tanimoto, S. L. (1990). *VIVA: a visual language for image processing*. Journal of Visual Languages & Computing, 1(2), 127-139.
 
@@ -1675,7 +1926,7 @@ Theorem type_preservation:
 
 5. Ingalls, D., Kaehler, T., Maloney, J., Wallace, S., & Kay, A. (1997). *Back to the future: The story of Squeak, a practical Smalltalk written in itself*. SIGPLAN Not., 32(10), 318-326.
 
-### 9.2 Program Comprehension and Debugging
+### 10.2 Program Comprehension and Debugging
 
 6. Ko, A. J., & Myers, B. A. (2004). *Designing the whyline: a debugging interface for asking questions about program behavior*. Proceedings of the SIGCHI conference on Human factors in computing systems, 151-158.
 
@@ -1687,7 +1938,7 @@ Theorem type_preservation:
 
 10. Cleve, H., & Zeller, A. (2005). *Locating causes of program failures*. Proceedings of the 27th international conference on Software engineering, 342-351.
 
-### 9.3 Omniscient Debugging and Time-Travel
+### 10.3 Omniscient Debugging and Time-Travel
 
 11. Pothier, G., & Tanter, É. (2009). *Back-in-time debugging for object-oriented languages*. Proceedings of the 23rd European conference on Object-oriented programming, 242-266.
 
@@ -1697,7 +1948,7 @@ Theorem type_preservation:
 
 14. Biland, P., & Zeller, A. (2013). *GDB-RR: recording and replaying programs for reverse debugging*. Proceedings of the 9th international conference on Predictive models in software engineering, 1-10.
 
-### 9.4 Program Slicing
+### 10.4 Program Slicing
 
 15. Weiser, M. (1981). *Program slicing*. Proceedings of the 5th international conference on Software engineering, 439-449.
 
@@ -1707,7 +1958,7 @@ Theorem type_preservation:
 
 18. Ball, T., & Horwitz, S. (1993). *Slicing programs with arbitrary control-flow*. Proceedings of the 1st international workshop on Automated and algorithmic debugging, 206-222.
 
-### 9.5 Software Visualization
+### 10.5 Software Visualization
 
 19. Stasko, J. T., & Myers, B. A. (1993). *A framework for the study of software visualization*. Journal of Visual Languages & Computing, 4(3), 321-343.
 
@@ -1715,7 +1966,7 @@ Theorem type_preservation:
 
 21. Reiss, S. P. (2005). *The paradox of software visualization*. Proceedings of the 3rd IEEE International Workshop on Visualizing Software for Understanding and Analysis, 1-5.
 
-### 9.6 Formal Methods and Type Systems
+### 10.6 Formal Methods and Type Systems
 
 22. Jung, R., Jourdan, J. A., Krebbers, R., & Dreyer, D. (2018). *RustBelt: securing the foundations of the Rust programming language*. Proc. ACM Program. Lang., 2(POPL), 1-34.
 
@@ -1725,7 +1976,7 @@ Theorem type_preservation:
 
 25. Chugh, R., Meister, B., & Jhala, R. (2015). *Staged static analysis*. Proceedings of the 36th ACM SIGPLAN Conference on Programming Language Design and Implementation, 590-601.
 
-### 9.7 Testing and Verification
+### 10.7 Testing and Verification
 
 26. Claessen, K., & Hughes, J. (2000). *QuickCheck: a lightweight tool for random testing of Haskell programs*. Proceedings of the fifth ACM SIGPLAN international conference on Functional programming, 268-279.
 
@@ -1737,7 +1988,7 @@ Theorem type_preservation:
 
 30. Godefroid, P., Levin, M. Y., & Molnar, D. (2008). *Automated whitebox fuzz testing*. NDSS, 8, 151-166.
 
-### 9.8 NASA Software Engineering
+### 10.8 NASA Software Engineering
 
 31. NASA. (2013). *NASA Software Engineering Requirements (NPR 7150.2D)*. NASA Technical Reports Server.
 
@@ -1749,7 +2000,7 @@ Theorem type_preservation:
 
 35. Knight, J. C., & Leveson, N. G. (1986). *An experimental evaluation of the assumption of independence in multiversion programming*. IEEE Transactions on Software Engineering, 1(1), 96-109.
 
-### 9.9 Modern Debugging Research (2020-2025)
+### 10.9 Modern Debugging Research (2020-2025)
 
 36. Tao, Y., Kim, J., Sun, S., & Kim, M. (2021). *Interactive program debugging through contextual retrieval of stack overflow posts*. Proceedings of the 2021 CHI Conference on Human Factors in Computing Systems, 1-13.
 
@@ -1761,7 +2012,7 @@ Theorem type_preservation:
 
 40. Pradel, M., & Sen, K. (2018). *DeepBugs: A learning approach to name-based bug detection*. Proceedings of the ACM on Programming Languages, 2(OOPSLA), 147.
 
-### 9.10 Software Engineering Process and DevEx
+### 10.10 Software Engineering Process and DevEx
 
 41. Humble, J., & Farley, D. (2010). *Continuous Delivery: Reliable Software Releases through Build, Test, and Automation*. Addison-Wesley.
 
@@ -1773,7 +2024,7 @@ Theorem type_preservation:
 
 45. Fagan, M. E. (1976). *Design and code inspections to reduce errors in program development*. IBM Systems Journal, 15(3), 182-211.
 
-### 9.11 Systematic Validation and Anti-Fraud Testing
+### 10.11 Systematic Validation and Anti-Fraud Testing
 
 46. Ruchy Project. (2025). *Systematic Validation Framework*. ../ruchy/docs/testing/SYSTEMATIC-VALIDATION-FRAMEWORK.md. Three-layer validation: 29 systematic tests, 20 interactive tests, integration testing for all tools on single program. **Key inspiration for anti-fraud measures.**
 
