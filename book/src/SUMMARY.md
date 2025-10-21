@@ -5,8 +5,10 @@
 # Phase 2: Validation & Robustness
 
 - [Validation Framework](./phase2_validation/chapter.md)
+  - [VALID-002: End-to-End Pipeline Validation](./phase2_validation/tickets/valid-002-end-to-end-pipeline.md)
   - [VALID-003: Property-Based Testing Framework](./phase2_validation/tickets/valid-003-property-testing.md)
   - [VALID-003-EXTENDED: Enhanced Property Testing](./phase2_validation/tickets/valid-003-extended-enhanced-testing.md)
+  - [VALID-004: Fuzz Testing Execution](./phase2_validation/tickets/valid-004-fuzz-testing-execution.md)
 
 # Phase 3: Bootstrap Compiler
 
