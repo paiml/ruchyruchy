@@ -914,8 +914,88 @@ Action Required:
 
 #### 6.0.3 Systematic Validation Test Matrix
 
-| Tool | Smoke Test | Error Handling | Integration | Differential | Consensus |
-|------|------------|----------------|-------------|--------------|-----------|
+**CRITICAL**: All 23 tools (15 existing Ruchy + 8 new debugging) must validate. If foundation tools are broken, debugging tools will be broken.
+
+**Example fraud chain**: `ruchy ast` (broken) → wrong AST → source maps (wrong lines) → DAP (breakpoint at wrong line) → **developer debugs WRONG CODE**.
+
+---
+
+**Foundation Layer (15 Existing Ruchy Tools)** - MUST validate before debugging tools work:
+
+| Tool | Smoke | Error | Integration | Fraud Risk |
+|------|-------|-------|-------------|------------|
+| `ruchy check` | ✅ | ✅ | ✅ | False positives block valid code from debugging |
+| `ruchy ast` | ✅ | ✅ | ✅ | Wrong AST → wrong source maps → wrong breakpoints |
+| `ruchy lint` | ✅ | ✅ | ✅ | False failures block debugging tool commits |
+| `ruchy test` | ✅ | ✅ | ✅ | Reports PASS when assertions fail (BUG-037) |
+| `ruchy run` | ✅ | ✅ | ✅ | Debugger debugs different program than `run` executes |
+| `ruchy eval` | ✅ | ✅ | ✅ | REPL evaluates differently than runtime |
+| `ruchy compile` | ✅ | ✅ | ✅ | Debugger shows different code than compiler generates |
+| `ruchy transpile` | ✅ | ✅ | ✅ | Source maps point to code that doesn't exist |
+| `ruchy coverage` | ✅ | ✅ | ✅ | False coverage metrics, missed code paths |
+| `ruchy notebook` | ✅ | ✅ | ✅ | Notebook runs different code than debugger sees |
+| `ruchy mutations` | ✅ | ✅ | ✅ | False 100% score, tests don't catch bugs |
+
+---
+
+**🌟 SHOWCASE TOOLS** - Ruchy's Unique Differentiators (EXTRA VALIDATION):
+
+**`ruchy wasm`** - WebAssembly Compilation:
+- **Why Unique**: Pure Ruchy → WASM pipeline (self-hosted compilation to web)
+- **Fraud Risk**: Different behavior in WASM vs native, debugging shows wrong execution
+- **Validation**:
+  - Differential: Compare WASM execution vs native execution (must match!)
+  - Cross-browser: Chrome, Firefox, Safari (all must produce identical results)
+  - Debugger integration: Source maps work in browser DevTools
+- **Special Test**: `test_debug_wasm_matches_native()` - same program, same results in WASM and native
+- **Anti-Fraud**: If native debugger shows `x=42` but WASM debugger shows `x=0`, **BLOCK RELEASE**
+
+**`ruchy score`** - PMAT Quality Analysis:
+- **Why Unique**: Unified quality score (complexity, SATD, entropy, TDG) - no other language has this
+- **Fraud Risk**: False quality scores, broken code passes gates
+- **Validation**:
+  - Known bad code: Must score <50
+  - Known excellent code: Must score >90
+  - Quality gate enforcement: Broken code with score=100 is fraud
+- **Special Test**: `test_score_catches_known_bad_code()` - intentionally bad code must fail
+- **Anti-Fraud**: If quality score says "A+" but code has 10 SATD comments, **FRAUD DETECTED**
+
+**`ruchy prove`** - Property-Based Testing & Formal Verification:
+- **Why Unique**: Built-in property testing with formal proof capabilities (combines QuickCheck + Coq)
+- **Fraud Risk**: Properties falsely pass, no actual verification, false mathematical proofs
+- **Validation**:
+  - Known-false property: Must fail (e.g., `∀ x: x + 1 = x` must FAIL)
+  - Known-true property: Must pass (e.g., `∀ x: x + 0 = x` must PASS)
+  - Differential: Compare with standalone QuickCheck/PropTest
+- **Special Test**: `test_prove_rejects_false_properties()` - false claims must be caught
+- **Anti-Fraud**: If `prove` says "property holds ✓" but property is mathematically false, **FRAUD DETECTED**
+
+**`ruchy mcp`** - Model Context Protocol (MCP) Server:
+- **Why Unique**: AI-native debugging (LLM integration for code understanding)
+- **Fraud Risk**: MCP returns wrong code context, AI gets misleading information
+- **Validation**:
+  - Context accuracy: MCP must return correct symbol definitions
+  - Differential: MCP context vs actual AST (must match!)
+  - AI integration: LLM answers using MCP must align with actual code behavior
+- **Special Test**: `test_mcp_context_matches_ast()` - MCP and AST must agree on symbols
+- **Anti-Fraud**: If MCP says "function foo returns int" but AST says "returns string", **FRAUD DETECTED**
+
+**`ruchy runtime`** - Performance & Complexity Analysis:
+- **Why Unique**: BigO analysis + runtime profiling combined (provable complexity bounds)
+- **Fraud Risk**: Wrong complexity analysis, false performance data, misleading hotspots
+- **Validation**:
+  - Known O(n²) algorithm: Must detect quadratic complexity
+  - Profiling accuracy: ±5% tolerance vs manual instrumentation
+  - Differential: Compare with perf, valgrind, flamegraph
+- **Special Test**: `test_runtime_detects_complexity_correctly()` - O(n²) must not report as O(n)
+- **Anti-Fraud**: If profiler says "0% time in loop" but 99% of time is in loop, **FRAUD DETECTED**
+
+---
+
+**Debugging Layer (8 New Tools)** - Built on validated foundation:
+
+| Tool | Smoke | Error | Integration | Differential | Consensus |
+|------|-------|-------|-------------|--------------|-----------|
 | Source Maps | ✅ | ✅ | ✅ | vs Chrome DevTools | N/A |
 | DAP Server | ✅ | ✅ | ✅ | vs GDB/LLDB | With Time-Travel |
 | Time-Travel | ✅ | ✅ | ✅ | vs rr/gdb-replay | With Slicing |
@@ -925,11 +1005,23 @@ Action Required:
 | Data Rendering | ✅ | ✅ | ✅ | Visual inspection | N/A |
 | Ownership Viz | ✅ | ✅ | ✅ | vs rustc borrow checker | N/A |
 
-**Total Systematic Tests**: 40+ (5 categories × 8 tools = 40 minimum)
+---
 
-**Runtime**: ~30 seconds (optimized for fast feedback)
+**Total Systematic Tests**:
+- Foundation: 15 tools × 3 categories = 45 tests
+- Showcase: 5 tools × 5 categories = 25 tests (extra validation)
+- Debugging: 8 tools × 5 categories = 40 tests
+- **Grand Total**: **110+ systematic tests minimum**
 
-**CI Integration**: Runs on every commit (Tier 2 quality gate)
+**Runtime**:
+- Tier 2 (quick): ~60 seconds (smoke + error + integration)
+- Tier 3 (full): ~10 minutes (differential + consensus + showcase validation)
+
+**CI Integration**:
+- Tier 2: Every commit (blocks broken PRs)
+- Tier 3: Nightly builds (comprehensive validation)
+
+**Enforcement**: ANY tool failure → **BLOCK RELEASE** (zero tolerance)
 
 ---
 
