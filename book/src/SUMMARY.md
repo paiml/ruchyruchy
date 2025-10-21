@@ -39,3 +39,4 @@
 
 - [Runtime Enhancements](./discoveries/runtime-enhancements.md)
 - [Language Boundaries](./discoveries/boundaries.md)
+  - [DEBUG-008: Record-Replay Engine (GREEN Phase)](./debugging/debug-008-record-replay-green.md)
