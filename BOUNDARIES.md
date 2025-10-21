@@ -986,14 +986,18 @@ Result: 3/6 tests passing with simplified implementation.
 
 ---
 
-## Runtime Hang: String Iteration with `.chars().nth()` (Issue #40)
+## Runtime Hang: String Iteration with `.chars().nth()` (Issue #40) - ✅ FIXED
 
 **Date Discovered**: October 20, 2025
-**Ruchy Version**: v3.98.0 (also v3.94.0)
+**Date Fixed**: October 21, 2025
+**Broken Versions**: v3.98.0, v3.99.1
+**Partially Fixed**: v3.99.2 (hang fixed, mutation bug introduced)
+**Fully Fixed**: v3.100.0 ✅
 **Discovered In**: BOOTSTRAP-004 (Error Recovery Mechanisms)
 **GitHub Issue**: https://github.com/paiml/ruchy/issues/40
+**Status**: ✅ COMPLETELY RESOLVED in v3.100.0
 
-### Symptom
+### Original Symptom (v3.99.1 and earlier)
 
 Runtime hangs indefinitely (never completes) when using `.chars().nth(i)` pattern in tight loops for string character iteration.
 
@@ -1043,26 +1047,61 @@ Calling `.chars()` on each loop iteration creates a new iterator, and `.nth(i)` 
 
 ### Impact on RuchyRuchy Bootstrap
 
-**Blocked Features**:
-- BOOTSTRAP-004: Error Recovery Mechanisms (WIP)
-- Character-by-character string processing
-- Position-tracked string iteration
-- Lexer lookahead implementation
+**Previously Blocked Features** (NOW UNBLOCKED ✅):
+- BOOTSTRAP-004: Error Recovery Mechanisms - ✅ CAN PROCEED
+- Character-by-character string processing - ✅ WORKS
+- Position-tracked string iteration - ✅ WORKS
+- Lexer lookahead implementation - ✅ WORKS
 
-**Current Status**: BOOTSTRAP-004 incomplete due to this blocker.
+### Resolution - ✅ FIXED in v3.100.0
 
-### Severity
+**Fix Date**: October 21, 2025
+**Ruchy Version**: v3.100.0
+**Test Results**: 4/4 comprehensive tests passing (100%)
 
-**High** - Blocks fundamental string processing patterns essential for lexer/parser implementation.
+The Ruchy team completely resolved this issue:
+1. **v3.99.2**: Fixed original hang, but introduced mutation bug
+2. **v3.100.0**: Fixed mutation bug, everything working perfectly
 
-### Workaround
+**Test Results** (v3.100.0):
+```
+Test 1: Simple string iteration (3 characters)    ✅ PASS
+Test 2: Longer string iteration (11 characters)   ✅ PASS
+Test 3: Empty string iteration                    ✅ PASS
+Test 4: Single character string                   ✅ PASS
 
-**None currently available**. Attempted alternatives all failed:
-- Simplified logic - still hangs
-- Different loop constructs - still hangs
-- Minimal test cases - still hangs
+All 4/4 tests passing - Issue completely resolved!
+```
 
-**Needed**: Alternative string iteration API or `.chars().nth()` performance fix.
+**Pattern Now Works**:
+```ruchy
+fun count_chars(input: String) -> i32 {
+    let mut count = 0;
+    let mut i = 0;
+    loop {
+        if i >= input.len() { break; }
+        let ch_opt = input.chars().nth(i);
+        match ch_opt {
+            Some(c) => {
+                count = count + 1;
+                i = i + 1;  // ✅ Works perfectly in v3.100.0!
+            },
+            None => break
+        }
+    }
+    count
+}
+```
+
+### Impact
+
+**BOOTSTRAP-004 is now fully unblocked!** 🚀
+- ✅ String iteration works correctly
+- ✅ Mutable variables update in match arms
+- ✅ No workarounds needed
+- ✅ Can use idiomatic Rust patterns
+
+**Acknowledgment**: Huge thanks to the Ruchy team for the rapid fix! Issue discovered on Oct 20, completely resolved by Oct 21. Excellent responsiveness! 🎉
 
 ### Requested Solutions
 
