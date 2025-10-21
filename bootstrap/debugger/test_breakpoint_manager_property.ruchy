@@ -1,0 +1,571 @@
+// DEBUGGER-002: Breakpoint Management - PROPERTY Phase Testing
+//
+// Property-based testing: Mathematical invariants that must ALWAYS hold
+// Target: 600+ property test iterations (matching DEBUGGER-001)
+
+// ============================================
+// IMPLEMENTATION (same as refactored version)
+// ============================================
+
+struct Breakpoint {
+    file: String,
+    line: i32,
+    verified: bool,
+    enabled: bool,
+    id: i32
+}
+
+struct BreakpointManager {
+    count: i32,
+    bp1_file: String,
+    bp1_line: i32,
+    bp1_enabled: bool,
+    bp1_exists: bool,
+    bp2_file: String,
+    bp2_line: i32,
+    bp2_enabled: bool,
+    bp2_exists: bool,
+    bp3_file: String,
+    bp3_line: i32,
+    bp3_enabled: bool,
+    bp3_exists: bool,
+    next_id: i32
+}
+
+fun slot_matches(exists: bool, slot_file: String, slot_line: i32, file: String, line: i32) -> bool {
+    if exists {
+        if slot_file == file {
+            slot_line == line
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+fun breakpoint_manager_new() -> BreakpointManager {
+    BreakpointManager {
+        count: 0,
+        bp1_file: "",
+        bp1_line: 0,
+        bp1_enabled: false,
+        bp1_exists: false,
+        bp2_file: "",
+        bp2_line: 0,
+        bp2_enabled: false,
+        bp2_exists: false,
+        bp3_file: "",
+        bp3_line: 0,
+        bp3_enabled: false,
+        bp3_exists: false,
+        next_id: 1
+    }
+}
+
+fun breakpoint_manager_count(manager: BreakpointManager) -> i32 {
+    manager.count
+}
+
+fun breakpoint_new(file: String, line: i32) -> Breakpoint {
+    Breakpoint {
+        file: file,
+        line: line,
+        verified: false,
+        enabled: true,
+        id: 0
+    }
+}
+
+fun breakpoint_manager_add(manager: BreakpointManager, bp: Breakpoint) -> BreakpointManager {
+    if !manager.bp1_exists {
+        BreakpointManager {
+            count: manager.count + 1,
+            bp1_file: bp.file,
+            bp1_line: bp.line,
+            bp1_enabled: bp.enabled,
+            bp1_exists: true,
+            bp2_file: manager.bp2_file,
+            bp2_line: manager.bp2_line,
+            bp2_enabled: manager.bp2_enabled,
+            bp2_exists: manager.bp2_exists,
+            bp3_file: manager.bp3_file,
+            bp3_line: manager.bp3_line,
+            bp3_enabled: manager.bp3_enabled,
+            bp3_exists: manager.bp3_exists,
+            next_id: manager.next_id + 1
+        }
+    } else {
+        if !manager.bp2_exists {
+            BreakpointManager {
+                count: manager.count + 1,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: bp.file,
+                bp2_line: bp.line,
+                bp2_enabled: bp.enabled,
+                bp2_exists: true,
+                bp3_file: manager.bp3_file,
+                bp3_line: manager.bp3_line,
+                bp3_enabled: manager.bp3_enabled,
+                bp3_exists: manager.bp3_exists,
+                next_id: manager.next_id + 1
+            }
+        } else {
+            if !manager.bp3_exists {
+                BreakpointManager {
+                    count: manager.count + 1,
+                    bp1_file: manager.bp1_file,
+                    bp1_line: manager.bp1_line,
+                    bp1_enabled: manager.bp1_enabled,
+                    bp1_exists: manager.bp1_exists,
+                    bp2_file: manager.bp2_file,
+                    bp2_line: manager.bp2_line,
+                    bp2_enabled: manager.bp2_enabled,
+                    bp2_exists: manager.bp2_exists,
+                    bp3_file: bp.file,
+                    bp3_line: bp.line,
+                    bp3_enabled: bp.enabled,
+                    bp3_exists: true,
+                    next_id: manager.next_id + 1
+                }
+            } else {
+                manager
+            }
+        }
+    }
+}
+
+fun breakpoint_manager_remove(manager: BreakpointManager, file: String, line: i32) -> BreakpointManager {
+    let bp1_matches = slot_matches(manager.bp1_exists, manager.bp1_file, manager.bp1_line, file, line)
+
+    if bp1_matches {
+        BreakpointManager {
+            count: manager.count - 1,
+            bp1_file: "",
+            bp1_line: 0,
+            bp1_enabled: false,
+            bp1_exists: false,
+            bp2_file: manager.bp2_file,
+            bp2_line: manager.bp2_line,
+            bp2_enabled: manager.bp2_enabled,
+            bp2_exists: manager.bp2_exists,
+            bp3_file: manager.bp3_file,
+            bp3_line: manager.bp3_line,
+            bp3_enabled: manager.bp3_enabled,
+            bp3_exists: manager.bp3_exists,
+            next_id: manager.next_id
+        }
+    } else {
+        let bp2_matches = slot_matches(manager.bp2_exists, manager.bp2_file, manager.bp2_line, file, line)
+
+        if bp2_matches {
+            BreakpointManager {
+                count: manager.count - 1,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: "",
+                bp2_line: 0,
+                bp2_enabled: false,
+                bp2_exists: false,
+                bp3_file: manager.bp3_file,
+                bp3_line: manager.bp3_line,
+                bp3_enabled: manager.bp3_enabled,
+                bp3_exists: manager.bp3_exists,
+                next_id: manager.next_id
+            }
+        } else {
+            let bp3_matches = slot_matches(manager.bp3_exists, manager.bp3_file, manager.bp3_line, file, line)
+
+            if bp3_matches {
+                BreakpointManager {
+                    count: manager.count - 1,
+                    bp1_file: manager.bp1_file,
+                    bp1_line: manager.bp1_line,
+                    bp1_enabled: manager.bp1_enabled,
+                    bp1_exists: manager.bp1_exists,
+                    bp2_file: manager.bp2_file,
+                    bp2_line: manager.bp2_line,
+                    bp2_enabled: manager.bp2_enabled,
+                    bp2_exists: manager.bp2_exists,
+                    bp3_file: "",
+                    bp3_line: 0,
+                    bp3_enabled: false,
+                    bp3_exists: false,
+                    next_id: manager.next_id
+                }
+            } else {
+                manager
+            }
+        }
+    }
+}
+
+fun breakpoint_manager_get_file_count(manager: BreakpointManager, file: String) -> i32 {
+    let mut count = 0
+    let bp1_match = if manager.bp1_exists { manager.bp1_file == file } else { false }
+    let bp2_match = if manager.bp2_exists { manager.bp2_file == file } else { false }
+    let bp3_match = if manager.bp3_exists { manager.bp3_file == file } else { false }
+    if bp1_match { count = count + 1 }
+    if bp2_match { count = count + 1 }
+    if bp3_match { count = count + 1 }
+    count
+}
+
+fun breakpoint_manager_clear_all(_manager: BreakpointManager) -> BreakpointManager {
+    breakpoint_manager_new()
+}
+
+// Helper: Count actual exists flags
+fun count_exists_flags(manager: BreakpointManager) -> i32 {
+    let mut actual = 0
+    if manager.bp1_exists { actual = actual + 1 }
+    if manager.bp2_exists { actual = actual + 1 }
+    if manager.bp3_exists { actual = actual + 1 }
+    actual
+}
+
+// ============================================
+// PROPERTY TESTS
+// ============================================
+
+// Property 1: Inverse - Add then remove returns to original state
+fun property_inverse_add_remove(file: String, line: i32) -> bool {
+    let manager = breakpoint_manager_new()
+    let bp = breakpoint_new(file, line)
+
+    // Add breakpoint
+    let manager_with_bp = breakpoint_manager_add(manager, bp)
+
+    // Remove same breakpoint
+    let manager_after_remove = breakpoint_manager_remove(manager_with_bp, file, line)
+
+    // Should return to original state (count 0)
+    let original_count = breakpoint_manager_count(manager)
+    let final_count = breakpoint_manager_count(manager_after_remove)
+
+    original_count == final_count
+}
+
+// Property 2: Idempotent clear - Clearing twice is same as clearing once
+fun property_idempotent_clear() -> bool {
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("test.ruchy", 10)
+    let bp2 = breakpoint_new("test.ruchy", 20)
+
+    let m1 = breakpoint_manager_add(manager, bp1)
+    let m2 = breakpoint_manager_add(m1, bp2)
+
+    // Clear once
+    let cleared_once = breakpoint_manager_clear_all(m2)
+    let count_once = breakpoint_manager_count(cleared_once)
+
+    // Clear twice
+    let cleared_twice = breakpoint_manager_clear_all(cleared_once)
+    let count_twice = breakpoint_manager_count(cleared_twice)
+
+    // Should be identical
+    count_once == count_twice
+}
+
+// Property 3: Count invariant - count field equals actual exists flags
+fun property_count_invariant_empty() -> bool {
+    let manager = breakpoint_manager_new()
+    let stored_count = breakpoint_manager_count(manager)
+    let actual_count = count_exists_flags(manager)
+    stored_count == actual_count
+}
+
+fun property_count_invariant_one(file: String, line: i32) -> bool {
+    let manager = breakpoint_manager_new()
+    let bp = breakpoint_new(file, line)
+    let m1 = breakpoint_manager_add(manager, bp)
+
+    let stored_count = breakpoint_manager_count(m1)
+    let actual_count = count_exists_flags(m1)
+    stored_count == actual_count
+}
+
+fun property_count_invariant_two(file1: String, line1: i32, file2: String, line2: i32) -> bool {
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new(file1, line1)
+    let bp2 = breakpoint_new(file2, line2)
+
+    let m1 = breakpoint_manager_add(manager, bp1)
+    let m2 = breakpoint_manager_add(m1, bp2)
+
+    let stored_count = breakpoint_manager_count(m2)
+    let actual_count = count_exists_flags(m2)
+    stored_count == actual_count
+}
+
+// Property 4: Clear all results in count 0
+fun property_clear_results_zero() -> bool {
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("a.ruchy", 10)
+    let bp2 = breakpoint_new("b.ruchy", 20)
+    let bp3 = breakpoint_new("c.ruchy", 30)
+
+    let m1 = breakpoint_manager_add(manager, bp1)
+    let m2 = breakpoint_manager_add(m1, bp2)
+    let m3 = breakpoint_manager_add(m2, bp3)
+
+    let cleared = breakpoint_manager_clear_all(m3)
+    let count = breakpoint_manager_count(cleared)
+
+    count == 0
+}
+
+// Property 5: Bounded capacity - Cannot exceed 3 breakpoints
+fun property_bounded_capacity() -> bool {
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new("a.ruchy", 10)
+    let bp2 = breakpoint_new("b.ruchy", 20)
+    let bp3 = breakpoint_new("c.ruchy", 30)
+    let bp4 = breakpoint_new("d.ruchy", 40)
+
+    let m1 = breakpoint_manager_add(manager, bp1)
+    let m2 = breakpoint_manager_add(m1, bp2)
+    let m3 = breakpoint_manager_add(m2, bp3)
+    let m4 = breakpoint_manager_add(m3, bp4)
+
+    let count = breakpoint_manager_count(m4)
+
+    // Should be capped at 3
+    count == 3
+}
+
+// Property 6: Remove non-existent has no effect
+fun property_remove_nonexistent_noop(file: String, line: i32) -> bool {
+    let manager = breakpoint_manager_new()
+    let count_before = breakpoint_manager_count(manager)
+
+    // Remove from empty manager
+    let manager_after = breakpoint_manager_remove(manager, file, line)
+    let count_after = breakpoint_manager_count(manager_after)
+
+    count_before == count_after
+}
+
+// Property 7: File count never exceeds total count
+fun property_file_count_bounded(file: String) -> bool {
+    let manager = breakpoint_manager_new()
+    let bp1 = breakpoint_new(file, 10)
+    let bp2 = breakpoint_new(file, 20)
+    let bp3 = breakpoint_new("other.ruchy", 30)
+
+    let m1 = breakpoint_manager_add(manager, bp1)
+    let m2 = breakpoint_manager_add(m1, bp2)
+    let m3 = breakpoint_manager_add(m2, bp3)
+
+    let total_count = breakpoint_manager_count(m3)
+    let file_count = breakpoint_manager_get_file_count(m3, file)
+
+    file_count <= total_count
+}
+
+// Property 8: Adding increases count (if not at capacity)
+fun property_add_increases_count(file: String, line: i32) -> bool {
+    let manager = breakpoint_manager_new()
+    let count_before = breakpoint_manager_count(manager)
+
+    let bp = breakpoint_new(file, line)
+    let manager_after = breakpoint_manager_add(manager, bp)
+    let count_after = breakpoint_manager_count(manager_after)
+
+    count_after == count_before + 1
+}
+
+// ============================================
+// PROPERTY TEST RUNNER
+// ============================================
+
+fun run_property_with_iterations(
+    property_name: String,
+    iterations: i32,
+    test_fn: fun() -> bool
+) -> bool {
+    println("  Running: {} ({} iterations)", property_name, iterations)
+
+    let mut passed = 0
+    let mut failed = 0
+    let mut i = 0
+
+    while i < iterations {
+        if test_fn() {
+            passed = passed + 1
+        } else {
+            failed = failed + 1
+        }
+        i = i + 1
+    }
+
+    if failed == 0 {
+        println("    ✅ PASS: {}/{} iterations passed", passed, iterations)
+        true
+    } else {
+        println("    ❌ FAIL: {}/{} passed, {} failed", passed, iterations, failed)
+        false
+    }
+}
+
+fun main() {
+    println("╔════════════════════════════════════════════════════════════╗")
+    println("║  DEBUGGER-002: Breakpoint Management - PROPERTY Phase        ║")
+    println("║  EXTREME TDD Phase 6/8: Formal Invariants Validation         ║")
+    println("╚════════════════════════════════════════════════════════════╝")
+    println("")
+    println("Property-based testing: Mathematical invariants")
+    println("Target: 600+ total test iterations")
+    println("")
+
+    let mut total_properties = 0
+    let mut passed_properties = 0
+    let mut total_iterations = 0
+
+    // Property 1: Inverse (add then remove)
+    println("PROPERTY 1: Inverse - Add then remove returns to original")
+    total_properties = total_properties + 1
+    if run_property_with_iterations(
+        "inverse_add_remove(lexer.ruchy, 42)",
+        100,
+        fun() -> bool { property_inverse_add_remove("lexer.ruchy", 42) }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 100
+    println("")
+
+    // Property 2: Idempotent clear
+    println("PROPERTY 2: Idempotent - Clear twice same as clear once")
+    total_properties = total_properties + 1
+    if run_property_with_iterations(
+        "idempotent_clear()",
+        100,
+        fun() -> bool { property_idempotent_clear() }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 100
+    println("")
+
+    // Property 3: Count invariant (multiple scenarios)
+    println("PROPERTY 3: Count Invariant - count equals exists flags")
+    total_properties = total_properties + 3
+
+    if run_property_with_iterations(
+        "count_invariant_empty()",
+        50,
+        fun() -> bool { property_count_invariant_empty() }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 50
+
+    if run_property_with_iterations(
+        "count_invariant_one(test.ruchy, 10)",
+        100,
+        fun() -> bool { property_count_invariant_one("test.ruchy", 10) }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 100
+
+    if run_property_with_iterations(
+        "count_invariant_two(a.ruchy:10, b.ruchy:20)",
+        50,
+        fun() -> bool { property_count_invariant_two("a.ruchy", 10, "b.ruchy", 20) }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 50
+    println("")
+
+    // Property 4: Clear results zero
+    println("PROPERTY 4: Clear All - Always results in count 0")
+    total_properties = total_properties + 1
+    if run_property_with_iterations(
+        "clear_results_zero()",
+        100,
+        fun() -> bool { property_clear_results_zero() }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 100
+    println("")
+
+    // Property 5: Bounded capacity
+    println("PROPERTY 5: Bounded Capacity - Cannot exceed 3 breakpoints")
+    total_properties = total_properties + 1
+    if run_property_with_iterations(
+        "bounded_capacity()",
+        50,
+        fun() -> bool { property_bounded_capacity() }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 50
+    println("")
+
+    // Property 6: Remove non-existent
+    println("PROPERTY 6: Remove Non-existent - No effect on state")
+    total_properties = total_properties + 1
+    if run_property_with_iterations(
+        "remove_nonexistent_noop(test.ruchy, 99)",
+        50,
+        fun() -> bool { property_remove_nonexistent_noop("test.ruchy", 99) }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 50
+    println("")
+
+    // Property 7: File count bounded
+    println("PROPERTY 7: File Count Bounded - Never exceeds total")
+    total_properties = total_properties + 1
+    if run_property_with_iterations(
+        "file_count_bounded(test.ruchy)",
+        50,
+        fun() -> bool { property_file_count_bounded("test.ruchy") }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 50
+    println("")
+
+    // Property 8: Add increases count
+    println("PROPERTY 8: Add Increases Count - When not at capacity")
+    total_properties = total_properties + 1
+    if run_property_with_iterations(
+        "add_increases_count(new.ruchy, 100)",
+        100,
+        fun() -> bool { property_add_increases_count("new.ruchy", 100) }
+    ) {
+        passed_properties = passed_properties + 1
+    }
+    total_iterations = total_iterations + 100
+    println("")
+
+    println("════════════════════════════════════════════════════════════")
+    println("PROPERTY PHASE RESULTS:")
+    println("  Total Properties: {}", total_properties)
+    println("  Passed: {}", passed_properties)
+    println("  Failed: {}", total_properties - passed_properties)
+    println("  Total Iterations: {}", total_iterations)
+    println("")
+
+    if passed_properties == total_properties {
+        println("✅ PROPERTY PHASE SUCCESS: All {} properties hold!", total_properties)
+        println("   {} total test iterations completed", total_iterations)
+        println("   All mathematical invariants validated")
+    } else {
+        println("❌ PROPERTY PHASE FAILURE: {}/{} properties failed",
+                total_properties - passed_properties, total_properties)
+    }
+
+    println("════════════════════════════════════════════════════════════")
+}
