@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Runtime Enhancements - RuchyRuchy Bootstrap Compiler: A TDD Journey</title>
+        <title>Debugging Toolkit - RuchyRuchy Bootstrap Compiler: A TDD Journey</title>
 
 
         <!-- Custom HTML head -->
@@ -147,7 +147,7 @@
                         <a href="https://github.com/paiml/ruchyruchy" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/paiml/ruchyruchy/edit/main/book/src/discoveries/runtime-enhancements.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                        <a href="https://github.com/paiml/ruchyruchy/edit/main/book/src/debugging/chapter.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -181,101 +181,126 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="runtime-enhancements-discovered"><a class="header" href="#runtime-enhancements-discovered">Runtime Enhancements Discovered</a></h1>
-<p>This page documents runtime enhancements discovered through dogfooding and the Bug Discovery Protocol.</p>
-<h2 id="v3930-enum-tuple-variant-pattern-matching"><a class="header" href="#v3930-enum-tuple-variant-pattern-matching">v3.93.0: Enum Tuple Variant Pattern Matching</a></h2>
-<p><strong>Discovered During</strong>: BOOTSTRAP-002 (Character Stream Processing)</p>
-<p><strong>Issue</strong>: Pattern matching on enum tuple variants failed in v3.92.0</p>
-<pre><code>Error: Runtime error: No match arm matched the value
-</code></pre>
-<p><strong>Minimal Reproduction</strong>:</p>
-<pre><code class="language-ruchy">enum Position {
-    Pos(i32, i32, i32)
-}
-
-fn get_line(pos: Position) -&gt; i32 {
-    match pos {
-        Position::Pos(line, _, _) =&gt; line  // Failed in v3.92.0
-    }
-}
-</code></pre>
-<p><strong>Resolution</strong>: Fixed in Ruchy v3.93.0</p>
-<p><strong>Impact</strong>: Enabled type-safe position tracking for lexer implementation</p>
-<p><strong>Validation</strong>:</p>
-<pre><code class="language-bash">$ ruchy --version
-ruchy 3.93.0
-
-$ ruchy run bug_reproduction_enum_tuple.ruchy
-Line: 1  # ✅ Works!
-</code></pre>
-<p><strong>Bug Report</strong>: <a href="https://github.com/paiml/ruchyruchy/blob/main/GITHUB_ISSUE_enum_tuple_pattern_matching.md">GITHUB_ISSUE_enum_tuple_pattern_matching.md</a></p>
-<hr />
-<h2 id="v3940-string-iterator-nth-method"><a class="header" href="#v3940-string-iterator-nth-method">v3.94.0: String Iterator .nth() Method</a></h2>
-<p><strong>Discovered During</strong>: BOOTSTRAP-002 (Character Stream Processing)</p>
-<p><strong>Issue</strong>: String character iterator <code>.nth()</code> method not implemented in v3.93.0</p>
-<pre><code>Error: Runtime error: Unknown array method: nth
-</code></pre>
-<p><strong>Minimal Reproduction</strong>:</p>
-<pre><code class="language-ruchy">fn main() {
-    let input = "hello";
-    let c = input.chars().nth(0);  // Failed in v3.93.0
-    match c {
-        Some(ch) =&gt; println("Char: {}", ch.to_string()),
-        None =&gt; println("No char")
-    }
-}
-</code></pre>
-<p><strong>Resolution</strong>: Fixed in Ruchy v3.94.0</p>
-<p><strong>Impact</strong>: Enabled O(1) character-by-index access for lexer</p>
-<p><strong>Validation</strong>:</p>
-<pre><code class="language-bash">$ ruchy --version
-ruchy 3.94.0
-
-$ ruchy run bug_reproduction_string_nth.ruchy
-Char: "h"  # ✅ Works!
-</code></pre>
-<p><strong>Bug Report</strong>: <a href="https://github.com/paiml/ruchyruchy/blob/main/GITHUB_ISSUE_string_nth_method.md">GITHUB_ISSUE_string_nth_method.md</a></p>
-<hr />
-<h2 id="bug-discovery-protocol"><a class="header" href="#bug-discovery-protocol">Bug Discovery Protocol</a></h2>
-<p>All discoveries followed the mandatory Bug Discovery Protocol from CLAUDE.md:</p>
-<ol>
-<li>🚨 <strong>STOP THE LINE</strong> - Immediately halt all work</li>
-<li>📋 <strong>FILE GITHUB ISSUE</strong> - Create detailed reproduction</li>
-<li>🔬 <strong>MINIMAL REPRO</strong> - Provide standalone test case</li>
-<li>⏸️ <strong>WAIT FOR FIX</strong> - No workarounds, wait for proper fix</li>
-<li>✅ <strong>VERIFY FIX</strong> - Test and confirm before resuming</li>
-</ol>
-<p>This protocol ensures:</p>
+                        <h1 id="debugging-toolkit"><a class="header" href="#debugging-toolkit">Debugging Toolkit</a></h1>
+<p><strong>Status</strong>: 🚧 In Progress - Vertical Slice 1 (Weeks 1-12)
+<strong>Goal</strong>: Minimal Viable Time-Travel Debugger
+<strong>Specification</strong>: <a href="../../../docs/specifications/ruchyruchy-debugging-tools-spec.html">ruchyruchy-debugging-tools-spec.md</a></p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>The RuchyRuchy Debugging Toolkit is a world-class debugging infrastructure built on modern computer science research and NASA-level engineering standards. The toolkit features:</p>
 <ul>
-<li>Bugs are documented with extreme detail</li>
-<li>Runtime improvements benefit all users</li>
-<li>No workarounds that hide issues</li>
-<li>Clean codebase without hacks</li>
+<li><strong>Symbiotic Compiler-Debugger Architecture</strong>: Embedded self-hosted compiler for maximum semantic awareness</li>
+<li><strong>Time-Travel Debugging</strong>: Record-replay engine for backward stepping</li>
+<li><strong>Formally-Verified Correctness</strong>: Mathematical proofs via Coq for critical algorithms</li>
+<li><strong>Extreme TDD Methodology</strong>: RED-GREEN-REFACTOR-VERIFY with mutation/fuzz/property testing</li>
+<li><strong>Developer Experience Validation</strong>: Usability testing with real developers</li>
 </ul>
-<h2 id="impact-on-project"><a class="header" href="#impact-on-project">Impact on Project</a></h2>
-<p>These runtime enhancements were critical for:</p>
+<h2 id="vertical-slice-approach"><a class="header" href="#vertical-slice-approach">Vertical Slice Approach</a></h2>
+<p>Following the Toyota Way principle of continuous learning, the debugging toolkit is built in <strong>vertical value slices</strong> rather than horizontal phases. Each slice delivers a complete, end-to-end experience of increasing capability:</p>
+<h3 id="vertical-slice-1-minimal-viable-time-travel-debugger-weeks-1-12"><a class="header" href="#vertical-slice-1-minimal-viable-time-travel-debugger-weeks-1-12">Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 1-12)</a></h3>
+<p><strong>Goal</strong>: Prove time-travel debugging is feasible, deliver most exciting feature first, create walking skeleton.</p>
+<p><strong>Features</strong>:</p>
 <ul>
-<li><strong>Position Tracking</strong>: Type-safe line/column/offset tracking</li>
-<li><strong>Character Access</strong>: Efficient lexer implementation</li>
-<li><strong>Code Quality</strong>: Clean enum-based design patterns</li>
-<li><strong>Educational Value</strong>: Demonstrates real-world dogfooding</li>
+<li>DEBUG-001: Minimal Source Maps (line-number mapping only)</li>
+<li>DEBUG-008-MINIMAL: Basic Record-Replay Engine (in-memory, &lt;1000 steps)</li>
+<li>DEBUG-003-MINIMAL: Basic DAP Server (5 commands only: launch, break, continue, stepForward, stepBackward)</li>
 </ul>
-<h2 id="related-documentation"><a class="header" href="#related-documentation">Related Documentation</a></h2>
+<p><strong>Value Proposition</strong>: Developers can experience backward stepping within first quarter, generating enthusiasm and early feedback.</p>
+<p><strong>Risk Mitigation</strong>: Tests most complex feature (record-replay) early, validates core architecture.</p>
+<p><strong>Demo Experience (End of Week 12)</strong>:</p>
+<pre><code class="language-bash">$ ruchydbg my_program.ruchy
+&gt; break main:10      # Set breakpoint
+&gt; run                # Start execution
+&gt; step               # Step forward
+&gt; step               # Step forward
+&gt; back               # Step BACKWARD! (Time-travel!)
+&gt; back               # Step backward again
+&gt; print my_var       # Inspect variable at this historical point
+</code></pre>
+<p><strong>Acceptance Criteria</strong>:</p>
 <ul>
-<li><a href="https://github.com/paiml/ruchyruchy/blob/main/BOUNDARIES.md">BOUNDARIES.md</a> - Complete boundary analysis</li>
-<li><a href="https://github.com/paiml/ruchyruchy/blob/main/INTEGRATION.md">INTEGRATION.md</a> - Integration status</li>
-<li><a href="https://github.com/paiml/ruchyruchy/blob/main/CLAUDE.md">CLAUDE.md</a> - Bug Discovery Protocol</li>
+<li>✅ Time-travel debugger works end-to-end</li>
+<li>✅ Can debug simple programs (&lt;100 LOC) with backward stepping</li>
+<li>✅ Proves feasibility of record-replay architecture</li>
+<li>✅ Generates developer enthusiasm and feedback</li>
+<li>✅ All Tier 2 quality gates passing</li>
+</ul>
+<h2 id="quality-standards"><a class="header" href="#quality-standards">Quality Standards</a></h2>
+<h3 id="tiered-quality-gates"><a class="header" href="#tiered-quality-gates">Tiered Quality Gates</a></h3>
+<p><strong>Tier 1: Pre-Commit</strong> (&lt;1 second feedback)</p>
+<ul>
+<li>Syntax validation (<code>ruchy check</code>)</li>
+<li>Lint (A+ grade, <code>ruchy lint</code>)</li>
+<li>Unit tests for changed code (<code>ruchy test --fast</code>)</li>
+</ul>
+<p><strong>Tier 2: Pre-Merge/PR</strong> (5-10 minute feedback)</p>
+<ul>
+<li>All unit and integration tests</li>
+<li>PMAT TDG score (≥85)</li>
+<li>Incremental mutation testing</li>
+<li>Used for Vertical Slice 1</li>
+</ul>
+<p><strong>Tier 3: Nightly Build</strong> (2-4 hour feedback)</p>
+<ul>
+<li>100% mutation score</li>
+<li>Exhaustive fuzz testing (10K+ inputs)</li>
+<li>Exhaustive property testing (10K+ cases)</li>
+<li>Formal verification (Coq proofs)</li>
+<li>Used for production releases</li>
+</ul>
+<h3 id="developer-experience-validation"><a class="header" href="#developer-experience-validation">Developer Experience Validation</a></h3>
+<p>Every feature includes DevEx validation:</p>
+<p><strong>Cognitive Walkthroughs</strong> (during RED phase):</p>
+<ul>
+<li>Mock UI before implementation</li>
+<li>Verify users can discover functionality without documentation</li>
+</ul>
+<p><strong>Usability Testing</strong> (during VERIFY phase):</p>
+<ul>
+<li>5 developers matching target personas</li>
+<li>Task completion rate &gt;80%</li>
+<li>User satisfaction &gt;4/5</li>
+</ul>
+<p><strong>Personas</strong>:</p>
+<ul>
+<li>Systems Programmer (Rust/C++ background)</li>
+<li>Data Scientist (Python background)</li>
+<li>Application Developer (JS/TS background)</li>
+</ul>
+<h2 id="implementation-progress"><a class="header" href="#implementation-progress">Implementation Progress</a></h2>
+<h3 id="completed"><a class="header" href="#completed">Completed</a></h3>
+<p>None yet - starting with DEBUG-001 RED phase.</p>
+<h3 id="in-progress"><a class="header" href="#in-progress">In Progress</a></h3>
+<ul>
+<li><strong>DEBUG-001: Source Map Generation</strong> (Week 1)
+<ul>
+<li>Status: RED Phase Complete ✅</li>
+<li>Tests: 20 tests (15 failing, 5 accidentally passing)</li>
+<li>File: <code>validation/debugging/test_source_maps.ruchy</code></li>
+<li>Next: GREEN Phase - Minimal implementation</li>
+</ul>
+</li>
+</ul>
+<h3 id="planned"><a class="header" href="#planned">Planned</a></h3>
+<ul>
+<li>DEBUG-008-MINIMAL: Basic Record-Replay Engine (Weeks 5-8)</li>
+<li>DEBUG-003-MINIMAL: Basic DAP Server (Weeks 9-12)</li>
+</ul>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<ul>
+<li><a href="../../../docs/specifications/ruchyruchy-debugging-tools-spec.html">Debugging Tools Specification</a></li>
+<li><a href="../../../docs/specifications/ruchyruchy-debugging-tools-spec.html#vertical-slice-1-minimal-viable-time-travel-debugger-weeks-1-12">Vertical Slice 1 Roadmap</a></li>
+<li><a href="../../../docs/specifications/ruchyruchy-debugging-tools-spec.html#6-quality-assurance-framework">Quality Assurance Framework</a></li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../debugging/debug-001-source-maps-red.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../discoveries/boundaries.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../debugging/debug-001-source-maps-red.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -285,11 +310,11 @@ Char: "h"  # ✅ Works!
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../debugging/debug-001-source-maps-red.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../discoveries/boundaries.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../debugging/debug-001-source-maps-red.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
