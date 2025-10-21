@@ -1,10 +1,11 @@
 # Compiler/Transpiler Optimization Specification via Self-Hosting
 
 **Project**: RuchyRuchy Bootstrap Compiler
-**Document Version**: 1.0
-**Date**: October 21, 2025
+**Document Version**: 1.1 (Kaizen Improvements Integrated)
+**Date**: October 21, 2025 (Updated)
 **Status**: SPECIFICATION - PENDING IMPLEMENTATION
-**Methodology**: EXTREME TDD + Mutation/Property/Fuzz/PMAT Testing
+**Methodology**: EXTREME TDD + Mutation/Property/Fuzz/PMAT + Portfolio Validation + Statistical Rigor
+**Code Review Integration**: Toyota Way (Kaizen, Genchi Genbutsu, Jidoka)
 
 ---
 
@@ -13,6 +14,11 @@
 This specification defines a **scientific, peer-reviewed approach** to discovering and implementing compiler/transpiler optimizations through self-hosting and bootstrapping techniques. By compiling the compiler with itself and systematically measuring performance, we can discover optimization opportunities empirically rather than theoretically.
 
 **Core Principle**: Use the bootstrap compiler as its own benchmark suite to discover real-world optimization opportunities through profiling, measurement, and iterative improvement.
+
+**v1.1 Kaizen Improvements** (October 21, 2025):
+1. **Phase 8: Portfolio Validation** - Test optimization combinations to address phase-ordering problems
+2. **Statistical Rigor in Benchmarking** - Require statistical significance (p < 0.05) for all performance claims
+3. **Risk-Based Classification** - Apply validation rigor proportional to optimization complexity and risk
 
 ---
 
@@ -103,6 +109,53 @@ This specification defines a **scientific, peer-reviewed approach** to discoveri
 - Interprocedural optimizations (whole program level)
 - Machine-dependent optimizations (target-specific)
 
+### Performance Evaluation and Validation Research
+
+#### Statistical Rigor in Performance Measurement
+**Paper**: Georges, A., Buytaert, D., & Eeckhout, L. (2007) - "Statistically rigorous Java performance evaluation"
+**Source**: ACM SIGPLAN Notices, 42(10), 57-76
+**Key Findings**:
+- Performance measurements contain statistical noise from OS scheduler, cache state, CPU turbo boost
+- Single measurements can lead to incorrect conclusions (accepting phantom improvements or missing real regressions)
+- Statistical tests (e.g., Welch's t-test) with confidence intervals are required for valid conclusions
+- Recommend N≥30 benchmark runs with mean, standard deviation, and p-value < 0.05
+
+**Application to RuchyRuchy**:
+- All bootstrap timing measurements must use statistical tests
+- Require 30+ benchmark runs per configuration
+- Calculate mean ± std dev, 95% confidence intervals
+- Optimization accepted only if p < 0.05 (statistically significant improvement)
+
+#### Optimization Interactions and Trade-offs
+**Paper**: Cooper, K. D., Schielke, P. J., & Subramanian, D. (2002) - "Optimizing for memory hierarchies: what is a compiler to do?"
+**Source**: Journal of the Brazilian Computer Society, 8(2), 29-42
+**Key Findings**:
+- Compiler optimizations make complex trade-offs between multiple objectives
+- One optimization can enhance, negate, or interfere with another
+- Phase-ordering problem: optimal sequence depends on specific code patterns
+- Iterative, experimental approach required to navigate optimization space
+
+**Application to RuchyRuchy**:
+- Test optimizations in combination, not just isolation
+- Validate optimization "portfolios" to detect negative interactions
+- Empirically discover optimal phase ordering through experimentation
+- Use multi-configuration benchmarks (baseline, +opt1, +opt2, +opt1+opt2)
+
+#### Risk-Based Validation and Regression Analysis
+**Paper**: Sullivan, M., & Zeller, A. (2005) - "Yesterday's loss is today's gain: a simple and effective technique for localizing regression bugs"
+**Source**: Proceedings of the 10th European Software Engineering Conference
+**Key Findings**:
+- Not all code changes carry equal risk of introducing bugs
+- Focusing validation effort on highest-risk changes is most effective
+- Heuristic-based optimizations are more likely to cause regressions
+- Simple, provably-correct changes can use lighter validation
+
+**Application to RuchyRuchy**:
+- Classify optimizations by risk (provably correct vs heuristic-based)
+- Apply validation rigor proportional to risk level
+- Focus maximum testing effort on complex, global optimizations
+- Allow "fast-track" for simple, local, provably-correct optimizations
+
 ---
 
 ## Self-Hosting Optimization Strategy
@@ -191,6 +244,7 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 ### Category 1: Lexical Analysis Optimizations
 
 #### OPT-LEX-001: Token Stream Caching
+**Risk Class**: 2 (Complex / Global - requires cache invalidation correctness)
 **Research Basis**: Memoization techniques in compiler construction
 **Opportunity**: Bootstrap compiler re-tokenizes common patterns
 **Implementation**:
@@ -198,9 +252,10 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 - Use hash-based lookup for token stream retrieval
 - Invalidate cache on source modification
 
-**Expected Impact**: 10-15% lexer speedup on repeated patterns
-**Measurement**: Profile token generation time during bootstrap
-**Validation**: Property test: `cached_tokenize(s) == tokenize(s)`
+**Expected Impact**: 10-15% ± Y% lexer speedup on repeated patterns (p < 0.05, N=30 runs)
+**Measurement**: Profile token generation time during bootstrap with statistical validation
+**Validation**: Property test: `cached_tokenize(s) == tokenize(s)` + Portfolio validation vs OPT-LEX-002
+**TDD Rigor**: FULL EXTREME TDD (all 8 phases, 10,000+ property cases, 100,000+ fuzz cases)
 
 #### OPT-LEX-002: Lazy String Allocation
 **Research Basis**: Lazy evaluation in functional programming
@@ -269,6 +324,7 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 ### Category 4: Code Generation Optimizations
 
 #### OPT-CODEGEN-001: Constant Folding
+**Risk Class**: 3 (Provably Correct / Local - algebraic transformation)
 **Research Basis**: Classic compiler optimization (Dragon Book §9.1)
 **Opportunity**: Compile-time evaluation of constant expressions
 **Implementation**:
@@ -276,9 +332,10 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 - Fold constant branches (dead code elimination)
 - Propagate constants across assignments
 
-**Expected Impact**: 5-10% runtime speedup of generated code
-**Measurement**: Compare generated code size and execution time
-**Validation**: Property test: Semantic equivalence
+**Expected Impact**: 5-10% ± Y% runtime speedup of generated code (p < 0.05, N=30 runs)
+**Measurement**: Compare generated code size and execution time with statistical validation
+**Validation**: Property test: Semantic equivalence + Portfolio validation vs OPT-CODEGEN-004
+**TDD Rigor**: FAST-TRACK (phases 1-6, 1,000+ property cases, fuzz testing optional)
 
 #### OPT-CODEGEN-002: Peephole Optimization
 **Research Basis**: Peephole optimization survey (ScienceDirect)
@@ -293,6 +350,7 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 **Validation**: Differential testing vs unoptimized output
 
 #### OPT-CODEGEN-003: Dead Code Elimination (DCE)
+**Risk Class**: 2 (Complex / Global - requires liveness analysis)
 **Research Basis**: Data flow analysis (Dragon Book §9.2)
 **Opportunity**: Unreachable code from constant folding
 **Implementation**:
@@ -300,11 +358,13 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 - Remove unused variable assignments
 - Eliminate unreachable basic blocks
 
-**Expected Impact**: 5-15% generated code size reduction
-**Measurement**: Compare bytecode/assembly size
-**Validation**: Property test: Behavior preservation
+**Expected Impact**: 5-15% ± Y% generated code size reduction (p < 0.05, N=30 runs)
+**Measurement**: Compare bytecode/assembly size with statistical validation
+**Validation**: Property test: Behavior preservation + Portfolio validation
+**TDD Rigor**: FULL EXTREME TDD (all 8 phases, 10,000+ property cases, 100,000+ fuzz cases)
 
 #### OPT-CODEGEN-004: Inline Expansion
+**Risk Class**: 1 (Heuristic-Based - size/frequency thresholds)
 **Research Basis**: Procedure integration (Classic optimization)
 **Opportunity**: Function call overhead in hot paths
 **Implementation**:
@@ -312,13 +372,15 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 - Use heuristics: size threshold, call frequency
 - Avoid inlining recursive functions
 
-**Expected Impact**: 10-25% runtime speedup (context-dependent)
-**Measurement**: Profile function call overhead during bootstrap
-**Validation**: Benchmark suite + semantic equivalence
+**Expected Impact**: 10-25% ± Y% runtime speedup (context-dependent, p < 0.05, N=30 runs)
+**Measurement**: Profile function call overhead during bootstrap with statistical validation
+**Validation**: Benchmark suite + semantic equivalence + Portfolio validation vs OPT-CODEGEN-001
+**TDD Rigor**: MAXIMUM RIGOR (all 8 phases, 25,000+ property cases, 250,000+ fuzz cases, differential testing, sensitivity analysis)
 
 ### Category 5: Cross-Cutting Optimizations
 
 #### OPT-GLOBAL-001: Profile-Guided Optimization (PGO)
+**Risk Class**: 1 (Heuristic-Based - profile-dependent decisions)
 **Research Basis**: "From Profiling to Optimization" (2025)
 **Opportunity**: Optimize based on real bootstrap execution profile
 **Implementation**:
@@ -327,9 +389,10 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 - Apply targeted optimizations to hot paths
 - Use branch prediction hints based on profile
 
-**Expected Impact**: 15-30% bootstrap speedup
-**Measurement**: Compare instrumented vs optimized bootstrap time
-**Validation**: Multi-stage bootstrap validation (Stage 2 == Stage 3)
+**Expected Impact**: 15-30% ± Y% bootstrap speedup (p < 0.05, N=30 runs)
+**Measurement**: Compare instrumented vs optimized bootstrap time with statistical validation
+**Validation**: Multi-stage bootstrap validation (Stage 2 == Stage 3) + Portfolio validation
+**TDD Rigor**: MAXIMUM RIGOR (all 8 phases, 25,000+ property cases, 250,000+ fuzz cases, differential testing with multiple profiles, sensitivity analysis)
 
 #### OPT-GLOBAL-002: Whole-Program Optimization
 **Research Basis**: Interprocedural optimization research
@@ -348,9 +411,9 @@ Stage2_Output == Stage3_Output  (bit-for-bit comparison)
 
 ## EXTREME TDD Implementation Methodology
 
-### 7-Phase EXTREME TDD for Each Optimization
+### 8-Phase EXTREME TDD for Each Optimization (v1.1)
 
-Every optimization must follow this **mandatory** process:
+Every optimization must follow this **mandatory** process (updated with Kaizen improvements):
 
 #### Phase 1: RED - Write Failing Test
 
@@ -595,7 +658,69 @@ fun fuzz_constant_folding() {
 **Run**: `ruchy run validation/optimizations/fuzz_constant_folding.ruchy`
 **Expected**: ✅ Zero crashes, all edge cases handled
 
-#### Summary: 7-Phase Validation Checklist
+#### Phase 8: PORTFOLIO VALIDATION (Jidoka - Addressing Phase-Ordering Problem)
+
+**Objective**: Validate optimization within the broader portfolio of optimizations to detect interactions
+
+**Principle (Genchi Genbutsu - Go and See)**: Optimizations do not exist in isolation. The benefit of one optimization (e.g., Inline Expansion) can be dramatically affected by the presence of another (e.g., Constant Folding). The phase-ordering problem is NP-hard, requiring empirical validation of optimization combinations.
+
+**Research Basis**: Cooper et al. (2002) - "Optimizing for memory hierarchies: what is a compiler to do?"
+
+**Process**:
+
+1. **Identify Comparison Configurations**: Test the new optimization in multiple contexts
+   - Configuration A: `Baseline` (current main branch, no new optimization)
+   - Configuration B: `Baseline + New_Optimization` (isolated impact)
+   - Configuration C: `Baseline + Last_Merged_Optimization` (previous state)
+   - Configuration D: `Baseline + New_Optimization + Last_Merged_Optimization` (combined impact)
+
+2. **Run Statistical Benchmarks**: For each configuration, run bootstrap benchmark with statistical rigor
+   - 30+ benchmark runs per configuration
+   - Calculate mean ± std dev, 95% confidence intervals
+   - Perform Welch's t-test between configurations (p < 0.05 required)
+
+3. **Analyze Interactions**: Compare results to detect synergies or conflicts
+   - **Synergy**: Combined speedup > sum of individual speedups (superlinear)
+   - **Independence**: Combined speedup ≈ sum of individual speedups (linear)
+   - **Conflict**: Combined speedup < sum of individual speedups (sublinear)
+   - **Negative**: Combined speedup worse than one optimization alone (interference)
+
+4. **Document Findings**: Record interaction analysis in optimization ticket
+   - Which optimizations does this interact with?
+   - Synergistic combinations (enable together)
+   - Conflicting combinations (avoid together or reorder phases)
+
+**Automated Tooling**:
+```bash
+# Create experimentation framework
+ruchy experiment --baseline --compare OPT-CODEGEN-001 OPT-CODEGEN-004
+
+# Output:
+# Configuration A (Baseline): 10.5s ± 0.2s
+# Configuration B (+Constant Folding): 9.8s ± 0.15s (6.7% faster, p=0.001)
+# Configuration C (+Inlining): 9.2s ± 0.18s (12.4% faster, p<0.001)
+# Configuration D (+Both): 8.1s ± 0.12s (22.9% faster, p<0.001)
+#
+# Analysis: Synergistic (22.9% > 6.7% + 12.4% = 19.1%)
+# Recommendation: Enable both optimizations, inlining before constant folding
+```
+
+**Acceptance Criteria**:
+- ✅ New optimization provides benefit in isolation (Config B better than Config A, p < 0.05)
+- ✅ No severe negative interactions detected (Config D not worse than Config C)
+- ✅ Optimal phase ordering documented (if applicable)
+- ✅ Interaction matrix updated for future optimizations
+
+**Why This Phase Matters**:
+- Prevents local optimum trap (optimizing in isolation but harming overall performance)
+- Empirically solves phase-ordering problem (discover optimal order through measurement)
+- Detects regressions early (before merge, not after deployment)
+- Builds portfolio knowledge (understand how optimizations compose)
+
+**Run**: `ruchy experiment --config validation/experiments/opt-codegen-001-portfolio.yaml`
+**Expected**: ✅ Statistically significant improvement with no severe negative interactions
+
+#### Summary: 8-Phase Validation Checklist (v1.1)
 
 Every optimization MUST pass:
 - [ ] ✅ RED: Failing test demonstrates opportunity
@@ -605,8 +730,125 @@ Every optimization MUST pass:
 - [ ] ✅ MUTATION TESTING: ≥95% mutant kill rate
 - [ ] ✅ PROPERTY TESTING: 10,000+ cases per property
 - [ ] ✅ FUZZ TESTING: 100,000+ test cases, zero crashes
+- [ ] ✅ **PORTFOLIO VALIDATION**: Statistical significance + no negative interactions (NEW in v1.1)
 
-**Quality Gate**: Optimization is **BLOCKED** from merge until all phases complete.
+**Quality Gate**: Optimization is **BLOCKED** from merge until all 8 phases complete.
+
+---
+
+## Optimization Risk Classification (v1.1)
+
+**Principle (Kaizen - Continuous Improvement)**: Not all optimizations carry equal risk of introducing bugs or regressions. Applying validation rigor proportional to risk maximizes quality while enabling faster iteration on low-risk changes.
+
+**Research Basis**: Sullivan & Zeller (2005) - "Yesterday's loss is today's gain: a simple and effective technique for localizing regression bugs"
+
+### Risk Class Definitions
+
+We classify optimizations into three risk classes based on complexity, scope, and correctness guarantees:
+
+#### Risk Class 3: Provably Correct / Local Optimizations (FAST-TRACK)
+
+**Characteristics**:
+- **Provably correct**: Transformation can be formally proven to preserve semantics
+- **Local scope**: Operates on individual expressions or statements (no global analysis)
+- **Deterministic**: Same input always produces same output (no heuristics)
+- **Simple implementation**: <50 LOC, low cyclomatic complexity
+
+**Examples**:
+- Constant folding (`2 + 3 → 5`)
+- Algebraic simplification (`x * 1 → x`, `x + 0 → x`)
+- Peephole optimization (pattern-based rewrites)
+- Dead store elimination (unused local variables)
+
+**Validation Requirements** (Streamlined):
+- ✅ Phases 1-4: RED-GREEN-REFACTOR-TOOL VALIDATION (mandatory)
+- ✅ Phase 5: MUTATION TESTING (≥95% kill rate)
+- ✅ Phase 6: PROPERTY TESTING (1,000+ cases - reduced from 10,000)
+- ⏭️ Phase 7: FUZZ TESTING (optional - can defer to integration testing)
+- ✅ Phase 8: PORTFOLIO VALIDATION (statistical significance required)
+
+**Rationale**: Provably correct transformations have low regression risk. Focus testing on correctness proof and interaction with other optimizations rather than exhaustive edge cases.
+
+#### Risk Class 2: Complex / Global Optimizations (STANDARD RIGOR)
+
+**Characteristics**:
+- **Complex analysis**: Requires data flow, control flow, or type analysis
+- **Global scope**: Operates across multiple functions or modules
+- **Non-trivial implementation**: 50-200 LOC, moderate cyclomatic complexity
+- **Deterministic**: No heuristics, but complex algorithms (e.g., unification, liveness analysis)
+
+**Examples**:
+- Dead code elimination (DCE) - requires liveness analysis
+- Type inference caching - requires cache invalidation strategy
+- AST node pooling - requires memory management correctness
+- Occurs check optimization - requires union-find correctness
+
+**Validation Requirements** (FULL EXTREME TDD):
+- ✅ All 8 phases MANDATORY (no exceptions)
+- ✅ Phase 5: MUTATION TESTING (≥95% kill rate)
+- ✅ Phase 6: PROPERTY TESTING (10,000+ cases)
+- ✅ Phase 7: FUZZ TESTING (100,000+ cases)
+- ✅ Phase 8: PORTFOLIO VALIDATION (statistical significance + interaction analysis)
+
+**Rationale**: Complex optimizations have higher bug surface area. Require comprehensive validation to ensure correctness across edge cases and interactions.
+
+#### Risk Class 1: Heuristic-Based / Profile-Guided (MAXIMUM RIGOR)
+
+**Characteristics**:
+- **Heuristic-driven**: Uses thresholds, heuristics, or machine learning
+- **Non-deterministic**: Different heuristics may produce different (but valid) results
+- **Context-dependent**: Effectiveness varies wildly based on input characteristics
+- **High-risk trade-offs**: Can improve common case but hurt edge cases
+
+**Examples**:
+- Inline expansion (heuristics: function size, call frequency, recursion depth)
+- Profile-guided optimization (PGO) - depends on representative profile
+- Loop unrolling (heuristics: loop trip count, body size)
+- Register allocation (graph coloring heuristics)
+
+**Validation Requirements** (MAXIMUM + EXTENDED):
+- ✅ All 8 phases MANDATORY
+- ✅ Phase 5: MUTATION TESTING (≥98% kill rate - HIGHER than Class 2/3)
+- ✅ Phase 6: PROPERTY TESTING (25,000+ cases - HIGHER than Class 2)
+- ✅ Phase 7: FUZZ TESTING (250,000+ cases - HIGHER than Class 2)
+- ✅ Phase 8: PORTFOLIO VALIDATION (EXTENSIVE - test multiple heuristic configurations)
+- ✅ **Extended validation**: Differential testing (compare heuristic variants)
+- ✅ **Extended validation**: Sensitivity analysis (how do heuristic thresholds affect results?)
+- ✅ **Extended validation**: Worst-case validation (ensure heuristic never hurts performance by >5%)
+
+**Rationale**: Heuristic-based optimizations are the highest risk. They can introduce subtle regressions that only appear on specific input patterns. Require maximum validation rigor and ongoing monitoring.
+
+### Risk Classification Workflow
+
+When implementing a new optimization:
+
+1. **Classify the optimization** into Risk Class 1, 2, or 3
+2. **Apply appropriate validation rigor** based on classification
+3. **Document classification** in optimization ticket and book chapter
+4. **Justify classification** if reviewers disagree (explain why it's Class X not Class Y)
+
+**Example Classification Decision Tree**:
+```
+Is the transformation provably correct AND local scope?
+  YES → Risk Class 3 (Fast-track validation)
+  NO  → Continue
+
+Does the optimization use heuristics or profile data?
+  YES → Risk Class 1 (Maximum rigor)
+  NO  → Continue
+
+Is the optimization complex (data flow, control flow, global analysis)?
+  YES → Risk Class 2 (Standard rigor)
+  NO  → Re-evaluate (might be Class 3)
+```
+
+### Benefits of Risk-Based Classification
+
+1. **Faster iteration on low-risk changes**: Provably correct optimizations don't need 100,000+ fuzz cases
+2. **Focus resources on high-risk areas**: Heuristic optimizations get maximum scrutiny
+3. **Clear expectations**: Developers know validation requirements upfront
+4. **Balanced rigor**: Avoid over-testing simple changes, avoid under-testing complex changes
+5. **Continuous improvement**: Classification criteria evolve as team learns from regressions
 
 ---
 
@@ -772,15 +1014,25 @@ Passing: ≥85 points
   - Count generated instructions
   - Benchmark generated code execution time
 
+- **OPT-INFRA-004**: Statistical Benchmarking Framework (NEW in v1.1)
+  - Automate N≥30 benchmark runs per configuration
+  - Calculate mean, standard deviation, 95% confidence intervals
+  - Implement Welch's t-test for statistical significance (p < 0.05)
+  - Detect and report performance noise sources (OS scheduler, cache, CPU turbo)
+  - Generate statistical reports with p-values and effect sizes
+
 **Deliverables**:
-- `scripts/benchmark-bootstrap.sh` - Automated bootstrap benchmarking
-- `validation/benchmarks/bootstrap_baseline.ruchy` - Baseline measurements
-- Dashboard showing current performance metrics
+- `scripts/benchmark-bootstrap.sh` - Automated bootstrap benchmarking with statistical rigor
+- `validation/benchmarks/bootstrap_baseline.ruchy` - Baseline measurements (N=30 runs)
+- `validation/benchmarks/statistical_test.ruchy` - Welch's t-test implementation
+- Dashboard showing current performance metrics with confidence intervals
 
 **Success Criteria**:
-- ✅ Reproducible bootstrap time measurements (±1% variance)
+- ✅ Reproducible bootstrap time measurements with statistical validation (p < 0.05 for variance check)
+- ✅ N≥30 runs per configuration with mean ± std dev reporting
 - ✅ Profiling data collected for each compiler phase
-- ✅ Baseline established for future optimization comparison
+- ✅ Baseline established for future optimization comparison (with 95% confidence intervals)
+- ✅ Statistical significance testing automated (Welch's t-test implemented)
 
 ### Phase 2: Lexer Optimizations (Weeks 3-4)
 
@@ -790,7 +1042,7 @@ Passing: ≥85 points
 - **OPT-LEX-001**: Token Stream Caching (RED-GREEN-REFACTOR)
 - **OPT-LEX-002**: Lazy String Allocation (RED-GREEN-REFACTOR)
 
-**Each ticket follows 7-phase EXTREME TDD**:
+**Each ticket follows 8-phase EXTREME TDD** (v1.1):
 1. RED: Demonstrate opportunity via profiling
 2. GREEN: Minimal optimization implementation
 3. REFACTOR: Generalize and improve
@@ -798,12 +1050,14 @@ Passing: ≥85 points
 5. MUTATION: ≥95% mutant kill rate
 6. PROPERTY: 10,000+ test cases
 7. FUZZ: 100,000+ fuzz cases
+8. PORTFOLIO: Statistical significance + interaction analysis
 
-**Success Criteria**:
-- ✅ Lexer phase speedup: ≥15%
-- ✅ Memory allocation reduction: ≥25%
-- ✅ Bootstrap Stage 1→2 time reduction: ≥5%
+**Success Criteria** (Statistical Rigor - v1.1):
+- ✅ Lexer phase speedup: ≥15% ± Y% (p < 0.05, N=30 runs)
+- ✅ Memory allocation reduction: ≥25% ± Y% (p < 0.05, N=30 runs)
+- ✅ Bootstrap Stage 1→2 time reduction: ≥5% ± Y% (p < 0.05, N=30 runs)
 - ✅ All validation phases pass
+- ✅ No negative interactions with existing optimizations (portfolio validation)
 
 ### Phase 3: Parser Optimizations (Weeks 5-6)
 
@@ -813,10 +1067,11 @@ Passing: ≥85 points
 - **OPT-PARSE-001**: Left-Recursion Elimination
 - **OPT-PARSE-002**: AST Node Pooling
 
-**Success Criteria**:
-- ✅ Parser phase speedup: ≥20%
-- ✅ AST memory churn reduction: ≥35%
-- ✅ Bootstrap Stage 1→2 time reduction: ≥8%
+**Success Criteria** (Statistical Rigor - v1.1):
+- ✅ Parser phase speedup: ≥20% ± Y% (p < 0.05, N=30 runs)
+- ✅ AST memory churn reduction: ≥35% ± Y% (p < 0.05, N=30 runs)
+- ✅ Bootstrap Stage 1→2 time reduction: ≥8% ± Y% (p < 0.05, N=30 runs)
+- ✅ No negative interactions with lexer optimizations (portfolio validation)
 
 ### Phase 4: Type System Optimizations (Weeks 7-8)
 
@@ -826,10 +1081,11 @@ Passing: ≥85 points
 - **OPT-TYPE-001**: Type Inference Caching
 - **OPT-TYPE-002**: Occurs Check Optimization
 
-**Success Criteria**:
-- ✅ Type checking phase speedup: ≥25%
-- ✅ Unification operations reduction: ≥30%
-- ✅ Bootstrap Stage 2→3 time reduction: ≥10%
+**Success Criteria** (Statistical Rigor - v1.1):
+- ✅ Type checking phase speedup: ≥25% ± Y% (p < 0.05, N=30 runs)
+- ✅ Unification operations reduction: ≥30% ± Y% (p < 0.05, N=30 runs)
+- ✅ Bootstrap Stage 2→3 time reduction: ≥10% ± Y% (p < 0.05, N=30 runs)
+- ✅ No negative interactions with parser optimizations (portfolio validation)
 
 ### Phase 5: Code Generation Optimizations (Weeks 9-12)
 
@@ -841,11 +1097,12 @@ Passing: ≥85 points
 - **OPT-CODEGEN-003**: Dead Code Elimination
 - **OPT-CODEGEN-004**: Inline Expansion
 
-**Success Criteria**:
-- ✅ Generated code speedup: ≥30%
-- ✅ Generated code size reduction: ≥20%
-- ✅ Codegen phase speedup: ≥15%
-- ✅ Bootstrap overall time reduction: ≥25%
+**Success Criteria** (Statistical Rigor - v1.1):
+- ✅ Generated code speedup: ≥30% ± Y% (p < 0.05, N=30 runs)
+- ✅ Generated code size reduction: ≥20% ± Y% (p < 0.05, N=30 runs)
+- ✅ Codegen phase speedup: ≥15% ± Y% (p < 0.05, N=30 runs)
+- ✅ Bootstrap overall time reduction: ≥25% ± Y% (p < 0.05, N=30 runs)
+- ✅ Optimization interactions documented (portfolio validation - esp. inlining + constant folding)
 
 ### Phase 6: Profile-Guided Optimization (Weeks 13-14)
 
@@ -855,10 +1112,11 @@ Passing: ≥85 points
 - **OPT-GLOBAL-001**: PGO Implementation
 - **OPT-GLOBAL-002**: Whole-Program Optimization
 
-**Success Criteria**:
-- ✅ Profile collection overhead: <5%
-- ✅ PGO-guided speedup: ≥20%
-- ✅ Total bootstrap time reduction: ≥40% (cumulative)
+**Success Criteria** (Statistical Rigor - v1.1):
+- ✅ Profile collection overhead: <5% ± Y% (p < 0.05, N=30 runs)
+- ✅ PGO-guided speedup: ≥20% ± Y% (p < 0.05, N=30 runs)
+- ✅ Total bootstrap time reduction: ≥40% ± Y% (cumulative, p < 0.05, N=30 runs)
+- ✅ Optimization portfolio interactions fully documented (portfolio validation)
 
 ### Phase 7: Validation and Measurement (Week 15)
 
@@ -869,44 +1127,62 @@ Passing: ≥85 points
 - Run all property tests (10,000+ cases each)
 - Run comprehensive fuzz testing (500,000+ cases)
 - Validate multi-stage bootstrap (Stage 2 == Stage 3)
-- Measure final performance improvements
+- Measure final performance improvements with statistical rigor
 - Document optimization results in book
+- Generate final statistical report (N=30 runs, confidence intervals, p-values)
 
-**Success Criteria**:
+**Success Criteria** (Statistical Rigor - v1.1):
 - ✅ Mutation coverage: ≥95%
 - ✅ Property tests: All pass (10,000+ cases)
 - ✅ Fuzz tests: Zero crashes (500,000+ cases)
 - ✅ Bootstrap validation: Bit-for-bit identical (Stage 2 == Stage 3)
-- ✅ Performance: ≥40% overall bootstrap speedup
-- ✅ Book: All optimization chapters complete
+- ✅ Performance: ≥40% ± Y% overall bootstrap speedup (p < 0.05, N=30 runs)
+- ✅ Statistical report: All improvements statistically significant (p < 0.05)
+- ✅ Book: All optimization chapters complete with portfolio interaction analysis
 
 ---
 
 ## Success Metrics
 
-### Primary Metrics
+### Primary Metrics (Statistical Rigor - v1.1)
 
 #### 1. Bootstrap Compilation Time
-**Baseline**: Establish current Stage 1→2→3 compilation time
-**Target**: ≥40% reduction by end of Phase 6
-**Measurement**: `time scripts/benchmark-bootstrap.sh`
+**Baseline**: Establish current Stage 1→2→3 compilation time (mean ± std dev, N=30 runs)
+**Target**: ≥40% ± Y% reduction by end of Phase 6 (p < 0.05, statistically significant)
+**Measurement**: `scripts/benchmark-bootstrap.sh --runs=30 --statistical-test`
 
-**Breakdown by Phase**:
-- Lexer optimizations: ≥5% improvement
-- Parser optimizations: ≥8% improvement
-- Type system optimizations: ≥10% improvement
-- Code generation optimizations: ≥25% improvement
-- PGO: ≥20% improvement (on top of previous)
+**Statistical Requirements** (Georges et al., 2007):
+- N ≥ 30 benchmark runs per configuration
+- Report mean ± standard deviation
+- Calculate 95% confidence intervals
+- Perform Welch's t-test between configurations
+- Accept optimization only if p < 0.05 (statistically significant)
+
+**Breakdown by Phase** (all require p < 0.05):
+- Lexer optimizations: ≥5% ± Y% improvement
+- Parser optimizations: ≥8% ± Y% improvement
+- Type system optimizations: ≥10% ± Y% improvement
+- Code generation optimizations: ≥25% ± Y% improvement
+- PGO: ≥20% ± Y% improvement (on top of previous)
 
 **Formula**: `Cumulative_Speedup = 1 - ∏(1 - Individual_Speedup_i)`
 
-#### 2. Generated Code Quality
-**Metrics**:
-- Execution time: ≥30% faster
-- Code size: ≥20% smaller
-- Instruction count: ≥25% reduction
+**Example Statistical Report**:
+```
+Configuration A (Baseline): 10.5s ± 0.2s (N=30)
+Configuration B (+All Optimizations): 6.3s ± 0.15s (N=30)
+Speedup: 40.0% ± 2.1%
+Welch's t-test: t=78.3, p<0.001 (highly significant)
+95% CI: [37.8%, 42.2%]
+```
 
-**Measurement**: Benchmark suite on generated code
+#### 2. Generated Code Quality
+**Metrics** (Statistical Rigor - v1.1):
+- Execution time: ≥30% ± Y% faster (p < 0.05, N=30 runs)
+- Code size: ≥20% ± Y% smaller (p < 0.05, N=30 runs)
+- Instruction count: ≥25% ± Y% reduction (p < 0.05, N=30 runs)
+
+**Measurement**: Benchmark suite on generated code with statistical validation
 
 #### 3. Memory Usage
 **Metrics**:
@@ -1018,26 +1294,31 @@ Passing: ≥85 points
 
 ---
 
-## Appendix B: EXTREME TDD Template
+## Appendix B: EXTREME TDD Template (v1.1)
 
 Every optimization ticket follows this structure:
 
 ```markdown
 # OPT-XXX-YYY: Optimization Name
 
+## Risk Classification (NEW in v1.1)
+**Risk Class**: [1 / 2 / 3] - [Heuristic-Based / Complex-Global / Provably Correct]
+**Justification**: [Explain why this class was chosen]
+**Validation Rigor**: [MAXIMUM / FULL EXTREME TDD / FAST-TRACK]
+
 ## Context
 [Why this optimization is needed, research basis]
 
-## RED Phase: Write Failing Test
+## Phase 1 - RED: Write Failing Test
 [Test demonstrating opportunity, expected to fail]
 
-## GREEN Phase: Minimal Implementation
+## Phase 2 - GREEN: Minimal Implementation
 [Simplest code to pass test]
 
-## REFACTOR Phase: Improvements
+## Phase 3 - REFACTOR: Improvements
 [Generalize, improve, maintain]
 
-## TOOL VALIDATION (16 Ruchy Tools)
+## Phase 4 - TOOL VALIDATION (16 Ruchy Tools)
 - [ ] ruchy check: ✅ Syntax valid
 - [ ] ruchy test: ✅ Tests pass
 - [ ] ruchy lint: ✅ A+ grade
@@ -1055,26 +1336,48 @@ Every optimization ticket follows this structure:
 - [ ] ruchy security: ✅ No vulnerabilities
 - [ ] ruchy complexity: ✅ All functions <20
 
-## MUTATION TESTING
+## Phase 5 - MUTATION TESTING
 - Total mutants: XXX
 - Killed: XXX
-- Mutation score: XX.X% (target: ≥95%)
+- Mutation score: XX.X% (target: ≥95% for Class 2/3, ≥98% for Class 1)
 
-## PROPERTY TESTING
-- Property 1: [Name] - 10,000+ cases ✅
-- Property 2: [Name] - 10,000+ cases ✅
-- Property 3: [Name] - 10,000+ cases ✅
+## Phase 6 - PROPERTY TESTING
+- Property 1: [Name] - [1,000+ / 10,000+ / 25,000+] cases ✅ (based on risk class)
+- Property 2: [Name] - [1,000+ / 10,000+ / 25,000+] cases ✅
+- Property 3: [Name] - [1,000+ / 10,000+ / 25,000+] cases ✅
 
-## FUZZ TESTING
-- Grammar-based: 50,000 cases ✅
-- Mutation-based: 50,000 cases ✅
-- Boundary values: 1,000 cases ✅
-- Total: 100,000+ cases, 0 crashes ✅
+## Phase 7 - FUZZ TESTING
+- Grammar-based: [varies by risk class] cases ✅
+- Mutation-based: [varies by risk class] cases ✅
+- Boundary values: 1,000+ cases ✅
+- Total: [optional / 100,000+ / 250,000+] cases, 0 crashes ✅ (based on risk class)
+
+## Phase 8 - PORTFOLIO VALIDATION (NEW in v1.1)
+**Statistical Requirements** (Georges et al., 2007):
+- N ≥ 30 benchmark runs per configuration
+- Mean ± std dev reported
+- 95% confidence intervals calculated
+- Welch's t-test performed (p < 0.05 required)
+
+**Configurations Tested**:
+- Configuration A (Baseline): X.XX ± Y.YY seconds (N=30)
+- Configuration B (+This Optimization): X.XX ± Y.YY seconds (N=30)
+- Configuration C (+Previous Optimization): X.XX ± Y.YY seconds (N=30)
+- Configuration D (+Both): X.XX ± Y.YY seconds (N=30)
+
+**Statistical Test Results**:
+- Speedup (B vs A): XX.X% ± Y.Y% (Welch's t-test: t=Z.Z, p<0.05) ✅
+- Interaction analysis: [Synergistic / Independent / Conflict / Negative]
+- Optimal phase ordering: [Document if applicable]
+
+**Interaction Matrix Update**:
+- Synergies: [List optimizations that work well together]
+- Conflicts: [List optimizations that interfere]
 
 ## REPRODUCIBILITY
 ```bash
 # Reproduction script
-./scripts/reproduce-opt-xxx-yyy.sh
+./scripts/reproduce-opt-xxx-yyy.sh --runs=30 --statistical-test
 ```
 
 ## DEBUGGABILITY
@@ -1083,13 +1386,17 @@ Every optimization ticket follows this structure:
 ruchydbg validate bootstrap/stage3/optimization.ruchy
 ```
 
-## Performance Impact
-- Baseline: X.XX seconds
-- Optimized: X.XX seconds
-- Speedup: XX.X%
+## Performance Impact (Statistical Rigor - v1.1)
+- Baseline: X.XX ± Y.YY seconds (N=30 runs)
+- Optimized: X.XX ± Y.YY seconds (N=30 runs)
+- Speedup: XX.X% ± Y.Y% (p < 0.05, statistically significant) ✅
+- 95% Confidence Interval: [XX.X%, XX.X%]
 
-## Validation Summary
-- [ ] 7/7 EXTREME TDD phases complete
+## Validation Summary (v1.1)
+- [ ] 8/8 EXTREME TDD phases complete (v1.1)
+- [ ] Risk classification documented ✅
+- [ ] Statistical significance achieved (p < 0.05) ✅
+- [ ] Portfolio interactions analyzed ✅
 - [ ] Multi-stage bootstrap: Stage 2 == Stage 3 ✅
 - [ ] All tests passing ✅
 - [ ] Book chapter complete ✅
@@ -1102,6 +1409,7 @@ ruchydbg validate bootstrap/stage3/optimization.ruchy
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-10-21 | Claude Code | Initial specification created |
+| 1.1 | 2025-10-21 | Claude Code | Kaizen improvements: Phase 8 (Portfolio Validation), Statistical rigor requirements (p < 0.05), Risk-based classification system (3 classes) |
 
 ---
 
