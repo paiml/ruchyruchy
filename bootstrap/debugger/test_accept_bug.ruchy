@@ -1,0 +1,43 @@
+// Minimal test to isolate the accept_connection bug
+
+struct DAPServer { port: i32, is_running: bool, is_initialized: bool }
+
+fn dap_server_new(port: i32) -> DAPServer {
+    DAPServer { port: port, is_running: false, is_initialized: false }
+}
+
+fn dap_server_accept_connection(server: DAPServer) -> bool {
+    println("  Input: is_running = {}", server.is_running)
+    println("  Condition !is_running = {}", !server.is_running)
+
+    if !server.is_running {
+        println("  Branch: Taking FALSE path")
+        return false
+    }
+    println("  Branch: Taking TRUE path")
+    true
+}
+
+fn main() {
+    println("Testing accept_connection logic:")
+    println("")
+
+    let server = dap_server_new(4711)
+    println("Created server with is_running = {}", server.is_running)
+    println("")
+
+    let result = dap_server_accept_connection(server)
+    println("")
+    println("Result: {}", result)
+    println("Expected: false")
+
+    if result {
+        println("")
+        println("❌ BUG CONFIRMED: Function returned true when should return false!")
+    } else {
+        println("")
+        println("✅ Function works correctly")
+    }
+}
+
+main()
