@@ -75,6 +75,12 @@
   - ✅ Real-world: Tested on Ruchy compiler environment (50K+ LOC)
   - ✅ Developer Experience: Non-intrusive, clear errors, graceful degradation
   - ✅ **Phase 1 (Source Map Dogfooding) COMPLETE!**
+- **VALID-006**: End-to-End Bootstrap Pipeline Integration Test ⭐ **NEW**
+  - 10/10 tests passing (100%)
+  - Complete pipeline validated: Lexer → Parser → TypeChecker → CodeGen
+  - Stage-by-stage validation (all 4 stages working)
+  - Performance test: 100 compilations successful
+  - File: `validation/end_to_end/test_bootstrap_pipeline_complete.ruchy` (250+ lines)
 
 ---
 
