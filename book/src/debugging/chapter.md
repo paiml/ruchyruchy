@@ -94,21 +94,26 @@ Every feature includes DevEx validation:
 
 ### Completed
 
-None yet - starting with DEBUG-001 RED phase.
-
-### In Progress
-
-- **DEBUG-001: Source Map Generation** (Week 2-3)
+- **DEBUG-001: Source Map Generation** (Weeks 1-3)
   - Status: GREEN Phase Complete ✅
   - Tests: 20 tests (100% passing)
   - Property Tests: 150 cases (100 roundtrip + 50 monotonicity)
   - Implementation: 1:1 line mapping, minimal serialization
   - File: `validation/debugging/test_source_maps.ruchy` (628 lines)
-  - Next: REFACTOR Phase - Improve while keeping tests green
+  - Next: REFACTOR Phase (deferred to post-MVP)
+
+### In Progress
+
+- **DEBUG-008-MINIMAL: Basic Record-Replay Engine** (Weeks 5-8)
+  - Status: RED Phase Complete ✅
+  - Tests: 20 tests (14 failing, 6 accidentally passing)
+  - Property Tests: 99 cases (50 roundtrip + 49 monotonicity)
+  - Scope: In-memory logging, <1000 steps, naive replay
+  - File: `validation/debugging/test_record_replay.ruchy` (620+ lines)
+  - Next: GREEN Phase - Implement recording/replay engine
 
 ### Planned
 
-- DEBUG-008-MINIMAL: Basic Record-Replay Engine (Weeks 5-8)
 - DEBUG-003-MINIMAL: Basic DAP Server (Weeks 9-12)
 
 ## References
