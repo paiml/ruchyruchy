@@ -1,0 +1,113 @@
+// DEBUGGER-001: MUTATION Phase - Manual Mutation Testing
+// Testing if our test suite catches intentional bugs
+
+// Mutation 1: Boolean inversion in dap_server_start()
+// Original: return server if already running
+// Mutated: ALWAYS start (ignore running check)
+
+struct DAPServer { port: i32, is_running: bool, is_initialized: bool }
+let DEFAULT_DAP_PORT = 4711
+
+fn dap_server_new(port: i32) -> DAPServer {
+    DAPServer { port: port, is_running: false, is_initialized: false }
+}
+
+fn dap_server_with_running(server: DAPServer, running: bool) -> DAPServer {
+    DAPServer { port: server.port, is_running: running, is_initialized: server.is_initialized }
+}
+
+fn dap_server_with_initialized(server: DAPServer, initialized: bool) -> DAPServer {
+    DAPServer { port: server.port, is_running: server.is_running, is_initialized: initialized }
+}
+
+fn dap_server_reset(server: DAPServer) -> DAPServer {
+    DAPServer { port: server.port, is_running: false, is_initialized: false }
+}
+
+// MUTATION 1: Removed idempotency check
+fn dap_server_start(server: DAPServer) -> DAPServer {
+    // MUTATED: Commented out the guard clause
+    // if server.is_running {
+    //     return server
+    // }
+    println("✅ DAP Server started on port {}", server.port)
+    dap_server_with_running(server, true)
+}
+
+fn dap_server_accept_connection(server: DAPServer) -> bool {
+    if !server.is_running {
+        return false
+    }
+    println("✅ Client connection accepted")
+    true
+}
+
+fn dap_server_handle_initialize(server: DAPServer) -> DAPServer {
+    println("✅ Initialize request handled")
+    println("   Client ID: vscode")
+    println("   Adapter ID: ruchyruchy")
+    dap_server_with_initialized(server, true)
+}
+
+fn dap_server_is_ready(server: DAPServer) -> bool {
+    server.is_running && server.is_initialized
+}
+
+fn dap_server_stop(server: DAPServer) -> DAPServer {
+    println("✅ DAP Server stopped")
+    dap_server_reset(server)
+}
+
+fn create_started_server(port: i32) -> DAPServer {
+    let server = dap_server_new(port) in dap_server_start(server)
+}
+
+fn create_ready_server(port: i32) -> DAPServer {
+    let server = create_started_server(port) in {
+        let _connected = dap_server_accept_connection(server)
+        dap_server_handle_initialize(server)
+    }
+}
+
+// Test to check if mutation is caught
+fn test_mutation_1_idempotency() -> bool {
+    println("🧬 MUTATION 1: Testing idempotency guard removal")
+    println("")
+
+    let server = create_started_server(DEFAULT_DAP_PORT) in {
+        // Call start AGAIN on already-started server
+        let server2 = dap_server_start(server)
+
+        // With mutation, this will print "Started" twice
+        // Original code should be idempotent (no double-start)
+
+        // This test doesn't currently check output
+        // So mutation SURVIVES (not caught)
+        println("⚠️  Mutation SURVIVED: Test doesn't verify idempotency")
+        true
+    }
+}
+
+fn main() {
+    println("============================================================")
+    println("DEBUGGER-001: MUTATION Phase - Manual Mutation Testing")
+    println("============================================================")
+    println("")
+    println("Testing Mutation 1: Removed idempotency guard in start()")
+    println("")
+
+    let result = test_mutation_1_idempotency()
+
+    println("")
+    println("============================================================")
+    println("MUTATION TEST RESULT:")
+    println("❌ Mutation SURVIVED - Test suite needs improvement!")
+    println("")
+    println("Analysis:")
+    println("- Mutation removed idempotency check in dap_server_start()")
+    println("- Existing tests don't verify start() is idempotent")
+    println("- Tests pass even with broken code")
+    println("============================================================")
+}
+
+main()
