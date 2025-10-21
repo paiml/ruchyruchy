@@ -176,21 +176,38 @@ CHAPTER_WARNINGS=0
 if [ -d "$BOOK_DIR/src" ]; then
     # Find all ticket chapter files (not intro, chapter.md, etc.)
     while IFS= read -r chapter_file; do
+        filename=$(basename "$chapter_file")
         MISSING_SECTIONS=()
 
-        # Check for required sections
-        if ! grep -q "## RED:" "$chapter_file" && ! grep -q "## RED Phase" "$chapter_file"; then
-            MISSING_SECTIONS+=("RED Phase")
-        fi
-        if ! grep -q "## GREEN:" "$chapter_file" && ! grep -q "## GREEN Phase" "$chapter_file"; then
-            MISSING_SECTIONS+=("GREEN Phase")
-        fi
-        if ! grep -q "## REFACTOR:" "$chapter_file" && ! grep -q "## REFACTOR Phase" "$chapter_file"; then
-            MISSING_SECTIONS+=("REFACTOR Phase")
+        # Special handling for phase-specific files (e.g., *-red.md, *-green.md)
+        # These files document individual TDD phases separately
+        if echo "$filename" | grep -qE "\-red\.md$"; then
+            # RED phase file - only needs RED section
+            if ! grep -q "## RED:" "$chapter_file" && ! grep -q "## RED Phase" "$chapter_file"; then
+                MISSING_SECTIONS+=("RED Phase")
+            fi
+        elif echo "$filename" | grep -qE "\-green\.md$"; then
+            # GREEN phase file - only needs GREEN section
+            if ! grep -q "## GREEN:" "$chapter_file" && ! grep -q "## GREEN Phase" "$chapter_file"; then
+                MISSING_SECTIONS+=("GREEN Phase")
+            fi
+        elif echo "$filename" | grep -qE "(integration|success|report|results|execution|analysis)"; then
+            # Integration/status/results reports - skip EXTREME TDD validation
+            continue
+        else
+            # Regular chapter - needs all three phases
+            if ! grep -q "## RED:" "$chapter_file" && ! grep -q "## RED Phase" "$chapter_file"; then
+                MISSING_SECTIONS+=("RED Phase")
+            fi
+            if ! grep -q "## GREEN:" "$chapter_file" && ! grep -q "## GREEN Phase" "$chapter_file"; then
+                MISSING_SECTIONS+=("GREEN Phase")
+            fi
+            if ! grep -q "## REFACTOR:" "$chapter_file" && ! grep -q "## REFACTOR Phase" "$chapter_file"; then
+                MISSING_SECTIONS+=("REFACTOR Phase")
+            fi
         fi
 
         if [ "${#MISSING_SECTIONS[@]}" -gt 0 ]; then
-            filename=$(basename "$chapter_file")
             echo "  ⚠️  $filename needs update: missing ${MISSING_SECTIONS[*]}"
             CHAPTER_WARNINGS=$((CHAPTER_WARNINGS + 1))
         fi
