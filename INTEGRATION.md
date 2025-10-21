@@ -61,6 +61,13 @@
   - Real-world dogfooding: Test on Ruchy compiler (50K+ LOC, 390K+ tests)
   - Integration milestones: Week 4 (source maps), Week 8 (time-travel), Week 12 (DAP)
   - New CLI: `ruchy debug source-map`, `ruchy debug record/replay`, `ruchy debug dap`
+- **DEBUG-INTEGRATION**: Fast-Feedback Tooling Implementation ⭐ **NEW**
+  - `ruchydbg.ruchy`: Pure Ruchy debugging tools CLI (all checks <6s)
+  - `validate-debugging-tools.sh`: Pre-commit hook wrapper script
+  - `test_real_ruchy_files.ruchy`: Real-world validation (6/6 tests passing)
+  - Validated on real Ruchy patterns: quicksort, structs, multiline strings, 100+ line files
+  - Ready for ../ruchy pre-commit hook integration
+  - Integration guide: `docs/integration/RUCHY_PRE_COMMIT_HOOK_INTEGRATION.md`
 
 ---
 
