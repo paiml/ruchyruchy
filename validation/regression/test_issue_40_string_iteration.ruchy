@@ -1,0 +1,186 @@
+// Test for Issue #40: String Iteration with .chars().nth()
+// GitHub Issue: https://github.com/paiml/ruchy/issues/40
+//
+// Reported: String iteration using .chars().nth(i) hangs indefinitely
+// Testing if fix deployed in recent Ruchy version
+
+fun test_simple_iteration() -> bool {
+    println("Test 1: Simple string iteration (3 characters)");
+
+    let input = "abc".to_string();
+    let mut count = 0;
+    let mut i = 0;
+
+    loop {
+        if i >= input.len() {
+            break;
+        }
+
+        let ch_opt = input.chars().nth(i);
+        match ch_opt {
+            Some(c) => {
+                count = count + 1;
+                i = i + 1;
+            },
+            None => break
+        }
+    }
+
+    if count == 3 {
+        println("  ✅ PASS: Counted 3 characters correctly");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 3, got {}", count);
+        false
+    }
+}
+
+fun test_longer_string() -> bool {
+    println("Test 2: Longer string iteration (11 characters)");
+
+    let input = "Hello World".to_string();
+    let mut count = 0;
+    let mut i = 0;
+
+    loop {
+        if i >= input.len() {
+            break;
+        }
+
+        let ch_opt = input.chars().nth(i);
+        match ch_opt {
+            Some(c) => {
+                count = count + 1;
+                i = i + 1;
+            },
+            None => break
+        }
+    }
+
+    if count == 11 {
+        println("  ✅ PASS: Counted 11 characters correctly");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 11, got {}", count);
+        false
+    }
+}
+
+fun test_empty_string() -> bool {
+    println("Test 3: Empty string iteration");
+
+    let input = "".to_string();
+    let mut count = 0;
+    let mut i = 0;
+
+    loop {
+        if i >= input.len() {
+            break;
+        }
+
+        let ch_opt = input.chars().nth(i);
+        match ch_opt {
+            Some(c) => {
+                count = count + 1;
+                i = i + 1;
+            },
+            None => break
+        }
+    }
+
+    if count == 0 {
+        println("  ✅ PASS: Empty string handled correctly");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 0, got {}", count);
+        false
+    }
+}
+
+fun test_single_char() -> bool {
+    println("Test 4: Single character string");
+
+    let input = "x".to_string();
+    let mut count = 0;
+    let mut i = 0;
+
+    loop {
+        if i >= input.len() {
+            break;
+        }
+
+        let ch_opt = input.chars().nth(i);
+        match ch_opt {
+            Some(c) => {
+                count = count + 1;
+                i = i + 1;
+            },
+            None => break
+        }
+    }
+
+    if count == 1 {
+        println("  ✅ PASS: Single character handled correctly");
+        true
+    } else {
+        println("  ❌ FAIL: Expected 1, got {}", count);
+        false
+    }
+}
+
+fun main() {
+    println("🧪 Testing Issue #40: String Iteration Fix");
+    println("==========================================");
+    println("");
+    println("Pattern: input.chars().nth(i) in loop");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    if test_simple_iteration() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_longer_string() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_empty_string() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    if test_single_char() {
+        passed = passed + 1;
+    } else {
+        failed = failed + 1;
+    }
+
+    println("");
+    println("📊 Results: {} passed, {} failed", passed, failed);
+    println("");
+
+    if failed == 0 {
+        println("✅ SUCCESS: All tests passed!");
+        println("Issue #40 appears to be FIXED! 🎉");
+        println("");
+        println("Next steps:");
+        println("1. Update GitHub issue with test results");
+        println("2. Update BOUNDARIES.md with fix confirmation");
+        println("3. Unblock BOOTSTRAP-004 (Error Recovery)");
+    } else {
+        println("❌ FAILURE: {} test(s) failed", failed);
+        println("Issue #40 still present - loops may hang");
+        println("");
+        println("If this test hangs and never completes,");
+        println("the issue is still present.");
+    }
+}
+
+main();
