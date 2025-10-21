@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Validation Framework - RuchyRuchy Bootstrap Compiler: A TDD Journey</title>
+        <title>Bootstrap Stage 2: Type Checker - RuchyRuchy Bootstrap Compiler: A TDD Journey</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="../favicon.svg">
-        <link rel="shortcut icon" href="../favicon.png">
-        <link rel="stylesheet" href="../css/variables.css">
-        <link rel="stylesheet" href="../css/general.css">
-        <link rel="stylesheet" href="../css/chrome.css">
-        <link rel="stylesheet" href="../css/print.css" media="print">
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="../fonts/fonts.css">
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="../../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "../";
+            const path_to_root = "../../";
             const default_light_theme = "rust";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex.js";
+            window.path_to_searchindex_js = "../../searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../toc.js"></script>
+        <script src="../../toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,13 +141,13 @@
                     <h1 class="menu-title">RuchyRuchy Bootstrap Compiler: A TDD Journey</h1>
 
                     <div class="right-buttons">
-                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                         <a href="https://github.com/paiml/ruchyruchy" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/paiml/ruchyruchy/edit/main/book/src/phase2_validation/chapter.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                        <a href="https://github.com/paiml/ruchyruchy/edit/main/book/src/phase3_bootstrap/stage2/chapter.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -181,64 +181,45 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="phase-2-validation--robustness"><a class="header" href="#phase-2-validation--robustness">Phase 2: Validation &amp; Robustness</a></h1>
+                        <h1 id="stage-2-type-checker"><a class="header" href="#stage-2-type-checker">Stage 2: Type Checker</a></h1>
+<p>This stage implements type inference using Algorithm W (Hindley-Milner type system) for the bootstrap compiler.</p>
 <h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
-<p>Phase 2 focuses on extensive validation of the Ruchy bootstrap compiler through property-based testing, fuzz testing, and boundary analysis. All validation infrastructure is implemented in pure Ruchy, dogfooding the Ruchy toolchain.</p>
-<h2 id="mission-find-the-boundaries"><a class="header" href="#mission-find-the-boundaries">Mission: Find the Boundaries</a></h2>
-<p>The core mission of Phase 2 is to discover the exact boundaries where our compiler works and where it fails through:</p>
-<ol>
-<li><strong>Property-Based Testing</strong>: Mathematical property validation with 10,000+ test cases per property</li>
-<li><strong>Fuzz Testing</strong>: Edge case discovery through 350,000+ randomized inputs</li>
-<li><strong>Boundary Analysis</strong>: Systematic mapping of compiler limits and capabilities</li>
-<li><strong>Pure Ruchy Dogfooding</strong>: All testing infrastructure uses <code>ruchy test</code>, <code>ruchy lint</code>, <code>ruchy prove</code>, <code>ruchy score</code></li>
-</ol>
-<h2 id="validation-tickets"><a class="header" href="#validation-tickets">Validation Tickets</a></h2>
-<h3 id="valid-001-self-compilation-test-harness"><a class="header" href="#valid-001-self-compilation-test-harness">VALID-001: Self-Compilation Test Harness</a></h3>
-<p>Status: ✅ Complete</p>
-<p>Created infrastructure to test Ruchy tools against self-compiled code, enabling differential testing and regression detection.</p>
-<h3 id="valid-002-pure-ruchy-quality-validation"><a class="header" href="#valid-002-pure-ruchy-quality-validation">VALID-002: Pure Ruchy Quality Validation</a></h3>
-<p>Status: ✅ Complete</p>
-<p>Converted all validation infrastructure to pure Ruchy with comprehensive quality gates including TDD test harness, zero SATD tolerance, and mandatory coverage requirements.</p>
-<h3 id="valid-003-property-based-testing-framework"><a class="header" href="#valid-003-property-based-testing-framework">VALID-003: Property-Based Testing Framework</a></h3>
-<p>Status: ✅ Complete</p>
-<p>Implemented mathematical property validation framework with pseudo-random test case generation. See <a href="./tickets/valid-003-property-testing.html">VALID-003 chapter</a> for full details.</p>
-<h3 id="valid-004-fuzz-testing-harness"><a class="header" href="#valid-004-fuzz-testing-harness">VALID-004: Fuzz Testing Harness</a></h3>
-<p>Status: ✅ Complete</p>
-<p>Comprehensive fuzz testing with 350,000+ test cases across grammar-based, mutation-based, boundary value, and corpus-based fuzzing strategies.</p>
-<h2 id="success-metrics"><a class="header" href="#success-metrics">Success Metrics</a></h2>
+<p>Stage 2 builds upon the parsed AST from Stage 1 and adds type inference capabilities:</p>
 <ul>
-<li><strong>Property Tests</strong>: 40,000+ test cases validating 4 mathematical properties (100% pass rate)</li>
-<li><strong>Fuzz Tests</strong>: 350,000+ inputs tested (0 crashes discovered)</li>
-<li><strong>Quality Score</strong>: &gt;0.8 via <code>ruchy score</code> (achieved 0.76-0.81)</li>
-<li><strong>Test Coverage</strong>: 100% line coverage on all validation files (482/482 lines)</li>
-<li><strong>SATD</strong>: Zero TODO/FIXME/HACK comments maintained</li>
-<li><strong>Lint Grade</strong>: A+ via <code>ruchy lint --strict</code> (zero issues)</li>
+<li>Type environment management</li>
+<li>Unification algorithm with occurs check</li>
+<li>Algorithm W implementation</li>
+<li>Self-typing validation</li>
 </ul>
-<h2 id="key-achievements"><a class="header" href="#key-achievements">Key Achievements</a></h2>
-<ol>
-<li><strong>Pure Ruchy Dogfooding</strong>: All validation infrastructure written in Ruchy</li>
-<li><strong>Mathematical Rigor</strong>: Property-based testing proves correctness across thousands of cases</li>
-<li><strong>Boundary Discovery</strong>: Comprehensive documentation of compiler limits</li>
-<li><strong>Quality Gates</strong>: Pre-commit hooks enforcing 100% coverage and A+ grades</li>
-<li><strong>Toyota Way</strong>: Kaizen continuous improvement with zero defect tolerance</li>
-</ol>
-<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
-<p>With Phase 2 validation complete, the project continues with:</p>
+<h2 id="tickets"><a class="header" href="#tickets">Tickets</a></h2>
 <ul>
-<li>Phase 3: Bootstrap compiler implementation (Stage 0-3)</li>
-<li>Integration of property tests with lexer/parser roundtrip validation</li>
-<li>Expansion of property framework to 10,000+ cases per property</li>
+<li><strong>BOOTSTRAP-010</strong>: Type Environment</li>
+<li><strong>BOOTSTRAP-011</strong>: Unification Algorithm</li>
+<li><strong>BOOTSTRAP-012</strong>: Algorithm W Implementation</li>
+<li><strong>BOOTSTRAP-013</strong>: Self-Typing Test</li>
+</ul>
+<h2 id="success-criteria"><a class="header" href="#success-criteria">Success Criteria</a></h2>
+<p>✅ Type inference working on all bootstrap stages
+✅ Soundness property: well-typed programs don't crash
+✅ Self-typing: type checker can type its own code
+✅ O(n log n) complexity achieved</p>
+<h2 id="technical-highlights"><a class="header" href="#technical-highlights">Technical Highlights</a></h2>
+<ul>
+<li><strong>Hindley-Milner type system</strong>: Automatic type inference</li>
+<li><strong>Let-polymorphism</strong>: Generalization at let bindings</li>
+<li><strong>Occurs check</strong>: Prevents infinite types</li>
+<li><strong>Constraint solving</strong>: Unification-based inference</li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../phase1_infrastructure/tickets/infra-004-organization.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../phase2_validation/tickets/valid-001-multi-target.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../phase3_bootstrap/stage2/bootstrap-010-type-environment.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -248,11 +229,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../phase1_infrastructure/tickets/infra-004-organization.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../phase3_bootstrap/stage1/bootstrap-009-roundtrip-validation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../phase2_validation/tickets/valid-001-multi-target.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../phase3_bootstrap/stage2/bootstrap-010-type-environment.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -267,13 +248,13 @@
         </script>
 
 
-        <script src="../elasticlunr.min.js"></script>
-        <script src="../mark.min.js"></script>
-        <script src="../searcher.js"></script>
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
 
-        <script src="../clipboard.min.js"></script>
-        <script src="../highlight.js"></script>
-        <script src="../book.js"></script>
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
 
         <!-- Custom JS scripts -->
 
