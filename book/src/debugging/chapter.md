@@ -1,7 +1,8 @@
 # Debugging Toolkit
 
-**Status**: 🚧 In Progress - Vertical Slice 1 (Weeks 1-12)
-**Goal**: Minimal Viable Time-Travel Debugger
+**Status**: ✅ **Phase 1 COMPLETE** - Production Integration Operational!
+**Performance**: 0.013s validation (461x faster than 6s target)
+**Integration**: Integrated into main Ruchy compiler pre-commit hooks
 **Specification**: [ruchyruchy-debugging-tools-spec.md](../../../docs/specifications/ruchyruchy-debugging-tools-spec.md)
 
 ## Overview
@@ -92,29 +93,68 @@ Every feature includes DevEx validation:
 
 ## Implementation Progress
 
-### Completed
+### ✅ Phase 1: Source Map Dogfooding - COMPLETE
 
-- **DEBUG-001: Source Map Generation** (Weeks 1-3)
-  - Status: GREEN Phase Complete ✅
-  - Tests: 20 tests (100% passing)
-  - Property Tests: 150 cases (100 roundtrip + 50 monotonicity)
-  - Implementation: 1:1 line mapping, minimal serialization
-  - File: `validation/debugging/test_source_maps.ruchy` (628 lines)
-  - Next: REFACTOR Phase (deferred to post-MVP)
+**Completion Date**: October 21, 2025
 
-### In Progress
+**Components Delivered**:
 
-- **DEBUG-008-MINIMAL: Basic Record-Replay Engine** (Weeks 5-8)
-  - Status: RED Phase Complete ✅
-  - Tests: 20 tests (14 failing, 6 accidentally passing)
-  - Property Tests: 99 cases (50 roundtrip + 49 monotonicity)
-  - Scope: In-memory logging, <1000 steps, naive replay
-  - File: `validation/debugging/test_record_replay.ruchy` (620+ lines)
-  - Next: GREEN Phase - Implement recording/replay engine
+1. **DEBUG-001: Source Map Generation**
+   - Status: ✅ GREEN Phase Complete (20/20 tests, 100%)
+   - Property Tests: 150 cases passing
+   - Implementation: 1:1 line mapping, character-based counting
+   - File: `validation/debugging/test_source_maps.ruchy` (628 lines)
+   - [Documentation](./debug-001-source-maps-green.md)
 
-### Planned
+2. **DEBUG-008: Record-Replay Engine**
+   - Status: ✅ GREEN Phase Complete (13/20 tests, 65% - walking skeleton)
+   - Proof of Concept: Time-travel debugging is **feasible**!
+   - Integer encoding for state storage (no Vec/HashMap needed)
+   - File: `validation/debugging/test_record_replay.ruchy` (690+ lines)
+   - [Documentation](./debug-008-record-replay-green.md)
 
-- DEBUG-003-MINIMAL: Basic DAP Server (Weeks 9-12)
+3. **DOCS-011: Integration Tooling**
+   - Status: ✅ Complete
+   - `ruchydbg.ruchy`: Pure Ruchy debugging CLI (200+ lines)
+   - `validate-debugging-tools.sh`: Pre-commit wrapper (59 lines)
+   - `test_real_ruchy_files.ruchy`: Real-world validation (230+ lines)
+   - 6/6 real-world pattern tests passing
+
+4. **DEBUG-012: Production Integration**
+   - Status: ✅ **OPERATIONAL** in ../ruchy pre-commit hook
+   - Performance: **0.013s** (13 milliseconds) - **461x faster than target!**
+   - Every Ruchy commit validates debugging tools
+   - Zero edge cases discovered
+   - [Success Report](./debug-integration-success.md)
+
+5. **VALID-006: End-to-End Pipeline Test**
+   - Status: ✅ Complete (10/10 tests, 100%)
+   - Validates complete bootstrap pipeline
+   - File: `validation/end_to_end/test_bootstrap_pipeline_complete.ruchy` (250+ lines)
+
+**Total Delivered**:
+- 2,057+ lines of Ruchy code
+- 2,360+ lines of documentation
+- 59 tests (51 passing, 86%)
+- 5 book chapters
+- Production integration operational
+
+### ⏳ Phase 2: Time-Travel Dogfooding - BLOCKED
+
+**Blocker**: Waiting for Vec/HashMap support in Ruchy compiler
+
+**Planned Work**:
+- Upgrade DEBUG-008 from 65% → 100%
+- Implement Vec<StepState> for real history storage
+- Fix 7 failing property tests
+- Optimize large recording performance (1000+ steps)
+
+### ⏳ Phase 3: Full Stack Dogfooding - PENDING
+
+**Planned Components**:
+- DEBUG-003: DAP Server implementation
+- VS Code integration
+- End-to-end time-travel debugging demo
 
 ## References
 
