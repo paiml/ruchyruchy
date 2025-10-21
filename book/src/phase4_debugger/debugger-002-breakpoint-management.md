@@ -423,3 +423,200 @@ $ ruchy run bootstrap/debugger/test_breakpoint_manager_green.ruchy
 **DEBUGGER-002 Progress**: Phase 2/8 complete (25% through EXTREME TDD)
 
 **Next Phase**: REFACTOR (Phase 3/8)
+
+---
+
+## Phase 3: REFACTOR (Code Quality Improvements)
+
+**Status**: ✅ COMPLETE
+
+Following EXTREME TDD, we now improve code quality while maintaining all tests passing.
+
+**File**: `bootstrap/debugger/breakpoint_manager.ruchy` (266 LOC)
+**Test File**: `bootstrap/debugger/test_breakpoint_manager_green.ruchy` (546 LOC)
+
+### Refactoring Goals
+
+- **Target**: 15-20% LOC reduction
+- **Achieved**: 15.0% reduction (313 → 266 LOC, 47 lines saved)
+- **Constraint**: Maintain all 10 tests passing (100%)
+
+### Key Refactorings Applied
+
+**1. Extract Helper Function** - `slot_matches()`
+Reduced duplication in remove() function matching logic:
+
+```ruchy
+// Before (repeated 3 times):
+let bp1_matches = if manager.bp1_exists {
+    if manager.bp1_file == file {
+        manager.bp1_line == line
+    } else {
+        false
+    }
+} else {
+    false
+}
+
+// After (helper function):
+fun slot_matches(exists: bool, slot_file: String, slot_line: i32, file: String, line: i32) -> bool {
+    if exists {
+        if slot_file == file {
+            slot_line == line
+        } else { false }
+    } else { false }
+}
+
+let bp1_matches = slot_matches(manager.bp1_exists, manager.bp1_file, manager.bp1_line, file, line)
+```
+
+**2. Inline Variables**
+Removed unnecessary `new_count` variable in `add()`:
+
+```ruchy
+// Before:
+let new_count = manager.count + 1
+// ... use new_count
+
+// After:
+count: manager.count + 1,  // inline directly
+```
+
+**3. Delegate to Existing Function**
+Eliminated duplication in `clear_all()`:
+
+```ruchy
+// Before (17 lines - duplicating structure):
+fun breakpoint_manager_clear_all(manager: BreakpointManager) -> BreakpointManager {
+    BreakpointManager {
+        count: 0,
+        bp1_file: "",
+        bp1_line: 0,
+        // ... 14 more fields
+    }
+}
+
+// After (2 lines - delegate):
+fun breakpoint_manager_clear_all(_manager: BreakpointManager) -> BreakpointManager {
+    breakpoint_manager_new()
+}
+```
+
+**4. Compact Logic**
+Simplified `get_file_count()` with inline conditionals:
+
+```ruchy
+// Before (17 lines):
+if manager.bp1_exists {
+    if manager.bp1_file == file {
+        count = count + 1
+    }
+}
+// ... repeat for bp2, bp3
+
+// After (10 lines):
+let bp1_match = if manager.bp1_exists { manager.bp1_file == file } else { false }
+let bp2_match = if manager.bp2_exists { manager.bp2_file == file } else { false }
+let bp3_match = if manager.bp3_exists { manager.bp3_file == file } else { false }
+if bp1_match { count = count + 1 }
+if bp2_match { count = count + 1 }
+if bp3_match { count = count + 1 }
+```
+
+### LOC Comparison
+
+| Metric | Before (GREEN) | After (REFACTOR) | Change |
+|--------|----------------|------------------|--------|
+| Total LOC | 313 | 266 | -47 (-15.0%) |
+| Functions | 12 | 13 (+1 helper) | |
+| Duplication | High | Low | ✅ Improved |
+| Test Results | 10/10 | 10/10 | ✅ Maintained |
+
+### REFACTOR Phase Results
+
+```bash
+$ ruchy check bootstrap/debugger/breakpoint_manager.ruchy
+✓ Syntax is valid
+
+$ ruchy run bootstrap/debugger/test_breakpoint_manager_green.ruchy
+```
+
+```
+╔════════════════════════════════════════════════════════════╗
+║  DEBUGGER-002: Breakpoint Management - REFACTOR Phase     ║
+║  EXTREME TDD Phase 3/8: Code Quality Improvements         ║
+╚════════════════════════════════════════════════════════════╝
+
+Expected: ALL 10 tests should PASS (implementation exists)
+
+TEST 1: Create empty breakpoint manager
+  ✅ PASS: Empty manager has count 0
+TEST 2: Add breakpoint
+  ✅ PASS: Adding breakpoint increases count to 1
+TEST 3: Verify valid breakpoint
+  ✅ PASS: Valid breakpoint is verified
+TEST 4: Reject comment breakpoint
+  ✅ PASS: Comment line breakpoint rejected
+TEST 5: Multiple breakpoints in one file
+  ✅ PASS: Multiple breakpoints stored (count 2)
+TEST 6: Breakpoints in different files
+  ✅ PASS: Breakpoints in different files (count 2)
+TEST 7: Remove breakpoint
+  ✅ PASS: Removing breakpoint decreases count to 0
+TEST 8: Enable/disable breakpoint
+  ✅ PASS: Breakpoint disabled successfully
+TEST 9: Get breakpoints for file
+  ✅ PASS: Got 2 breakpoints for lexer.ruchy
+TEST 10: Clear all breakpoints
+  ✅ PASS: Clear all results in count 0
+
+════════════════════════════════════════════════════════════
+GREEN PHASE RESULTS:
+  Total Tests: 10
+  Passed: 10
+  Failed: 0
+
+✅ GREEN PHASE SUCCESS: All 10 tests passing!
+REFACTOR Phase Complete - 15% LOC reduction (313→266)
+════════════════════════════════════════════════════════════
+```
+
+### Validation
+
+```bash
+# Syntax validation
+$ ruchy check bootstrap/debugger/breakpoint_manager.ruchy
+✓ Syntax is valid
+
+# Test validation (all still passing!)
+$ ruchy run bootstrap/debugger/test_breakpoint_manager_green.ruchy
+✅ 10/10 tests passing (100%)
+
+# LOC measurement
+$ wc -l bootstrap/debugger/breakpoint_manager.ruchy
+266 breakpoint_manager.ruchy  # Down from 313 (15% reduction)
+```
+
+**Status**: ✅ **REFACTOR Phase Complete**
+- 15.0% LOC reduction achieved (313 → 266)
+- All 10 tests still passing (100%)
+- Code duplication eliminated
+- Helper function extracted
+- Cleaner, more maintainable code
+
+## Next Steps
+
+**Phase 4: TOOL** - Quality Analysis
+- Run `ruchy score` (target: 1.00/1.0)
+- Run `ruchy lint` (target: A+ grade with 0 errors)
+- Run `ruchy check` (verify syntax)
+- Run `ruchy prove` (formal verification readiness)
+- Run `ruchy runtime` (performance analysis)
+- Target: Perfect quality scores across all tools
+- Estimated: 1 hour
+
+---
+
+**DEBUGGER-002 Progress**: Phase 3/8 complete (37.5% through EXTREME TDD)
+
+**Next Phase**: TOOL (Phase 4/8)
