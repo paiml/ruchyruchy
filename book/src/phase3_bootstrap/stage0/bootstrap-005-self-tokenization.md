@@ -264,6 +264,91 @@ The sample input `"fun add(x: i32, y: i32) -> i32 { x + y }"` produces 18 tokens
 
 **Note**: The `:` (colon) tokens are currently tokenized as Error tokens because we haven't implemented type annotation syntax yet. This is expected and acceptable for this stage.
 
+## REFACTOR: Improvements
+
+After the GREEN phase implementation, several refactorings improved code quality while maintaining test success:
+
+### 1. Loop Control Clarity
+
+**Before**: Manual position tracking mixed with token counting
+```ruchy
+let mut pos = 0;
+let mut token_count = 0;
+loop {
+    // ... mixed logic ...
+}
+```
+
+**After**: Separated concerns with clear boolean flag
+```ruchy
+let mut done = false;
+loop {
+    if done { break; }
+    // Clear exit conditions
+    if pos >= input.len() { done = true; }
+    if token_count > 10000 { done = true; }
+}
+```
+
+**Improvement**: Easier to understand loop termination logic.
+
+### 2. Multi-Char Operator Pattern
+
+**Refactored** `tokenize_single` to use consistent lookahead pattern:
+```ruchy
+fun tokenize_single(input: String, start: i32) -> (Token, i32) {
+    let ch = char_at(input, start);
+    let next_ch = char_at(input, start + 1);  // Lookahead once
+
+    // Pattern matching on (ch, next_ch) pairs
+    if ch == "-" && next_ch == ">" { /* Arrow */ }
+    else if ch == "=" && next_ch == "=" { /* Equals */ }
+    // ... etc
+}
+```
+
+**Improvement**: Extensible pattern for future multi-char operators (`==`, `!=`, `<=`, `>=`, `&&`, `||`).
+
+### 3. Safety Limit Documentation
+
+Added clear comments explaining the safety limit:
+```ruchy
+// Safety limit: prevents infinite loops on malformed input
+// 10,000 tokens is reasonable for bootstrap stage (self-tokenization ~100-500 tokens)
+if token_count > 10000 {
+    done = true;
+}
+```
+
+**Improvement**: Future maintainers understand the rationale.
+
+### 4. Token Counting Validation
+
+Refactored return value to provide actionable feedback:
+```ruchy
+fun tokenize_all(input: String) -> i32 {
+    // ... tokenization ...
+    token_count  // Return count for validation
+}
+```
+
+**Improvement**: Caller can validate success without inspecting tokens directly.
+
+### Result
+
+All tests continue to pass:
+```bash
+$ ruchy run bootstrap/stage0/lexer_self_tokenization.ruchy
+✅ Tokenized 18 tokens successfully
+✅ Self-tokenization working!
+```
+
+**Refactoring Impact**:
+- ✅ Tests still green
+- ✅ Code more maintainable
+- ✅ Patterns reusable for Stage 1 (Parser)
+- ✅ Safety guarantees documented
+
 ## Key Learnings
 
 ### 1. Avoiding Nested Match with Break

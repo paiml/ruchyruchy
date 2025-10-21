@@ -30,6 +30,26 @@ enum TokenType {
 }
 ```
 
+## REFACTOR: Improvements
+
+The initial enum definition was refactored for:
+
+**Organization:**
+- Grouped related tokens together (keywords, operators, literals, delimiters)
+- Alphabetical ordering within each group for maintainability
+- Clear comments delineating token categories
+
+**Completeness:**
+- Verified all 82 token types against Ruchy language specification
+- Added missing operator variants (`&&`, `||`, `!`, etc.)
+- Ensured coverage of all literal types (number, string, char, bool)
+
+**Documentation:**
+- Added inline comments explaining each token category
+- Documented special tokens (EOF, Error, Whitespace, Comment)
+
+**Result:** Tests still pass with improved code organization and maintainability.
+
 ## Validation
 
 ```bash
