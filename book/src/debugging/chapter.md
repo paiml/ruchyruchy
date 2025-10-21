@@ -98,11 +98,13 @@ None yet - starting with DEBUG-001 RED phase.
 
 ### In Progress
 
-- **DEBUG-001: Source Map Generation** (Week 1)
-  - Status: RED Phase Complete ✅
-  - Tests: 20 tests (15 failing, 5 accidentally passing)
-  - File: `validation/debugging/test_source_maps.ruchy`
-  - Next: GREEN Phase - Minimal implementation
+- **DEBUG-001: Source Map Generation** (Week 2-3)
+  - Status: GREEN Phase Complete ✅
+  - Tests: 20 tests (100% passing)
+  - Property Tests: 150 cases (100 roundtrip + 50 monotonicity)
+  - Implementation: 1:1 line mapping, minimal serialization
+  - File: `validation/debugging/test_source_maps.ruchy` (628 lines)
+  - Next: REFACTOR Phase - Improve while keeping tests green
 
 ### Planned
 
