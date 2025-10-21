@@ -96,6 +96,144 @@ Status: BOOTSTRAP-002 proceeding with simplified enum design
 
 **Rationale**: A Ruchy project MUST dogfood Ruchy tools. Using external toolchains undermines credibility and prevents self-hosting validation.
 
+### MUST Use BashRS for Bash Script Validation and Generation
+
+**MANDATORY - ZERO TOLERANCE - BLOCKING**
+
+ALL bash scripts (.sh files) MUST be validated and/or generated using **BashRS** (https://github.com/paiml/bashrs), which is OUR OWN TOOL:
+
+**BashRS - OUR Tool (MANDATORY)**:
+1. **Repository**: https://github.com/paiml/bashrs
+2. **Purpose**: Rust-to-bash transpiler + validation
+3. **Install**: `cargo install bashrs`
+4. **Usage**: Write Rust code, generate type-safe bash
+5. **Validation**: `bashrs lint`, `bashrs check`, `bashrs analyze`
+
+**Why BashRS** (Our Tool):
+- **Dogfooding**: We wrote it, we MUST use it
+- **Type Safety**: Write bash logic in Rust (memory-safe, type-safe)
+- **Validation**: Catches errors before runtime
+- **Reproducibility**: Deterministic bash generation from Rust
+- **Debuggability**: Rust tooling for bash scripts
+- **Quality**: Enforces best practices automatically
+
+**BashRS Bug Discovery Protocol** (MANDATORY):
+
+When you encounter ANY bug, missing feature, or limitation in BashRS:
+
+1. **STOP THE LINE** - Immediately halt work
+2. **FILE GITHUB ISSUE** at https://github.com/paiml/bashrs/issues
+3. **EXTREME DETAIL REQUIRED** - Issue MUST contain:
+   - Exact reproduction steps
+   - Minimal reproduction code (Rust and generated bash)
+   - Expected behavior vs actual behavior
+   - BashRS version (`bashrs --version`)
+   - Full error output (copy-paste verbatim)
+   - Context: what you were trying to accomplish
+   - Impact: how this blocks current work
+   - Workaround: if any exists
+
+**Example BashRS Issue**:
+```markdown
+## Bug Report: bashrs lint fails on valid bash script
+
+**BashRS Version**: [output of `bashrs --version`]
+**Project**: RuchyRuchy
+**Context**: Trying to lint existing bash scripts in pre-commit hook
+
+### Reproduction Steps
+1. Create bash script with: [code]
+2. Run: bashrs lint script.sh
+3. Error: [error message]
+
+### Expected Behavior
+bashrs lint should validate existing bash scripts (not just Rust-generated ones)
+
+### Actual Behavior
+bashrs lint fails with parse error
+
+### Impact
+Blocks pre-commit hook validation for bash scripts
+
+### Workaround
+[If any - e.g., use shellcheck temporarily, or rewrite in Rust first]
+
+### Request
+Add bash-to-bash validation mode, or clarify usage model
+```
+
+**After Filing BashRS Issue**:
+1. Document in project notes (BOUNDARIES.md, issue tracker)
+2. Implement workaround if possible (rewrite in Rust, simplify script)
+3. Reference issue # in commits
+4. Continue with alternative approach until fixed
+5. **NEVER**: Use shellcheck or other non-BashRS tools as workaround
+
+**Enforcement** (BASHRS ONLY - ZERO TOLERANCE):
+1. **Pre-commit Hook**: ALL .sh files MUST pass `bashrs lint` (errors only, warnings non-blocking)
+2. **Quality Gates**: BashRS validation BLOCKING
+3. **Book Scripts**: ALL reproduction scripts MUST pass bashrs lint
+4. **ALL Scripts**: MUST be bashrs-generated OR pass bashrs lint
+5. **NEVER shellcheck**: We dogfood BashRS, our own tool
+
+**BashRS Commands Explained**:
+- `bashrs lint <script.sh>` - Static analysis of existing bash scripts (use for all .sh files)
+- `bashrs check <source.rs>` - Validate Rust code before transpiling to bash (use for .rs files)
+- `bashrs build <source.rs>` - Transpile Rust to bash (generates .sh from .rs)
+- `bashrs analyze <script.sh>` - Security analysis (non-blocking warnings)
+
+**BashRS Usage**:
+```bash
+# Generate bash from Rust (PREFERRED for new scripts)
+# File: scripts/validate-book.rs
+bashrs check scripts/validate-book.rs    # Validate Rust source
+bashrs build scripts/validate-book.rs > scripts/validate-book.sh  # Transpile
+
+# Validate existing bash scripts
+bashrs lint scripts/validate-book.sh     # Static analysis (MANDATORY)
+bashrs analyze scripts/validate-book.sh  # Security analysis (non-blocking)
+
+# Analyze for security
+bashrs analyze scripts/validate-book.sh
+
+# Format (if supported)
+bashrs fmt scripts/validate-book.sh
+```
+
+**Pre-commit Integration** (BASHRS ONLY):
+```bash
+# In .git/hooks/pre-commit
+for file in $(git diff --cached --name-only --diff-filter=ACM | grep '\.sh$'); do
+    bashrs lint "$file" || exit 1
+    bashrs check "$file" || exit 1
+done
+```
+
+**Required Bash Script Standards** (Enforced by BashRS):
+1. **Shebang**: `#!/bin/bash` (not #!/bin/sh)
+2. **Safety**: `set -euo pipefail` at top
+3. **Documentation**: Header comment with purpose, exit codes
+4. **Exit Codes**: Explicit exit 0/1
+5. **Variables**: Use `${VAR}` not `$VAR`
+6. **Quoting**: Quote all variables: `"$VAR"`
+7. **Error Handling**: Explicit error messages
+8. **Idempotence**: Scripts MUST be re-runnable
+9. **Reproducibility**: Deterministic behavior
+10. **Debuggability**: Clear error messages and logging
+
+**No bash script is complete without**:
+- ✅ bashrs lint passing (zero errors)
+- ✅ bashrs check passing (syntax valid)
+- ✅ bashrs analyze passing (no security issues)
+- ✅ set -euo pipefail enabled
+- ✅ Proper exit codes (0 = success, 1 = failure)
+- ✅ Full error handling
+- ✅ All variables quoted
+- ✅ Security best practices
+
+**CRITICAL**: If bashrs has issues, file bug at https://github.com/paiml/bashrs/issues
+**NEVER**: Fall back to shellcheck or other tools - BashRS is OUR tool, we dogfood it
+
 ### MUST Use Correct Ruchy Syntax
 
 **MANDATORY - ZERO TOLERANCE**
@@ -129,31 +267,78 @@ Ruchy has specific syntax that differs from Rust. The following are **REQUIRED**
 
 ### MUST Maintain TDD Book Documentation
 
-**MANDATORY - ZERO TOLERANCE**
+**MANDATORY - ZERO TOLERANCE - BLOCKING**
 
-Following the pattern from `../ruchy-book`, `../ruchy`, and `../paiml-mcp-agent-toolkit`, this project MUST maintain a comprehensive book documenting all development via TDD:
+Following the pattern from `../ruchy-book`, `../ruchy`, and `../paiml-mcp-agent-toolkit`, this project MUST maintain a comprehensive book documenting all development via EXTREME TDD with full tool validation:
 
-**Book Requirements**:
+**Book Requirements** (ALL MANDATORY):
 1. **Location**: `book/` directory at repository root
 2. **Format**: Markdown chapters published via GitHub Pages
 3. **Structure**: `book/src/SUMMARY.md` with chapter links
-4. **Build**: mdBook or similar for GitHub Pages deployment
+4. **Build**: mdBook with automated validation
 5. **Publishing**: GitHub Actions workflow for automatic deployment
+6. **Reproducibility**: All examples MUST be executable via scripts
+7. **Debuggability**: All code examples MUST be debuggable
+8. **Tool Validation**: ALL chapters MUST validate against 16 Ruchy tools + ruchyruchy debuggers
 
-**Content Requirements - EVERY feature must have**:
+**16 Ruchy Tools - ALL MUST BE VALIDATED**:
+1. `ruchy check` - Syntax and type checking
+2. `ruchy test` - Test execution
+3. `ruchy lint` - Code quality (A+ grade required)
+4. `ruchy fmt` - Code formatting
+5. `ruchy prove` - Formal verification
+6. `ruchy score` - Quality metrics (>0.8 required)
+7. `ruchy runtime` - Performance analysis
+8. `ruchy build` - Compilation
+9. `ruchy run` - Execution
+10. `ruchy doc` - Documentation generation
+11. `ruchy bench` - Benchmarking
+12. `ruchy profile` - Performance profiling
+13. `ruchy coverage` - Code coverage
+14. `ruchy deps` - Dependency analysis
+15. `ruchy security` - Security scanning
+16. `ruchy complexity` - Complexity analysis
+
+**RuchyRuchy Debuggers - ALL MUST BE VALIDATED**:
+1. `ruchydbg validate` - Debugging tools validation
+2. Source map generation validation
+3. Record-replay time-travel validation
+4. Performance regression checks
+
+**Content Requirements - EVERY ticket MUST have**:
 1. **RED Phase**: Document the failing test first
-   - What test was written
+   - Test code in pure Ruchy
    - Why it fails
    - Expected behavior vs actual behavior
+   - Validation: `ruchy test` shows failure
 
 2. **GREEN Phase**: Document the minimal implementation
    - Code that makes test pass
    - No extra features beyond test requirements
+   - Validation: `ruchy test` shows success
 
 3. **REFACTOR Phase**: Document improvements
    - What was refactored
    - Why (performance, clarity, maintainability)
-   - Tests still passing confirmation
+   - Validation: Tests still passing
+
+4. **TOOL VALIDATION Phase** (NEW - MANDATORY):
+   - Run ALL 16 Ruchy tools
+   - Run ALL ruchyruchy debuggers
+   - Document results for each tool
+   - BLOCKING if any tool fails
+
+5. **REPRODUCIBILITY Phase** (NEW - MANDATORY):
+   - Provide executable script
+   - Script MUST reproduce all results
+   - Script MUST be idempotent
+   - Script MUST exit with status code
+
+6. **DEBUGGABILITY Phase** (NEW - MANDATORY):
+   - Code MUST be debuggable with ruchydbg
+   - Source maps MUST be validated
+   - Time-travel MUST be demonstrated
+   - Performance MUST be benchmarked
 
 **Book Structure**:
 ```
@@ -185,7 +370,7 @@ book/
 │       └── runtime-enhancements.md
 ```
 
-**Chapter Template** (for each ticket):
+**Chapter Template** (for each ticket - EXTREME TDD):
 ```markdown
 # TICKET-XXX: Feature Name
 
@@ -195,32 +380,118 @@ book/
 ## RED: Write Failing Test
 [The test that was written first]
 ```ruchy
-// Test code here
+// Test code here (MUST be in repository)
+// File: validation/tests/test_TICKET_XXX.ruchy
 ```
 **Expected**: [What should happen]
 **Actual**: [What currently happens - failure]
+**Validation**: `ruchy test validation/tests/test_TICKET_XXX.ruchy` exits with status 1
 
 ## GREEN: Minimal Implementation
 [Code that makes test pass]
 ```ruchy
-// Implementation code
+// Implementation code (MUST be in repository)
+// File: bootstrap/stageN/TICKET_XXX_implementation.ruchy
 ```
 **Result**: ✅ Test passes
+**Validation**: `ruchy test validation/tests/test_TICKET_XXX.ruchy` exits with status 0
 
 ## REFACTOR: Improvements
 [Any refactoring done while keeping tests green]
 
-## Validation
-- ruchy check: ✅ Pass
-- ruchy lint: ✅ A+ grade
-- ruchy test: ✅ X/X tests passing
-- ruchy run: ✅ Executes successfully
+## TOOL VALIDATION (MANDATORY - ALL 16 TOOLS)
+Execute and document results:
+```bash
+./scripts/validate-ticket-TICKET-XXX.sh
+```
+
+Results:
+1. `ruchy check`: ✅ Pass / ❌ Fail [error message]
+2. `ruchy test`: ✅ X/X tests passing
+3. `ruchy lint`: ✅ A+ grade
+4. `ruchy fmt`: ✅ No formatting changes
+5. `ruchy prove`: ✅ Properties verified
+6. `ruchy score`: ✅ Score X.XX (>0.8 required)
+7. `ruchy runtime`: ✅ Performance within bounds
+8. `ruchy build`: ✅ Compilation successful
+9. `ruchy run`: ✅ Execution successful
+10. `ruchy doc`: ✅ Documentation generated
+11. `ruchy bench`: ✅ Benchmarks within thresholds
+12. `ruchy profile`: ✅ No performance regressions
+13. `ruchy coverage`: ✅ >80% coverage achieved
+14. `ruchy deps`: ✅ No dependency issues
+15. `ruchy security`: ✅ No security vulnerabilities
+16. `ruchy complexity`: ✅ Complexity <20 per function
+
+**RuchyRuchy Debugger Validation**:
+1. `ruchydbg validate`: ✅ All checks passing
+2. Source maps: ✅ 1:1 line mapping verified
+3. Time-travel: ✅ Backward stepping works
+4. Performance: ✅ <6s validation (target: 0.013s achieved)
+
+## REPRODUCIBILITY (MANDATORY)
+**Script**: `scripts/reproduce-ticket-TICKET-XXX.sh`
+```bash
+#!/bin/bash
+# Reproduces all results for TICKET-XXX
+# Exit status: 0 = success, 1 = failure
+# Idempotent: Can be run multiple times
+
+set -euo pipefail
+
+echo "Reproducing TICKET-XXX results..."
+
+# Run all tests
+ruchy test validation/tests/test_TICKET_XXX.ruchy
+
+# Run all validations
+ruchy check bootstrap/stageN/TICKET_XXX_implementation.ruchy
+ruchy lint bootstrap/stageN/TICKET_XXX_implementation.ruchy
+# ... (all 16 tools)
+
+echo "✅ All results reproduced successfully"
+exit 0
+```
+
+**Execution**:
+```bash
+chmod +x scripts/reproduce-ticket-TICKET-XXX.sh
+./scripts/reproduce-ticket-TICKET-XXX.sh
+# Exit status: 0
+```
+
+## DEBUGGABILITY (MANDATORY)
+**Debug Session Example**:
+```bash
+# Start debugging session
+ruchydbg validate validation/tests/test_TICKET_XXX.ruchy
+
+# Verify source maps
+# Verify time-travel stepping
+# Verify performance benchmarks
+```
+
+**Results**:
+- Source map accuracy: 100% (N/N lines mapped)
+- Time-travel steps: X backward, Y forward
+- Performance: <0.1s per debug operation
 
 ## Discoveries
 [Any boundaries, bugs, or learnings discovered]
 
 ## Next Steps
 [What this enables, next ticket to implement]
+
+## Validation Summary
+- ✅ RED phase: Test failed as expected
+- ✅ GREEN phase: Test passed
+- ✅ REFACTOR phase: Tests still passing
+- ✅ TOOL VALIDATION: All 16 tools passing
+- ✅ DEBUGGER VALIDATION: All debuggers working
+- ✅ REPRODUCIBILITY: Script exits with status 0
+- ✅ DEBUGGABILITY: Debug session successful
+
+**Status**: 🟢 COMPLETE (7/7 phases validated)
 ```
 
 **GitHub Pages Deployment**:
@@ -246,21 +517,107 @@ jobs:
           publish_dir: ./book/book
 ```
 
-**Integration with Development**:
+**Integration with Development** (MANDATORY - BLOCKING):
 - Every commit for a ticket MUST update corresponding book chapter
-- Book chapters MUST be written in TDD order (RED-GREEN-REFACTOR)
+- Book chapters MUST be written in EXTREME TDD order (RED-GREEN-REFACTOR-TOOL-VALIDATION-REPRODUCIBILITY-DEBUGGABILITY)
 - Book serves as living documentation of development process
 - Book published automatically to GitHub Pages on push
+- ALL code examples MUST exist in repository
+- ALL scripts MUST be executable and validated
+- ALL tool validations MUST be documented
 
 **Examples to Follow**:
 - `../ruchy-book`: Language reference and tutorial structure
 - `../ruchy`: Compiler implementation documentation
 - `../paiml-mcp-agent-toolkit`: MCP server development documentation
 
-**Enforcement**:
-- Pre-commit hook checks for book chapter when ticket files change
-- Quality gates verify book is buildable
-- No ticket considered "complete" without book chapter
+**Enforcement** (ZERO TOLERANCE - BLOCKING):
+1. **Pre-commit Hook Checks**:
+   - Book chapter MUST exist for every ticket
+   - Book chapter MUST include all 7 phases (RED, GREEN, REFACTOR, TOOL VALIDATION, REPRODUCIBILITY, DEBUGGABILITY, SUMMARY)
+   - All referenced code files MUST exist in repository
+   - All referenced scripts MUST be executable
+   - Book MUST be buildable via `mdbook build`
+
+2. **Validation Script** (`scripts/validate-book.sh`):
+   ```bash
+   #!/bin/bash
+   # Validates book completeness and correctness
+   # Exit status: 0 = valid, 1 = invalid
+
+   set -euo pipefail
+
+   echo "🔍 Validating book..."
+
+   # Check book builds
+   cd book && mdbook build
+
+   # Check all tickets have chapters
+   for ticket in $(grep -E "^\s+- id: (INFRA|VALID|BOOTSTRAP)-" ../roadmap.yaml | sed 's/.*id: //'); do
+       if ! grep -q "$ticket" src/SUMMARY.md; then
+           echo "❌ ERROR: Missing book chapter for $ticket"
+           exit 1
+       fi
+   done
+
+   # Check all code examples exist
+   for file in $(grep -r "File: " src/ | sed 's/.*File: //' | sed 's/`.*//'); do
+       if [ ! -f "../$file" ]; then
+           echo "❌ ERROR: Missing code file: $file"
+           exit 1
+       fi
+   done
+
+   # Check all scripts are executable
+   for script in $(grep -r "scripts/" src/ | grep -o "scripts/[^'\" ]*" | sort -u); do
+       if [ ! -x "../$script" ]; then
+           echo "❌ ERROR: Script not executable: $script"
+           exit 1
+       fi
+   done
+
+   echo "✅ Book validation passed!"
+   exit 0
+   ```
+
+3. **Pre-commit Hook Addition**:
+   - Book validation script MUST be called in pre-commit hook
+   - Commits BLOCKED if book validation fails
+   - No bypass allowed (--no-verify FORBIDDEN)
+
+4. **Roadmap Integration**:
+   - Ticket status "completed" REQUIRES book chapter existence
+   - Book chapter MUST include all 7 validation phases
+   - Reproducibility script MUST exit with status 0
+
+**Ticket Completion Checklist** (ALL MANDATORY):
+- [ ] RED phase: Test written and failing
+- [ ] GREEN phase: Test passing
+- [ ] REFACTOR phase: Code cleaned up
+- [ ] TOOL VALIDATION: All 16 Ruchy tools validated
+- [ ] DEBUGGER VALIDATION: All ruchyruchy debuggers validated
+- [ ] REPRODUCIBILITY: Script created and tested (exit status 0)
+- [ ] DEBUGGABILITY: Debug session documented
+- [ ] BOOK CHAPTER: Chapter created with all 7 phases
+- [ ] CODE FILES: All referenced files exist in repository
+- [ ] SCRIPTS: All scripts executable and validated
+- [ ] ROADMAP: Ticket marked "completed" in roadmap.yaml
+- [ ] INTEGRATION.MD: Status updated
+
+**Pre-Commit Hook Enforcement**:
+```bash
+# In .git/hooks/pre-commit
+echo "🔍 Validating book completeness..."
+./scripts/validate-book.sh || exit 1
+```
+
+**No ticket is complete without:**
+1. Book chapter with all 7 phases documented
+2. All code examples in repository
+3. Reproducibility script passing
+4. All 16 tools validated
+5. All debuggers validated
+6. mdBook building successfully
 
 ## Phase 2: Validation & Robustness (Current Focus)
 

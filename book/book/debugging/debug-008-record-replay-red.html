@@ -1,0 +1,442 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>DEBUG-008: Record-Replay Engine (RED Phase)</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="debug-008-minimal-basic-record-replay-engine-red-phase"><a class="header" href="#debug-008-minimal-basic-record-replay-engine-red-phase">DEBUG-008-MINIMAL: Basic Record-Replay Engine (RED Phase)</a></h1>
+<h2 id="context"><a class="header" href="#context">Context</a></h2>
+<p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 5-8)</strong></p>
+<p>The Record-Replay Engine is the <strong>killer feature</strong> of the debugging toolkit - it enables time-travel debugging with backward stepping. This is what makes RuchyRuchy's debugger special and generates developer excitement.</p>
+<p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
+<ul>
+<li>In-memory state logging only (no persistence)</li>
+<li>Small programs only (&lt;1000 steps)</li>
+<li>No optimization (record everything)</li>
+<li>Simple linked list of program states</li>
+<li>Naive replay (re-execute from beginning to target step)</li>
+</ul>
+<p><strong>Acceptance Criteria</strong>:</p>
+<ul>
+<li>✅ Can step backward through a 100-line program</li>
+<li>✅ Variable values are correct at each historical step</li>
+</ul>
+<h2 id="red-write-failing-tests"><a class="header" href="#red-write-failing-tests">RED: Write Failing Tests</a></h2>
+<p>Following Extreme TDD methodology, we write comprehensive tests FIRST, before any implementation exists.</p>
+<h3 id="test-file"><a class="header" href="#test-file">Test File</a></h3>
+<p><code>validation/debugging/test_record_replay.ruchy</code></p>
+<h3 id="test-coverage-20-tests"><a class="header" href="#test-coverage-20-tests">Test Coverage (20 Tests)</a></h3>
+<p><strong>Core Functionality</strong> (Tests 1-10):</p>
+<ol>
+<li>Create recording session</li>
+<li>Record single step</li>
+<li>Record multiple steps</li>
+<li>Get current step number</li>
+<li>Get total step count</li>
+<li>Replay to specific step (forward)</li>
+<li>Replay to specific step (backward)</li>
+<li>Get variable value at step</li>
+<li>Get line number at step</li>
+<li>Verify recording is immutable after replay</li>
+</ol>
+<p><strong>Property Tests</strong> (Tests 11-12):
+11. <strong>Roundtrip Property</strong> (50 cases): <code>replay(record(execution), step) = execution[step]</code>
+12. <strong>Monotonicity Property</strong> (49 cases): Step numbers increase monotonically</p>
+<p><strong>Edge Cases</strong> (Tests 13-20):
+13. Handle empty recording (no steps)
+14. Single step recording
+15. Record 1000 steps (limit test)
+16. Replay to step 0 (initial state)
+17. Replay beyond last step (error handling - clamp to max)
+18. Replay to negative step (error handling - clamp to 0)
+19. Multiple variables at same step
+20. Variable doesn't exist at step (return 0)</p>
+<h3 id="placeholder-functions"><a class="header" href="#placeholder-functions">Placeholder Functions</a></h3>
+<p>All functions return minimal placeholder values to ensure tests fail:</p>
+<pre><code class="language-ruchy">fun create_recording() -&gt; i64 {
+    0
+}
+
+fun verify_recording(recording_id: i64) -&gt; bool {
+    false
+}
+
+fun record_step(recording_id: i64, line: i64, var_name: String, value: i64) {
+    // No-op
+}
+
+fun record_step_with_var(var_name: String, value: i64) {
+    // No-op
+}
+
+fun get_step_count(recording_id: i64) -&gt; i64 {
+    0
+}
+
+fun get_current_step(recording_id: i64) -&gt; i64 {
+    0
+}
+
+fun replay_to_step(recording_id: i64, step: i64) {
+    // No-op
+}
+
+fun get_variable_value(recording_id: i64, var_name: String) -&gt; i64 {
+    0
+}
+
+fun get_line_number(recording_id: i64) -&gt; i64 {
+    0
+}
+</code></pre>
+<h3 id="test-execution"><a class="header" href="#test-execution">Test Execution</a></h3>
+<pre><code class="language-bash">$ ruchy run validation/debugging/test_record_replay.ruchy
+</code></pre>
+<p><strong>Expected Result</strong>: Most tests should fail because implementations don't exist yet.</p>
+<p><strong>Actual Result</strong>:</p>
+<pre><code>----------------------------------------------------------------
+DEBUG-008-MINIMAL: Record-Replay Engine - RED Phase
+Scope: In-memory logging, &lt;1000 steps, minimal implementation
+----------------------------------------------------------------
+
+Test 1: Create recording session
+  FAIL FAIL: Recording invalid
+Test 2: Record single step
+  FAIL FAIL: Expected 1 step, got 0
+Test 3: Record multiple steps
+  FAIL FAIL: Expected 3 steps, got 0
+Test 4: Get current step number
+  FAIL FAIL: Expected 2, got 0
+Test 5: Get total step count
+  FAIL FAIL: Expected 10, got 0
+Test 6: Replay to specific step (forward)
+  FAIL FAIL: Expected step 2, got 0
+Test 7: Replay to specific step (backward)
+  FAIL FAIL: Expected step 1, got 0
+Test 8: Get variable value at step
+  FAIL FAIL: Expected 200, got 0
+Test 9: Get line number at step
+  FAIL FAIL: Expected 20, got 0
+Test 10: Verify recording immutability
+  PASS PASS: Recording unchanged by replay
+Test 11: Property - Roundtrip correctness (50 cases)
+  FAIL FAIL: 0/50 cases passed
+Test 12: Property - Step monotonicity (49 cases)
+  PASS PASS: All 49 monotonicity cases passed
+Test 13: Handle empty recording
+  PASS PASS: Empty recording handled
+Test 14: Single step recording
+  FAIL FAIL: Wrong step count
+Test 15: Record 1000 steps (limit test)
+  FAIL FAIL: Expected 1000, got 0
+Test 16: Replay to step 0 (initial state)
+  PASS PASS: Replayed to initial state
+Test 17: Replay beyond last step
+  FAIL FAIL: Expected 2, got 0
+Test 18: Replay to negative step
+  PASS PASS: Clamped to 0
+Test 19: Multiple variables at same step
+  FAIL FAIL: Wrong x value
+Test 20: Variable doesn't exist at step
+  PASS PASS: Missing variable returns 0
+
+----------------------------------------------------------------
+ Test Results (RED Phase)
+----------------------------------------------------------------
+PASS Passed: 6
+FAIL Failed: 14
+ Total:  20
+</code></pre>
+<h3 id="analysis"><a class="header" href="#analysis">Analysis</a></h3>
+<p><strong>Tests Failing (14)</strong>: ✅ Core functionality not implemented</p>
+<ul>
+<li>Tests 1-9: Basic recording/replay operations</li>
+<li>Test 11: Roundtrip property</li>
+<li>Tests 14-15, 17, 19: Various edge cases</li>
+</ul>
+<p><strong>Tests Passing (6)</strong>: ⚠️ Accidental passes due to placeholder values</p>
+<ul>
+<li>Test 10: Immutability passes because both calls return 0</li>
+<li>Test 12: Monotonicity passes because 0 &gt;= 0 for all cases</li>
+<li>Test 13: Empty recording expects 0 steps, placeholder returns 0</li>
+<li>Test 16: Replay to 0 expects current step = 0, placeholder returns 0</li>
+<li>Test 18: Negative step handled (clamps to 0), placeholder returns 0</li>
+<li>Test 20: Missing variable expects 0, placeholder returns 0</li>
+</ul>
+<p><strong>Verdict</strong>: <strong>RED Phase Successful</strong> - Core functionality tests are failing, ready for GREEN phase implementation.</p>
+<h2 id="implementation-design-for-green-phase"><a class="header" href="#implementation-design-for-green-phase">Implementation Design (for GREEN Phase)</a></h2>
+<h3 id="data-structures"><a class="header" href="#data-structures">Data Structures</a></h3>
+<p><strong>Step State</strong>:</p>
+<pre><code class="language-ruchy">struct StepState {
+    step_number: i64,
+    line_number: i64,
+    variables: Vec&lt;Variable&gt;,
+}
+
+struct Variable {
+    name: String,
+    value: i64,
+}
+</code></pre>
+<p><strong>Recording Session</strong>:</p>
+<pre><code class="language-ruchy">struct Recording {
+    steps: Vec&lt;StepState&gt;,
+    current_step: i64,
+    valid: bool,
+}
+</code></pre>
+<h3 id="minimal-implementation-strategy"><a class="header" href="#minimal-implementation-strategy">Minimal Implementation Strategy</a></h3>
+<ol>
+<li><strong>Storage</strong>: Simple vector/array of <code>StepState</code> (up to 1000 steps)</li>
+<li><strong>Recording</strong>: Append new state to vector on each step</li>
+<li><strong>Replay</strong>: Set <code>current_step</code> index, return state at that index</li>
+<li><strong>Naive approach</strong>: No delta compression, record full state each time</li>
+</ol>
+<h3 id="key-design-decisions"><a class="header" href="#key-design-decisions">Key Design Decisions</a></h3>
+<p><strong>Why use i64 for recording_id?</strong></p>
+<ul>
+<li>Following same pattern as DEBUG-001 (encode metadata in return value)</li>
+<li>For Vertical Slice 1, we can encode step count in the ID</li>
+<li>Real implementation will use HashMap/proper storage</li>
+</ul>
+<p><strong>Why record full state each time?</strong></p>
+<ul>
+<li>Simplest implementation (Vertical Slice 1 philosophy)</li>
+<li>No need for delta compression for &lt;1000 steps</li>
+<li>Optimization deferred to REFACTOR phase</li>
+</ul>
+<p><strong>Why only i64 variable values?</strong></p>
+<ul>
+<li>Minimal scope for Vertical Slice 1</li>
+<li>Strings, booleans, structs can be added later</li>
+<li>Proves the concept works</li>
+</ul>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<p><strong>GREEN Phase</strong> (Week 7):</p>
+<ol>
+<li>Implement <code>Recording</code> struct with Vec<StepState></li>
+<li>Implement <code>record_step</code> - append to vector</li>
+<li>Implement <code>replay_to_step</code> - set current_step index</li>
+<li>Implement <code>get_variable_value</code> - lookup in current step's variables</li>
+<li>Implement helper functions (get_step_count, get_line_number, etc.)</li>
+</ol>
+<p><strong>Target</strong>: Get all 20 tests passing with minimal implementation.</p>
+<p><strong>REFACTOR Phase</strong> (Week 7):</p>
+<ol>
+<li>Optimize storage if needed</li>
+<li>Add delta compression (if performance requires it)</li>
+<li>Improve error handling</li>
+<li>Keep all 20 tests passing throughout refactoring</li>
+</ol>
+<p><strong>VERIFY Phase</strong> (Week 8):</p>
+<ol>
+<li>Integration test: Record a 100-line program</li>
+<li>Step backward through entire execution</li>
+<li>Verify variable values at each step</li>
+<li>Property testing with 10K+ cases</li>
+<li>Differential testing vs GDB's reverse debugging</li>
+</ol>
+<hr />
+<p><strong>Status</strong>: ✅ RED Phase Complete - 14 tests failing as expected
+<strong>File</strong>: <code>validation/debugging/test_record_replay.ruchy</code> (620+ lines, 20 tests)
+<strong>Next</strong>: GREEN Phase - Implement record/replay engine</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../debugging/debug-001-source-maps-green.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../debugging/debug-008-record-replay-green.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../debugging/debug-001-source-maps-green.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../debugging/debug-008-record-replay-green.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
