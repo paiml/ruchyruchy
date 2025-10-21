@@ -32,6 +32,7 @@
 
 - [Debugging Toolkit](./debugging/chapter.md)
   - [DEBUG-001: Source Map Generation (RED Phase)](./debugging/debug-001-source-maps-red.md)
+  - [DEBUG-001: Source Map Generation (GREEN Phase)](./debugging/debug-001-source-maps-green.md)
 
 # Discoveries
 
