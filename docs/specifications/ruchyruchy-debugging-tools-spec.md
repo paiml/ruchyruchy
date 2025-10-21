@@ -249,9 +249,13 @@ Following the Toyota Way principle of *Jidoka* (automation with human touch), qu
 3. ✅ Documentation synchronization check
 4. ✅ Incremental mutation testing (changed/affected code only, `ruchy mutation-test --incremental`)
 5. ✅ Roadmap validation (ticket status update)
+6. ✅ **Systematic Tool Validation** (smoke, error handling, integration tests - ~30 seconds)
+7. ✅ **Cross-Tool Integration Test** (`test_all_debugging_tools_on_single_program` - prevents fraud)
 
 **Feedback Time**: 5-10 minutes
 **Automation**: GitHub Actions CI pipeline
+
+**Anti-Fraud Enforcement**: Gate 6-7 prevent shipping broken debugging tools. If any tool gives incorrect information (wrong breakpoints, false variable values, incorrect time-travel state), **CI build fails and PR is blocked**.
 
 #### Tier 3: Post-Merge / Nightly Build (Comprehensive Verification - Hours)
 
@@ -263,9 +267,13 @@ Following the Toyota Way principle of *Jidoka* (automation with human touch), qu
 3. ✅ Exhaustive property testing (10K+ cases per property, `ruchy prove --exhaustive`)
 4. ✅ Formal verification checks (Coq proofs, `ruchy verify`)
 5. ✅ Performance regression testing (`ruchy runtime --benchmark`)
+6. ✅ **Differential Testing** (vs GDB/LLDB/Chrome DevTools - ensures correctness)
+7. ✅ **Consensus Validation** (multiple tools finding same bug - prevents false positives/negatives)
 
 **Feedback Time**: 2-4 hours
 **Automation**: Nightly build pipeline
+
+**Anti-Fraud Enforcement**: Gate 6-7 compare RuchyDbg against production debuggers. If RuchyDbg disagrees with GDB on variable values or Chrome DevTools on breakpoint locations, **nightly build fails and debugging tools are marked as broken**.
 
 **Quality Guarantee**: Every line of code passes Tier 1 immediately, Tier 2 within 10 minutes, and Tier 3 within 24 hours. This respects developer time while ensuring NASA-level quality.
 
@@ -683,6 +691,247 @@ ruchy debug break --on-ast "MatchArm(pattern='Some(_)')"
 ---
 
 ## 6. Quality Assurance Framework
+
+**Critical Principle**: If debugging tools give incorrect information, they are WORSE than useless - they actively mislead developers and waste time debugging fiction. **Zero tolerance for broken tools.**
+
+> **Anti-Fraud Measure**: Following the ../ruchy validation strategy, ALL debugging tools must be systematically validated with cross-tool integration tests. A debugger that gives wrong breakpoint locations, incorrect variable values, or false time-travel state is a **fraud** - it cannot be shipped.
+
+---
+
+### 6.0 Systematic Validation Framework (Anti-Fraud Measures)
+
+**Purpose**: Prevent "broken tool" scenarios where debugging features report incorrect information
+
+**Inspired By**: ../ruchy project's three-layer validation (29 systematic tests, 20 interactive tests, 3800+ unit tests)
+
+**Toyota Way Principle**: Jidoka - Build quality into the process, stop the line when tools are broken
+
+#### 6.0.1 Three-Layer Validation Strategy
+
+**Layer 1: Systematic Tool Validation**
+
+Every debugging tool must pass systematic validation tests:
+
+```ruchy
+// File: validation/debugging/systematic_tool_validation.ruchy
+
+// Test 1: Smoke test - basic functionality
+fun test_source_maps_smoke() -> bool {
+    let map = generate_source_map("42".to_string(), "test.ruchy".to_string());
+    verify_source_map(map)  // Must return true
+}
+
+// Test 2: Error handling - graceful degradation
+fun test_source_maps_error_handling() -> bool {
+    let map = generate_source_map("".to_string(), "".to_string());
+    // Should not crash, should return valid empty map
+    verify_source_map(map)
+}
+
+// Test 3: Integration - all tools on SAME program
+fun test_all_debugging_tools_on_single_program() -> bool {
+    let source = "fun main() { let x = 42; println(x); }".to_string();
+
+    // Step 1: Generate source map
+    let source_map = generate_source_map(source, "test.ruchy".to_string());
+
+    // Step 2: Start DAP server
+    let dap = start_dap_server(source, source_map);
+
+    // Step 3: Set breakpoint using source map
+    let breakpoint = set_breakpoint(dap, "test.ruchy".to_string(), 1);
+
+    // Step 4: Run with time-travel recording
+    let trace = run_with_recording(dap);
+
+    // Step 5: Verify all tools agree
+    // - Source map says line 1 maps to line 1 ✓
+    // - DAP server stopped at line 1 (must match!) ✓
+    // - Time-travel shows x=42 at line 1 (must match!) ✓
+    // - If ANY tool disagrees, INTEGRATION IS BROKEN
+
+    verify_tool_consensus(source_map, dap, trace)
+}
+```
+
+**Key Insight**: The integration test `test_all_debugging_tools_on_single_program` is what prevents fraud. If source maps say "line 5" but DAP stops at "line 7", the tools are broken and must not ship.
+
+**Layer 2: Differential Testing Against Known-Good Implementations**
+
+Every debugging tool must match behavior of production debuggers on equivalent scenarios:
+
+```ruchy
+// File: validation/debugging/differential_validation.ruchy
+
+fun test_source_maps_vs_chrome_devtools() -> bool {
+    let ruchy_source = "fun main() { println(\"test\"); }".to_string();
+
+    // Generate Ruchy source map
+    let ruchy_map = generate_source_map(ruchy_source, "test.ruchy".to_string());
+
+    // Compile to TypeScript
+    let typescript_code = compile_to_typescript(ruchy_source);
+
+    // Load in Chrome DevTools and verify breakpoint behavior
+    // (This requires headless Chrome automation)
+    let chrome_breakpoint = set_breakpoint_in_chrome(typescript_code, 1);
+    let ruchy_breakpoint = map_source_to_target(1);  // From our source map
+
+    // CRITICAL: Chrome and Ruchy MUST agree on line number
+    if chrome_breakpoint != ruchy_breakpoint {
+        println("FRAUD DETECTED: Source map disagrees with Chrome DevTools!");
+        println("  Chrome stopped at line: {}", chrome_breakpoint);
+        println("  Ruchy maps to line:     {}", ruchy_breakpoint);
+        println("  Source map is BROKEN - do not ship!");
+        false
+    } else {
+        true
+    }
+}
+
+fun test_dap_server_vs_gdb() -> bool {
+    let ruchy_source = "fun main() { let x = 42; }".to_string();
+
+    // Compile to Rust
+    let rust_code = compile_to_rust(ruchy_source);
+
+    // Debug with GDB
+    let gdb_result = debug_with_gdb(rust_code);
+    let gdb_variable_value = gdb_result.get_variable("x");
+
+    // Debug with RuchyDbg
+    let ruchydbg_result = debug_with_ruchydbg(ruchy_source);
+    let ruchydbg_variable_value = ruchydbg_result.get_variable("x");
+
+    // CRITICAL: GDB and RuchyDbg MUST agree on variable value
+    if gdb_variable_value != ruchydbg_variable_value {
+        println("FRAUD DETECTED: RuchyDbg disagrees with GDB!");
+        println("  GDB shows x = {}", gdb_variable_value);
+        println("  RuchyDbg shows x = {}", ruchydbg_variable_value);
+        println("  Debugger is BROKEN - do not ship!");
+        false
+    } else {
+        true
+    }
+}
+```
+
+**Layer 3: Cross-Tool Consensus Validation**
+
+Multiple debugging tools debugging the SAME bug must find the SAME root cause:
+
+```ruchy
+// File: validation/debugging/consensus_validation.ruchy
+
+fun test_bug_detection_consensus() -> bool {
+    // Program with intentional bug
+    let buggy_program = "
+        fun main() {
+            let mut counter = 10;
+            loop {
+                if counter == 0 { break; }
+                println(counter);
+                // BUG: Forgot to decrement counter!
+            }
+        }
+    ".to_string();
+
+    // Tool 1: Time-Travel Debugging
+    // Should show: counter never changes value (stuck at 10)
+    let time_travel_result = debug_with_time_travel(buggy_program);
+    let time_travel_diagnosis = "counter never decremented";
+
+    // Tool 2: Program Slicing
+    // Should show: counter is set to 10 but never modified
+    let slicing_result = backward_slice(buggy_program, "counter", line=5);
+    let slicing_diagnosis = "counter has no mutation after initialization";
+
+    // Tool 3: WhyLine Query
+    // Query: "Why didn't the loop exit?"
+    let whyline_result = query_whyline(buggy_program, "why didn't loop exit?");
+    let whyline_diagnosis = "counter==0 never true because counter never changes";
+
+    // CRITICAL: All tools must identify the SAME root cause
+    // If time-travel says "counter stuck at 10"
+    // but slicing says "counter is fine"
+    // then AT LEAST ONE TOOL IS LYING (broken)
+
+    let consensus = check_consensus([
+        time_travel_diagnosis,
+        slicing_diagnosis,
+        whyline_diagnosis
+    ]);
+
+    if !consensus {
+        println("FRAUD DETECTED: Debugging tools disagree on root cause!");
+        println("  Time-Travel: {}", time_travel_diagnosis);
+        println("  Slicing:     {}", slicing_diagnosis);
+        println("  WhyLine:     {}", whyline_diagnosis);
+        println("  At least ONE tool is BROKEN - do not ship!");
+        false
+    } else {
+        println("CONSENSUS ACHIEVED: All tools agree on root cause");
+        true
+    }
+}
+```
+
+#### 6.0.2 Anti-Fraud Acceptance Criteria
+
+**MANDATORY before ANY debugging tool can ship**:
+
+1. ✅ **Smoke Test Passing**: Basic functionality works
+2. ✅ **Integration Test Passing**: All tools work together on same program
+3. ✅ **Differential Test Passing**: Matches GDB/LLDB/Chrome DevTools behavior
+4. ✅ **Consensus Test Passing**: Multiple tools find same bug in same code
+5. ✅ **Zero Disagreements**: If any two tools contradict, BLOCK RELEASE
+
+**Enforcement**: Pre-release quality gate - if systematic validation fails, debugging tools CANNOT ship
+
+**Example Failure Scenario (BLOCK RELEASE)**:
+```
+❌ SYSTEMATIC VALIDATION FAILED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Test: test_all_debugging_tools_on_single_program
+Status: FAILED ❌
+
+Tool Disagreement Detected:
+  Source Map:   line 5 in test.ruchy → line 8 in generated code
+  DAP Server:   Breakpoint stopped at line 10 in generated code
+  Expected:     Both tools must agree on line 8
+
+Root Cause: Source map generation is BROKEN
+Impact: Breakpoints will stop at WRONG LINES
+Verdict: FRAUD - Developer will debug the wrong code
+
+Action Required:
+  1. DO NOT SHIP debugging tools
+  2. Fix source map generation
+  3. Re-run systematic validation
+  4. All tests must pass before release
+```
+
+#### 6.0.3 Systematic Validation Test Matrix
+
+| Tool | Smoke Test | Error Handling | Integration | Differential | Consensus |
+|------|------------|----------------|-------------|--------------|-----------|
+| Source Maps | ✅ | ✅ | ✅ | vs Chrome DevTools | N/A |
+| DAP Server | ✅ | ✅ | ✅ | vs GDB/LLDB | With Time-Travel |
+| Time-Travel | ✅ | ✅ | ✅ | vs rr/gdb-replay | With Slicing |
+| Program Slicing | ✅ | ✅ | ✅ | vs Frama-C | With WhyLine |
+| WhyLine | ✅ | ✅ | ✅ | vs Original WhyLine | With Slicing |
+| REPL | ✅ | ✅ | ✅ | vs GDB expressions | N/A |
+| Data Rendering | ✅ | ✅ | ✅ | Visual inspection | N/A |
+| Ownership Viz | ✅ | ✅ | ✅ | vs rustc borrow checker | N/A |
+
+**Total Systematic Tests**: 40+ (5 categories × 8 tools = 40 minimum)
+
+**Runtime**: ~30 seconds (optimized for fast feedback)
+
+**CI Integration**: Runs on every commit (Tier 2 quality gate)
+
+---
 
 ### 6.1 Test Coverage Requirements
 
@@ -1431,6 +1680,18 @@ Theorem type_preservation:
 44. Lewis, C., Polson, P. G., Wharton, C., & Rieman, J. (1990). *Testing a walkthrough methodology for theory-based design of walk-up-and-use interfaces*. Proceedings of the SIGCHI conference on Human factors in computing systems, 235-242.
 
 45. Fagan, M. E. (1976). *Design and code inspections to reduce errors in program development*. IBM Systems Journal, 15(3), 182-211.
+
+### 9.11 Systematic Validation and Anti-Fraud Testing
+
+46. Ruchy Project. (2025). *Systematic Validation Framework*. ../ruchy/docs/testing/SYSTEMATIC-VALIDATION-FRAMEWORK.md. Three-layer validation: 29 systematic tests, 20 interactive tests, integration testing for all tools on single program. **Key inspiration for anti-fraud measures.**
+
+47. Knight, J. C., & Leveson, N. G. (1986). *An experimental evaluation of the assumption of independence in multiversion programming*. IEEE Transactions on Software Engineering, 1(1), 96-109. **N-version programming for fault tolerance.**
+
+48. Avizienis, A., & Chen, L. (1977). *On the implementation of N-version programming for software fault tolerance during execution*. Proceedings of IEEE COMPSAC, 149-155. **Consensus-based error detection.**
+
+49. Voas, J. M., & Miller, K. W. (1995). *Software testability: The new verification*. IEEE software, 12(3), 17-28. **Differential testing and oracle problem.**
+
+50. McKeeman, W. M. (1998). *Differential testing for software*. Digital Technical Journal, 10(1), 100-107. **Validates one implementation against another - foundation for cross-tool validation.**
 
 ---
 
