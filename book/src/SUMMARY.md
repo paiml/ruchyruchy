@@ -34,9 +34,10 @@
   - [DEBUG-001: Source Map Generation (RED Phase)](./debugging/debug-001-source-maps-red.md)
   - [DEBUG-001: Source Map Generation (GREEN Phase)](./debugging/debug-001-source-maps-green.md)
   - [DEBUG-008: Record-Replay Engine (RED Phase)](./debugging/debug-008-record-replay-red.md)
+  - [DEBUG-008: Record-Replay Engine (GREEN Phase)](./debugging/debug-008-record-replay-green.md)
+  - [DEBUG-INTEGRATION: Production Integration Success](./debugging/debug-integration-success.md)
 
 # Discoveries
 
 - [Runtime Enhancements](./discoveries/runtime-enhancements.md)
 - [Language Boundaries](./discoveries/boundaries.md)
-  - [DEBUG-008: Record-Replay Engine (GREEN Phase)](./debugging/debug-008-record-replay-green.md)
