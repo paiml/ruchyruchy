@@ -1,0 +1,313 @@
+// DEBUGGER-002: Breakpoint Management - GREEN Phase (Phase 2/8 EXTREME TDD)
+//
+// Purpose: Minimal implementation to make all RED phase tests pass
+// Approach: Simplest possible code that satisfies test requirements
+//
+// Green Phase Rule: Do the simplest thing that could possibly work
+
+// Breakpoint structure
+struct Breakpoint {
+    file: String,
+    line: i32,
+    verified: bool,
+    enabled: bool,
+    id: i32
+}
+
+// BreakpointManager structure
+// Note: Using simple fields instead of Vec<Breakpoint> due to Ruchy limitations
+struct BreakpointManager {
+    count: i32,
+    bp1_file: String,
+    bp1_line: i32,
+    bp1_enabled: bool,
+    bp1_exists: bool,
+    bp2_file: String,
+    bp2_line: i32,
+    bp2_enabled: bool,
+    bp2_exists: bool,
+    bp3_file: String,
+    bp3_line: i32,
+    bp3_enabled: bool,
+    bp3_exists: bool,
+    next_id: i32
+}
+
+// Create new empty breakpoint manager
+fun breakpoint_manager_new() -> BreakpointManager {
+    BreakpointManager {
+        count: 0,
+        bp1_file: "",
+        bp1_line: 0,
+        bp1_enabled: false,
+        bp1_exists: false,
+        bp2_file: "",
+        bp2_line: 0,
+        bp2_enabled: false,
+        bp2_exists: false,
+        bp3_file: "",
+        bp3_line: 0,
+        bp3_enabled: false,
+        bp3_exists: false,
+        next_id: 1
+    }
+}
+
+// Get count of breakpoints
+fun breakpoint_manager_count(manager: BreakpointManager) -> i32 {
+    manager.count
+}
+
+// Create new breakpoint
+fun breakpoint_new(file: String, line: i32) -> Breakpoint {
+    Breakpoint {
+        file: file,
+        line: line,
+        verified: false,
+        enabled: true,
+        id: 0
+    }
+}
+
+// Set breakpoint verified status
+fun breakpoint_set_verified(bp: Breakpoint, verified: bool) -> Breakpoint {
+    Breakpoint {
+        file: bp.file,
+        line: bp.line,
+        verified: verified,
+        enabled: bp.enabled,
+        id: bp.id
+    }
+}
+
+// Check if breakpoint is verified
+fun breakpoint_is_verified(bp: Breakpoint) -> bool {
+    bp.verified
+}
+
+// Disable breakpoint
+fun breakpoint_disable(bp: Breakpoint) -> Breakpoint {
+    Breakpoint {
+        file: bp.file,
+        line: bp.line,
+        verified: bp.verified,
+        enabled: false,
+        id: bp.id
+    }
+}
+
+// Check if breakpoint is enabled
+fun breakpoint_is_enabled(bp: Breakpoint) -> bool {
+    bp.enabled
+}
+
+// Add breakpoint to manager
+fun breakpoint_manager_add(manager: BreakpointManager, bp: Breakpoint) -> BreakpointManager {
+    let new_count = manager.count + 1
+
+    // Add to first available slot
+    if !manager.bp1_exists {
+        BreakpointManager {
+            count: new_count,
+            bp1_file: bp.file,
+            bp1_line: bp.line,
+            bp1_enabled: bp.enabled,
+            bp1_exists: true,
+            bp2_file: manager.bp2_file,
+            bp2_line: manager.bp2_line,
+            bp2_enabled: manager.bp2_enabled,
+            bp2_exists: manager.bp2_exists,
+            bp3_file: manager.bp3_file,
+            bp3_line: manager.bp3_line,
+            bp3_enabled: manager.bp3_enabled,
+            bp3_exists: manager.bp3_exists,
+            next_id: manager.next_id + 1
+        }
+    } else {
+        if !manager.bp2_exists {
+            BreakpointManager {
+                count: new_count,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: bp.file,
+                bp2_line: bp.line,
+                bp2_enabled: bp.enabled,
+                bp2_exists: true,
+                bp3_file: manager.bp3_file,
+                bp3_line: manager.bp3_line,
+                bp3_enabled: manager.bp3_enabled,
+                bp3_exists: manager.bp3_exists,
+                next_id: manager.next_id + 1
+            }
+        } else {
+            BreakpointManager {
+                count: new_count,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: manager.bp2_file,
+                bp2_line: manager.bp2_line,
+                bp2_enabled: manager.bp2_enabled,
+                bp2_exists: manager.bp2_exists,
+                bp3_file: bp.file,
+                bp3_line: bp.line,
+                bp3_enabled: bp.enabled,
+                bp3_exists: true,
+                next_id: manager.next_id + 1
+            }
+        }
+    }
+}
+
+// Remove breakpoint from manager
+// NOTE: Avoids early returns due to Ruchy compiler limitation (discovered in DEBUGGER-001)
+fun breakpoint_manager_remove(manager: BreakpointManager, file: String, line: i32) -> BreakpointManager {
+    // Check bp1 match
+    let bp1_matches = if manager.bp1_exists {
+        if manager.bp1_file == file {
+            manager.bp1_line == line
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+
+    // If bp1 matches, remove it
+    if bp1_matches {
+        BreakpointManager {
+            count: manager.count - 1,
+            bp1_file: "",
+            bp1_line: 0,
+            bp1_enabled: false,
+            bp1_exists: false,
+            bp2_file: manager.bp2_file,
+            bp2_line: manager.bp2_line,
+            bp2_enabled: manager.bp2_enabled,
+            bp2_exists: manager.bp2_exists,
+            bp3_file: manager.bp3_file,
+            bp3_line: manager.bp3_line,
+            bp3_enabled: manager.bp3_enabled,
+            bp3_exists: manager.bp3_exists,
+            next_id: manager.next_id
+        }
+    } else {
+        // Check bp2 match
+        let bp2_matches = if manager.bp2_exists {
+            if manager.bp2_file == file {
+                manager.bp2_line == line
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+
+        if bp2_matches {
+            BreakpointManager {
+                count: manager.count - 1,
+                bp1_file: manager.bp1_file,
+                bp1_line: manager.bp1_line,
+                bp1_enabled: manager.bp1_enabled,
+                bp1_exists: manager.bp1_exists,
+                bp2_file: "",
+                bp2_line: 0,
+                bp2_enabled: false,
+                bp2_exists: false,
+                bp3_file: manager.bp3_file,
+                bp3_line: manager.bp3_line,
+                bp3_enabled: manager.bp3_enabled,
+                bp3_exists: manager.bp3_exists,
+                next_id: manager.next_id
+            }
+        } else {
+            // Check bp3 match
+            let bp3_matches = if manager.bp3_exists {
+                if manager.bp3_file == file {
+                    manager.bp3_line == line
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+
+            if bp3_matches {
+                BreakpointManager {
+                    count: manager.count - 1,
+                    bp1_file: manager.bp1_file,
+                    bp1_line: manager.bp1_line,
+                    bp1_enabled: manager.bp1_enabled,
+                    bp1_exists: manager.bp1_exists,
+                    bp2_file: manager.bp2_file,
+                    bp2_line: manager.bp2_line,
+                    bp2_enabled: manager.bp2_enabled,
+                    bp2_exists: manager.bp2_exists,
+                    bp3_file: "",
+                    bp3_line: 0,
+                    bp3_enabled: false,
+                    bp3_exists: false,
+                    next_id: manager.next_id
+                }
+            } else {
+                manager
+            }
+        }
+    }
+}
+
+// Get count of breakpoints for specific file
+fun breakpoint_manager_get_file_count(manager: BreakpointManager, file: String) -> i32 {
+    let mut count = 0
+
+    if manager.bp1_exists {
+        if manager.bp1_file == file {
+            count = count + 1
+        }
+    }
+
+    if manager.bp2_exists {
+        if manager.bp2_file == file {
+            count = count + 1
+        }
+    }
+
+    if manager.bp3_exists {
+        if manager.bp3_file == file {
+            count = count + 1
+        }
+    }
+
+    count
+}
+
+// Clear all breakpoints
+fun breakpoint_manager_clear_all(manager: BreakpointManager) -> BreakpointManager {
+    BreakpointManager {
+        count: 0,
+        bp1_file: "",
+        bp1_line: 0,
+        bp1_enabled: false,
+        bp1_exists: false,
+        bp2_file: "",
+        bp2_line: 0,
+        bp2_enabled: false,
+        bp2_exists: false,
+        bp3_file: "",
+        bp3_line: 0,
+        bp3_enabled: false,
+        bp3_exists: false,
+        next_id: 1
+    }
+}
+
+// Main function for testing
+fun main() {
+    println("DEBUGGER-002: Breakpoint Management - GREEN Phase Implementation")
+    println("")
+    println("Minimal implementation created - ready for test validation")
+    println("Run test_breakpoint_manager_red.ruchy to verify all tests pass")
+}
