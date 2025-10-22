@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Performance Optimization Infrastructure
-- **OPT-INFRA-001**: Bootstrap Timing Harness (Phases 1-4 complete)
+- **INFRA-001**: Bootstrap Timing Harness (Phases 1-4 complete)
   - RED phase: 1/3 tests passing (demonstrates need)
   - GREEN phase: 3/3 tests passing (minimal implementation, 60 LOC)
   - REFACTOR phase: 3/3 tests passing (improved structure, 115 LOC)
@@ -19,7 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Statistical mean calculation (3-sample baseline)
   - Speedup percentage calculation
 
-**Foundation for compiler optimization**: Measurement infrastructure built following EXTREME TDD methodology (RED-GREEN-REFACTOR-TOOL). Ready to extend to N=30 statistical rigor and actual compilation timing.
+- **INFRA-002**: Statistical Testing Framework (Phases 1-4 complete)
+  - RED phase: 3/6 tests passing (demonstrates need)
+  - GREEN phase: 6/6 tests passing (minimal implementation, 175 LOC)
+  - REFACTOR phase: 6/6 tests passing (improved structure, 290 LOC)
+  - TOOL phase: Quality validated (0 errors)
+  - Standard deviation calculation (integer square root via Newton's method)
+  - 95% confidence interval calculation
+  - Welch's t-test for statistical significance (p < 0.05)
+  - Coefficient of variation (CV < 5% target)
+  - Statistical power validation (N=30 support)
+  - BenchmarkStats struct for comprehensive analysis
+
+**Statistical rigor achieved**: N=30 statistical framework built with integer arithmetic. Supports standard deviation, confidence intervals, and hypothesis testing. Ready for rigorous compiler optimization validation.
 
 ---
 
