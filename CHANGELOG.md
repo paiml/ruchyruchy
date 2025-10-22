@@ -31,7 +31,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Statistical power validation (N=30 support)
   - BenchmarkStats struct for comprehensive analysis
 
-**Statistical rigor achieved**: N=30 statistical framework built with integer arithmetic. Supports standard deviation, confidence intervals, and hypothesis testing. Ready for rigorous compiler optimization validation.
+- **INFRA-003**: Baseline Measurements (Phases 1-4 complete)
+  - RED phase: 4/8 tests passing (demonstrates need)
+  - GREEN phase: 8/8 tests passing (minimal implementation, 282 LOC)
+  - REFACTOR phase: 8/8 tests passing (improved structure, 383 LOC)
+  - TOOL phase: Quality validated (0 errors)
+  - N=30 benchmark execution loop
+  - Comprehensive statistical reporting (mean, σ, CI, CV)
+  - Baseline vs optimized comparison with significance testing
+  - Multi-file benchmark support
+  - Stability validation (CV < 5%)
+  - BenchmarkResult struct for complete analysis
+  - Fixed integer division truncation in Welch's t-test (scaling)
+
+**Complete optimization validation pipeline**: INFRA-001 (timing) + INFRA-002 (statistics) + INFRA-003 (integration) = production-ready N=30 benchmark harness. Measure baseline, apply optimization, measure optimized, validate significance (p < 0.05), report with confidence intervals. Ready for actual compiler benchmarking when std::time available.
 
 ---
 
