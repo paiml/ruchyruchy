@@ -1,0 +1,194 @@
+// DEBUGGER-010: Type Error Visualization - RED Phase
+//
+// Phase 1/8 of EXTREME TDD: Write failing tests first
+//
+// Objective: Demonstrate need for type error visualization with helpful messages
+// Expected: Some basic operations pass, core visualization functionality fails
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct TypeInfo {
+    type_name: String,
+    category: String,
+    location: String
+}
+
+struct TypeError {
+    message: String,
+    expected_type: TypeInfo,
+    actual_type: TypeInfo,
+    location: String
+}
+
+struct TypeErrorViz {
+    error: TypeError,
+    suggestion: String,
+    severity: String
+}
+
+// ============================================
+// STUB IMPLEMENTATIONS (RED PHASE)
+// ============================================
+
+fun type_info_new(type_name: String, category: String, location: String) -> TypeInfo {
+    TypeInfo { type_name: type_name, category: category, location: location }
+}
+
+fun type_error_new(message: String, expected: TypeInfo, actual: TypeInfo, location: String) -> TypeError {
+    TypeError { message: message, expected_type: expected, actual_type: actual, location: location }
+}
+
+fun viz_new(error: TypeError) -> TypeErrorViz {
+    TypeErrorViz { error: error, suggestion: "", severity: "" }
+}
+
+fun viz_generate_message(viz: TypeErrorViz) -> String {
+    ""
+}
+
+fun viz_get_suggestion(viz: TypeErrorViz) -> String {
+    viz.suggestion
+}
+
+fun viz_get_severity(viz: TypeErrorViz) -> String {
+    viz.severity
+}
+
+fun viz_format_compact(viz: TypeErrorViz) -> String {
+    ""
+}
+
+fun viz_format_detailed(viz: TypeErrorViz) -> String {
+    ""
+}
+
+fun viz_get_fix_hint(viz: TypeErrorViz) -> String {
+    ""
+}
+
+// ============================================
+// RED PHASE TESTS
+// ============================================
+
+fun test_create_type_info() -> bool {
+    let t = type_info_new("i32", "primitive", "main:10")
+    t.type_name == "i32"
+}
+
+fun test_create_type_error() -> bool {
+    let expected = type_info_new("i32", "primitive", "main:10")
+    let actual = type_info_new("String", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    err.message == "Type mismatch"
+}
+
+fun test_generate_basic_message() -> bool {
+    let expected = type_info_new("i32", "primitive", "main:10")
+    let actual = type_info_new("String", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    let viz = viz_new(err)
+    let msg = viz_generate_message(viz)
+    msg == "Type mismatch: expected i32, got String"
+}
+
+fun test_generate_suggestion() -> bool {
+    let expected = type_info_new("i32", "primitive", "main:10")
+    let actual = type_info_new("String", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    let viz = viz_new(err)
+    let suggestion = viz_get_suggestion(viz)
+    suggestion == "Convert String to i32 using parse()"
+}
+
+fun test_get_severity() -> bool {
+    let expected = type_info_new("i32", "primitive", "main:10")
+    let actual = type_info_new("String", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    let viz = viz_new(err)
+    let severity = viz_get_severity(viz)
+    severity == "error"
+}
+
+fun test_format_compact() -> bool {
+    let expected = type_info_new("i32", "primitive", "main:10")
+    let actual = type_info_new("String", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    let viz = viz_new(err)
+    let compact = viz_format_compact(viz)
+    compact == "main:10: Type mismatch (i32 vs String)"
+}
+
+fun test_format_detailed() -> bool {
+    let expected = type_info_new("i32", "primitive", "main:10")
+    let actual = type_info_new("String", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    let viz = viz_new(err)
+    let detailed = viz_format_detailed(viz)
+    detailed == "Error at main:10: Type mismatch\n  Expected: i32 (primitive)\n  Got: String (primitive)"
+}
+
+fun test_different_categories() -> bool {
+    let expected = type_info_new("Vec", "collection", "main:10")
+    let actual = type_info_new("i32", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    let viz = viz_new(err)
+    let msg = viz_generate_message(viz)
+    msg == "Type mismatch: expected Vec, got i32"
+}
+
+fun test_get_fix_hint() -> bool {
+    let expected = type_info_new("bool", "primitive", "main:10")
+    let actual = type_info_new("i32", "primitive", "main:10")
+    let err = type_error_new("Type mismatch", expected, actual, "main:10")
+    let viz = viz_new(err)
+    let hint = viz_get_fix_hint(viz)
+    hint == "Use comparison: x > 0 instead of x"
+}
+
+fun test_location_formatting() -> bool {
+    let expected = type_info_new("i32", "primitive", "src/main.rs:42")
+    let actual = type_info_new("String", "primitive", "src/main.rs:42")
+    let err = type_error_new("Type mismatch", expected, actual, "src/main.rs:42")
+    let viz = viz_new(err)
+    let compact = viz_format_compact(viz)
+    compact == "src/main.rs:42: Type mismatch (i32 vs String)"
+}
+
+fun main() {
+    println("DEBUGGER-010: Type Error Visualization - RED Phase")
+    println("EXTREME TDD Phase 1/8: Write Failing Tests First")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_type_info() { passed = passed + 1 }
+    if test_create_type_error() { passed = passed + 1 }
+    if test_generate_basic_message() { passed = passed + 1 }
+    if test_generate_suggestion() { passed = passed + 1 }
+    if test_get_severity() { passed = passed + 1 }
+    if test_format_compact() { passed = passed + 1 }
+    if test_format_detailed() { passed = passed + 1 }
+    if test_different_categories() { passed = passed + 1 }
+    if test_get_fix_hint() { passed = passed + 1 }
+    if test_location_formatting() { passed = passed + 1 }
+
+    println("RED PHASE RESULTS:")
+    println("  Total Tests: {}", total)
+    println("  Passed: {}", passed)
+    println("  Failed: {}", total - passed)
+    println("")
+
+    if passed >= 2 && passed <= 4 {
+        println("RED PHASE SUCCESS!")
+        println("Core functionality clearly missing")
+    } else {
+        if passed < 2 {
+            println("WARNING: Too many failures")
+        } else {
+            println("WARNING: Too few failures")
+        }
+    }
+}
