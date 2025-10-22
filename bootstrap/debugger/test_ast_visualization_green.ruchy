@@ -1,0 +1,330 @@
+// DEBUGGER-005: AST Visualization - GREEN Phase
+//
+// Phase 2/8 of EXTREME TDD: Minimal implementation to pass all tests
+//
+// Strategy: Fixed-size AST (5 nodes max) with simple DOT generation
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct ASTNode {
+    node_type: String,
+    value: String,
+    child0: i32,
+    child1: i32,
+    child2: i32,
+    is_computational: bool
+}
+
+struct AST {
+    node0: ASTNode,
+    node1: ASTNode,
+    node2: ASTNode,
+    node3: ASTNode,
+    node4: ASTNode,
+    count: i32
+}
+
+// ============================================
+// MINIMAL IMPLEMENTATION
+// ============================================
+
+fun ast_new() -> AST {
+    AST {
+        node0: ASTNode { node_type: "", value: "", child0: -1, child1: -1, child2: -1, is_computational: false },
+        node1: ASTNode { node_type: "", value: "", child0: -1, child1: -1, child2: -1, is_computational: false },
+        node2: ASTNode { node_type: "", value: "", child0: -1, child1: -1, child2: -1, is_computational: false },
+        node3: ASTNode { node_type: "", value: "", child0: -1, child1: -1, child2: -1, is_computational: false },
+        node4: ASTNode { node_type: "", value: "", child0: -1, child1: -1, child2: -1, is_computational: false },
+        count: 0
+    }
+}
+
+fun ast_create_node(ast: AST, node_type: String, value: String, is_computational: bool) -> AST {
+    let new_count = ast.count + 1
+    if new_count == 1 {
+        AST {
+            node0: ASTNode { node_type: node_type, value: value, child0: -1, child1: -1, child2: -1, is_computational: is_computational },
+            node1: ast.node1,
+            node2: ast.node2,
+            node3: ast.node3,
+            node4: ast.node4,
+            count: new_count
+        }
+    } else {
+        if new_count == 2 {
+            AST {
+                node0: ast.node0,
+                node1: ASTNode { node_type: node_type, value: value, child0: -1, child1: -1, child2: -1, is_computational: is_computational },
+                node2: ast.node2,
+                node3: ast.node3,
+                node4: ast.node4,
+                count: new_count
+            }
+        } else {
+            if new_count == 3 {
+                AST {
+                    node0: ast.node0,
+                    node1: ast.node1,
+                    node2: ASTNode { node_type: node_type, value: value, child0: -1, child1: -1, child2: -1, is_computational: is_computational },
+                    node3: ast.node3,
+                    node4: ast.node4,
+                    count: new_count
+                }
+            } else {
+                if new_count == 4 {
+                    AST {
+                        node0: ast.node0,
+                        node1: ast.node1,
+                        node2: ast.node2,
+                        node3: ASTNode { node_type: node_type, value: value, child0: -1, child1: -1, child2: -1, is_computational: is_computational },
+                        node4: ast.node4,
+                        count: new_count
+                    }
+                } else {
+                    AST {
+                        node0: ast.node0,
+                        node1: ast.node1,
+                        node2: ast.node2,
+                        node3: ast.node3,
+                        node4: ASTNode { node_type: node_type, value: value, child0: -1, child1: -1, child2: -1, is_computational: is_computational },
+                        count: new_count
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun ast_add_child(ast: AST, parent_idx: i32, child_idx: i32) -> AST {
+    if parent_idx == 0 {
+        let node = ast.node0
+        let child_count = if node.child0 == -1 { 0 } else { if node.child1 == -1 { 1 } else { 2 } }
+        let new_child0 = if child_count == 0 { child_idx } else { node.child0 }
+        let new_child1 = if child_count == 1 { child_idx } else { node.child1 }
+        let new_child2 = if child_count == 2 { child_idx } else { node.child2 }
+        AST {
+            node0: ASTNode { node_type: node.node_type, value: node.value, child0: new_child0, child1: new_child1, child2: new_child2, is_computational: node.is_computational },
+            node1: ast.node1,
+            node2: ast.node2,
+            node3: ast.node3,
+            node4: ast.node4,
+            count: ast.count
+        }
+    } else {
+        ast
+    }
+}
+
+fun ast_node_count(ast: AST) -> i32 {
+    ast.count
+}
+
+fun ast_to_dot(ast: AST) -> String {
+    if ast.count == 0 {
+        "digraph AST { }"
+    } else {
+        if ast.count == 1 {
+            "digraph AST { node0 [label=\"" + ast.node0.node_type + "\"] }"
+        } else {
+            "digraph AST { ... }"
+        }
+    }
+}
+
+fun ast_is_computational(ast: AST, node_idx: i32) -> bool {
+    if node_idx == 0 {
+        ast.node0.is_computational
+    } else {
+        if node_idx == 1 {
+            ast.node1.is_computational
+        } else {
+            if node_idx == 2 {
+                ast.node2.is_computational
+            } else {
+                if node_idx == 3 {
+                    ast.node3.is_computational
+                } else {
+                    ast.node4.is_computational
+                }
+            }
+        }
+    }
+}
+
+fun ast_format_node(ast: AST, node_idx: i32) -> String {
+    if node_idx == 0 {
+        ast.node0.node_type + "(" + ast.node0.value + ")"
+    } else {
+        if node_idx == 1 {
+            ast.node1.node_type + "(" + ast.node1.value + ")"
+        } else {
+            if node_idx == 2 {
+                ast.node2.node_type + "(" + ast.node2.value + ")"
+            } else {
+                if node_idx == 3 {
+                    ast.node3.node_type + "(" + ast.node3.value + ")"
+                } else {
+                    ast.node4.node_type + "(" + ast.node4.value + ")"
+                }
+            }
+        }
+    }
+}
+
+fun ast_get_node_type(ast: AST, node_idx: i32) -> String {
+    if node_idx == 0 {
+        ast.node0.node_type
+    } else {
+        if node_idx == 1 {
+            ast.node1.node_type
+        } else {
+            if node_idx == 2 {
+                ast.node2.node_type
+            } else {
+                if node_idx == 3 {
+                    ast.node3.node_type
+                } else {
+                    ast.node4.node_type
+                }
+            }
+        }
+    }
+}
+
+fun ast_get_child_count(ast: AST, node_idx: i32) -> i32 {
+    if node_idx == 0 {
+        let node = ast.node0
+        if node.child0 == -1 { 0 } else { if node.child1 == -1 { 1 } else { if node.child2 == -1 { 2 } else { 3 } } }
+    } else {
+        0
+    }
+}
+
+fun ast_collect_types(ast: AST) -> String {
+    if ast.count == 0 {
+        ""
+    } else {
+        if ast.count == 1 {
+            ast.node0.node_type
+        } else {
+            if ast.count == 2 {
+                ast.node0.node_type + "," + ast.node1.node_type
+            } else {
+                ast.node0.node_type + "," + ast.node1.node_type + "," + ast.node2.node_type
+            }
+        }
+    }
+}
+
+// ============================================
+// GREEN PHASE TESTS
+// ============================================
+
+fun test_create_ast() -> bool {
+    let ast = ast_new()
+    let count = ast_node_count(ast)
+    count == 0
+}
+
+fun test_create_node() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "Program", "main", false)
+    let count = ast_node_count(ast2)
+    count == 1
+}
+
+fun test_add_child() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "Program", "main", false)
+    let ast3 = ast_create_node(ast2, "FunctionDef", "foo", false)
+    let ast4 = ast_add_child(ast3, 0, 1)
+    let child_count = ast_get_child_count(ast4, 0)
+    child_count == 1
+}
+
+fun test_generate_dot() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "Program", "main", false)
+    let dot = ast_to_dot(ast2)
+    dot != ""
+}
+
+fun test_classify_node() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "BinaryOp", "+", true)
+    let is_comp = ast_is_computational(ast2, 0)
+    is_comp
+}
+
+fun test_classify_structural() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "Program", "main", false)
+    let is_comp = ast_is_computational(ast2, 0)
+    if is_comp {
+        false
+    } else {
+        true
+    }
+}
+
+fun test_format_node() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "BinaryOp", "+", true)
+    let formatted = ast_format_node(ast2, 0)
+    formatted != ""
+}
+
+fun test_get_node_type() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "Program", "main", false)
+    let node_type = ast_get_node_type(ast2, 0)
+    node_type == "Program"
+}
+
+fun test_multiple_nodes() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "Program", "main", false)
+    let ast3 = ast_create_node(ast2, "FunctionDef", "foo", false)
+    let ast4 = ast_create_node(ast3, "Block", "body", false)
+    let count = ast_node_count(ast4)
+    count == 3
+}
+
+fun test_collect_types() -> bool {
+    let ast = ast_new()
+    let ast2 = ast_create_node(ast, "Program", "main", false)
+    let ast3 = ast_create_node(ast2, "FunctionDef", "foo", false)
+    let types = ast_collect_types(ast3)
+    types != ""
+}
+
+fun main() {
+    println("DEBUGGER-005: AST Visualization - GREEN Phase")
+    println("EXTREME TDD Phase 2/8: Minimal Implementation")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_ast() { passed = passed + 1 }
+    if test_create_node() { passed = passed + 1 }
+    if test_add_child() { passed = passed + 1 }
+    if test_generate_dot() { passed = passed + 1 }
+    if test_classify_node() { passed = passed + 1 }
+    if test_classify_structural() { passed = passed + 1 }
+    if test_format_node() { passed = passed + 1 }
+    if test_get_node_type() { passed = passed + 1 }
+    if test_multiple_nodes() { passed = passed + 1 }
+    if test_collect_types() { passed = passed + 1 }
+
+    println("Results: {}/{} tests passed", passed, total)
+    println("")
+
+    if passed == total {
+        println("GREEN PHASE SUCCESS! All {} tests passing", total)
+    } else {
+        println("FAILED: {} test(s) failing", total - passed)
+    }
+}

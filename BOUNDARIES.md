@@ -18,6 +18,65 @@ All boundaries discovered through:
 
 ---
 
+## 🚨 CRITICAL: Boolean Negation Operator Hang (v3.111.0)
+
+### ❌ Boolean Negation `!` Causes Runtime Hang
+
+**Discovered**: 2025-10-22 during DEBUGGER-005 (AST Visualization) RED phase
+**Severity**: **HIGH** - Common operator causes infinite hang
+**Status**: 🔴 **OPEN** - Workaround required
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/54
+**Ticket**: DEBUGGER-005
+
+#### Problem Description
+The boolean negation operator `!` causes Ruchy runtime to hang indefinitely. The program appears to enter an infinite loop or deadlock. No error message is displayed.
+
+#### Minimal Reproduction
+```ruchy
+fun test_negation() -> bool {
+    let is_false = false
+    !is_false  // This causes hang
+}
+
+fun main() {
+    println("Testing negation...")
+    let result = test_negation()
+    println("Result: {}", result)
+}
+```
+
+**Expected Output**:
+```
+Testing negation...
+Result: true
+```
+
+**Actual Behavior**:
+```
+Testing negation...
+[hangs indefinitely - no further output]
+```
+
+#### Impact
+- ❌ **BLOCKS**: Writing idiomatic boolean negation expressions
+- ❌ **SEVERITY**: High - must use verbose if/else workaround
+
+#### Workaround
+Replace `!boolean_expr` with explicit if/else:
+
+```ruchy
+// Instead of: !is_comp
+if is_comp {
+    false
+} else {
+    true
+}
+```
+
+**Status**: Using workaround in DEBUGGER-005 implementation
+
+---
+
 ## 🚨 CRITICAL: Variable Name Collision Bug (v3.96.0)
 
 ### ❌ Variable Corruption with Nested Function Calls and Tuple Unpacking
