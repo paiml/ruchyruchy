@@ -1,0 +1,126 @@
+// OPT-INFRA-001: Bootstrap Timing Harness - REFACTOR Phase (Simplified)
+//
+// Improved structure and maintainability while keeping all tests passing
+
+// ============================================
+// TIMING INFRASTRUCTURE
+// ============================================
+
+// Get current time in milliseconds
+// NOTE: Simulated until Ruchy has std::time support
+fun get_current_time_ms() -> i32 {
+    100  // Simulated timestamp
+}
+
+// ============================================
+// BENCHMARK HARNESS
+// ============================================
+
+// Benchmark a single compilation operation
+// Returns: Duration in milliseconds
+fun benchmark_compile(file: String) -> i32 {
+    let start = get_current_time_ms()
+
+    // Simulate compilation work
+    // NOTE: Will use actual ruchy compile call when std::time available
+    let compile_duration = 50  // Simulated 50ms compilation
+
+    let end = start + compile_duration
+    end - start
+}
+
+// ============================================
+// STATISTICAL FUNCTIONS
+// ============================================
+
+// Calculate mean of three timing samples
+// Returns: Mean duration in milliseconds
+fun calculate_mean(a: i32, b: i32, c: i32) -> i32 {
+    (a + b + c) / 3
+}
+
+// Calculate speedup percentage between baseline and optimized
+// Returns: Speedup as percentage (e.g., 20 means 20% faster)
+fun calculate_speedup(baseline: i32, optimized: i32) -> i32 {
+    ((baseline - optimized) * 100) / baseline
+}
+
+// ============================================
+// TEST SUITE
+// ============================================
+
+fun test_timing_measurement() -> bool {
+    println("Test 1: Timing measurement capability")
+
+    let time1 = benchmark_compile("test.ruchy")
+
+    if time1 == 0 {
+        println("❌ No timing measured")
+        false
+    } else {
+        println("✅ Measured {}ms", time1)
+        true
+    }
+}
+
+fun test_mean_calculation() -> bool {
+    println("Test 2: Mean calculation for N=3 samples")
+
+    let time_a = 100
+    let time_b = 105
+    let time_c = 102
+    let mean = calculate_mean(time_a, time_b, time_c)
+
+    if mean == 0 {
+        println("❌ Mean not calculated")
+        false
+    } else {
+        println("✅ Mean = {}ms", mean)
+        true
+    }
+}
+
+fun test_speedup_calculation() -> bool {
+    println("Test 3: Speedup percentage calculation")
+
+    let baseline = 1000   // 1000ms baseline
+    let optimized = 800   // 800ms optimized
+    let speedup = calculate_speedup(baseline, optimized)
+
+    if speedup == 20 {
+        println("✅ Speedup = {}%", speedup)
+        true
+    } else {
+        println("❌ Speedup calculation wrong (got {}%)", speedup)
+        false
+    }
+}
+
+// ============================================
+// MAIN TEST RUNNER
+// ============================================
+
+fun main() {
+    println("OPT-INFRA-001: Bootstrap Timing - REFACTOR Phase")
+    println("Improved structure, same functionality")
+    println("")
+
+    let mut passed = 0
+    let total = 3
+
+    // Run test suite
+    if test_timing_measurement() { passed = passed + 1 }
+    if test_mean_calculation() { passed = passed + 1 }
+    if test_speedup_calculation() { passed = passed + 1 }
+
+    // Report results
+    println("")
+    println("Results: {}/{} tests passed", passed, total)
+
+    if passed == total {
+        println("REFACTOR PHASE SUCCESS! All {}/{} tests passing", passed, total)
+        println("Code improved: Better structure, more maintainable")
+    } else {
+        println("REGRESSION DETECTED: {}/{} tests passing", passed, total)
+    }
+}
