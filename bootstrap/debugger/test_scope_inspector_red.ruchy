@@ -1,0 +1,214 @@
+// DEBUGGER-011: Scope Inspector - RED Phase
+//
+// Phase 1/8 of EXTREME TDD: Write failing tests first
+//
+// Objective: Demonstrate need for scope inspection and variable tracking
+// Expected: Some basic operations pass, core inspection functionality fails
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct Variable {
+    name: String,
+    value: String,
+    var_type: String,
+    scope_level: i32
+}
+
+struct Scope {
+    scope_name: String,
+    level: i32,
+    var0: Variable,
+    var1: Variable,
+    var2: Variable,
+    var_count: i32
+}
+
+struct ScopeStack {
+    scope0: Scope,
+    scope1: Scope,
+    scope2: Scope,
+    depth: i32
+}
+
+// ============================================
+// STUB IMPLEMENTATIONS (RED PHASE)
+// ============================================
+
+fun variable_new(name: String, value: String, var_type: String, scope_level: i32) -> Variable {
+    Variable { name: name, value: value, var_type: var_type, scope_level: scope_level }
+}
+
+fun scope_new(scope_name: String, level: i32) -> Scope {
+    let empty_var = Variable { name: "", value: "", var_type: "", scope_level: 0 }
+    Scope {
+        scope_name: scope_name,
+        level: level,
+        var0: empty_var,
+        var1: empty_var,
+        var2: empty_var,
+        var_count: 0
+    }
+}
+
+fun scope_add_variable(scope: Scope, variable: Variable) -> Scope {
+    scope
+}
+
+fun scope_get_variable(scope: Scope, name: String) -> Variable {
+    scope.var0
+}
+
+fun scope_has_variable(scope: Scope, name: String) -> bool {
+    false
+}
+
+fun scope_variable_count(scope: Scope) -> i32 {
+    scope.var_count
+}
+
+fun stack_new() -> ScopeStack {
+    let empty_scope = scope_new("", 0)
+    ScopeStack {
+        scope0: empty_scope,
+        scope1: empty_scope,
+        scope2: empty_scope,
+        depth: 0
+    }
+}
+
+fun stack_push_scope(stack: ScopeStack, scope: Scope) -> ScopeStack {
+    stack
+}
+
+fun stack_pop_scope(stack: ScopeStack) -> ScopeStack {
+    stack
+}
+
+fun stack_current_scope(stack: ScopeStack) -> Scope {
+    stack.scope0
+}
+
+fun stack_depth(stack: ScopeStack) -> i32 {
+    stack.depth
+}
+
+fun stack_find_variable(stack: ScopeStack, name: String) -> Variable {
+    stack.scope0.var0
+}
+
+// ============================================
+// RED PHASE TESTS
+// ============================================
+
+fun test_create_variable() -> bool {
+    let v = variable_new("x", "42", "i32", 0)
+    v.name == "x"
+}
+
+fun test_create_scope() -> bool {
+    let scope = scope_new("main", 0)
+    scope.scope_name == "main"
+}
+
+fun test_add_variable_to_scope() -> bool {
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    scope_variable_count(scope2) == 1
+}
+
+fun test_get_variable_from_scope() -> bool {
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    let retrieved = scope_get_variable(scope2, "x")
+    retrieved.value == "42"
+}
+
+fun test_has_variable() -> bool {
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    scope_has_variable(scope2, "x")
+}
+
+fun test_push_scope() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let stack2 = stack_push_scope(stack, scope)
+    stack_depth(stack2) == 1
+}
+
+fun test_pop_scope() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let stack2 = stack_push_scope(stack, scope)
+    let stack3 = stack_pop_scope(stack2)
+    stack_depth(stack3) == 0
+}
+
+fun test_current_scope() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let stack2 = stack_push_scope(stack, scope)
+    let current = stack_current_scope(stack2)
+    current.scope_name == "main"
+}
+
+fun test_nested_scopes() -> bool {
+    let stack = stack_new()
+    let scope1 = scope_new("main", 0)
+    let scope2 = scope_new("function", 1)
+    let stack2 = stack_push_scope(stack, scope1)
+    let stack3 = stack_push_scope(stack2, scope2)
+    stack_depth(stack3) == 2
+}
+
+fun test_find_variable_in_stack() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    let stack2 = stack_push_scope(stack, scope2)
+    let found = stack_find_variable(stack2, "x")
+    found.value == "42"
+}
+
+fun main() {
+    println("DEBUGGER-011: Scope Inspector - RED Phase")
+    println("EXTREME TDD Phase 1/8: Write Failing Tests First")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_variable() { passed = passed + 1 }
+    if test_create_scope() { passed = passed + 1 }
+    if test_add_variable_to_scope() { passed = passed + 1 }
+    if test_get_variable_from_scope() { passed = passed + 1 }
+    if test_has_variable() { passed = passed + 1 }
+    if test_push_scope() { passed = passed + 1 }
+    if test_pop_scope() { passed = passed + 1 }
+    if test_current_scope() { passed = passed + 1 }
+    if test_nested_scopes() { passed = passed + 1 }
+    if test_find_variable_in_stack() { passed = passed + 1 }
+
+    println("RED PHASE RESULTS:")
+    println("  Total Tests: {}", total)
+    println("  Passed: {}", passed)
+    println("  Failed: {}", total - passed)
+    println("")
+
+    if passed >= 2 && passed <= 4 {
+        println("RED PHASE SUCCESS!")
+        println("Core functionality clearly missing")
+    } else {
+        if passed < 2 {
+            println("WARNING: Too many failures")
+        } else {
+            println("WARNING: Too few failures")
+        }
+    }
+}
