@@ -1,0 +1,218 @@
+// DEBUGGER-007: Execution Recording - RED Phase
+//
+// Phase 1/8 of EXTREME TDD: Write failing tests first
+//
+// Objective: Demonstrate need for execution event recording with circular buffer
+// Expected: Some basic operations pass, core recording functionality fails
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct ExecutionEvent {
+    event_type: String,
+    location: String,
+    timestamp: i32,
+    data: String
+}
+
+struct RecordBuffer {
+    event0: ExecutionEvent,
+    event1: ExecutionEvent,
+    event2: ExecutionEvent,
+    event3: ExecutionEvent,
+    event4: ExecutionEvent,
+    capacity: i32,
+    count: i32,
+    write_pos: i32
+}
+
+// ============================================
+// STUB IMPLEMENTATIONS (RED PHASE)
+// ============================================
+
+fun event_new(event_type: String, location: String, data: String) -> ExecutionEvent {
+    ExecutionEvent { event_type: event_type, location: location, timestamp: 0, data: data }
+}
+
+fun buffer_new(capacity: i32) -> RecordBuffer {
+    let empty = ExecutionEvent { event_type: "", location: "", timestamp: 0, data: "" }
+    RecordBuffer {
+        event0: empty,
+        event1: empty,
+        event2: empty,
+        event3: empty,
+        event4: empty,
+        capacity: capacity,
+        count: 0,
+        write_pos: 0
+    }
+}
+
+fun buffer_record(buf: RecordBuffer, event: ExecutionEvent) -> RecordBuffer {
+    buf
+}
+
+fun buffer_count(buf: RecordBuffer) -> i32 {
+    buf.count
+}
+
+fun buffer_capacity(buf: RecordBuffer) -> i32 {
+    buf.capacity
+}
+
+fun buffer_get(buf: RecordBuffer, index: i32) -> ExecutionEvent {
+    buf.event0
+}
+
+fun buffer_is_full(buf: RecordBuffer) -> bool {
+    false
+}
+
+fun buffer_clear(buf: RecordBuffer) -> RecordBuffer {
+    buf
+}
+
+fun buffer_get_latest(buf: RecordBuffer) -> ExecutionEvent {
+    buf.event0
+}
+
+fun buffer_get_oldest(buf: RecordBuffer) -> ExecutionEvent {
+    buf.event0
+}
+
+// ============================================
+// RED PHASE TESTS
+// ============================================
+
+fun test_create_empty_buffer() -> bool {
+    let buf = buffer_new(5)
+    buffer_count(buf) == 0 && buffer_capacity(buf) == 5
+}
+
+fun test_record_single_event() -> bool {
+    let buf = buffer_new(5)
+    let event = event_new("step", "main:10", "x=5")
+    let buf2 = buffer_record(buf, event)
+    buffer_count(buf2) == 1
+}
+
+fun test_record_multiple_events() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=5")
+    let e2 = event_new("step", "main:11", "y=10")
+    let e3 = event_new("step", "main:12", "z=15")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+    let buf4 = buffer_record(buf3, e3)
+    buffer_count(buf4) == 3
+}
+
+fun test_circular_buffer_overflow() -> bool {
+    let buf = buffer_new(3)
+    let e1 = event_new("step", "main:10", "a")
+    let e2 = event_new("step", "main:11", "b")
+    let e3 = event_new("step", "main:12", "c")
+    let e4 = event_new("step", "main:13", "d")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+    let buf4 = buffer_record(buf3, e3)
+    let buf5 = buffer_record(buf4, e4)
+    buffer_count(buf5) == 3
+}
+
+fun test_get_event_by_index() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "data1")
+    let buf2 = buffer_record(buf, e1)
+    let retrieved = buffer_get(buf2, 0)
+    retrieved.data == "data1"
+}
+
+fun test_buffer_is_full() -> bool {
+    let buf = buffer_new(2)
+    let e1 = event_new("step", "main:10", "a")
+    let e2 = event_new("step", "main:11", "b")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+    buffer_is_full(buf3)
+}
+
+fun test_clear_buffer() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "data")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_clear(buf2)
+    buffer_count(buf3) == 0
+}
+
+fun test_get_latest_event() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "first")
+    let e2 = event_new("step", "main:11", "latest")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+    let latest = buffer_get_latest(buf3)
+    latest.data == "latest"
+}
+
+fun test_get_oldest_event() -> bool {
+    let buf = buffer_new(3)
+    let e1 = event_new("step", "main:10", "oldest")
+    let e2 = event_new("step", "main:11", "middle")
+    let e3 = event_new("step", "main:12", "newest")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+    let buf4 = buffer_record(buf3, e3)
+    let oldest = buffer_get_oldest(buf4)
+    oldest.data == "oldest"
+}
+
+fun test_circular_overwrites_oldest() -> bool {
+    let buf = buffer_new(2)
+    let e1 = event_new("step", "main:10", "first")
+    let e2 = event_new("step", "main:11", "second")
+    let e3 = event_new("step", "main:12", "third")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+    let buf4 = buffer_record(buf3, e3)
+    let oldest = buffer_get_oldest(buf4)
+    oldest.data == "second"
+}
+
+fun main() {
+    println("DEBUGGER-007: Execution Recording - RED Phase")
+    println("EXTREME TDD Phase 1/8: Write Failing Tests First")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_empty_buffer() { passed = passed + 1 }
+    if test_record_single_event() { passed = passed + 1 }
+    if test_record_multiple_events() { passed = passed + 1 }
+    if test_circular_buffer_overflow() { passed = passed + 1 }
+    if test_get_event_by_index() { passed = passed + 1 }
+    if test_buffer_is_full() { passed = passed + 1 }
+    if test_clear_buffer() { passed = passed + 1 }
+    if test_get_latest_event() { passed = passed + 1 }
+    if test_get_oldest_event() { passed = passed + 1 }
+    if test_circular_overwrites_oldest() { passed = passed + 1 }
+
+    println("RED PHASE RESULTS:")
+    println("  Total Tests: {}", total)
+    println("  Passed: {}", passed)
+    println("  Failed: {}", total - passed)
+    println("")
+
+    if passed >= 3 && passed <= 7 {
+        println("RED PHASE SUCCESS!")
+        println("Core functionality clearly missing")
+    } else {
+        if passed < 3 {
+            println("WARNING: Too many failures")
+        } else {
+            println("WARNING: Too few failures")
+        }
+    }
+}
