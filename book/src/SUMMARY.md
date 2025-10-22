@@ -56,6 +56,10 @@
 
 # Phase 4: Debugging Tools - 100% COMPLETE! 🏆
 
+## Interactive Debugging Guide
+
+- [Interactive Debugging: REPL, Notebooks, and IDE Integration](./phase4_debugger/interactive-debugging-guide.md)
+
 ## Phase 1: DAP Infrastructure (3/3) ✅
 
 - [DEBUGGER-001: DAP Server Skeleton](./phase4_debugger/debugger-001-dap-server-skeleton.md)
