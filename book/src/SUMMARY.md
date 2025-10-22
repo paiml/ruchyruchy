@@ -54,7 +54,33 @@
   - [BOOTSTRAP-015: Rust Emitter](./phase3_bootstrap/stage3/bootstrap-015-rust.md)
   - [BOOTSTRAP-016: Self-Compilation](./phase3_bootstrap/stage3/bootstrap-016-self-compilation.md)
 
-# Phase 4: Debugging Tools (Vertical Slice 1)
+# Phase 4: Debugging Tools - 100% COMPLETE! 🏆
+
+## Phase 1: DAP Infrastructure (3/3) ✅
+
+- [DEBUGGER-001: DAP Server Skeleton](./phase4_debugger/debugger-001-dap-server-skeleton.md)
+- [DEBUGGER-002: Breakpoint Management](./phase4_debugger/debugger-002-breakpoint-management.md)
+- [DEBUGGER-003: Execution Control](./phase4_debugger/debugger-003-execution-control.md)
+
+## Phase 2: Parser Debugging (3/3) ✅
+
+- [DEBUGGER-004: Parse Stack Inspection](./phase4_debugger/debugger-004-parse-stack-inspection.md)
+- [DEBUGGER-005: AST Visualization](./phase4_debugger/debugger-005-ast-visualization.md)
+- [DEBUGGER-006: Parse Tree Diff](./phase4_debugger/debugger-006-parse-tree-diff.md)
+
+## Phase 3: Time-Travel Debugging (3/3) ✅
+
+- [DEBUGGER-007: Execution Recording](./phase4_debugger/debugger-007-execution-recording.md)
+- [DEBUGGER-008: Time-Travel Navigation](./phase4_debugger/debugger-008-time-travel-navigation.md)
+- [DEBUGGER-009: Deterministic Replay](./phase4_debugger/debugger-009-deterministic-replay.md)
+
+## Phase 4: Semantic Debugging (3/3) ✅
+
+- [DEBUGGER-010: Type Error Visualization](./phase4_debugger/debugger-010-type-error-visualization.md)
+- [DEBUGGER-011: Scope Inspector](./phase4_debugger/debugger-011-scope-inspector.md)
+- [DEBUGGER-012: Call Stack Visualization](./phase4_debugger/debugger-012-call-stack-visualization.md)
+
+## Early Prototypes & Vertical Slices
 
 - [Debugging Toolkit](./debugging/chapter.md)
   - [DEBUG-001: Source Map Generation (RED Phase)](./debugging/debug-001-source-maps-red.md)
@@ -62,8 +88,6 @@
   - [DEBUG-008: Record-Replay Engine (RED Phase)](./debugging/debug-008-record-replay-red.md)
   - [DEBUG-008: Record-Replay Engine (GREEN Phase)](./debugging/debug-008-record-replay-green.md)
   - [DEBUG-INTEGRATION: Production Integration Success](./debugging/debug-integration-success.md)
-  - [DEBUGGER-001: DAP Server Skeleton](./phase4_debugger/debugger-001-dap-server-skeleton.md)
-  - [DEBUGGER-002: Breakpoint Management](./phase4_debugger/debugger-002-breakpoint-management.md)
 
 # Discoveries
 
