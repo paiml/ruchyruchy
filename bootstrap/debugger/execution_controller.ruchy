@@ -1,0 +1,251 @@
+// DEBUGGER-003: Execution Control - GREEN Phase
+//
+// Minimal implementation of execution control for debugger.
+// Provides launch, pause, continue, and stepping functionality.
+//
+// Integration:
+//   - DEBUGGER-001: DAP Server routes execution requests here
+//   - DEBUGGER-002: Breakpoint Manager checked during execution
+//
+// Features:
+//   - State machine: Stopped -> Running -> Paused -> Running -> Stopped
+//   - Launch program execution
+//   - Pause/continue execution
+//   - Step over, step into, step out
+//   - Breakpoint integration
+//   - Error handling for invalid state transitions
+
+// Execution states
+struct ExecutionState {
+    stopped: bool,
+    running: bool,
+    paused: bool
+}
+
+fun execution_state_stopped() -> ExecutionState {
+    ExecutionState { stopped: true, running: false, paused: false }
+}
+
+fun execution_state_running() -> ExecutionState {
+    ExecutionState { stopped: false, running: true, paused: false }
+}
+
+fun execution_state_paused() -> ExecutionState {
+    ExecutionState { stopped: false, running: false, paused: true }
+}
+
+fun execution_state_is_stopped(state: ExecutionState) -> bool {
+    state.stopped
+}
+
+fun execution_state_is_running(state: ExecutionState) -> bool {
+    state.running
+}
+
+fun execution_state_is_paused(state: ExecutionState) -> bool {
+    state.paused
+}
+
+// Main execution controller
+struct ExecutionController {
+    state: ExecutionState,
+    current_line: i32,
+    program_name: String,
+    has_breakpoint_manager: bool,
+    step_mode: bool
+}
+
+// Create new execution controller (initially stopped)
+fun execution_controller_new() -> ExecutionController {
+    ExecutionController {
+        state: execution_state_stopped(),
+        current_line: 0,
+        program_name: "",
+        has_breakpoint_manager: false,
+        step_mode: false
+    }
+}
+
+// Check if controller is running
+fun execution_controller_is_running(controller: ExecutionController) -> bool {
+    execution_state_is_running(controller.state)
+}
+
+// Check if controller is paused
+fun execution_controller_is_paused(controller: ExecutionController) -> bool {
+    execution_state_is_paused(controller.state)
+}
+
+// Check if controller is stopped
+fun execution_controller_is_stopped(controller: ExecutionController) -> bool {
+    execution_state_is_stopped(controller.state)
+}
+
+// Launch program execution
+fun execution_controller_launch(controller: ExecutionController, program_name: String) -> ExecutionController {
+    ExecutionController {
+        state: execution_state_running(),
+        current_line: 1,
+        program_name: program_name,
+        has_breakpoint_manager: controller.has_breakpoint_manager,
+        step_mode: false
+    }
+}
+
+// Pause execution (only valid if running)
+fun execution_controller_pause(controller: ExecutionController) -> ExecutionController {
+    // Validate: can only pause if running
+    if execution_state_is_running(controller.state) {
+        ExecutionController {
+            state: execution_state_paused(),
+            current_line: controller.current_line,
+            program_name: controller.program_name,
+            has_breakpoint_manager: controller.has_breakpoint_manager,
+            step_mode: controller.step_mode
+        }
+    } else {
+        // Return unchanged if not running (error case)
+        controller
+    }
+}
+
+// Continue execution from pause (only valid if paused)
+fun execution_controller_continue(controller: ExecutionController) -> ExecutionController {
+    // Validate: can only continue if paused
+    if execution_state_is_paused(controller.state) {
+        ExecutionController {
+            state: execution_state_running(),
+            current_line: controller.current_line,
+            program_name: controller.program_name,
+            has_breakpoint_manager: controller.has_breakpoint_manager,
+            step_mode: false
+        }
+    } else {
+        // Return unchanged if not paused (error case)
+        controller
+    }
+}
+
+// Step over: execute one source line, pause at next line
+fun execution_controller_step_over(controller: ExecutionController) -> ExecutionController {
+    // Can step from paused or stopped state
+    if execution_state_is_paused(controller.state) {
+        // Advance one line and remain paused
+        ExecutionController {
+            state: execution_state_paused(),
+            current_line: controller.current_line + 1,
+            program_name: controller.program_name,
+            has_breakpoint_manager: controller.has_breakpoint_manager,
+            step_mode: true
+        }
+    } else {
+        // If stopped, start in step mode
+        if execution_state_is_stopped(controller.state) {
+            ExecutionController {
+                state: execution_state_paused(),
+                current_line: 1,
+                program_name: controller.program_name,
+                has_breakpoint_manager: controller.has_breakpoint_manager,
+                step_mode: true
+            }
+        } else {
+            controller
+        }
+    }
+}
+
+// Step into: enter function call, pause at first line
+fun execution_controller_step_into(controller: ExecutionController) -> ExecutionController {
+    // Similar to step_over for minimal implementation
+    // In full implementation, would actually enter function
+    if execution_state_is_paused(controller.state) {
+        ExecutionController {
+            state: execution_state_paused(),
+            current_line: controller.current_line + 1,
+            program_name: controller.program_name,
+            has_breakpoint_manager: controller.has_breakpoint_manager,
+            step_mode: true
+        }
+    } else {
+        if execution_state_is_stopped(controller.state) {
+            ExecutionController {
+                state: execution_state_paused(),
+                current_line: 1,
+                program_name: controller.program_name,
+                has_breakpoint_manager: controller.has_breakpoint_manager,
+                step_mode: true
+            }
+        } else {
+            controller
+        }
+    }
+}
+
+// Step out: return from function, pause after call
+fun execution_controller_step_out(controller: ExecutionController) -> ExecutionController {
+    // For minimal implementation, similar to step_over
+    // In full implementation, would execute until function return
+    if execution_state_is_paused(controller.state) {
+        ExecutionController {
+            state: execution_state_paused(),
+            current_line: controller.current_line + 1,
+            program_name: controller.program_name,
+            has_breakpoint_manager: controller.has_breakpoint_manager,
+            step_mode: true
+        }
+    } else {
+        controller
+    }
+}
+
+// Stop execution
+fun execution_controller_stop(controller: ExecutionController) -> ExecutionController {
+    ExecutionController {
+        state: execution_state_stopped(),
+        current_line: 0,
+        program_name: "",
+        has_breakpoint_manager: controller.has_breakpoint_manager,
+        step_mode: false
+    }
+}
+
+// Attach breakpoint manager
+fun execution_controller_attach_breakpoint_manager(controller: ExecutionController) -> ExecutionController {
+    ExecutionController {
+        state: controller.state,
+        current_line: controller.current_line,
+        program_name: controller.program_name,
+        has_breakpoint_manager: true,
+        step_mode: controller.step_mode
+    }
+}
+
+// Check if breakpoint manager is attached
+fun execution_controller_has_breakpoint_manager(controller: ExecutionController) -> bool {
+    controller.has_breakpoint_manager
+}
+
+// Simulate execution to line (for testing)
+fun execution_controller_run_to_line(controller: ExecutionController, target_line: i32) -> ExecutionController {
+    if execution_state_is_running(controller.state) {
+        ExecutionController {
+            state: execution_state_paused(),
+            current_line: target_line,
+            program_name: controller.program_name,
+            has_breakpoint_manager: controller.has_breakpoint_manager,
+            step_mode: controller.step_mode
+        }
+    } else {
+        controller
+    }
+}
+
+// Get current line number
+fun execution_controller_current_line(controller: ExecutionController) -> i32 {
+    controller.current_line
+}
+
+// Get program name
+fun execution_controller_program_name(controller: ExecutionController) -> String {
+    controller.program_name
+}

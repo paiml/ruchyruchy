@@ -1,0 +1,266 @@
+// DEBUGGER-003: Execution Control - GREEN Phase (Simplified)
+//
+// Minimal implementation + tests (combined file for quick validation)
+
+// ============================================
+// MINIMAL IMPLEMENTATION
+// ============================================
+
+struct ExecutionController {
+    is_running: bool,
+    is_paused: bool,
+    current_line: i32,
+    program_name: String,
+    has_bp_mgr: bool
+}
+
+fun execution_controller_new() -> ExecutionController {
+    ExecutionController {
+        is_running: false,
+        is_paused: false,
+        current_line: 0,
+        program_name: "",
+        has_bp_mgr: false
+    }
+}
+
+fun execution_controller_is_running(ec: ExecutionController) -> bool {
+    ec.is_running
+}
+
+fun execution_controller_is_paused(ec: ExecutionController) -> bool {
+    ec.is_paused
+}
+
+fun execution_controller_is_stopped(ec: ExecutionController) -> bool {
+    if ec.is_running { return false }
+    if ec.is_paused { return false }
+    true
+}
+
+fun execution_controller_launch(ec: ExecutionController, program: String) -> ExecutionController {
+    ExecutionController {
+        is_running: true,
+        is_paused: false,
+        current_line: 1,
+        program_name: program,
+        has_bp_mgr: ec.has_bp_mgr
+    }
+}
+
+fun execution_controller_pause(ec: ExecutionController) -> ExecutionController {
+    if ec.is_running {
+        ExecutionController {
+            is_running: false,
+            is_paused: true,
+            current_line: ec.current_line,
+            program_name: ec.program_name,
+            has_bp_mgr: ec.has_bp_mgr
+        }
+    } else {
+        ec
+    }
+}
+
+fun execution_controller_continue(ec: ExecutionController) -> ExecutionController {
+    if ec.is_paused {
+        ExecutionController {
+            is_running: true,
+            is_paused: false,
+            current_line: ec.current_line,
+            program_name: ec.program_name,
+            has_bp_mgr: ec.has_bp_mgr
+        }
+    } else {
+        ec
+    }
+}
+
+fun execution_controller_step_over(ec: ExecutionController) -> ExecutionController {
+    if ec.is_paused {
+        ExecutionController {
+            is_running: false,
+            is_paused: true,
+            current_line: ec.current_line + 1,
+            program_name: ec.program_name,
+            has_bp_mgr: ec.has_bp_mgr
+        }
+    } else {
+        if !ec.is_running {
+            if !ec.is_paused {
+                ExecutionController {
+                    is_running: false,
+                    is_paused: true,
+                    current_line: 1,
+                    program_name: ec.program_name,
+                    has_bp_mgr: ec.has_bp_mgr
+                }
+            } else {
+                ec
+            }
+        } else {
+            ec
+        }
+    }
+}
+
+fun execution_controller_step_into(ec: ExecutionController) -> ExecutionController {
+    execution_controller_step_over(ec)
+}
+
+fun execution_controller_step_out(ec: ExecutionController) -> ExecutionController {
+    execution_controller_step_over(ec)
+}
+
+fun execution_controller_stop(ec: ExecutionController) -> ExecutionController {
+    ExecutionController {
+        is_running: false,
+        is_paused: false,
+        current_line: 0,
+        program_name: "",
+        has_bp_mgr: ec.has_bp_mgr
+    }
+}
+
+fun execution_controller_attach_bp_mgr(ec: ExecutionController) -> ExecutionController {
+    ExecutionController {
+        is_running: ec.is_running,
+        is_paused: ec.is_paused,
+        current_line: ec.current_line,
+        program_name: ec.program_name,
+        has_bp_mgr: true
+    }
+}
+
+fun execution_controller_has_bp_mgr(ec: ExecutionController) -> bool {
+    ec.has_bp_mgr
+}
+
+fun execution_controller_program_name(ec: ExecutionController) -> String {
+    ec.program_name
+}
+
+fun execution_controller_current_line(ec: ExecutionController) -> i32 {
+    ec.current_line
+}
+
+// ============================================
+// TESTS
+// ============================================
+
+fun test_create() -> bool {
+    let ec = execution_controller_new()
+    if execution_controller_is_running(ec) { return false }
+    if execution_controller_is_paused(ec) { return false }
+    execution_controller_is_stopped(ec)
+}
+
+fun test_launch() -> bool {
+    let ec = execution_controller_new()
+    let launched = execution_controller_launch(ec, "test.ruchy")
+    if !execution_controller_is_running(launched) { return false }
+    if execution_controller_program_name(launched) != "test.ruchy" { return false }
+    execution_controller_current_line(launched) == 1
+}
+
+fun test_pause() -> bool {
+    let ec = execution_controller_new()
+    let launched = execution_controller_launch(ec, "test.ruchy")
+    let paused = execution_controller_pause(launched)
+    execution_controller_is_paused(paused)
+}
+
+fun test_continue() -> bool {
+    let ec = execution_controller_new()
+    let launched = execution_controller_launch(ec, "test.ruchy")
+    let paused = execution_controller_pause(launched)
+    let continued = execution_controller_continue(paused)
+    execution_controller_is_running(continued)
+}
+
+fun test_step_over() -> bool {
+    let ec = execution_controller_new()
+    let launched = execution_controller_launch(ec, "test.ruchy")
+    let paused = execution_controller_pause(launched)
+    let line = execution_controller_current_line(paused)
+    let stepped = execution_controller_step_over(paused)
+    execution_controller_current_line(stepped) == line + 1
+}
+
+fun test_step_into() -> bool {
+    let ec = execution_controller_new()
+    let launched = execution_controller_launch(ec, "test.ruchy")
+    let paused = execution_controller_pause(launched)
+    let line = execution_controller_current_line(paused)
+    let stepped = execution_controller_step_into(paused)
+    execution_controller_current_line(stepped) == line + 1
+}
+
+fun test_step_out() -> bool {
+    let ec = execution_controller_new()
+    let launched = execution_controller_launch(ec, "test.ruchy")
+    let paused = execution_controller_pause(launched)
+    let line = execution_controller_current_line(paused)
+    let stepped = execution_controller_step_out(paused)
+    execution_controller_current_line(stepped) == line + 1
+}
+
+fun test_state_transitions() -> bool {
+    let ec = execution_controller_new()
+    let launched = execution_controller_launch(ec, "test.ruchy")
+    if !execution_controller_is_running(launched) { return false }
+    let paused = execution_controller_pause(launched)
+    if !execution_controller_is_paused(paused) { return false }
+    let continued = execution_controller_continue(paused)
+    if !execution_controller_is_running(continued) { return false }
+    let stopped = execution_controller_stop(continued)
+    execution_controller_is_stopped(stopped)
+}
+
+fun test_bp_manager_integration() -> bool {
+    let ec = execution_controller_new()
+    if execution_controller_has_bp_mgr(ec) { return false }
+    let with_bp = execution_controller_attach_bp_mgr(ec)
+    if !execution_controller_has_bp_mgr(with_bp) { return false }
+    let launched = execution_controller_launch(with_bp, "test.ruchy")
+    execution_controller_has_bp_mgr(launched)
+}
+
+fun test_error_handling() -> bool {
+    let ec = execution_controller_new()
+    let not_paused = execution_controller_pause(ec)
+    if execution_controller_is_paused(not_paused) { return false }
+    let not_continued = execution_controller_continue(ec)
+    if execution_controller_is_running(not_continued) { return false }
+    execution_controller_is_stopped(not_paused)
+}
+
+fun main() {
+    println("╔════════════════════════════════════════════════════════════╗")
+    println("║  DEBUGGER-003: Execution Control - GREEN Phase            ║")
+    println("╚════════════════════════════════════════════════════════════╝")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create() { passed = passed + 1 }
+    if test_launch() { passed = passed + 1 }
+    if test_pause() { passed = passed + 1 }
+    if test_continue() { passed = passed + 1 }
+    if test_step_over() { passed = passed + 1 }
+    if test_step_into() { passed = passed + 1 }
+    if test_step_out() { passed = passed + 1 }
+    if test_state_transitions() { passed = passed + 1 }
+    if test_bp_manager_integration() { passed = passed + 1 }
+    if test_error_handling() { passed = passed + 1 }
+
+    println("Results: {}/{} tests passed", passed, total)
+    println("")
+
+    if passed == total {
+        println("✅ GREEN PHASE SUCCESS! All {} tests passing", total)
+    } else {
+        println("❌ FAIL: {}/{} tests passing", passed, total)
+    }
+}
