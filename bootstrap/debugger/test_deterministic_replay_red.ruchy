@@ -1,0 +1,367 @@
+// DEBUGGER-009: Deterministic Replay - RED Phase
+//
+// Phase 1/8 of EXTREME TDD: Write failing tests first
+//
+// Objective: Demonstrate need for deterministic replay of execution sequences
+// Expected: Some basic operations pass, core replay functionality fails
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct ExecutionEvent {
+    event_type: String,
+    location: String,
+    timestamp: i32,
+    data: String
+}
+
+struct RecordBuffer {
+    event0: ExecutionEvent,
+    event1: ExecutionEvent,
+    event2: ExecutionEvent,
+    event3: ExecutionEvent,
+    event4: ExecutionEvent,
+    capacity: i32,
+    count: i32,
+    write_pos: i32
+}
+
+struct ReplaySession {
+    buffer: RecordBuffer,
+    current_index: i32,
+    replay_active: bool,
+    total_steps: i32
+}
+
+// ============================================
+// HELPER FUNCTIONS (from DEBUGGER-007)
+// ============================================
+
+fun event_new(event_type: String, location: String, data: String) -> ExecutionEvent {
+    ExecutionEvent { event_type: event_type, location: location, timestamp: 0, data: data }
+}
+
+fun buffer_new(capacity: i32) -> RecordBuffer {
+    let empty = ExecutionEvent { event_type: "", location: "", timestamp: 0, data: "" }
+    RecordBuffer {
+        event0: empty,
+        event1: empty,
+        event2: empty,
+        event3: empty,
+        event4: empty,
+        capacity: capacity,
+        count: 0,
+        write_pos: 0
+    }
+}
+
+fun buffer_record(buf: RecordBuffer, event: ExecutionEvent) -> RecordBuffer {
+    let new_pos = buf.write_pos
+    let new_count = if buf.count < buf.capacity { buf.count + 1 } else { buf.capacity }
+    let next_write_pos = if buf.write_pos + 1 >= buf.capacity { 0 } else { buf.write_pos + 1 }
+
+    if new_pos == 0 {
+        RecordBuffer {
+            event0: event,
+            event1: buf.event1,
+            event2: buf.event2,
+            event3: buf.event3,
+            event4: buf.event4,
+            capacity: buf.capacity,
+            count: new_count,
+            write_pos: next_write_pos
+        }
+    } else {
+        if new_pos == 1 {
+            RecordBuffer {
+                event0: buf.event0,
+                event1: event,
+                event2: buf.event2,
+                event3: buf.event3,
+                event4: buf.event4,
+                capacity: buf.capacity,
+                count: new_count,
+                write_pos: next_write_pos
+            }
+        } else {
+            if new_pos == 2 {
+                RecordBuffer {
+                    event0: buf.event0,
+                    event1: buf.event1,
+                    event2: event,
+                    event3: buf.event3,
+                    event4: buf.event4,
+                    capacity: buf.capacity,
+                    count: new_count,
+                    write_pos: next_write_pos
+                }
+            } else {
+                if new_pos == 3 {
+                    RecordBuffer {
+                        event0: buf.event0,
+                        event1: buf.event1,
+                        event2: buf.event2,
+                        event3: event,
+                        event4: buf.event4,
+                        capacity: buf.capacity,
+                        count: new_count,
+                        write_pos: next_write_pos
+                    }
+                } else {
+                    RecordBuffer {
+                        event0: buf.event0,
+                        event1: buf.event1,
+                        event2: buf.event2,
+                        event3: buf.event3,
+                        event4: event,
+                        capacity: buf.capacity,
+                        count: new_count,
+                        write_pos: next_write_pos
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun buffer_get(buf: RecordBuffer, index: i32) -> ExecutionEvent {
+    if index == 0 {
+        buf.event0
+    } else {
+        if index == 1 {
+            buf.event1
+        } else {
+            if index == 2 {
+                buf.event2
+            } else {
+                if index == 3 {
+                    buf.event3
+                } else {
+                    buf.event4
+                }
+            }
+        }
+    }
+}
+
+// ============================================
+// STUB IMPLEMENTATIONS (RED PHASE)
+// ============================================
+
+fun replay_new(buffer: RecordBuffer) -> ReplaySession {
+    ReplaySession {
+        buffer: buffer,
+        current_index: 0,
+        replay_active: false,
+        total_steps: 0
+    }
+}
+
+fun replay_start(session: ReplaySession) -> ReplaySession {
+    session
+}
+
+fun replay_next_step(session: ReplaySession) -> ReplaySession {
+    session
+}
+
+fun replay_is_active(session: ReplaySession) -> bool {
+    session.replay_active
+}
+
+fun replay_current_index(session: ReplaySession) -> i32 {
+    session.current_index
+}
+
+fun replay_has_more_steps(session: ReplaySession) -> bool {
+    false
+}
+
+fun replay_get_current_event(session: ReplaySession) -> ExecutionEvent {
+    session.buffer.event0
+}
+
+fun replay_reset(session: ReplaySession) -> ReplaySession {
+    session
+}
+
+fun replay_stop(session: ReplaySession) -> ReplaySession {
+    session
+}
+
+fun replay_total_steps(session: ReplaySession) -> i32 {
+    session.total_steps
+}
+
+// ============================================
+// RED PHASE TESTS
+// ============================================
+
+fun test_create_replay_session() -> bool {
+    let buf = buffer_new(5)
+    let session = replay_new(buf)
+    if replay_is_active(session) {
+        false
+    } else {
+        true
+    }
+}
+
+fun test_start_replay() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=1")
+    let buf2 = buffer_record(buf, e1)
+
+    let session = replay_new(buf2)
+    let session2 = replay_start(session)
+    replay_is_active(session2)
+}
+
+fun test_next_step() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=1")
+    let e2 = event_new("step", "main:11", "x=2")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+
+    let session = replay_new(buf3)
+    let session2 = replay_start(session)
+    let session3 = replay_next_step(session2)
+    replay_current_index(session3) == 1
+}
+
+fun test_has_more_steps_at_start() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=1")
+    let e2 = event_new("step", "main:11", "x=2")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+
+    let session = replay_new(buf3)
+    let session2 = replay_start(session)
+    replay_has_more_steps(session2)
+}
+
+fun test_has_more_steps_at_end() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=1")
+    let buf2 = buffer_record(buf, e1)
+
+    let session = replay_new(buf2)
+    let session2 = replay_start(session)
+    let session3 = replay_next_step(session2)
+    if replay_has_more_steps(session3) {
+        false
+    } else {
+        true
+    }
+}
+
+fun test_get_current_event_during_replay() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "data1")
+    let e2 = event_new("step", "main:11", "data2")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+
+    let session = replay_new(buf3)
+    let session2 = replay_start(session)
+    let session3 = replay_next_step(session2)
+    let event = replay_get_current_event(session3)
+    event.data == "data2"
+}
+
+fun test_reset_replay() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=1")
+    let e2 = event_new("step", "main:11", "x=2")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+
+    let session = replay_new(buf3)
+    let session2 = replay_start(session)
+    let session3 = replay_next_step(session2)
+    let session4 = replay_reset(session3)
+    replay_current_index(session4) == 0
+}
+
+fun test_stop_replay() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=1")
+    let buf2 = buffer_record(buf, e1)
+
+    let session = replay_new(buf2)
+    let session2 = replay_start(session)
+    let session3 = replay_stop(session2)
+    if replay_is_active(session3) {
+        false
+    } else {
+        true
+    }
+}
+
+fun test_total_steps() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "x=1")
+    let e2 = event_new("step", "main:11", "x=2")
+    let e3 = event_new("step", "main:12", "x=3")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+    let buf4 = buffer_record(buf3, e3)
+
+    let session = replay_new(buf4)
+    replay_total_steps(session) == 3
+}
+
+fun test_deterministic_replay_sequence() -> bool {
+    let buf = buffer_new(5)
+    let e1 = event_new("step", "main:10", "first")
+    let e2 = event_new("step", "main:11", "second")
+    let buf2 = buffer_record(buf, e1)
+    let buf3 = buffer_record(buf2, e2)
+
+    let session = replay_new(buf3)
+    let session2 = replay_start(session)
+    let ev1 = replay_get_current_event(session2)
+    let session3 = replay_next_step(session2)
+    let ev2 = replay_get_current_event(session3)
+    ev1.data == "first" && ev2.data == "second"
+}
+
+fun main() {
+    println("DEBUGGER-009: Deterministic Replay - RED Phase")
+    println("EXTREME TDD Phase 1/8: Write Failing Tests First")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_replay_session() { passed = passed + 1 }
+    if test_start_replay() { passed = passed + 1 }
+    if test_next_step() { passed = passed + 1 }
+    if test_has_more_steps_at_start() { passed = passed + 1 }
+    if test_has_more_steps_at_end() { passed = passed + 1 }
+    if test_get_current_event_during_replay() { passed = passed + 1 }
+    if test_reset_replay() { passed = passed + 1 }
+    if test_stop_replay() { passed = passed + 1 }
+    if test_total_steps() { passed = passed + 1 }
+    if test_deterministic_replay_sequence() { passed = passed + 1 }
+
+    println("RED PHASE RESULTS:")
+    println("  Total Tests: {}", total)
+    println("  Passed: {}", passed)
+    println("  Failed: {}", total - passed)
+    println("")
+
+    if passed >= 2 && passed <= 4 {
+        println("RED PHASE SUCCESS!")
+        println("Core functionality clearly missing")
+    } else {
+        if passed < 2 {
+            println("WARNING: Too many failures")
+        } else {
+            println("WARNING: Too few failures")
+        }
+    }
+}
