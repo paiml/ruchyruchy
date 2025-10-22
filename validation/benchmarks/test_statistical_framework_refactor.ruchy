@@ -1,0 +1,299 @@
+// INFRA-002: Statistical Testing Framework - REFACTOR Phase
+//
+// Improved structure and maintainability while keeping all tests passing
+// Comprehensive statistical analysis for benchmark validation
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct BenchmarkStats {
+    sum: i32,
+    sum_squares: i32,
+    count: i32,
+    mean: i32,
+    std_dev: i32,
+    cv_percent: i32
+}
+
+// ============================================
+// MATHEMATICAL UTILITIES
+// ============================================
+
+// Integer square root using Newton's method
+// Converges to floor(sqrt(n)) in O(log n) iterations
+fun isqrt(n: i32) -> i32 {
+    if n == 0 { return 0 }
+    if n == 1 { return 1 }
+
+    let mut x = n / 2
+    let mut i = 0
+
+    while i < 10 {
+        let next = (x + n / x) / 2
+        if next >= x {
+            return x
+        }
+        x = next
+        i = i + 1
+    }
+
+    x
+}
+
+// Absolute value for integers
+fun abs(x: i32) -> i32 {
+    if x < 0 {
+        0 - x
+    } else {
+        x
+    }
+}
+
+// ============================================
+// DESCRIPTIVE STATISTICS
+// ============================================
+
+// Calculate standard deviation from summary statistics
+// Formula: σ = sqrt(E[X²] - E[X]²)
+//   where E[X²] = sum_of_squares / n
+//   and E[X]² = (sum / n)²
+fun calculate_std_dev(sum: i32, sum_sq: i32, n: i32) -> i32 {
+    let mean = sum / n
+    let mean_of_squares = sum_sq / n
+    let variance = mean_of_squares - (mean * mean)
+    isqrt(variance)
+}
+
+// Calculate coefficient of variation (CV)
+// Formula: CV = (σ / μ) × 100%
+// Good benchmarks typically have CV < 5%
+fun calculate_cv(mean: i32, std_dev: i32) -> i32 {
+    if mean == 0 { return 0 }
+    (std_dev * 100) / mean
+}
+
+// Create comprehensive benchmark statistics
+fun create_stats(sum: i32, sum_sq: i32, n: i32) -> BenchmarkStats {
+    let mean = sum / n
+    let std_dev = calculate_std_dev(sum, sum_sq, n)
+    let cv = calculate_cv(mean, std_dev)
+
+    BenchmarkStats {
+        sum: sum,
+        sum_squares: sum_sq,
+        count: n,
+        mean: mean,
+        std_dev: std_dev,
+        cv_percent: cv
+    }
+}
+
+// ============================================
+// INFERENTIAL STATISTICS
+// ============================================
+
+// Calculate 95% confidence interval margin
+// Formula: margin = z × (σ / sqrt(n))
+//   where z = 1.96 for 95% confidence
+// Interpretation: True mean is within [mean ± margin] with 95% confidence
+fun calculate_ci_margin(std_dev: i32, n: i32) -> i32 {
+    let sqrt_n = isqrt(n)
+    if sqrt_n == 0 { return 0 }
+
+    // z-score for 95% CI: 1.96 ≈ 196/100
+    (196 * std_dev) / (100 * sqrt_n)
+}
+
+// Welch's t-test for comparing two independent samples
+// Tests null hypothesis: mean1 == mean2
+// Returns: true if p < 0.05 (statistically significant difference)
+//
+// Formula: t = (μ₁ - μ₂) / sqrt(σ₁²/n₁ + σ₂²/n₂)
+// Decision: Reject H₀ if |t| > 2 (approximation for large samples)
+fun welch_t_test(mean1: i32, std1: i32, n1: i32, mean2: i32, std2: i32, n2: i32) -> bool {
+    let diff = abs(mean1 - mean2)
+
+    // Standard error of difference
+    let se1_sq = (std1 * std1) / n1
+    let se2_sq = (std2 * std2) / n2
+    let pooled_se = isqrt(se1_sq + se2_sq)
+
+    if pooled_se == 0 { return false }
+
+    // t-statistic
+    let t = diff / pooled_se
+
+    // Critical value ≈ 2 for p < 0.05 with large samples
+    t > 2
+}
+
+// Check if sample size provides adequate statistical power
+// Rule: N ≥ 30 provides good power for detecting medium effect sizes
+fun has_adequate_power(n: i32) -> bool {
+    n >= 30
+}
+
+// ============================================
+// DATA AGGREGATION
+// ============================================
+
+// Aggregate multiple benchmark runs
+// Returns: Sum of all run times
+fun aggregate_runs(r1: i32, r2: i32, r3: i32, r4: i32, r5: i32) -> i32 {
+    r1 + r2 + r3 + r4 + r5
+}
+
+// ============================================
+// TEST SUITE
+// ============================================
+
+fun test_std_dev_calculation() -> bool {
+    println("Test 1: Standard deviation calculation")
+
+    // Sample: [100, 105, 102, 98, 103]
+    let sum = 508
+    let sum_sq = 51582
+    let n = 5
+
+    let std_dev = calculate_std_dev(sum, sum_sq, n)
+
+    if std_dev == 0 {
+        println("  ❌ Standard deviation not calculated")
+        false
+    } else {
+        println("  ✅ StdDev = {} (shows measurement variability)", std_dev)
+        true
+    }
+}
+
+fun test_confidence_interval() -> bool {
+    println("Test 2: 95% Confidence interval calculation")
+
+    let std_dev = 50
+    let n = 30
+
+    let margin = calculate_ci_margin(std_dev, n)
+
+    if margin == 0 {
+        println("  ❌ CI margin not calculated")
+        false
+    } else {
+        println("  ✅ 95% CI margin = ±{} (precision estimate)", margin)
+        true
+    }
+}
+
+fun test_welch_t_test() -> bool {
+    println("Test 3: Welch's t-test for statistical significance")
+
+    // Large difference: baseline=1000, optimized=800 (20% improvement)
+    let significant = welch_t_test(1000, 50, 30, 800, 40, 30)
+
+    if !significant {
+        println("  ❌ Should detect significant difference")
+        false
+    } else {
+        println("  ✅ Significant improvement detected (p < 0.05)")
+        true
+    }
+}
+
+fun test_n30_aggregation() -> bool {
+    println("Test 4: Aggregate multiple benchmark runs")
+
+    let r1 = 100
+    let r2 = 105
+    let r3 = 102
+    let r4 = 98
+    let r5 = 103
+
+    let total = aggregate_runs(r1, r2, r3, r4, r5)
+
+    if total == 0 {
+        println("  ❌ Aggregation failed")
+        false
+    } else {
+        println("  ✅ Aggregated {} runs: sum={}", 5, total)
+        true
+    }
+}
+
+fun test_coefficient_of_variation() -> bool {
+    println("Test 5: Coefficient of variation (CV < 5% target)")
+
+    let mean = 1000
+    let std_dev = 30
+    let cv = calculate_cv(mean, std_dev)
+
+    if cv > 5 {
+        println("  ❌ High variability (CV={}% > 5%)", cv)
+        false
+    } else {
+        println("  ✅ Low variability (CV={}% < 5%)", cv)
+        true
+    }
+}
+
+fun test_statistical_power() -> bool {
+    println("Test 6: Statistical power with N=30")
+
+    let n = 30
+
+    if !has_adequate_power(n) {
+        println("  ❌ Insufficient sample size (n={})", n)
+        false
+    } else {
+        println("  ✅ Adequate power (n={} ≥ 30)", n)
+        true
+    }
+}
+
+// ============================================
+// MAIN TEST RUNNER
+// ============================================
+
+fun main() {
+    println("INFRA-002: Statistical Testing Framework - REFACTOR Phase")
+    println("Improved structure, comprehensive statistics")
+    println("")
+
+    let mut passed = 0
+    let total = 6
+
+    // Run test suite
+    if test_std_dev_calculation() { passed = passed + 1 }
+    println("")
+
+    if test_confidence_interval() { passed = passed + 1 }
+    println("")
+
+    if test_welch_t_test() { passed = passed + 1 }
+    println("")
+
+    if test_n30_aggregation() { passed = passed + 1 }
+    println("")
+
+    if test_coefficient_of_variation() { passed = passed + 1 }
+    println("")
+
+    if test_statistical_power() { passed = passed + 1 }
+    println("")
+
+    // Summary
+    println("=" * 50)
+    println("Results: {}/{} tests passed", passed, total)
+    println("=" * 50)
+    println("")
+
+    if passed == total {
+        println("REFACTOR PHASE SUCCESS! All {}/{} tests passing", passed, total)
+        println("Code improved:")
+        println("  - Added BenchmarkStats struct")
+        println("  - Comprehensive statistical formulas")
+        println("  - Better organization and documentation")
+        println("  - More maintainable code structure")
+    } else {
+        println("REGRESSION DETECTED: {}/{} tests passing", passed, total)
+    }
+}

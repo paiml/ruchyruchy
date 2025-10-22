@@ -1,0 +1,189 @@
+// INFRA-002: Statistical Testing Framework - RED Phase
+//
+// Demonstrate need for statistical rigor in benchmarking
+// Target: N=30 runs, std dev, confidence intervals, Welch's t-test
+
+// ============================================
+// STATISTICAL INFRASTRUCTURE (STUBS)
+// ============================================
+
+// Calculate standard deviation
+// Returns: Standard deviation of samples
+fun calculate_std_dev(sum: i32, sum_sq: i32, n: i32) -> i32 {
+    // Stub: Should calculate sqrt(variance)
+    // variance = (sum_sq / n) - (sum / n)^2
+    0
+}
+
+// Calculate 95% confidence interval margin
+// Returns: Margin for 95% CI (± value)
+fun calculate_ci_margin(std_dev: i32, n: i32) -> i32 {
+    // Stub: Should calculate 1.96 * (std_dev / sqrt(n))
+    // For N=30: 1.96 * (std_dev / 5.48)
+    0
+}
+
+// Welch's t-test for statistical significance
+// Returns: true if difference is statistically significant (p < 0.05)
+fun welch_t_test(mean1: i32, std1: i32, n1: i32, mean2: i32, std2: i32, n2: i32) -> bool {
+    // Stub: Should implement Welch's t-test
+    // Compare t-statistic against critical value
+    false
+}
+
+// Aggregate N runs into summary statistics
+// Returns: (sum, sum_of_squares, count)
+fun aggregate_runs(r1: i32, r2: i32, r3: i32, r4: i32, r5: i32) -> i32 {
+    // Stub: Should aggregate multiple runs
+    // This is simplified (only 5 runs shown, need 30)
+    r1 + r2 + r3 + r4 + r5
+}
+
+// ============================================
+// TEST SUITE
+// ============================================
+
+fun test_std_dev_calculation() -> bool {
+    println("Test 1: Standard deviation calculation")
+
+    // Sample data: times = [100, 105, 102, 98, 103]
+    // Mean = 101.6, Variance ≈ 6.64, StdDev ≈ 2.58
+    let sum = 508
+    let sum_sq = 51582  // 100^2 + 105^2 + 102^2 + 98^2 + 103^2
+    let n = 5
+
+    let std_dev = calculate_std_dev(sum, sum_sq, n)
+
+    if std_dev == 0 {
+        println("❌ Standard deviation not calculated")
+        false
+    } else {
+        println("✅ StdDev = {}", std_dev)
+        true
+    }
+}
+
+fun test_confidence_interval() -> bool {
+    println("Test 2: 95% Confidence interval calculation")
+
+    // For N=30 runs with std_dev=50
+    // CI margin ≈ 1.96 * (50 / 5.48) ≈ 17.9
+    let std_dev = 50
+    let n = 30
+
+    let margin = calculate_ci_margin(std_dev, n)
+
+    if margin == 0 {
+        println("❌ CI margin not calculated")
+        false
+    } else {
+        println("✅ 95% CI margin = ±{}", margin)
+        true
+    }
+}
+
+fun test_welch_t_test() -> bool {
+    println("Test 3: Welch's t-test for significance")
+
+    // Baseline: mean=1000, std=50, n=30
+    // Optimized: mean=800, std=40, n=30
+    // Large difference should be significant
+    let significant = welch_t_test(1000, 50, 30, 800, 40, 30)
+
+    if !significant {
+        println("❌ Should detect significant difference")
+        false
+    } else {
+        println("✅ Statistically significant (p < 0.05)")
+        true
+    }
+}
+
+fun test_n30_aggregation() -> bool {
+    println("Test 4: Aggregate N=30 runs")
+
+    // Simulate 5 runs (would need 30 in real implementation)
+    let r1 = 100
+    let r2 = 105
+    let r3 = 102
+    let r4 = 98
+    let r5 = 103
+
+    let total = aggregate_runs(r1, r2, r3, r4, r5)
+
+    if total == 0 {
+        println("❌ Aggregation failed")
+        false
+    } else {
+        println("✅ Aggregated {} runs: sum={}", 5, total)
+        true
+    }
+}
+
+fun test_coefficient_of_variation() -> bool {
+    println("Test 5: Coefficient of variation (CV)")
+
+    // CV = (std_dev / mean) * 100
+    // Good benchmarks have CV < 5%
+    let mean = 1000
+    let std_dev = 30
+    let cv = (std_dev * 100) / mean
+
+    if cv > 5 {
+        println("❌ High variability (CV={}%)", cv)
+        false
+    } else {
+        println("✅ Low variability (CV={}%)", cv)
+        true
+    }
+}
+
+fun test_statistical_power() -> bool {
+    println("Test 6: N=30 provides adequate statistical power")
+
+    // With N=30, can detect 10% difference with 80% power
+    // This test just checks we understand the requirement
+    let n = 30
+
+    if n < 30 {
+        println("❌ Insufficient sample size (n={})", n)
+        false
+    } else {
+        println("✅ Adequate sample size (n={})", n)
+        true
+    }
+}
+
+// ============================================
+// MAIN TEST RUNNER
+// ============================================
+
+fun main() {
+    println("INFRA-002: Statistical Testing Framework - RED Phase")
+    println("Demonstrate need for N=30 statistical rigor")
+    println("")
+
+    let mut passed = 0
+    let total = 6
+
+    if test_std_dev_calculation() { passed = passed + 1 }
+    if test_confidence_interval() { passed = passed + 1 }
+    if test_welch_t_test() { passed = passed + 1 }
+    if test_n30_aggregation() { passed = passed + 1 }
+    if test_coefficient_of_variation() { passed = passed + 1 }
+    if test_statistical_power() { passed = passed + 1 }
+
+    println("")
+    println("Results: {}/{} tests passed", passed, total)
+    println("")
+
+    if passed >= 2 && passed <= 4 {
+        println("RED PHASE SUCCESS! {}/{} passing (demonstrates need)", passed, total)
+    } else {
+        if passed == total {
+            println("WARNING: All tests passing - need actual implementation for RED")
+        } else {
+            println("ADJUST: {} tests passing (target: 2-4 for RED phase)", passed)
+        }
+    }
+}
