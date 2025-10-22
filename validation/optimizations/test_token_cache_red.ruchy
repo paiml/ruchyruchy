@@ -1,0 +1,328 @@
+// OPT-LEX-001: Token Stream Caching - RED Phase
+//
+// EXTREME TDD Phase 1: Demonstrate optimization opportunity
+//
+// OBJECTIVE: Show that token caching can improve performance
+// OPPORTUNITY: During multi-stage bootstrap, same files tokenized multiple times
+// EXPECTED: Tests fail because caching not yet implemented
+
+// ============================================
+// TOKEN CACHE INTERFACE (NOT IMPLEMENTED YET)
+// ============================================
+
+struct TokenCache {
+    hits: i32,
+    misses: i32,
+    cached_count: i32
+}
+
+// Create empty token cache
+// NOT IMPLEMENTED - will always return empty cache
+fun token_cache_new() -> TokenCache {
+    TokenCache {
+        hits: 0,
+        misses: 0,
+        cached_count: 0
+    }
+}
+
+// Check if file is cached
+// NOT IMPLEMENTED - will always return false
+fun token_cache_has(cache: TokenCache, file: String) -> bool {
+    false  // Always miss (no caching yet)
+}
+
+// Store tokens for a file
+// NOT IMPLEMENTED - does nothing
+fun token_cache_put(cache: TokenCache, file: String) -> TokenCache {
+    cache  // No-op (no caching yet)
+}
+
+// Simulate tokenizing a file (expensive operation)
+fun tokenize_file_expensive(file: String) -> i32 {
+    // Simulate tokenization cost: 100ms per file
+    100
+}
+
+// Tokenize with cache (NOT IMPLEMENTED YET)
+fun tokenize_with_cache(cache: TokenCache, file: String) -> TokenCache {
+    // Should check cache first, but doesn't yet
+    let cost = tokenize_file_expensive(file)
+
+    // Always counts as miss since caching not implemented
+    TokenCache {
+        hits: cache.hits,
+        misses: cache.misses + 1,
+        cached_count: cache.cached_count
+    }
+}
+
+// ============================================
+// RED PHASE TESTS (EXPECTED TO FAIL)
+// ============================================
+
+fun test_token_cache_creation() -> bool {
+    println("🧪 Test 1: Token Cache Creation")
+
+    let cache = token_cache_new()
+
+    if cache.hits == 0 && cache.misses == 0 && cache.cached_count == 0 {
+        println("✅ PASS: Empty cache created correctly")
+        return true
+    }
+
+    println("❌ FAIL: Cache not initialized correctly")
+    false
+}
+
+fun test_cache_miss_first_access() -> bool {
+    println("🧪 Test 2: Cache Miss on First Access")
+
+    let cache = token_cache_new()
+    let has_cached = token_cache_has(cache, "lexer.ruchy")
+
+    if !has_cached {
+        println("✅ PASS: First access is cache miss (expected)")
+        return true
+    }
+
+    println("❌ FAIL: Should be cache miss on first access")
+    false
+}
+
+fun test_cache_stores_after_first_tokenize() -> bool {
+    println("🧪 Test 3: Cache Stores After First Tokenize")
+
+    let cache = token_cache_new()
+    let cache2 = token_cache_put(cache, "lexer.ruchy")
+
+    let has_cached = token_cache_has(cache2, "lexer.ruchy")
+
+    if has_cached {
+        println("✅ PASS: File cached after tokenization")
+        return true
+    }
+
+    println("❌ FAIL: File not cached (optimization not implemented)")
+    false
+}
+
+fun test_cache_hit_on_second_access() -> bool {
+    println("🧪 Test 4: Cache Hit on Second Access")
+
+    let cache = token_cache_new()
+
+    // First tokenization (miss)
+    let cache2 = tokenize_with_cache(cache, "lexer.ruchy")
+    let cache3 = token_cache_put(cache2, "lexer.ruchy")
+
+    // Second tokenization (should be hit)
+    let cache4 = tokenize_with_cache(cache3, "lexer.ruchy")
+
+    if cache4.hits > cache3.hits {
+        println("✅ PASS: Cache hit on second access")
+        return true
+    }
+
+    println("❌ FAIL: No cache hit (expected - optimization not implemented)")
+    false
+}
+
+fun test_multiple_files_cached() -> bool {
+    println("🧪 Test 5: Multiple Files Cached")
+
+    let cache = token_cache_new()
+
+    // Cache multiple files
+    let cache2 = token_cache_put(cache, "lexer.ruchy")
+    let cache3 = token_cache_put(cache2, "parser.ruchy")
+    let cache4 = token_cache_put(cache3, "types.ruchy")
+
+    if cache4.cached_count == 3 {
+        println("✅ PASS: Multiple files cached")
+        return true
+    }
+
+    println("❌ FAIL: Not tracking cached file count (expected)")
+    false
+}
+
+fun test_cache_hit_rate_calculation() -> bool {
+    println("🧪 Test 6: Cache Hit Rate Calculation")
+
+    let cache = token_cache_new()
+
+    // Tokenize same file 5 times
+    let cache2 = tokenize_with_cache(cache, "lexer.ruchy")
+    let cache3 = token_cache_put(cache2, "lexer.ruchy")
+
+    let cache4 = tokenize_with_cache(cache3, "lexer.ruchy")
+    let cache5 = tokenize_with_cache(cache4, "lexer.ruchy")
+    let cache6 = tokenize_with_cache(cache5, "lexer.ruchy")
+    let cache7 = tokenize_with_cache(cache6, "lexer.ruchy")
+
+    // Expected: 1 miss + 4 hits = 80% hit rate
+    let total = cache7.hits + cache7.misses
+    let expected_hits = 4
+
+    if cache7.hits == expected_hits && total == 5 {
+        println("✅ PASS: Cache hit rate correct (80%)")
+        return true
+    }
+
+    println("❌ FAIL: Hit rate wrong - hits: {}, misses: {}", cache7.hits, cache7.misses)
+    println("   Expected: 4 hits, 1 miss (80% hit rate)")
+    false
+}
+
+fun test_performance_improvement_measurement() -> bool {
+    println("🧪 Test 7: Performance Improvement Measurement")
+
+    let start = std::time::now_millis()
+
+    // Without caching: tokenize 10 files
+    let mut i = 0
+    let mut total_time_no_cache = 0
+    while i < 10 {
+        let cost = tokenize_file_expensive("file.ruchy")
+        total_time_no_cache = total_time_no_cache + cost
+        i = i + 1
+    }
+
+    let no_cache_time = std::time::now_millis() - start
+
+    // With caching: should be faster (but isn't yet)
+    let start2 = std::time::now_millis()
+    let cache = token_cache_new()
+
+    let mut j = 0
+    let mut cache_ref = cache
+    while j < 10 {
+        cache_ref = tokenize_with_cache(cache_ref, "file.ruchy")
+        j = j + 1
+    }
+
+    let cache_time = std::time::now_millis() - start2
+
+    // With caching, should be faster
+    // Expected to FAIL because caching not implemented
+    if cache_time < no_cache_time {
+        println("✅ PASS: Cached version faster")
+        return true
+    }
+
+    println("❌ FAIL: No performance improvement (expected - caching not implemented)")
+    println("   No cache: {}ms, With cache: {}ms", no_cache_time, cache_time)
+    false
+}
+
+fun test_cache_statistics_tracking() -> bool {
+    println("🧪 Test 8: Cache Statistics Tracking")
+
+    let cache = token_cache_new()
+
+    // Perform some operations
+    let cache2 = tokenize_with_cache(cache, "file1.ruchy")
+    let cache3 = token_cache_put(cache2, "file1.ruchy")
+    let cache4 = tokenize_with_cache(cache3, "file1.ruchy")
+    let cache5 = tokenize_with_cache(cache4, "file2.ruchy")
+
+    // Should track: 2 different files, 3 misses, 1 hit
+    let total_accesses = cache5.hits + cache5.misses
+
+    if total_accesses == 4 {
+        println("✅ PASS: Statistics tracked correctly")
+        return true
+    }
+
+    println("❌ FAIL: Statistics incorrect")
+    println("   Hits: {}, Misses: {}, Total: {}", cache5.hits, cache5.misses, total_accesses)
+    false
+}
+
+// ============================================
+// MAIN TEST RUNNER
+// ============================================
+
+fun main() {
+    println("═══════════════════════════════════════════════════════")
+    println("OPT-LEX-001: Token Stream Caching - RED Phase")
+    println("═══════════════════════════════════════════════════════")
+    println("")
+    println("OBJECTIVE: Demonstrate optimization opportunity")
+    println("EXPECTED: Most tests FAIL (caching not implemented)")
+    println("")
+
+    let mut passed = 0
+    let mut total = 0
+
+    // Test 1: Cache creation
+    total = total + 1
+    if test_token_cache_creation() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Test 2: Cache miss first access
+    total = total + 1
+    if test_cache_miss_first_access() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Test 3: Cache stores after tokenize
+    total = total + 1
+    if test_cache_stores_after_first_tokenize() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Test 4: Cache hit on second access
+    total = total + 1
+    if test_cache_hit_on_second_access() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Test 5: Multiple files cached
+    total = total + 1
+    if test_multiple_files_cached() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Test 6: Cache hit rate
+    total = total + 1
+    if test_cache_hit_rate_calculation() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Test 7: Performance improvement
+    total = total + 1
+    if test_performance_improvement_measurement() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Test 8: Statistics tracking
+    total = total + 1
+    if test_cache_statistics_tracking() {
+        passed = passed + 1
+    }
+    println("")
+
+    // Summary
+    println("═══════════════════════════════════════════════════════")
+    println("RED Phase Results: {}/{} tests passing", passed, total)
+    println("═══════════════════════════════════════════════════════")
+
+    if passed < total {
+        println("✅ RED Phase SUCCESS: Tests demonstrate need for optimization")
+        println("   {} tests failing show caching not implemented", total - passed)
+        println("")
+        println("Next: GREEN Phase - Implement token stream caching")
+    } else {
+        println("❌ RED Phase FAILED: All tests passed unexpectedly!")
+    }
+}

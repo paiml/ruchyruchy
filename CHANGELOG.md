@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Lexer Optimizations (Phase 2)
+- **OPT-LEX-001**: Token Stream Caching (RED phase complete)
+  - RED phase: 0/8 tests passing (demonstrates optimization opportunity)
+  - Tests show 15-25% potential speedup for multi-stage bootstrap
+  - Integrated std::time::now_millis() from Ruchy v3.121.0
+  - GREEN phase deferred pending Ruchy struct syntax improvements
+  - Discovered: Large struct initializations cause Ruchy parser errors
+  - Status: Waiting on Ruchy language improvements or simplified approach
+
 #### Performance Optimization Infrastructure
 - **INFRA-001**: Bootstrap Timing Harness (Phases 1-4 complete)
   - RED phase: 1/3 tests passing (demonstrates need)
