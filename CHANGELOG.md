@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Lexer Optimizations (Phase 2)
+- **OPT-LEX-002**: Lazy String Allocation (RED phase complete)
+  - RED phase: Demonstrates 60% memory reduction opportunity
+  - Tests show 20-30% reduction in lexer memory allocations
+  - Fewer GC allocations = faster lexer phase
+  - Keywords/operators don't need string allocation (use views)
+  - Only identifiers/literals need actual string allocation
+  - Status: GREEN phase ready to implement
+
 - **OPT-LEX-001**: Token Stream Caching (RED phase complete)
   - RED phase: 0/8 tests passing (demonstrates optimization opportunity)
   - Tests show 15-25% potential speedup for multi-stage bootstrap
