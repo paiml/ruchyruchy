@@ -1,0 +1,265 @@
+// DEBUGGER-004: Parse Stack Inspection - GREEN Phase (Simplified)
+//
+// Phase 2/8 of EXTREME TDD: Minimal implementation to pass all tests
+//
+// Strategy: Ultra-simple approach - just track depth and top 3 entries
+// (This is truly minimal - REFACTOR will improve)
+
+// ============================================
+// MINIMAL IMPLEMENTATION
+// ============================================
+
+struct ParseStack {
+    entry0_rule: String,
+    entry0_ctx: String,
+    entry1_rule: String,
+    entry1_ctx: String,
+    entry2_rule: String,
+    entry2_ctx: String,
+    depth: i32
+}
+
+fun parse_stack_new() -> ParseStack {
+    ParseStack {
+        entry0_rule: "",
+        entry0_ctx: "",
+        entry1_rule: "",
+        entry1_ctx: "",
+        entry2_rule: "",
+        entry2_ctx: "",
+        depth: 0
+    }
+}
+
+fun parse_stack_push(stack: ParseStack, rule: String, context: String) -> ParseStack {
+    let new_depth = stack.depth + 1
+    if new_depth == 1 {
+        ParseStack {
+            entry0_rule: rule,
+            entry0_ctx: context,
+            entry1_rule: stack.entry1_rule,
+            entry1_ctx: stack.entry1_ctx,
+            entry2_rule: stack.entry2_rule,
+            entry2_ctx: stack.entry2_ctx,
+            depth: new_depth
+        }
+    } else {
+        if new_depth == 2 {
+            ParseStack {
+                entry0_rule: stack.entry0_rule,
+                entry0_ctx: stack.entry0_ctx,
+                entry1_rule: rule,
+                entry1_ctx: context,
+                entry2_rule: stack.entry2_rule,
+                entry2_ctx: stack.entry2_ctx,
+                depth: new_depth
+            }
+        } else {
+            if new_depth == 3 {
+                ParseStack {
+                    entry0_rule: stack.entry0_rule,
+                    entry0_ctx: stack.entry0_ctx,
+                    entry1_rule: stack.entry1_rule,
+                    entry1_ctx: stack.entry1_ctx,
+                    entry2_rule: rule,
+                    entry2_ctx: context,
+                    depth: new_depth
+                }
+            } else {
+                ParseStack {
+                    entry0_rule: stack.entry0_rule,
+                    entry0_ctx: stack.entry0_ctx,
+                    entry1_rule: stack.entry1_rule,
+                    entry1_ctx: stack.entry1_ctx,
+                    entry2_rule: stack.entry2_rule,
+                    entry2_ctx: stack.entry2_ctx,
+                    depth: new_depth
+                }
+            }
+        }
+    }
+}
+
+fun parse_stack_pop(stack: ParseStack) -> ParseStack {
+    if stack.depth == 0 {
+        stack
+    } else {
+        ParseStack {
+            entry0_rule: stack.entry0_rule,
+            entry0_ctx: stack.entry0_ctx,
+            entry1_rule: stack.entry1_rule,
+            entry1_ctx: stack.entry1_ctx,
+            entry2_rule: stack.entry2_rule,
+            entry2_ctx: stack.entry2_ctx,
+            depth: stack.depth - 1
+        }
+    }
+}
+
+fun parse_stack_depth(stack: ParseStack) -> i32 {
+    stack.depth
+}
+
+fun parse_stack_top_rule(stack: ParseStack) -> String {
+    if stack.depth == 0 {
+        ""
+    } else {
+        if stack.depth == 1 {
+            stack.entry0_rule
+        } else {
+            if stack.depth == 2 {
+                stack.entry1_rule
+            } else {
+                stack.entry2_rule
+            }
+        }
+    }
+}
+
+fun parse_stack_format(stack: ParseStack) -> String {
+    if stack.depth == 0 {
+        "(empty)"
+    } else {
+        if stack.depth == 1 {
+            "[0] " + stack.entry0_rule
+        } else {
+            if stack.depth == 2 {
+                "[0] " + stack.entry0_rule + " -> [1] " + stack.entry1_rule
+            } else {
+                "[0] " + stack.entry0_rule + " -> [1] " + stack.entry1_rule + " -> [2] " + stack.entry2_rule
+            }
+        }
+    }
+}
+
+fun parse_stack_clear(stack: ParseStack) -> ParseStack {
+    parse_stack_new()
+}
+
+fun parse_stack_generate_suggestion(stack: ParseStack, expected: String, got: String) -> String {
+    let top = parse_stack_top_rule(stack)
+    if top == "" {
+        "Expected " + expected + ", got " + got
+    } else {
+        "In " + top + ": Expected " + expected + ", got " + got
+    }
+}
+
+// ============================================
+// GREEN PHASE TESTS
+// ============================================
+
+fun test_create_parse_stack() -> bool {
+    let stack = parse_stack_new()
+    let depth = parse_stack_depth(stack)
+    depth == 0
+}
+
+fun test_push_to_stack() -> bool {
+    let stack = parse_stack_new()
+    let pushed = parse_stack_push(stack, "Program", "root")
+    let depth = parse_stack_depth(pushed)
+    depth == 1
+}
+
+fun test_pop_from_stack() -> bool {
+    let stack = parse_stack_new()
+    let pushed = parse_stack_push(stack, "Program", "root")
+    let popped = parse_stack_pop(pushed)
+    let depth = parse_stack_depth(popped)
+    depth == 0
+}
+
+fun test_multiple_pushes() -> bool {
+    let stack = parse_stack_new()
+    let s1 = parse_stack_push(stack, "Program", "root")
+    let s2 = parse_stack_push(s1, "FunctionDef", "function: main")
+    let s3 = parse_stack_push(s2, "Block", "body")
+    let depth = parse_stack_depth(s3)
+    depth == 3
+}
+
+fun test_get_top_rule() -> bool {
+    let stack = parse_stack_new()
+    let s1 = parse_stack_push(stack, "Program", "root")
+    let s2 = parse_stack_push(s1, "FunctionDef", "function: main")
+    let top = parse_stack_top_rule(s2)
+    top == "FunctionDef"
+}
+
+fun test_format_stack() -> bool {
+    let stack = parse_stack_new()
+    let s1 = parse_stack_push(stack, "Program", "root")
+    let s2 = parse_stack_push(s1, "FunctionDef", "function: main")
+    let s3 = parse_stack_push(s2, "Block", "body")
+    let formatted = parse_stack_format(s3)
+    formatted != ""
+}
+
+fun test_clear_stack() -> bool {
+    let stack = parse_stack_new()
+    let s1 = parse_stack_push(stack, "Program", "root")
+    let s2 = parse_stack_push(s1, "FunctionDef", "function: main")
+    let cleared = parse_stack_clear(s2)
+    let depth = parse_stack_depth(cleared)
+    depth == 0
+}
+
+fun test_generate_suggestion() -> bool {
+    let stack = parse_stack_new()
+    let s1 = parse_stack_push(stack, "Program", "root")
+    let s2 = parse_stack_push(s1, "FunctionDef", "function: main")
+    let s3 = parse_stack_push(s2, "Block", "body")
+    let suggestion = parse_stack_generate_suggestion(s3, "RightBrace", "Semicolon")
+    suggestion != ""
+}
+
+fun test_empty_stack_operations() -> bool {
+    let stack = parse_stack_new()
+    let popped = parse_stack_pop(stack)
+    let depth = parse_stack_depth(popped)
+    let top = parse_stack_top_rule(popped)
+    depth == 0 && top == ""
+}
+
+fun test_stack_consistency() -> bool {
+    let stack = parse_stack_new()
+    let s1 = parse_stack_push(stack, "Program", "root")
+    let s2 = parse_stack_push(s1, "FunctionDef", "function: main")
+    let p1 = parse_stack_pop(s2)
+    let p2 = parse_stack_pop(p1)
+    let depth = parse_stack_depth(p2)
+    let top = parse_stack_top_rule(p2)
+    depth == 0 && top == ""
+}
+
+fun main() {
+    println("╔════════════════════════════════════════════════════════════╗")
+    println("║  DEBUGGER-004: Parse Stack Inspection - GREEN Phase       ║")
+    println("║  EXTREME TDD Phase 2/8: Minimal Implementation            ║")
+    println("╚════════════════════════════════════════════════════════════╝")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_parse_stack() { passed = passed + 1 }
+    if test_push_to_stack() { passed = passed + 1 }
+    if test_pop_from_stack() { passed = passed + 1 }
+    if test_multiple_pushes() { passed = passed + 1 }
+    if test_get_top_rule() { passed = passed + 1 }
+    if test_format_stack() { passed = passed + 1 }
+    if test_clear_stack() { passed = passed + 1 }
+    if test_generate_suggestion() { passed = passed + 1 }
+    if test_empty_stack_operations() { passed = passed + 1 }
+    if test_stack_consistency() { passed = passed + 1 }
+
+    println("Results: {}/{} tests passed", passed, total)
+    println("")
+
+    if passed == total {
+        println("✅ GREEN PHASE SUCCESS! All {} tests passing", total)
+    } else {
+        println("❌ {} test(s) failing", total - passed)
+    }
+}
