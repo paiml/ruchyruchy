@@ -1,0 +1,182 @@
+// DEBUGGER-012: Call Stack Visualization - RED Phase
+//
+// Phase 1/8 of EXTREME TDD: Demonstrate need with failing tests
+//
+// Target: 3/10 tests passing (demonstrates RED phase)
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct StackFrame {
+    function_name: String,
+    location: String,
+    line_number: i32
+}
+
+struct CallStack {
+    frame0: StackFrame,
+    frame1: StackFrame,
+    frame2: StackFrame,
+    depth: i32
+}
+
+// ============================================
+// STUB IMPLEMENTATIONS
+// ============================================
+
+fun frame_new(function_name: String, location: String, line_number: i32) -> StackFrame {
+    StackFrame { function_name: function_name, location: location, line_number: line_number }
+}
+
+fun frame_format(frame: StackFrame) -> String {
+    ""
+}
+
+fun stack_new() -> CallStack {
+    let empty_frame = StackFrame { function_name: "", location: "", line_number: 0 }
+    CallStack {
+        frame0: empty_frame,
+        frame1: empty_frame,
+        frame2: empty_frame,
+        depth: 0
+    }
+}
+
+fun stack_push_frame(stack: CallStack, frame: StackFrame) -> CallStack {
+    stack
+}
+
+fun stack_pop_frame(stack: CallStack) -> CallStack {
+    stack
+}
+
+fun stack_current_frame(stack: CallStack) -> StackFrame {
+    stack.frame0
+}
+
+fun stack_depth(stack: CallStack) -> i32 {
+    0
+}
+
+fun stack_is_empty(stack: CallStack) -> bool {
+    true
+}
+
+fun stack_get_frame_at(stack: CallStack, depth: i32) -> StackFrame {
+    stack.frame0
+}
+
+fun stack_format_trace(stack: CallStack) -> String {
+    ""
+}
+
+// ============================================
+// RED PHASE TESTS
+// ============================================
+
+fun test_create_frame() -> bool {
+    let frame = frame_new("main", "main.ruchy", 42)
+    frame.function_name == "main"
+}
+
+fun test_create_stack() -> bool {
+    let stack = stack_new()
+    stack_depth(stack) == 0
+}
+
+fun test_empty_stack() -> bool {
+    let stack = stack_new()
+    stack_is_empty(stack)
+}
+
+fun test_push_frame() -> bool {
+    let stack = stack_new()
+    let frame = frame_new("main", "main.ruchy", 42)
+    let stack2 = stack_push_frame(stack, frame)
+    stack_depth(stack2) == 1
+}
+
+fun test_pop_frame() -> bool {
+    let stack = stack_new()
+    let frame = frame_new("main", "main.ruchy", 42)
+    let stack2 = stack_push_frame(stack, frame)
+    let stack3 = stack_pop_frame(stack2)
+    stack_depth(stack3) == 0
+}
+
+fun test_current_frame() -> bool {
+    let stack = stack_new()
+    let frame = frame_new("main", "main.ruchy", 42)
+    let stack2 = stack_push_frame(stack, frame)
+    let current = stack_current_frame(stack2)
+    current.function_name == "main"
+}
+
+fun test_multiple_frames() -> bool {
+    let stack = stack_new()
+    let frame1 = frame_new("main", "main.ruchy", 10)
+    let frame2 = frame_new("helper", "helper.ruchy", 20)
+    let stack2 = stack_push_frame(stack, frame1)
+    let stack3 = stack_push_frame(stack2, frame2)
+    stack_depth(stack3) == 2
+}
+
+fun test_get_frame_at_depth() -> bool {
+    let stack = stack_new()
+    let frame1 = frame_new("main", "main.ruchy", 10)
+    let frame2 = frame_new("helper", "helper.ruchy", 20)
+    let stack2 = stack_push_frame(stack, frame1)
+    let stack3 = stack_push_frame(stack2, frame2)
+    let retrieved = stack_get_frame_at(stack3, 0)
+    retrieved.function_name == "main"
+}
+
+fun test_format_frame() -> bool {
+    let frame = frame_new("main", "main.ruchy", 42)
+    let formatted = frame_format(frame)
+    formatted == "main (main.ruchy:42)"
+}
+
+fun test_format_stack_trace() -> bool {
+    let stack = stack_new()
+    let frame1 = frame_new("main", "main.ruchy", 10)
+    let frame2 = frame_new("helper", "helper.ruchy", 20)
+    let stack2 = stack_push_frame(stack, frame1)
+    let stack3 = stack_push_frame(stack2, frame2)
+    let trace = stack_format_trace(stack3)
+    trace == "helper (helper.ruchy:20)\nmain (main.ruchy:10)"
+}
+
+fun main() {
+    println("DEBUGGER-012: Call Stack Visualization - RED Phase")
+    println("EXTREME TDD Phase 1/8: Demonstrate Need")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_frame() { passed = passed + 1 }
+    if test_create_stack() { passed = passed + 1 }
+    if test_empty_stack() { passed = passed + 1 }
+    if test_push_frame() { passed = passed + 1 }
+    if test_pop_frame() { passed = passed + 1 }
+    if test_current_frame() { passed = passed + 1 }
+    if test_multiple_frames() { passed = passed + 1 }
+    if test_get_frame_at_depth() { passed = passed + 1 }
+    if test_format_frame() { passed = passed + 1 }
+    if test_format_stack_trace() { passed = passed + 1 }
+
+    println("Results: {}/{} tests passed", passed, total)
+    println("")
+
+    if passed >= 2 && passed <= 4 {
+        println("RED PHASE SUCCESS! {}/{} tests passing (demonstrates need)", passed, total)
+    } else {
+        if passed == total {
+            println("WARNING: All tests passing - need more ambitious tests for RED phase")
+        } else {
+            println("ADJUST: {} tests passing (target: 2-4 for RED phase)", passed)
+        }
+    }
+}
