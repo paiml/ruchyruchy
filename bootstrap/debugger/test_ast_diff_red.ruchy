@@ -1,0 +1,204 @@
+// DEBUGGER-006: Parse Tree Diff - RED Phase
+//
+// Phase 1/8 of EXTREME TDD: Write failing tests first
+//
+// Objective: Demonstrate need for AST diffing and structural comparison
+// Expected: Some basic operations pass, core diff functionality fails
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct ASTNode {
+    node_type: String,
+    value: String,
+    child_count: i32,
+    is_leaf: bool
+}
+
+struct AST {
+    node0: ASTNode,
+    node1: ASTNode,
+    node2: ASTNode,
+    count: i32
+}
+
+struct DiffResult {
+    has_changes: bool,
+    added_count: i32,
+    removed_count: i32,
+    modified_count: i32
+}
+
+// ============================================
+// STUB IMPLEMENTATIONS (RED PHASE)
+// ============================================
+
+fun ast_new() -> AST {
+    AST {
+        node0: ASTNode { node_type: "", value: "", child_count: 0, is_leaf: true },
+        node1: ASTNode { node_type: "", value: "", child_count: 0, is_leaf: true },
+        node2: ASTNode { node_type: "", value: "", child_count: 0, is_leaf: true },
+        count: 0
+    }
+}
+
+fun ast_add_node(ast: AST, node_type: String, value: String, is_leaf: bool) -> AST {
+    ast
+}
+
+fun diff_new() -> DiffResult {
+    DiffResult { has_changes: false, added_count: 0, removed_count: 0, modified_count: 0 }
+}
+
+fun diff_compare(ast1: AST, ast2: AST) -> DiffResult {
+    diff_new()
+}
+
+fun diff_has_changes(diff: DiffResult) -> bool {
+    diff.has_changes
+}
+
+fun diff_added_count(diff: DiffResult) -> i32 {
+    diff.added_count
+}
+
+fun diff_removed_count(diff: DiffResult) -> i32 {
+    diff.removed_count
+}
+
+fun diff_modified_count(diff: DiffResult) -> i32 {
+    diff.modified_count
+}
+
+fun diff_format(diff: DiffResult) -> String {
+    ""
+}
+
+fun diff_is_regression(diff: DiffResult) -> bool {
+    false
+}
+
+// ============================================
+// RED PHASE TESTS
+// ============================================
+
+fun test_create_empty_asts() -> bool {
+    let ast1 = ast_new()
+    let ast2 = ast_new()
+    ast1.count == 0 && ast2.count == 0
+}
+
+fun test_compare_empty_asts() -> bool {
+    let ast1 = ast_new()
+    let ast2 = ast_new()
+    let diff = diff_compare(ast1, ast2)
+    if diff_has_changes(diff) {
+        false
+    } else {
+        true
+    }
+}
+
+fun test_detect_added_node() -> bool {
+    let ast1 = ast_new()
+    let ast2 = ast_add_node(ast1, "Program", "main", false)
+    let diff = diff_compare(ast1, ast2)
+    diff_has_changes(diff) && diff_added_count(diff) == 1
+}
+
+fun test_detect_removed_node() -> bool {
+    let ast1 = ast_add_node(ast_new(), "Program", "main", false)
+    let ast2 = ast_new()
+    let diff = diff_compare(ast1, ast2)
+    diff_has_changes(diff) && diff_removed_count(diff) == 1
+}
+
+fun test_detect_modified_node() -> bool {
+    let ast1 = ast_add_node(ast_new(), "Program", "main", false)
+    let ast2 = ast_add_node(ast_new(), "Program", "test", false)
+    let diff = diff_compare(ast1, ast2)
+    diff_has_changes(diff) && diff_modified_count(diff) == 1
+}
+
+fun test_detect_multiple_changes() -> bool {
+    let base = ast_new()
+    let ast1 = ast_add_node(base, "Program", "main", false)
+    let ast2_temp = ast_add_node(base, "Function", "foo", false)
+    let ast2 = ast_add_node(ast2_temp, "Block", "body", false)
+    let diff = diff_compare(ast1, ast2)
+    diff_has_changes(diff)
+}
+
+fun test_format_diff() -> bool {
+    let ast1 = ast_new()
+    let ast2 = ast_add_node(ast1, "Program", "main", false)
+    let diff = diff_compare(ast1, ast2)
+    let formatted = diff_format(diff)
+    formatted != ""
+}
+
+fun test_no_changes() -> bool {
+    let ast1 = ast_add_node(ast_new(), "Program", "main", false)
+    let ast2 = ast_add_node(ast_new(), "Program", "main", false)
+    let diff = diff_compare(ast1, ast2)
+    if diff_has_changes(diff) {
+        false
+    } else {
+        true
+    }
+}
+
+fun test_regression_detection() -> bool {
+    let ast1 = ast_add_node(ast_new(), "Program", "main", false)
+    let ast2 = ast_new()
+    let diff = diff_compare(ast1, ast2)
+    diff_is_regression(diff)
+}
+
+fun test_structural_equivalence() -> bool {
+    let ast1 = ast_add_node(ast_new(), "Program", "main", false)
+    let ast2 = ast_add_node(ast_new(), "Program", "main", false)
+    let diff = diff_compare(ast1, ast2)
+    let added = diff_added_count(diff)
+    let removed = diff_removed_count(diff)
+    let modified = diff_modified_count(diff)
+    added == 0 && removed == 0 && modified == 0
+}
+
+fun main() {
+    println("DEBUGGER-006: Parse Tree Diff - RED Phase")
+    println("EXTREME TDD Phase 1/8: Write Failing Tests First")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_empty_asts() { passed = passed + 1 }
+    if test_compare_empty_asts() { passed = passed + 1 }
+    if test_detect_added_node() { passed = passed + 1 }
+    if test_detect_removed_node() { passed = passed + 1 }
+    if test_detect_modified_node() { passed = passed + 1 }
+    if test_detect_multiple_changes() { passed = passed + 1 }
+    if test_format_diff() { passed = passed + 1 }
+    if test_no_changes() { passed = passed + 1 }
+    if test_regression_detection() { passed = passed + 1 }
+    if test_structural_equivalence() { passed = passed + 1 }
+
+    println("RED PHASE RESULTS:")
+    println("  Total Tests: {}", total)
+    println("  Passed: {}", passed)
+    println("  Failed: {}", total - passed)
+    println("")
+
+    if passed >= 3 && passed <= 7 {
+        println("RED PHASE SUCCESS!")
+        println("Core functionality clearly missing")
+    } else {
+        if passed < 3 {
+            println("WARNING: Too many failures")
+        } else {
+            println("WARNING: Too few failures")
+        }
+    }
+}
