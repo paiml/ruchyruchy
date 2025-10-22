@@ -1,0 +1,305 @@
+// DEBUGGER-011: Scope Inspector - GREEN Phase
+//
+// Phase 2/8 of EXTREME TDD: Minimal implementation to pass all tests
+//
+// Strategy: Fixed-size scope stack with simple variable lookup
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct Variable {
+    name: String,
+    value: String,
+    var_type: String,
+    scope_level: i32
+}
+
+struct Scope {
+    scope_name: String,
+    level: i32,
+    var0: Variable,
+    var1: Variable,
+    var2: Variable,
+    var_count: i32
+}
+
+struct ScopeStack {
+    scope0: Scope,
+    scope1: Scope,
+    scope2: Scope,
+    depth: i32
+}
+
+// ============================================
+// MINIMAL IMPLEMENTATION
+// ============================================
+
+fun variable_new(name: String, value: String, var_type: String, scope_level: i32) -> Variable {
+    Variable { name: name, value: value, var_type: var_type, scope_level: scope_level }
+}
+
+fun scope_new(scope_name: String, level: i32) -> Scope {
+    let empty_var = Variable { name: "", value: "", var_type: "", scope_level: 0 }
+    Scope {
+        scope_name: scope_name,
+        level: level,
+        var0: empty_var,
+        var1: empty_var,
+        var2: empty_var,
+        var_count: 0
+    }
+}
+
+fun scope_add_variable(scope: Scope, variable: Variable) -> Scope {
+    let new_count = scope.var_count + 1
+    if scope.var_count == 0 {
+        Scope {
+            scope_name: scope.scope_name,
+            level: scope.level,
+            var0: variable,
+            var1: scope.var1,
+            var2: scope.var2,
+            var_count: new_count
+        }
+    } else {
+        if scope.var_count == 1 {
+            Scope {
+                scope_name: scope.scope_name,
+                level: scope.level,
+                var0: scope.var0,
+                var1: variable,
+                var2: scope.var2,
+                var_count: new_count
+            }
+        } else {
+            Scope {
+                scope_name: scope.scope_name,
+                level: scope.level,
+                var0: scope.var0,
+                var1: scope.var1,
+                var2: variable,
+                var_count: new_count
+            }
+        }
+    }
+}
+
+fun scope_get_variable(scope: Scope, name: String) -> Variable {
+    if scope.var0.name == name {
+        scope.var0
+    } else {
+        if scope.var1.name == name {
+            scope.var1
+        } else {
+            scope.var2
+        }
+    }
+}
+
+fun scope_has_variable(scope: Scope, name: String) -> bool {
+    scope.var0.name == name || scope.var1.name == name || scope.var2.name == name
+}
+
+fun scope_variable_count(scope: Scope) -> i32 {
+    scope.var_count
+}
+
+fun stack_new() -> ScopeStack {
+    let empty_scope = scope_new("", 0)
+    ScopeStack {
+        scope0: empty_scope,
+        scope1: empty_scope,
+        scope2: empty_scope,
+        depth: 0
+    }
+}
+
+fun stack_push_scope(stack: ScopeStack, scope: Scope) -> ScopeStack {
+    let new_depth = stack.depth + 1
+    if stack.depth == 0 {
+        ScopeStack {
+            scope0: scope,
+            scope1: stack.scope1,
+            scope2: stack.scope2,
+            depth: new_depth
+        }
+    } else {
+        if stack.depth == 1 {
+            ScopeStack {
+                scope0: stack.scope0,
+                scope1: scope,
+                scope2: stack.scope2,
+                depth: new_depth
+            }
+        } else {
+            ScopeStack {
+                scope0: stack.scope0,
+                scope1: stack.scope1,
+                scope2: scope,
+                depth: new_depth
+            }
+        }
+    }
+}
+
+fun stack_pop_scope(stack: ScopeStack) -> ScopeStack {
+    let new_depth = if stack.depth > 0 { stack.depth - 1 } else { 0 }
+    ScopeStack {
+        scope0: stack.scope0,
+        scope1: stack.scope1,
+        scope2: stack.scope2,
+        depth: new_depth
+    }
+}
+
+fun stack_current_scope(stack: ScopeStack) -> Scope {
+    if stack.depth == 1 {
+        stack.scope0
+    } else {
+        if stack.depth == 2 {
+            stack.scope1
+        } else {
+            stack.scope2
+        }
+    }
+}
+
+fun stack_depth(stack: ScopeStack) -> i32 {
+    stack.depth
+}
+
+fun stack_find_variable(stack: ScopeStack, name: String) -> Variable {
+    if stack.depth == 0 {
+        stack.scope0.var0
+    } else {
+        if stack.depth == 1 {
+            scope_get_variable(stack.scope0, name)
+        } else {
+            if stack.depth == 2 {
+                if scope_has_variable(stack.scope1, name) {
+                    scope_get_variable(stack.scope1, name)
+                } else {
+                    scope_get_variable(stack.scope0, name)
+                }
+            } else {
+                if scope_has_variable(stack.scope2, name) {
+                    scope_get_variable(stack.scope2, name)
+                } else {
+                    if scope_has_variable(stack.scope1, name) {
+                        scope_get_variable(stack.scope1, name)
+                    } else {
+                        scope_get_variable(stack.scope0, name)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================
+// GREEN PHASE TESTS
+// ============================================
+
+fun test_create_variable() -> bool {
+    let v = variable_new("x", "42", "i32", 0)
+    v.name == "x"
+}
+
+fun test_create_scope() -> bool {
+    let scope = scope_new("main", 0)
+    scope.scope_name == "main"
+}
+
+fun test_add_variable_to_scope() -> bool {
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    scope_variable_count(scope2) == 1
+}
+
+fun test_get_variable_from_scope() -> bool {
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    let retrieved = scope_get_variable(scope2, "x")
+    retrieved.value == "42"
+}
+
+fun test_has_variable() -> bool {
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    scope_has_variable(scope2, "x")
+}
+
+fun test_push_scope() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let stack2 = stack_push_scope(stack, scope)
+    stack_depth(stack2) == 1
+}
+
+fun test_pop_scope() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let stack2 = stack_push_scope(stack, scope)
+    let stack3 = stack_pop_scope(stack2)
+    stack_depth(stack3) == 0
+}
+
+fun test_current_scope() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let stack2 = stack_push_scope(stack, scope)
+    let current = stack_current_scope(stack2)
+    current.scope_name == "main"
+}
+
+fun test_nested_scopes() -> bool {
+    let stack = stack_new()
+    let scope1 = scope_new("main", 0)
+    let scope2 = scope_new("function", 1)
+    let stack2 = stack_push_scope(stack, scope1)
+    let stack3 = stack_push_scope(stack2, scope2)
+    stack_depth(stack3) == 2
+}
+
+fun test_find_variable_in_stack() -> bool {
+    let stack = stack_new()
+    let scope = scope_new("main", 0)
+    let v = variable_new("x", "42", "i32", 0)
+    let scope2 = scope_add_variable(scope, v)
+    let stack2 = stack_push_scope(stack, scope2)
+    let found = stack_find_variable(stack2, "x")
+    found.value == "42"
+}
+
+fun main() {
+    println("DEBUGGER-011: Scope Inspector - GREEN Phase")
+    println("EXTREME TDD Phase 2/8: Minimal Implementation")
+    println("")
+
+    let mut passed = 0
+    let total = 10
+
+    if test_create_variable() { passed = passed + 1 }
+    if test_create_scope() { passed = passed + 1 }
+    if test_add_variable_to_scope() { passed = passed + 1 }
+    if test_get_variable_from_scope() { passed = passed + 1 }
+    if test_has_variable() { passed = passed + 1 }
+    if test_push_scope() { passed = passed + 1 }
+    if test_pop_scope() { passed = passed + 1 }
+    if test_current_scope() { passed = passed + 1 }
+    if test_nested_scopes() { passed = passed + 1 }
+    if test_find_variable_in_stack() { passed = passed + 1 }
+
+    println("Results: {}/{} tests passed", passed, total)
+    println("")
+
+    if passed == total {
+        println("GREEN PHASE SUCCESS! All {} tests passing", total)
+    } else {
+        println("FAILED: {} test(s) failing", total - passed)
+    }
+}
