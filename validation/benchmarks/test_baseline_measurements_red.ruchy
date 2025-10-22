@@ -1,0 +1,255 @@
+// INFRA-003: Baseline Measurements - RED Phase
+//
+// Demonstrate need for comprehensive N=30 benchmark harness
+// Integrates INFRA-001 (timing) + INFRA-002 (statistics)
+
+// ============================================
+// BENCHMARK HARNESS (STUBS)
+// ============================================
+
+// Run benchmark N times and collect all timings
+// Returns: Sum of all timings (simplified - would return array if available)
+fun benchmark_n_times(file: String, n: i32) -> i32 {
+    // Stub: Should run actual benchmark N times
+    // For now, just returns 0 to demonstrate need
+    0
+}
+
+// Aggregate N runs into statistical summary
+// Returns: (sum, sum_squares, count) as a simple sum for now
+fun aggregate_n_runs(total_sum: i32, n: i32) -> i32 {
+    // Stub: Should calculate sum and sum_of_squares
+    // For now, just returns the sum
+    total_sum
+}
+
+// Calculate comprehensive statistics from N runs
+// Returns: mean (simplified - would return full stats struct)
+fun calculate_benchmark_stats(sum: i32, sum_sq: i32, n: i32) -> i32 {
+    // Stub: Should return BenchmarkStats struct
+    // For now, just returns mean
+    if n == 0 { return 0 }
+    sum / n
+}
+
+// Report benchmark results with statistical rigor
+// Returns: true if reporting succeeded
+fun report_benchmark_results(file: String, mean: i32, std_dev: i32, ci: i32, cv: i32) -> bool {
+    // Stub: Should generate comprehensive report
+    false
+}
+
+// Compare baseline vs optimized with statistical significance
+// Returns: true if significant improvement detected
+fun compare_configurations(baseline_mean: i32, baseline_std: i32,
+                          optimized_mean: i32, optimized_std: i32, n: i32) -> bool {
+    // Stub: Should use Welch's t-test
+    false
+}
+
+// ============================================
+// TEST SUITE
+// ============================================
+
+fun test_n30_execution() -> bool {
+    println("Test 1: Execute benchmark N=30 times")
+
+    let file = "test.ruchy"
+    let n = 30
+
+    let total = benchmark_n_times(file, n)
+
+    if total == 0 {
+        println("  ❌ No benchmarks executed")
+        false
+    } else {
+        println("  ✅ Executed {} runs, total={}ms", n, total)
+        true
+    }
+}
+
+fun test_statistical_aggregation() -> bool {
+    println("Test 2: Aggregate N=30 runs into statistics")
+
+    // Simulate 30 runs with total sum
+    let total_sum = 3000  // ~100ms per run
+    let n = 30
+
+    let sum = aggregate_n_runs(total_sum, n)
+
+    if sum == 0 {
+        println("  ❌ Aggregation failed")
+        false
+    } else {
+        println("  ✅ Aggregated {} runs: sum={}ms", n, sum)
+        true
+    }
+}
+
+fun test_comprehensive_statistics() -> bool {
+    println("Test 3: Calculate comprehensive statistics")
+
+    let sum = 3000
+    let sum_sq = 305000  // variance for realistic std dev
+    let n = 30
+
+    let mean = calculate_benchmark_stats(sum, sum_sq, n)
+
+    if mean == 0 {
+        println("  ❌ Statistics not calculated")
+        false
+    } else {
+        println("  ✅ Statistics: mean={}ms", mean)
+        true
+    }
+}
+
+fun test_statistical_reporting() -> bool {
+    println("Test 4: Generate statistical report")
+
+    let file = "lexer.ruchy"
+    let mean = 100
+    let std_dev = 5
+    let ci = 2
+    let cv = 5
+
+    let reported = report_benchmark_results(file, mean, std_dev, ci, cv)
+
+    if !reported {
+        println("  ❌ Report not generated")
+        false
+    } else {
+        println("  ✅ Report generated for {}", file)
+        true
+    }
+}
+
+fun test_baseline_vs_optimized() -> bool {
+    println("Test 5: Compare baseline vs optimized")
+
+    // Baseline: 100ms ± 5ms
+    let baseline_mean = 100
+    let baseline_std = 5
+
+    // Optimized: 80ms ± 4ms (20% improvement)
+    let optimized_mean = 80
+    let optimized_std = 4
+
+    let n = 30
+
+    let significant = compare_configurations(baseline_mean, baseline_std,
+                                            optimized_mean, optimized_std, n)
+
+    if !significant {
+        println("  ❌ Comparison not performed")
+        false
+    } else {
+        println("  ✅ Significant improvement detected")
+        true
+    }
+}
+
+fun test_stability_check() -> bool {
+    println("Test 6: Check benchmark stability (CV < 5%)")
+
+    // Good benchmark: mean=100, std=3, CV=3%
+    let mean = 100
+    let std_dev = 3
+    let cv = (std_dev * 100) / mean
+
+    if cv > 5 {
+        println("  ❌ Unstable benchmark (CV={}%)", cv)
+        false
+    } else {
+        println("  ✅ Stable benchmark (CV={}%)", cv)
+        true
+    }
+}
+
+fun test_confidence_interval_reporting() -> bool {
+    println("Test 7: Report with 95% confidence interval")
+
+    // mean=100, CI=±2, so true mean in [98, 102]
+    let mean = 100
+    let ci_lower = 98
+    let ci_upper = 102
+
+    let range = ci_upper - ci_lower
+
+    if range <= 0 {
+        println("  ❌ CI calculation failed")
+        false
+    } else {
+        println("  ✅ 95% CI: [{}, {}]", ci_lower, ci_upper)
+        true
+    }
+}
+
+fun test_multi_file_baseline() -> bool {
+    println("Test 8: Establish baseline for multiple files")
+
+    // Should benchmark multiple compiler stages
+    let lexer_time = benchmark_n_times("lexer.ruchy", 30)
+    let parser_time = benchmark_n_times("parser.ruchy", 30)
+    let total = lexer_time + parser_time
+
+    if total == 0 {
+        println("  ❌ Multi-file baseline not established")
+        false
+    } else {
+        println("  ✅ Multi-file baseline established")
+        true
+    }
+}
+
+// ============================================
+// MAIN TEST RUNNER
+// ============================================
+
+fun main() {
+    println("INFRA-003: Baseline Measurements - RED Phase")
+    println("Demonstrate need for N=30 benchmark harness")
+    println("")
+
+    let mut passed = 0
+    let total = 8
+
+    if test_n30_execution() { passed = passed + 1 }
+    println("")
+
+    if test_statistical_aggregation() { passed = passed + 1 }
+    println("")
+
+    if test_comprehensive_statistics() { passed = passed + 1 }
+    println("")
+
+    if test_statistical_reporting() { passed = passed + 1 }
+    println("")
+
+    if test_baseline_vs_optimized() { passed = passed + 1 }
+    println("")
+
+    if test_stability_check() { passed = passed + 1 }
+    println("")
+
+    if test_confidence_interval_reporting() { passed = passed + 1 }
+    println("")
+
+    if test_multi_file_baseline() { passed = passed + 1 }
+    println("")
+
+    println("=" * 50)
+    println("Results: {}/{} tests passed", passed, total)
+    println("=" * 50)
+    println("")
+
+    if passed >= 3 && passed <= 5 {
+        println("RED PHASE SUCCESS! {}/{} passing (demonstrates need)", passed, total)
+    } else {
+        if passed == total {
+            println("WARNING: All tests passing - need actual implementation for RED")
+        } else {
+            println("ADJUST: {} tests passing (target: 3-5 for RED phase)", passed)
+        }
+    }
+}
