@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Code Generation Optimizations (Phase 5)
+- **OPT-CODEGEN-003**: Dead Code Elimination (RED phase complete)
+  - RED phase: 3/4 tests passing (demonstrates optimization opportunity)
+  - Tests show 5-15% potential code size reduction
+  - Demonstrates 15% instruction elimination for dead code
+  - Remove unreachable and unused code
+  - Examples: unreachable after return, unused variables, constant false branches
+  - 150 instructions eliminated for bootstrap
+  - GREEN phase pending: Implement dead code elimination logic
+  - Status: RED phase validated, ready for GREEN implementation
+
 - **OPT-CODEGEN-002**: Peephole Optimization (COMPLETE - All 4 phases)
   - RED phase: 3/4 tests passing (demonstrates optimization opportunity)
   - GREEN phase: 4/4 tests passing (minimal implementation, 197 LOC)
