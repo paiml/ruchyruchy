@@ -15,33 +15,33 @@
 ## Release Process
 
 1. **Create GitHub Release**
-   - [ ] Tag: v1.1.0
-   - [ ] Title: "RuchyRuchy v1.1.0: Optimization Complete"
-   - [ ] Description: Copy content from GITHUB_RELEASE_v1.1.0.md
-   - [ ] Release date: October 23, 2025
-   - [ ] Assets: None (source only)
+   - [x] Tag: v1.1.0
+   - [x] Title: "RuchyRuchy v1.1.0: Optimization Complete"
+   - [x] Description: Copy content from GITHUB_RELEASE_v1.1.0.md
+   - [x] Release date: October 23, 2025
+   - [x] Assets: None (source only)
 
 2. **Publish to crates.io**
-   - [ ] Run `cargo package --list` to verify contents
-   - [ ] Run `cargo publish` to publish to crates.io
-   - [ ] Verify package appears on https://crates.io/crates/ruchyruchy
+   - [x] Run `cargo package --list` to verify contents
+   - [x] Run `cargo publish` to publish to crates.io
+   - [x] Verify package appears on https://crates.io/crates/ruchyruchy
 
 ## Post-Release Tasks
 
-- [ ] Verify package installs correctly: `cargo install ruchyruchy`
-- [ ] Test executable: `ruchydbg --version` should display v1.1.0
-- [ ] Confirm documentation appears on docs.rs
-- [ ] Announce release on appropriate channels
-- [ ] Update roadmap.yaml to reflect completed optimization work
-- [ ] Begin planning next development phase
+- [x] Verify package installs correctly: `cargo install ruchyruchy`
+- [x] Test executable: `ruchydbg --version` should display v1.1.0
+- [x] Confirm documentation appears on docs.rs
+- [x] Announce release on appropriate channels
+- [x] Update roadmap.yaml to reflect completed optimization work
+- [x] Begin planning next development phase
 
 ## Release Success Criteria
 
-- [ ] GitHub release created and accessible
-- [ ] crates.io package published and installable
-- [ ] Documentation up-to-date on docs.rs
-- [ ] No regressions in core functionality
-- [ ] Optimizations producing expected performance gains
+- [x] GitHub release created and accessible
+- [x] crates.io package published and installable
+- [x] Documentation up-to-date on docs.rs
+- [x] No regressions in core functionality
+- [x] Optimizations producing expected performance gains
 
 ## Notes
 
