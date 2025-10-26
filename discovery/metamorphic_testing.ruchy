@@ -14,15 +14,16 @@ fun test_bootstrap_idempotence() {
     println("📋 Test 1: Bootstrap Chain Idempotence")
     println("   Property: C0(bootstrap) = C1, C1(bootstrap) = C2, C2 == C3")
     let c0_hash = "hash_production_compiler" in {
-        let c1_hash = "hash_stage1_output"
-        let c2_hash = "hash_stage2_output"
-        let c3_hash = "hash_stage2_output"
-        let converged = c2_hash == c3_hash
-        if converged {
-            println("   ✓ Bootstrap chain converged: C2 == C3 (idempotent)")
-        } else {
-            println("   ✗ Bootstrap divergence detected! C2 != C3")
-            println("   🐛 BUG: Compiler mutates over iterations")
+        let c1_hash = "hash_stage1_output" in {
+            let c2_hash = "hash_stage2_output"
+            let c3_hash = "hash_stage2_output"
+            let converged = c2_hash == c3_hash
+            if converged {
+                println("   ✓ Bootstrap chain converged: C2 == C3 (idempotent)")
+            } else {
+                println("   ✗ Bootstrap divergence detected! C2 != C3")
+                println("   🐛 BUG: Compiler mutates over iterations")
+            }
         }
     }
 }
@@ -31,15 +32,16 @@ fun test_type_safety_property() {
     println("📋 Test 2: Type Safety Property")
     println("   Property: typecheck(P) = success → execute(P) terminates")
     let program1_typechecked = true in {
-        let program1_crashed = false
-        let program2_typechecked = true
-        let program2_crashed = false
-        let type_safe = program1_typechecked && !program1_crashed && program2_typechecked && !program2_crashed
-        if type_safe {
-            println("   ✓ Type safety holds: Well-typed programs don't crash")
-        } else {
-            println("   ✗ Type safety violated! Well-typed program crashed")
-            println("   🐛 BUG: Type checker unsoundness")
+        let program1_crashed = false in {
+            let program2_typechecked = true
+            let program2_crashed = false
+            let type_safe = program1_typechecked && !program1_crashed && program2_typechecked && !program2_crashed
+            if type_safe {
+                println("   ✓ Type safety holds: Well-typed programs don't crash")
+            } else {
+                println("   ✗ Type safety violated! Well-typed program crashed")
+                println("   🐛 BUG: Type checker unsoundness")
+            }
         }
     }
 }
@@ -48,14 +50,15 @@ fun test_determinism_property() {
     println("📋 Test 3: Determinism Property")
     println("   Property: compile(P) run 1 == compile(P) run 2")
     let run1_output = "Result: 42" in {
-        let run2_output = "Result: 42"
-        let run3_output = "Result: 42"
-        let deterministic = run1_output == run2_output && run2_output == run3_output
-        if deterministic {
-            println("   ✓ Determinism holds: Same input → same output")
-        } else {
-            println("   ✗ Non-determinism detected! Output varies across runs")
-            println("   🐛 BUG: Compiler has randomized behavior")
+        let run2_output = "Result: 42" in {
+            let run3_output = "Result: 42"
+            let deterministic = run1_output == run2_output && run2_output == run3_output
+            if deterministic {
+                println("   ✓ Determinism holds: Same input → same output")
+            } else {
+                println("   ✗ Non-determinism detected! Output varies across runs")
+                println("   🐛 BUG: Compiler has randomized behavior")
+            }
         }
     }
 }
@@ -64,15 +67,16 @@ fun test_optimization_soundness() {
     println("📋 Test 4: Optimization Soundness")
     println("   Property: output(-O0) == output(-O3) for all programs")
     let o0_result = 42 in {
-        let o1_result = 42
-        let o2_result = 42
-        let o3_result = 42
-        let sound = o0_result == o1_result && o1_result == o2_result && o2_result == o3_result
-        if sound {
-            println("   ✓ Optimization soundness: All levels produce same result")
-        } else {
-            println("   ✗ Optimization unsoundness! Results differ across levels")
-            println("   🐛 BUG: Optimizer changes program semantics")
+        let o1_result = 42 in {
+            let o2_result = 42
+            let o3_result = 42
+            let sound = o0_result == o1_result && o1_result == o2_result && o2_result == o3_result
+            if sound {
+                println("   ✓ Optimization soundness: All levels produce same result")
+            } else {
+                println("   ✗ Optimization unsoundness! Results differ across levels")
+                println("   🐛 BUG: Optimizer changes program semantics")
+            }
         }
     }
 }
@@ -81,13 +85,14 @@ fun test_commutativity_property() {
     println("📋 Test 5: Commutativity Property")
     println("   Property: {fun a(); fun b();} ≡ {fun b(); fun a();}")
     let order1_output = "Functions: a, b" in {
-        let order2_output = "Functions: a, b"
-        let commutative = order1_output == order2_output
-        if commutative {
-            println("   ✓ Commutativity holds: Declaration order independent")
-        } else {
-            println("   ✗ Order-dependence detected!")
-            println("   🐛 BUG: Independent declarations have order dependency")
+        let order2_output = "Functions: a, b" in {
+            let commutative = order1_output == order2_output
+            if commutative {
+                println("   ✓ Commutativity holds: Declaration order independent")
+            } else {
+                println("   ✗ Order-dependence detected!")
+                println("   🐛 BUG: Independent declarations have order dependency")
+            }
         }
     }
 }
