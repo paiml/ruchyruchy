@@ -236,19 +236,59 @@ Crash at nesting depth >500 levels
 
 ### Bug Counts by Severity
 - **CRITICAL**: 7 (BUG-001, 004, 008, 009, 010, 013, 017)
-- **HIGH**: 4 (BUG-005, 007, 011, 012)
+- **HIGH**: 5 (BUG-005, 007, 011, 012, 018)
 - **MEDIUM**: 5 (BUG-002, 003, 006, 014, 015)
 - **LOW**: 1 (BUG-016)
 
-**Total Bugs**: 17
+**Total Bugs**: 18
+
+---
+
+### BUG-018: vec! Macro Not Implemented in Interpreter (HIGH)
+
+**Severity**: HIGH
+**Discovery Technique**: TESTING-001 (Systematic Bootstrap Testing)
+**Component**: Ruchy Interpreter - Macro Evaluation
+**Status**: FILED (GitHub Issue #62)
+
+**Description**:
+The `vec!` macro passes syntax check but fails at runtime with "Expression type not yet implemented: Macro"
+
+**Reproduction Steps**:
+```bash
+ruchy run bootstrap/stage1/pratt_parser_full.ruchy
+```
+
+**Expected Behavior**:
+`vec!` macro should expand and execute, creating a vector
+
+**Actual Behavior**:
+```
+Error: Evaluation error: Runtime error: Expression type not yet implemented: Macro { name: "vec", args: [...] }
+```
+
+**Impact**:
+- Blocks bootstrap stage1 pratt parser execution
+- Affects all code using `vec!` macro in interpreter
+- Prevents self-compilation testing
+- Confusing: passes syntax check but fails at runtime
+
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/62
+
+**Discovery Context**:
+- Systematic testing of all 43 bootstrap files
+- 42/43 passed `ruchy run`, 1 failed
+- Found via TESTING-001 automated test suite
+- Only bootstrap file that fails execution
 
 ### Bug Detection Rate
-- Discovery techniques executed: 17/17 + Extreme Testing
-- Bugs found: 17 total
-- Critical bugs: 7 (41%)
-- High bugs: 4 (24%)
-- Medium bugs: 5 (29%)
-- Low bugs: 1 (6%)
+- Discovery techniques executed: 17/17 + Extreme Testing + TESTING-001
+- Bugs found: 18 total
+- Critical bugs: 7 (39%)
+- High bugs: 5 (28%)
+- Medium bugs: 5 (28%)
+- Low bugs: 1 (5%)
+- **Real bugs filed**: 2 (BUG-001, BUG-018) via GitHub issues #61, #62
 
 ### Discovery Effectiveness
 - **Automated detection**: 100% (all bugs found via automated tools)
