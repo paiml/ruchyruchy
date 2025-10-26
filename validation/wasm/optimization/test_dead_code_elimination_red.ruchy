@@ -1,0 +1,280 @@
+// WASM-008: Advanced Optimization Passes - Dead Code Elimination Tests (RED Phase)
+//
+// These tests verify dead code elimination optimization for WebAssembly code generation.
+// All tests should FAIL in the RED phase, indicating missing optimization implementation.
+//
+// Dead code elimination removes unreachable and unused code to reduce binary size.
+
+// Test helper structures
+struct DeadCodeResult {
+    optimized_code: String,
+    lines_removed: i64,
+    functions_removed: i64,
+}
+
+// ============================================================================
+// Test 1: Unreachable Code After Return
+// ============================================================================
+
+fun test_unreachable_after_return() -> bool {
+    println("Test 1: Unreachable code after return");
+
+    let source = "fun example() -> i32 { return 42; let x = 5; return x; }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: Code after first return eliminated
+    if result.lines_removed > 0 && !contains(result.optimized_code, "let x = 5") {
+        println("  PASS: Unreachable code eliminated");
+        true
+    } else {
+        println("  FAIL: Unreachable code not eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 2: Unreachable Branch (Constant False)
+// ============================================================================
+
+fun test_unreachable_branch() -> bool {
+    println("Test 2: Unreachable branch elimination");
+
+    let source = "fun check() { if false { expensive_call(); } }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: False branch eliminated
+    if result.lines_removed > 0 && !contains(result.optimized_code, "expensive_call") {
+        println("  PASS: Unreachable branch eliminated");
+        true
+    } else {
+        println("  FAIL: Unreachable branch not eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 3: Unused Variable
+// ============================================================================
+
+fun test_unused_variable() -> bool {
+    println("Test 3: Unused variable elimination");
+
+    let source = "fun compute() -> i32 { let x = 42; return 0; }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: Unused variable assignment eliminated
+    if result.lines_removed > 0 && !contains(result.optimized_code, "let x") {
+        println("  PASS: Unused variable eliminated");
+        true
+    } else {
+        println("  FAIL: Unused variable not eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 4: Unused Function
+// ============================================================================
+
+fun test_unused_function() -> bool {
+    println("Test 4: Unused function elimination");
+
+    let source = "fun helper() { } fun main() { }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: Unused helper function eliminated
+    if result.functions_removed > 0 && !contains(result.optimized_code, "fun helper") {
+        println("  PASS: Unused function eliminated");
+        true
+    } else {
+        println("  FAIL: Unused function not eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 5: Dead Assignment
+// ============================================================================
+
+fun test_dead_assignment() -> bool {
+    println("Test 5: Dead assignment elimination");
+
+    let source = "fun calc() -> i32 { let mut x = 5; x = 10; return 0; }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: Both assignments eliminated (value never used)
+    if result.lines_removed > 0 {
+        println("  PASS: Dead assignments eliminated");
+        true
+    } else {
+        println("  FAIL: Dead assignments not eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 6: Unreachable Loop (Constant False)
+// ============================================================================
+
+fun test_unreachable_loop() -> bool {
+    println("Test 6: Unreachable loop elimination");
+
+    let source = "fun loop_test() { while false { expensive(); } }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: Entire loop eliminated
+    if result.lines_removed > 0 && !contains(result.optimized_code, "while") {
+        println("  PASS: Unreachable loop eliminated");
+        true
+    } else {
+        println("  FAIL: Unreachable loop not eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 7: Side Effect Preservation
+// ============================================================================
+
+fun test_side_effect_preservation() -> bool {
+    println("Test 7: Side effect preservation");
+
+    let source = "fun test() -> i32 { let x = print(\"hi\"); return 0; }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: print call preserved (side effect), but assignment eliminated
+    if contains(result.optimized_code, "print") && !contains(result.optimized_code, "let x") {
+        println("  PASS: Side effects preserved");
+        true
+    } else {
+        println("  FAIL: Side effects not preserved correctly");
+        false
+    }
+}
+
+// ============================================================================
+// Test 8: Used in Nested Scope
+// ============================================================================
+
+fun test_used_in_nested_scope() -> bool {
+    println("Test 8: Variable used in nested scope");
+
+    let source = "fun scoped() -> i32 { let x = 5; { let y = x; return y; } }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: x NOT eliminated (used in nested scope)
+    if contains(result.optimized_code, "let x") && result.lines_removed == 0 {
+        println("  PASS: Used variable preserved");
+        true
+    } else {
+        println("  FAIL: Used variable incorrectly eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 9: Partial Branch Elimination
+// ============================================================================
+
+fun test_partial_branch_elimination() -> bool {
+    println("Test 9: Partial branch elimination");
+
+    let source = "fun branch(cond: bool) { if cond { live(); } else { also_live(); } }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: Both branches preserved (dynamic condition)
+    if contains(result.optimized_code, "live()") &&
+       contains(result.optimized_code, "also_live()") {
+        println("  PASS: Dynamic branches preserved");
+        true
+    } else {
+        println("  FAIL: Dynamic branches incorrectly eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 10: Dead Code After Break
+// ============================================================================
+
+fun test_dead_code_after_break() -> bool {
+    println("Test 10: Dead code after break");
+
+    let source = "fun loop_break() { loop { break; let x = 5; } }";
+    let result = eliminate_dead_code(source);
+
+    // Expected: Code after break eliminated
+    if result.lines_removed > 0 && !contains(result.optimized_code, "let x = 5") {
+        println("  PASS: Code after break eliminated");
+        true
+    } else {
+        println("  FAIL: Code after break not eliminated");
+        false
+    }
+}
+
+// ============================================================================
+// Test Helper Functions (Stub Implementation for RED Phase)
+// ============================================================================
+
+fun eliminate_dead_code(source: String) -> DeadCodeResult {
+    // RED Phase: This function doesn't exist yet - tests will fail
+    // Expected to implement dead code elimination
+    DeadCodeResult {
+        optimized_code: source.clone(),
+        lines_removed: 0,
+        functions_removed: 0,
+    }
+}
+
+fun contains(haystack: String, needle: &str) -> bool {
+    haystack.find(needle).is_some()
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("WASM-008: Dead Code Elimination Tests (RED Phase)");
+    println("=================================================");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Run all tests
+    if test_unreachable_after_return() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_unreachable_branch() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_unused_variable() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_unused_function() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_dead_assignment() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_unreachable_loop() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_side_effect_preservation() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_used_in_nested_scope() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_partial_branch_elimination() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_dead_code_after_break() { passed = passed + 1; } else { failed = failed + 1; }
+
+    println("");
+    println("=================================================");
+    println("Test Results (RED Phase)");
+    println("=================================================");
+    println("PASS: {}", passed);
+    println("FAIL: {}", failed);
+    println("Total: {}", passed + failed);
+    println("");
+
+    if failed == 10 {
+        println("✅ RED PHASE SUCCESS: All 10 tests failing as expected!");
+        println("");
+        println("This confirms that dead code elimination optimization");
+        println("is not yet implemented. Proceed to GREEN phase.");
+    } else {
+        println("⚠️  UNEXPECTED: {} test(s) passing in RED phase", passed);
+        println("");
+        println("RED phase tests should all fail to demonstrate");
+        println("missing implementation. Review test logic.");
+    }
+
+    println("=================================================");
+}
