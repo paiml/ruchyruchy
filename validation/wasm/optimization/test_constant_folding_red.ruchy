@@ -1,0 +1,283 @@
+// WASM-008: Advanced Optimization Passes - Constant Folding Tests (RED Phase)
+//
+// These tests verify constant folding optimization for WebAssembly code generation.
+// All tests should FAIL in the RED phase, indicating missing optimization implementation.
+//
+// Constant folding evaluates compile-time constant expressions to reduce runtime overhead.
+
+// Test helper structures
+struct OptimizationResult {
+    optimized_code: String,
+    size_reduction: i64,
+    constants_folded: i64,
+}
+
+// ============================================================================
+// Test 1: Arithmetic Constant Folding
+// ============================================================================
+
+fun test_arithmetic_constant_folding() -> bool {
+    println("Test 1: Arithmetic constant folding");
+
+    let source = "fun compute() -> i32 { return 2 + 3 * 4; }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Expression "2 + 3 * 4" folded to "14"
+    if result.constants_folded > 0 && contains(result.optimized_code, "14") {
+        println("  PASS: Arithmetic constants folded");
+        true
+    } else {
+        println("  FAIL: Arithmetic constants not folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 2: Boolean Constant Folding
+// ============================================================================
+
+fun test_boolean_constant_folding() -> bool {
+    println("Test 2: Boolean constant folding");
+
+    let source = "fun check() -> bool { return true && false; }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Expression "true && false" folded to "false"
+    if result.constants_folded > 0 && contains(result.optimized_code, "false") {
+        println("  PASS: Boolean constants folded");
+        true
+    } else {
+        println("  FAIL: Boolean constants not folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 3: String Constant Folding
+// ============================================================================
+
+fun test_string_constant_folding() -> bool {
+    println("Test 3: String constant folding");
+
+    let source = "fun greet() -> String { return \"Hello, \" + \"World\"; }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: String concatenation folded to "Hello, World"
+    if result.constants_folded > 0 && contains(result.optimized_code, "Hello, World") {
+        println("  PASS: String constants folded");
+        true
+    } else {
+        println("  FAIL: String constants not folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 4: Comparison Constant Folding
+// ============================================================================
+
+fun test_comparison_constant_folding() -> bool {
+    println("Test 4: Comparison constant folding");
+
+    let source = "fun compare() -> bool { return 5 > 3; }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Comparison "5 > 3" folded to "true"
+    if result.constants_folded > 0 && contains(result.optimized_code, "true") {
+        println("  PASS: Comparison constants folded");
+        true
+    } else {
+        println("  FAIL: Comparison constants not folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 5: Nested Constant Folding
+// ============================================================================
+
+fun test_nested_constant_folding() -> bool {
+    println("Test 5: Nested constant folding");
+
+    let source = "fun nested() -> i32 { return (2 + 3) * (4 + 5); }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Expression "(2 + 3) * (4 + 5)" folded to "45"
+    if result.constants_folded >= 2 && contains(result.optimized_code, "45") {
+        println("  PASS: Nested constants folded");
+        true
+    } else {
+        println("  FAIL: Nested constants not folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 6: Constant Propagation
+// ============================================================================
+
+fun test_constant_propagation() -> bool {
+    println("Test 6: Constant propagation");
+
+    let source = "fun propagate() -> i32 { let x = 5; return x + 3; }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: "x + 3" propagated to "8"
+    if result.constants_folded > 0 && contains(result.optimized_code, "8") {
+        println("  PASS: Constants propagated");
+        true
+    } else {
+        println("  FAIL: Constants not propagated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 7: Conditional Constant Folding
+// ============================================================================
+
+fun test_conditional_constant_folding() -> bool {
+    println("Test 7: Conditional constant folding");
+
+    let source = "fun conditional() -> i32 { if true { return 42; } else { return 0; } }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Constant condition folded, else branch eliminated
+    if result.constants_folded > 0 && !contains(result.optimized_code, "else") {
+        println("  PASS: Conditional constants folded");
+        true
+    } else {
+        println("  FAIL: Conditional constants not folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 8: Array Constant Folding
+// ============================================================================
+
+fun test_array_constant_folding() -> bool {
+    println("Test 8: Array constant folding");
+
+    let source = "fun array() -> Vec<i32> { return vec![1 + 1, 2 * 2, 3 + 3]; }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Array elements folded to [2, 4, 6]
+    if result.constants_folded >= 3 {
+        println("  PASS: Array constants folded");
+        true
+    } else {
+        println("  FAIL: Array constants not folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 9: Function Call Not Folded (Side Effects)
+// ============================================================================
+
+fun test_function_call_not_folded() -> bool {
+    println("Test 9: Function call not folded (side effects)");
+
+    let source = "fun impure() -> i32 { return random() + random(); }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Function calls NOT folded (may have side effects)
+    if result.constants_folded == 0 && contains(result.optimized_code, "random()") {
+        println("  PASS: Side-effecting calls preserved");
+        true
+    } else {
+        println("  FAIL: Side-effecting calls incorrectly folded");
+        false
+    }
+}
+
+// ============================================================================
+// Test 10: Overflow Constant Folding
+// ============================================================================
+
+fun test_overflow_constant_folding() -> bool {
+    println("Test 10: Overflow constant folding");
+
+    let source = "fun overflow() -> i32 { return 2147483647 + 1; }";
+    let result = optimize_with_constant_folding(source);
+
+    // Expected: Overflow detected or wrapped correctly
+    let has_overflow_handling = contains(result.optimized_code, "overflow") ||
+                                 contains(result.optimized_code, "wrap");
+
+    if has_overflow_handling || result.constants_folded > 0 {
+        println("  PASS: Overflow handled in constant folding");
+        true
+    } else {
+        println("  FAIL: Overflow not handled");
+        false
+    }
+}
+
+// ============================================================================
+// Test Helper Functions (Stub Implementation for RED Phase)
+// ============================================================================
+
+fun optimize_with_constant_folding(source: String) -> OptimizationResult {
+    // RED Phase: This function doesn't exist yet - tests will fail
+    // Expected to implement constant folding optimization
+    OptimizationResult {
+        optimized_code: source.clone(),
+        size_reduction: 0,
+        constants_folded: 0,
+    }
+}
+
+fun contains(haystack: String, needle: &str) -> bool {
+    // Simple substring check
+    haystack.find(needle).is_some()
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("WASM-008: Constant Folding Tests (RED Phase)");
+    println("============================================");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Run all tests
+    if test_arithmetic_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_boolean_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_string_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_comparison_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_nested_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_constant_propagation() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_conditional_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_array_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_function_call_not_folded() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_overflow_constant_folding() { passed = passed + 1; } else { failed = failed + 1; }
+
+    println("");
+    println("============================================");
+    println("Test Results (RED Phase)");
+    println("============================================");
+    println("PASS: {}", passed);
+    println("FAIL: {}", failed);
+    println("Total: {}", passed + failed);
+    println("");
+
+    if failed == 10 {
+        println("✅ RED PHASE SUCCESS: All 10 tests failing as expected!");
+        println("");
+        println("This confirms that constant folding optimization");
+        println("is not yet implemented. Proceed to GREEN phase.");
+    } else {
+        println("⚠️  UNEXPECTED: {} test(s) passing in RED phase", passed);
+        println("");
+        println("RED phase tests should all fail to demonstrate");
+        println("missing implementation. Review test logic.");
+    }
+
+    println("============================================");
+}
