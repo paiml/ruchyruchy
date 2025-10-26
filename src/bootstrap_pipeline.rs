@@ -1,5 +1,8 @@
 // Bootstrap Pipeline Integration: Connecting All Stages
 // This creates the actual end-to-end compilation pipeline
+//
+// Note: Functions in this module are demonstration/example code
+#![allow(dead_code)]
 
 use std::fs;
 use std::process::Command;

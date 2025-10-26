@@ -23,14 +23,14 @@
 #![warn(clippy::all)]
 
 // Re-export the bootstrap pipeline components
+/// Bootstrap pipeline module for compiler stages
 pub mod bootstrap_pipeline;
+/// Bootstrap showcase examples and demonstrations
 pub mod bootstrap_showcase;
+/// Performance benchmarking utilities
 pub mod performance_benchmark;
+/// Stage 3 code generation (real Rust codegen)
 pub mod stage3_real_codegen;
-
-// Re-export key types and functions
-pub use bootstrap_pipeline::*;
-pub use stage3_real_codegen::*;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

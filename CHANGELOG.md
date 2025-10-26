@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-10-26
+
+### Fixed
+- Removed all compilation warnings (55 warnings eliminated)
+- Fixed unused imports in `src/lib.rs`
+- Fixed unused variables in `src/performance_benchmark.rs` and `src/stage3_real_codegen.rs`
+- Added `#![allow(dead_code)]` to demonstration/example modules to suppress unused function warnings
+- Added missing module documentation for all public modules
+
+### Changed
+- Clean compilation with zero warnings for better code quality
+- Improved documentation for library modules
+
 ## [1.2.0] - 2025-10-26 🎉 **DEEP BUG DISCOVERY SYSTEM - PRODUCTION READY**
 
 ### Summary

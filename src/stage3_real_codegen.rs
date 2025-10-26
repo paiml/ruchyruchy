@@ -1,5 +1,8 @@
 // REAL Stage 3: Functional Ruchy→Rust Code Generator
 // This actually compiles Ruchy code to working Rust - implemented in Rust for now
+//
+// Note: Functions in this module are demonstration/example code
+#![allow(dead_code)]
 
 use std::fs;
 use std::process::Command;
@@ -287,7 +290,7 @@ fn transform_type_system(code: String) -> String {
 }
 
 // Simplified regex replacement function for basic patterns
-fn regex_replace<F>(text: &str, pattern: &str, replacer: F) -> String 
+fn regex_replace<F>(text: &str, _pattern: &str, _replacer: F) -> String
 where
     F: Fn(&[&str]) -> String,
 {
