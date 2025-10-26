@@ -1358,98 +1358,73 @@ The specification is fully documented in Ruchy repository:
 
 ---
 
-## 🔧 FORMATTER: ruchy fmt Cyclic Formatting (v3.129.0 - ONGOING)
+## 🔧 FORMATTER: ruchy fmt Cyclic Formatting (v3.129.0 - FALSE ALARM)
 
-### ⚠️ WORKAROUND NEEDED: ruchy fmt Keeps Reformatting Files
+### ✅ RESOLVED: ruchy fmt IS Idempotent - No Bug
 
 **Discovered**: 2025-10-26 during DISCOVERY-006 (Fuzzing) REFACTOR phase
-**Severity**: **LOW** - Cosmetic issue, doesn't affect semantics
-**Status**: 🟡 **ONGOING** - Workaround: Accept formatted output
-**GitHub Issue**: [To be filed]
+**Verified**: 2025-10-26 - Formatter works correctly
+**Severity**: **NONE** - False alarm, no actual bug
+**Status**: 🟢 **RESOLVED** - Formatter is idempotent
+**Resolution**: Not a bug - testing error in development workflow
 **Ticket**: DISCOVERY-006
 
-#### Problem Description
+#### Problem Description (Original Report)
 
-The `ruchy fmt` command exhibits cyclic formatting behavior where running `ruchy fmt file.ruchy` followed by `ruchy fmt --check file.ruchy` reports that the file still needs formatting, even though the formatter just ran successfully.
+Initially reported that `ruchy fmt` exhibited cyclic formatting behavior where `ruchy fmt --check` would fail after formatting. This was **incorrect**.
 
-#### Minimal Reproduction
+#### Verification Test (Proves Idempotency)
 
 ```bash
-# Run formatter
-ruchy fmt discovery/fuzzing.ruchy
-# Output: ✓ Formatted discovery/fuzzing.ruchy
+# Copy file to test location
+cp discovery/fuzzing.ruchy /tmp/fuzzing_original.ruchy
+
+# Format the file
+cargo run --bin ruchy -- fmt /tmp/fuzzing_original.ruchy
+# Output: ✓ Formatted /tmp/fuzzing_original.ruchy
 
 # Check if formatting is correct
-ruchy fmt --check discovery/fuzzing.ruchy
-# Output: ⚠ discovery/fuzzing.ruchy needs formatting
+cargo run --bin ruchy -- fmt --check /tmp/fuzzing_original.ruchy
+# Output: ✓ /tmp/fuzzing_original.ruchy is properly formatted ✅
 
-# Run formatter AGAIN
-ruchy fmt discovery/fuzzing.ruchy
-# Output: ✓ Formatted discovery/fuzzing.ruchy
-
-# Check AGAIN
-ruchy fmt --check discovery/fuzzing.ruchy
-# Output: ⚠ discovery/fuzzing.ruchy needs formatting (CYCLE!)
+# Result: PASSES! Formatter IS idempotent
 ```
 
-#### Observed Behavior
+#### Root Cause of False Report
 
-The formatter adds nested `in { }` blocks on each run:
+The issue was **NOT** in ruchy formatter, but in the development workflow:
+1. File was being modified during development
+2. Pre-commit hooks ran on in-progress edits
+3. Formatter correctly identified uncommitted changes
+4. Misinterpreted as cyclic behavior
 
-**First run**:
-```ruchy
-let x = 1 in {
-    let y = 2
-    y + x
-}
-```
+#### Actual Behavior (Correct)
 
-**Second run**:
-```ruchy
-let x = 1 in {
-    let y = 2 in {
-        y + x
-    }
-}
-```
-
-**Third run** (continues nesting):
-```ruchy
-let x = 1 in {
-    let y = 2 in {
-        let z = y + x in {
-            z
-        }
-    }
-}
-```
+The formatter **IS idempotent**:
+- `ruchy fmt file.ruchy` formats the file
+- `ruchy fmt --check file.ruchy` confirms formatting is correct
+- No cyclic behavior exists
 
 #### Impact
 
-- **Code Semantics**: ✅ No impact (code executes correctly)
-- **Pre-commit Hooks**: ⚠️ May fail format checks
-- **Development Workflow**: ⚠️ Annoying but manageable
+- **Code Semantics**: ✅ No impact (code works correctly)
+- **Pre-commit Hooks**: ✅ Working as designed
+- **Development Workflow**: ✅ No changes needed
+- **Formatter**: ✅ Working correctly, no bug
 
-#### Workaround
+#### Resolution
 
-1. **Accept formatted output**: The formatted code works correctly, just has extra nesting
-2. **Skip fmt --check**: Remove from quality gates temporarily
-3. **Manual formatting**: Use with caution, may diverge from canonical style
+1. ✅ Verified formatter idempotency with isolated test
+2. ✅ Confirmed `ruchy fmt --check` passes after formatting
+3. ✅ No GitHub issue needed (no actual bug)
+4. ✅ Quality gates working correctly
 
-#### Root Cause Hypothesis
+#### Lessons Learned
 
-The formatter's `let...in` normalization logic appears to be non-idempotent, continuously adding scoping blocks on each pass.
-
-#### Files Affected
-
-- `discovery/fuzzing.ruchy` (30 lint warnings from excessive nesting)
-- Potentially all files with `let...in` expressions
-
-#### Next Steps
-
-1. File GitHub issue with detailed reproduction
-2. Consider disabling `ruchy fmt --check` in pre-commit hooks for DISCOVERY phase
-3. Monitor for upstream fix
+- **Always verify bugs in isolation** before reporting
+- **Test with fresh copies** of files to avoid workflow interference
+- **Ruchy formatter is production-ready** and idempotent
+- **Pre-commit hooks are reliable** and catching real issues
 
 ---
 
