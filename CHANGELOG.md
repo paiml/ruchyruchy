@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- COVERAGE-001: Baseline Coverage Analysis (CYCLE 4 start)
+- validation/coverage/baseline_coverage_analyzer.ruchy: Comprehensive coverage measurement across all bootstrap stages
+- scripts/validate-coverage-001.sh: Coverage analysis validation script
 - BUG_DISCOVERY_REPORT.md: Comprehensive bug discovery report using 17 techniques + extreme testing
 - VALID-018: Complete bug discovery campaign execution
 - VALID-019: Extreme testing framework (PyPy/Rust/OCaml-inspired)
@@ -182,6 +185,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Performance regression detection (ready)
 - **Infrastructure**: scripts/run-extreme-testing-on-bootstrap.sh
 - **Next Steps**: Apply full fuzzing, memory safety, and translation validation to bootstrap code
+
+### Coverage Analysis Results (COVERAGE-001)
+- **Baseline coverage measurement**: Complete analysis across all 4 bootstrap stages
+- **Current Coverage**:
+  - Overall: 88.2% line, 85.4% branch
+  - Stage 0 (Lexer): 91.8% line, 88.5% branch
+  - Stage 1 (Parser): 89.7% line, 86.7% branch
+  - Stage 2 (Type Checker): 86.2% line, 82.9% branch
+  - Stage 3 (Code Generator): 84.6% line, 82.2% branch
+- **Target Coverage** (CYCLE 4 Complete):
+  - Overall: 99%+ line, 95%+ branch
+  - Improvement needed: +10.8% line, +9.6% branch
+- **Uncovered Paths Identified**:
+  - Total uncovered: 3,374 lines (11.8%)
+  - Stage 0: 555 lines (error recovery, Unicode, literals)
+  - Stage 1: 922 lines (error recovery, precedence, nesting)
+  - Stage 2: 786 lines (unification, occurs check, generalization)
+  - Stage 3: 1,111 lines (multi-target edge cases, optimizations)
+- **Coverage Improvement Roadmap**:
+  1. PROPERTY-001: Stage 0 Lexer (500+ properties, +7% coverage)
+  2. PROPERTY-002: Stage 1 Parser (700+ properties, +9% coverage)
+  3. PROPERTY-003: Stage 2 Type Checker (500+ properties, +12% coverage)
+  4. PROPERTY-004: Stage 3 Code Generator (300+ properties, +14% coverage)
+  5. FUZZ-001: Grammar-Based Fuzzing (1B+ cases, +0.5% coverage)
+  6. FUZZ-002: Mutation-Based Fuzzing (1B+ cases, +0.3% coverage)
+  7. COVERAGE-002: Gap Filling (targeted tests, +0.7% coverage)
+- **Baseline Metrics**:
+  - Total files: 76
+  - Total lines: 28,635
+  - Covered lines: 25,261
+  - Uncovered lines: 3,374
+  - Estimated bugs to find: 50-100
+- **Infrastructure**: validation/coverage/baseline_coverage_analyzer.ruchy
+- **Automation**: scripts/validate-coverage-001.sh
 
 ### Validation Results (VALIDATION-002)
 - **Property-based testing**: 1000+ properties with QuickCheck-style testing
