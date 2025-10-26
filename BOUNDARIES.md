@@ -1260,15 +1260,18 @@ fun test_2() { ... }
 
 ---
 
-## 🔧 FORMATTER: ruchy fmt Changes 'fun' to 'fn' (v3.111.0+)
+## 🔧 FORMATTER: ruchy fmt Changes 'fun' to 'fn' (v3.111.0+ - FIXED in v3.129.0)
 
-### ❌ ruchy fmt Violates Ruchy Language Specification
+### ✅ RESOLVED: ruchy fmt Now Preserves 'fun' Keyword
 
 **Discovered**: 2025-10-26 during DISCOVERY-001 (Framework Infrastructure) REFACTOR phase
-**Severity**: **MEDIUM** - Breaks formatter workflow
-**Status**: 🔴 **OPEN** - Formatter configuration issue
+**Resolved**: 2025-10-26 in Ruchy v3.129.0
+**Severity**: **MEDIUM** - Was breaking formatter workflow
+**Status**: 🟢 **RESOLVED** - Fixed by Ruchy team!
 **GitHub Issue**: https://github.com/paiml/ruchy/issues/60
 **Ticket**: DISCOVERY-001
+
+**Resolution Time**: Same day! 🚀 Issue discovered and fixed within hours. Outstanding responsiveness from Ruchy team!
 
 #### Problem Description
 
@@ -1327,24 +1330,35 @@ This suggests either:
 - `ruchy check` is too permissive (accepts Rust syntax)
 - `ruchy fmt` has wrong canonical format configured
 
-#### Workaround Used
+#### Workaround Used (No Longer Needed)
 
-Manual post-processing after `ruchy fmt`:
+~~Manual post-processing after `ruchy fmt`:~~
 ```bash
-ruchy fmt file.ruchy
-sed -i 's/^fn /fun /g' file.ruchy  # Fix formatter output
+# NO LONGER NEEDED - Fixed in v3.129.0!
+# ruchy fmt file.ruchy
+# sed -i 's/^fn /fun /g' file.ruchy
 ```
 
-#### Impact
+#### Resolution (v3.129.0)
 
-- **Workflow Disruption**: Cannot use `ruchy fmt` without manual fixes
-- **Inconsistency**: Formatted code diverges from project conventions
-- **Confusion**: Unclear whether `fun` or `fn` is canonical Ruchy syntax
+**Verification Test**:
+```bash
+$ echo 'fun test() { println("Hello"); }' > test.ruchy
+$ ruchy fmt test.ruchy
+✓ Formatted test.ruchy
 
-#### Requested Solutions
+$ cat test.ruchy
+fun test() {
+    println("Hello")
+}
+# ✅ 'fun' keyword preserved!
+```
 
-1. **Fix Formatter**: Update `ruchy fmt` to preserve `fun` keyword
-2. **Canonical Syntax**: Document which keyword is official Ruchy syntax
-3. **Optionally**: Convert `fn` → `fun` (not the other way around)
+**Impact After Fix**:
+- ✅ **Workflow Restored**: Can use `ruchy fmt` without manual fixes
+- ✅ **Consistency**: Formatted code matches project conventions
+- ✅ **Clarity**: `fun` is confirmed as canonical Ruchy syntax
+
+**Acknowledgment**: Incredible same-day fix from Ruchy team! Issue filed and resolved in hours. This is exactly the kind of responsiveness that makes open source great! 🎉
 
 ---
