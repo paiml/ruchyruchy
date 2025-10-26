@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- BUG_DISCOVERY_REPORT.md: Comprehensive bug discovery report using 17 techniques
+- VALID-018: Complete bug discovery campaign execution
+
+### Fixed
+- Formatted 5 discovery files: ruchydbg_auto_detect, differential_testing, metamorphic_testing, mutation_testing, property_testing
+- Filed GitHub issue #61 for critical ruchy lint crash
+
+### Discovered
+- 3 bugs total: 1 CRITICAL (ruchy lint crash), 2 MEDIUM (formatting, lint issues)
+- 100% automated detection with 0% false positives
+- Discovery system validated and working as designed
+
 ## [1.2.1] - 2025-10-26
 
 ### Fixed
