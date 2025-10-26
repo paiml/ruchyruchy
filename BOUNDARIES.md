@@ -1202,6 +1202,30 @@ fun main() {
 }
 ```
 
+**✅ WORKING - Import Syntax Parsing**:
+```ruchy
+// All import syntaxes PARSE correctly (runtime execution pending)
+use std::collections::HashMap         // ✅ Parses (ruchy check passes)
+use std::collections::*               // ✅ Parses
+use std::collections::HashMap as Map  // ✅ Parses
+use std::{HashMap, HashSet}           // ✅ Parses
+
+import std                            // ✅ Parses (Python-style)
+from std import println               // ✅ Parses
+
+// Comprehensive test coverage: tests/issue_059_module_imports.rs (15 tests!)
+```
+
+**❌ NOT YET IMPLEMENTED - Import Runtime Execution**:
+```ruchy
+// Parsing works, but runtime execution doesn't
+use std::collections::HashMap
+
+fun main() {
+    println("Test");  // ❌ Error: Expression type not yet implemented: Import
+}
+```
+
 **❌ NOT YET IMPLEMENTED - Multi-File Modules**:
 ```ruchy
 // File: math.ruchy
@@ -1210,7 +1234,7 @@ pub fun add(x: i32, y: i32) -> i32 {
 }
 
 // File: main.ruchy
-use math;  // ❌ Not yet implemented
+use math;  // ❌ Parses but can't load external file
 let result = math::add(1, 2);
 ```
 
