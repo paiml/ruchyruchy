@@ -1,5 +1,8 @@
 // Performance Benchmark: Validate Bootstrap Compiler Speed Claims
 // Empirical measurement of compilation throughput and performance
+//
+// Note: Functions in this module are demonstration/example code
+#![allow(dead_code)]
 
 use std::fs;
 use std::process::Command;
@@ -33,20 +36,20 @@ fn benchmark_code_generation() {
     let small_rust = bootstrap_compile(&small_program);
     let small_duration = start.elapsed();
     let small_lines = small_program.lines().count();
-    
+
     println!("  Small program ({} lines): {:.2}ms", small_lines, small_duration.as_secs_f64() * 1000.0);
-    
+
     // Benchmark medium program
     let start = Instant::now();
-    let medium_rust = bootstrap_compile(&medium_program);
+    let _medium_rust = bootstrap_compile(&medium_program);
     let medium_duration = start.elapsed();
     let medium_lines = medium_program.lines().count();
-    
+
     println!("  Medium program ({} lines): {:.2}ms", medium_lines, medium_duration.as_secs_f64() * 1000.0);
-    
-    // Benchmark large program  
+
+    // Benchmark large program
     let start = Instant::now();
-    let large_rust = bootstrap_compile(&large_program);
+    let _large_rust = bootstrap_compile(&large_program);
     let large_duration = start.elapsed();
     let large_lines = large_program.lines().count();
     

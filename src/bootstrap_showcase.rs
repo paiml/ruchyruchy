@@ -1,5 +1,8 @@
 // Bootstrap Showcase: Demonstrating Real Self-Hosting Capability
 // Final proof that the bootstrap compiler actually works
+//
+// Note: Functions in this module are demonstration/example code
+#![allow(dead_code)]
 
 use std::fs;
 use std::process::Command;
