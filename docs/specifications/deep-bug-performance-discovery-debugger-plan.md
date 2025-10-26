@@ -1,9 +1,10 @@
 # Deep Bug & Performance Discovery Debugger Plan
 
 **Project**: RuchyRuchy - Self-Hosting Compiler Bug Discovery & Performance Optimization
-**Version**: 1.0.0
+**Version**: 2.0.0 (Toyota Way Enhanced)
 **Date**: October 26, 2025
-**Status**: Specification (Pre-Implementation)
+**Status**: Specification v2.0 (Toyota Way Peer Review Applied)
+**Reviewer**: Toyota Way Critical Analysis
 
 ---
 
@@ -13,6 +14,34 @@
 
 **Outcome A**: Enhanced `ruchydbg` debugger with automated bug detection capabilities
 **Outcome B**: Structured YAML reports (`docs/reports/*.yaml`) with actionable upstream feedback
+
+### Long-Term Vision (10-Year Philosophy)
+
+This system is not merely a one-time quality improvement effort but the foundation for **continuous evolution** of compiler quality assurance:
+
+**Phase 1** (Current - 8 weeks): Automated Bug & Performance Discovery
+- 8 discovery techniques finding bugs and bottlenecks
+- Enhanced debugger with root cause analysis
+- Actionable YAML reports for upstream team
+
+**Phase 2** (6-12 months): Statistical Fault Localization
+- Spectrum-based fault localization (Tarantula, Ochiai)
+- Suspiciousness ranking for code elements
+- Increased confidence in suggested fixes (>90%)
+
+**Phase 3** (1-2 years): Automated Program Repair (APR)
+- Template-based repair (GenProg, Prophet)
+- Semantics-preserving transformations
+- Automated patch generation for common bug classes
+- Human-in-the-loop validation
+
+**Phase 4** (3-5 years): Self-Healing Compiler
+- Continuous integration of APR into development workflow
+- Automatic bug fixing in CI/CD pipeline
+- Feedback loop: fixes improve future discovery
+- Zero-defect aspiration (Toyota Production System ideal)
+
+**Philosophy**: Following Toyota's principle of "long-term philosophy, even at the expense of short-term financial goals," this system is designed to evolve over years, ultimately achieving a self-healing compiler that automatically discovers and repairs its own bugs.
 
 ---
 
@@ -104,6 +133,10 @@ We've already discovered and documented **8+ critical bugs** through dogfooding:
 │  │  - Performance bottlenecks, hot paths                 │  │
 │  │  - Minimized reproduction cases (delta debugging)     │  │
 │  │  - Root cause analysis (bisection, tracing)           │  │
+│  │  - **Deduplication Engine** (Muda elimination)        │  │
+│  │    - Hash-based bug fingerprinting                    │  │
+│  │    - AST structural similarity (>80% = duplicate)     │  │
+│  │    - Root cause merge (same file/function/line)       │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                            │                                 │
 │              ┌─────────────┴───────────────┐                │
@@ -1688,39 +1721,203 @@ external_tools:
 
 ---
 
-## 📅 Timeline (8 Weeks)
+## 📅 Timeline: Iterative 3-Cycle Approach (24 Weeks Total)
 
-### Week 1-2: Infrastructure (DISCOVERY-001, DISCOVERY-015)
-- Build framework for 8 discovery techniques
+**Toyota Way Principle**: Level out workload (Heijunka) to avoid overburden (Muri) and unevenness (Mura)
+
+### Rationale for Iterative Approach
+
+The original 8-week timeline risked **Muri** (overburden) by attempting to implement 8 state-of-the-art techniques simultaneously. Following the Toyota Way principle of **Heijunka** (leveling), we adopt a **3-cycle iterative approach**:
+
+- **Cycle 1 (8 weeks)**: Core high-impact techniques + foundational tooling
+- **Cycle 2 (8 weeks)**: Advanced techniques + enhanced automation
+- **Cycle 3 (8 weeks)**: Comprehensive integration + long-term evolution
+
+Each cycle delivers **production value** and provides **feedback** for subsequent cycles, embodying **Kaizen** (continuous improvement).
+
+---
+
+### Cycle 1: Core Discovery & Foundational Tools (8 Weeks)
+
+**Goal**: Deliver high-impact bug discovery with minimal viable tooling
+
+**Success Criteria**:
+- ≥5 new bugs discovered
+- 20+ YAML reports generated
+- ruchydbg with auto-detect and differential modes
+- CI/CD integration operational
+
+#### Week 1-2: Foundation (DISCOVERY-001, DISCOVERY-015)
+- Build framework for discovery orchestration
 - Implement YAML report generation system
-- Database for storing bugs/performance data
+- Database for bugs/performance (with deduplication engine)
 - Integration with ruchydbg skeleton
 
-### Week 3-4: Core Discovery Techniques (DISCOVERY-002, DISCOVERY-003, DISCOVERY-004)
-- Implement differential testing (stages, opts, targets)
-- Implement metamorphic testing (20+ properties)
-- Implement real-world code injection (Creal-style)
-- First bug discoveries expected
+#### Week 3-4: Core Discovery - Differential & Metamorphic (DISCOVERY-002, DISCOVERY-003)
+- **DISCOVERY-002**: Differential Testing
+  - Cross-stage (Stage 0→1→2→3)
+  - Cross-optimization (-O0 vs -O3)
+  - Cross-target (TypeScript vs Rust)
+  - Expected: 2-3 new bugs (optimizer miscompilations)
 
-### Week 5-6: Advanced Discovery (DISCOVERY-005, DISCOVERY-006, DISCOVERY-007)
-- Implement mutation testing (18 mutators)
-- Implement fuzzing (grammar + mutation)
-- Implement property-based testing (50+ invariants)
-- Performance profiling (DISCOVERY-008)
+- **DISCOVERY-003**: Metamorphic Testing
+  - Bootstrap chain idempotence
+  - Type safety property
+  - Optimization soundness
+  - Expected: 2-3 new bugs (type checker, bootstrap divergence)
 
-### Week 7: ruchydbg Enhancements (DISCOVERY-010, DISCOVERY-011, DISCOVERY-012, DISCOVERY-013, DISCOVERY-014)
-- Auto-detect mode
-- Performance visualization
-- Differential mode
-- Root cause analysis
-- Property checker
+#### Week 5-6: Fuzzing (DISCOVERY-006)
+- **DISCOVERY-006**: Grammar-based + mutation-based fuzzing
+  - Coverage-guided fuzzing (1M+ test cases)
+  - Crash/hang detection
+  - Expected: 3-5 new bugs (parser crashes, type checker hangs)
 
-### Week 8: Integration, Testing, Documentation (DISCOVERY-009, DISCOVERY-016, DISCOVERY-017)
-- Coverage-guided exploration
-- CI/CD integration
-- Comprehensive testing of discovery system itself
-- Documentation and user guides
-- Case studies of bugs found
+#### Week 7: ruchydbg Enhancements - Core Modes (DISCOVERY-010, DISCOVERY-012)
+- **DISCOVERY-010**: Auto-detect mode
+  - Run differential + metamorphic + fuzzing automatically
+  - Delta debugging (minimize cases)
+  - Root cause hints
+
+- **DISCOVERY-012**: Differential mode
+  - Stage comparison
+  - Opt level comparison
+  - Divergence reporting
+
+#### Week 8: Integration & First Release (DISCOVERY-016, DISCOVERY-017)
+- **DISCOVERY-016**: CI/CD integration
+  - Run core discovery on every commit
+  - Track bugs over time
+  - Performance regression detection
+
+- **DISCOVERY-017**: Documentation (Cycle 1)
+  - User guide for ruchydbg core modes
+  - YAML report guide for upstream
+  - Case studies (5+ bugs found)
+
+**Cycle 1 Deliverable**: Production-ready core discovery system with 3 techniques, 2 ruchydbg modes, CI integration
+
+---
+
+### Cycle 2: Advanced Discovery & Enhanced Automation (8 Weeks)
+
+**Goal**: Add advanced techniques and improve automation
+
+**Success Criteria**:
+- ≥5 additional bugs discovered (10+ total)
+- 30+ additional YAML reports (50+ total)
+- ruchydbg with 3 additional modes
+- Deduplication engine operational
+
+#### Week 9-10: Real-World Code Injection (DISCOVERY-004)
+- **DISCOVERY-004**: Creal-style injection
+  - Corpus collection (100+ programs from ecosystem)
+  - Function-level extraction
+  - Type-compatible injection
+  - Expected: 2-3 new bugs (complex type inference failures)
+
+#### Week 11-12: Mutation Testing (DISCOVERY-005)
+- **DISCOVERY-005**: 18 mutators (4 Ruchy + 14 general)
+  - AST diff tool
+  - Type inference diff
+  - Execution diff
+  - Expected: 2-3 new bugs (optimizer over-optimization)
+
+#### Week 13-14: Property-Based Testing (DISCOVERY-007)
+- **DISCOVERY-007**: 50+ compiler invariants
+  - Property test framework
+  - Shrinking for minimal counterexamples
+  - Integration with `ruchy prove`
+  - Expected: 2-3 new bugs (type soundness violations)
+
+#### Week 15: ruchydbg Enhancements - Advanced Modes (DISCOVERY-011, DISCOVERY-013, DISCOVERY-014)
+- **DISCOVERY-011**: Performance visualization
+  - Flamegraph generation
+  - Memory timeline
+  - Comparison with production compiler
+
+- **DISCOVERY-013**: Root cause analysis
+  - Git bisection integration
+  - Fix suggestions (code diffs)
+  - Confidence scoring
+
+- **DISCOVERY-014**: Property checker
+  - 50+ properties available
+  - Property violation reporting
+
+#### Week 16: Deduplication & Refinement
+- Enhance deduplication engine
+  - Hash-based fingerprinting
+  - AST structural similarity
+  - Root cause merging
+- Refine existing techniques based on Cycle 1 feedback
+
+**Cycle 2 Deliverable**: Comprehensive discovery system with 6 techniques, 5 ruchydbg modes, deduplication engine
+
+---
+
+### Cycle 3: Performance Discovery & Long-Term Evolution (8 Weeks)
+
+**Goal**: Add performance profiling and lay foundation for automated repair
+
+**Success Criteria**:
+- ≥5 performance bottlenecks identified
+- ≥10 additional bugs (15+ total from all cycles)
+- 20+ performance reports (70+ total reports)
+- Statistical fault localization prototype
+
+#### Week 17-18: Performance Profiling (DISCOVERY-008)
+- **DISCOVERY-008**: Comprehensive profiling
+  - Time, memory, allocations tracking
+  - Hot function detection (>10% time)
+  - O(n²) algorithm identification
+  - Expected: 5+ performance bottlenecks
+
+#### Week 19-20: Coverage-Guided Exploration (DISCOVERY-009)
+- **DISCOVERY-009**: Maximize code coverage
+  - Line, branch, path coverage tracking
+  - Guided mutation to cover uncovered paths
+  - Target: >95% line, >85% branch coverage
+
+#### Week 21: Statistical Fault Localization (Prototype)
+- **NEW**: Spectrum-based fault localization
+  - Tarantula, Ochiai suspiciousness metrics
+  - Code element ranking
+  - Enhanced confidence for suggested fixes
+  - Foundation for Phase 2 (6-12 month vision)
+
+#### Week 22-23: Comprehensive Testing & Refinement
+- Test discovery system itself (>90% coverage)
+- Mutation testing on discovery code
+- Performance optimization of discovery techniques
+- Feedback loop for technique effectiveness
+
+#### Week 24: Final Integration & Documentation
+- Complete user guides
+- Case studies (15+ bugs, 5+ performance bottlenecks)
+- Academic paper draft (compiler testing methodology)
+- Handoff to upstream Ruchy team
+
+**Cycle 3 Deliverable**: Production-grade discovery system with 8 techniques, fault localization, comprehensive documentation
+
+---
+
+### Summary: 3-Cycle Comparison
+
+| Aspect | Cycle 1 (Weeks 1-8) | Cycle 2 (Weeks 9-16) | Cycle 3 (Weeks 17-24) |
+|--------|---------------------|----------------------|-----------------------|
+| **Techniques** | 3 core | +3 advanced | +2 comprehensive |
+| **ruchydbg Modes** | 2 core | +3 advanced | Complete (5 modes) |
+| **Expected Bugs** | 5+ | +5 (10+ total) | +5 (15+ total) |
+| **Reports** | 20+ | +30 (50+ total) | +20 (70+ total) |
+| **Performance** | - | - | 5+ bottlenecks |
+| **Workload** | ⚖️ Balanced | ⚖️ Balanced | ⚖️ Balanced |
+| **Risk** | ✅ Low | ✅ Low | ✅ Low |
+
+**Toyota Way Alignment**:
+- **Heijunka** ✅: Workload leveled across 3 cycles
+- **Muri** ✅: No overburden, sustainable pace
+- **Mura** ✅: No unevenness, consistent quality
+- **Kaizen** ✅: Each cycle informs next, continuous improvement
 
 ---
 
@@ -1835,28 +2032,147 @@ This project is considered **successful** if:
 
 ---
 
+## 🏭 Toyota Way Principles Applied
+
+This specification embodies the 14 principles of the Toyota Way:
+
+### 1. Long-Term Philosophy ✅
+- **Principle**: "Base your management decisions on a long-term philosophy, even at the expense of short-term financial goals"
+- **Application**: 10-year vision from bug discovery → fault localization → automated repair → self-healing compiler
+- **Evidence**: Phase 1-4 roadmap spanning 3-5 years
+
+### 2. Create Continuous Process Flow (Jidoka) ✅
+- **Principle**: "Create continuous process flow to bring problems to the surface"
+- **Application**: 8 discovery techniques create multi-layered quality assurance
+- **Evidence**: CI/CD integration runs discovery on every commit, immediately surfacing issues
+
+### 3. Use "Pull" Systems (Just-in-Time) ✅
+- **Principle**: "Use 'pull' systems to avoid overproduction"
+- **Application**: Generate bug reports only when bugs are found (not speculative)
+- **Evidence**: YAML reports created on-demand based on actual discoveries
+
+### 4. Level Out the Workload (Heijunka) ⚠️ **ADDRESSED IN v2.0**
+- **Principle**: "Level out the workload"
+- **Application**: Iterative 8-week cycles prevent overburden
+- **Improvement**: v2.0 roadmap further levels workload with 3-cycle approach
+
+### 5. Build a Culture of Stopping to Fix Problems (Andon) ✅
+- **Principle**: "Build a culture of stopping to fix problems, to get quality right the first time"
+- **Application**: `ruchydbg auto-detect` immediately stops and reports when bug found
+- **Evidence**: Pre-commit hooks block commits if quality gates fail
+
+### 6. Standardized Tasks (Foundation for Kaizen) ✅
+- **Principle**: "Standardized tasks are the foundation for continuous improvement and employee empowerment"
+- **Application**: Extreme TDD (RED-GREEN-REFACTOR-TOOL), PMAT enforcement, zero SATD
+- **Evidence**: All 17 tickets follow identical quality gate process
+
+### 7. Use Visual Control ✅
+- **Principle**: "Use visual control so no problems are hidden"
+- **Application**: Flamegraphs, coverage reports (HTML), performance dashboards
+- **Evidence**: `ruchydbg perf-viz` generates visual flamegraphs
+
+### 8. Use Only Reliable, Thoroughly Tested Technology ✅
+- **Principle**: "Use only reliable, thoroughly tested technology that serves your people and processes"
+- **Application**: All techniques based on peer-reviewed research (2024-2025)
+- **Evidence**: 10 peer-reviewed papers cited, proven track record (8 bugs found)
+
+### 9. Grow Leaders Who Thoroughly Understand the Work ✅
+- **Principle**: "Grow leaders who thoroughly understand the work, live the philosophy, and teach it to others"
+- **Application**: Educational value section, comprehensive documentation
+- **Evidence**: Students learn production-grade compiler QA methodologies
+
+### 10. Develop Exceptional People and Teams ✅
+- **Principle**: "Develop exceptional people and teams who follow your company's philosophy"
+- **Application**: Pure Ruchy dogfooding upskills team in debugging and optimization
+- **Evidence**: Feedback loop for improving discovery system itself
+
+### 11. Respect Your Extended Network (Upstream Team) ✅
+- **Principle**: "Respect your extended network of partners and suppliers by challenging them and helping them improve"
+- **Application**: Actionable YAML reports with minimal reproduction, root cause, suggested fixes
+- **Evidence**: 87.5% upstream acceptance rate (7/8 bugs fixed)
+
+### 12. Go and See for Yourself (Genchi Genbutsu) ✅
+- **Principle**: "Go and see for yourself to thoroughly understand the situation"
+- **Application**: Real-world code injection from actual Ruchy programs, root cause analysis with bisection
+- **Evidence**: Creal-style technique goes to "gemba" of real-world code
+
+### 13. Make Decisions Slowly by Consensus (Nemawashi) ✅
+- **Principle**: "Make decisions slowly by consensus, thoroughly considering all options; implement decisions rapidly"
+- **Application**: This specification represents thorough analysis of 8 techniques before implementation
+- **Evidence**: Comprehensive review process, Toyota Way critical analysis
+
+### 14. Become a Learning Organization (Kaizen) ✅
+- **Principle**: "Become a learning organization through relentless reflection and continuous improvement"
+- **Application**: Success metrics, feedback loops, iterative improvement
+- **Evidence**: Process for periodically reviewing effectiveness of discovery techniques
+
+---
+
 ## 📖 References
+
+### Peer-Reviewed Research (Foundational Papers)
+
+#### Metamorphic Testing
+1. **Chen, T. Y., Kuo, F. C., Liu, H., & Poon, P. L.** (2015). *A survey on metamorphic testing*. IEEE Transactions on Software Engineering, 41(1), 14-35.
+   - Seminal survey on metamorphic testing for solving oracle problem
+   - Cited 1,500+ times, foundational work
+
+#### Differential Testing
+2. **McKeeman, W. M.** (1998). *Differential testing for software*. Digital Technical Journal, 10(1), 100-107.
+   - Original differential testing paper
+   - Foundation for modern compiler testing
+
+3. **Le, V., Afshari, M., & Su, Z.** (2014). *Compiler validation via equivalence modulo inputs*. ACM SIGPLAN Notices, 49(6), 213-222.
+   - EMI technique for compiler testing
+   - Found hundreds of bugs in GCC/LLVM
+
+#### Compiler Fuzzing
+4. **Yang, X., Chen, Y., Eide, E., & Regehr, J.** (2011). *Finding and understanding bugs in C compilers*. ACM SIGPLAN Notices, 46(6), 283-294.
+   - Csmith: random program generator for C compilers
+   - Found 325+ bugs in production compilers
+
+5. **Sun, C., Le, V., & Su, Z.** (2016). *Finding compiler bugs via live code mutation*. In Proceedings of the 2016 ACM SIGPLAN International Conference on Object-Oriented Programming, Systems, Languages, and Applications (pp. 849-863).
+   - Live code mutation for compiler testing
+   - Discovered 104 new bugs
+
+6. **Lidbury, C., Lascu, A., Chong, N., & Donaldson, A. F.** (2015). *Many-core compiler fuzzing*. ACM SIGPLAN Notices, 50(8), 225-235.
+   - Graphics shader compiler fuzzing
+   - 60+ bugs found via metamorphic testing
+
+7. **Marcozzi, M., Tang, Q., Donaldson, A. F., & Cadar, C.** (2019). *Compiler fuzzing: how much does it matter?* Proceedings of the ACM on Programming Languages, 3(OOPSLA), 1-29.
+   - Systematic study of compiler fuzzing effectiveness
+   - Analysis of 5,000+ compiler bugs
+
+8. **Holler, C., Herzig, K., & Zeller, A.** (2012). *Fuzzing with code fragments*. In Proceedings of the 21st USENIX security symposium (pp. 445-458).
+   - LangFuzz: fragment-based fuzzing
+   - Found 105 bugs in JavaScript engines
+
+#### Automated Program Repair (Future Work)
+9. **Le Goues, C., Nguyen, T., Forrest, S., & Weimer, W.** (2012). *GenProg: A generic method for automatic software repair*. IEEE Transactions on Software Engineering, 38(1), 54-72.
+   - Template-based automated program repair
+   - Foundation for modern APR research
+
+#### Profile-Guided Optimization
+10. **Cummins, C., Petoumenos, P., Wang, Z., & Leather, H.** (2017). *Synthesizing benchmarks for predictive modeling*. In Proceedings of the 2017 International Symposium on Code Generation and Optimization (pp. 86-99).
+    - Benchmark synthesis for compiler optimization
+    - Machine learning for optimization decisions
 
 ### Research Papers (2024-2025)
 
-1. **Creal** (PLDI 2024)
-   - "Boosting Compiler Testing by Injecting Real-World Code"
-   - https://github.com/UniCodeSphere/Creal
+11. **Creal** (PLDI 2024)
+    - "Boosting Compiler Testing by Injecting Real-World Code"
+    - https://github.com/UniCodeSphere/Creal
 
-2. **Rustlantis** (OOPSLA 2024)
-   - "Randomized Differential Testing of the Rust Compiler"
-   - https://www.ralfj.de/blog/2024/11/25/rustlantis.html
+12. **Rustlantis** (OOPSLA 2024)
+    - "Randomized Differential Testing of the Rust Compiler"
+    - https://www.ralfj.de/blog/2024/11/25/rustlantis.html
 
-3. **Rust-twins** (ASE 2024)
-   - "Automatic Rust Compiler Testing through Program Mutation and Dual Macros Generation"
+13. **Rust-twins** (ASE 2024)
+    - "Automatic Rust Compiler Testing through Program Mutation and Dual Macros Generation"
 
-4. **DIFFER** (2024)
-   - "Introducing DIFFER, a new tool for testing and validating transformed programs"
-   - https://blog.trailofbits.com/2024/01/31/introducing-differ
-
-5. **Metamorphic Testing**
-   - "Metamorphic Testing: Testing the Untestable"
-   - Various applications to compilers
+14. **DIFFER** (2024)
+    - "Introducing DIFFER, a new tool for testing and validating transformed programs"
+    - https://blog.trailofbits.com/2024/01/31/introducing-differ
 
 ### Existing Ruchy Bugs
 
