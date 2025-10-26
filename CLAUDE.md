@@ -8,9 +8,11 @@ RuchyRuchy is an educational compiler infrastructure project supporting the Ruch
 
 ## 🚨 CRITICAL: Bug Discovery Protocol
 
-**MANDATORY PROCEDURE - ZERO TOLERANCE**
+**MANDATORY PROCEDURE - ZERO TOLERANCE - BLOCKING**
 
-When you discover ANY bug or not-implemented feature in Ruchy:
+When you discover ANY bug or not-implemented feature in Ruchy OR RuchyRuchy:
+
+### Ruchy Compiler Bugs (https://github.com/paiml/ruchy/issues)
 
 1. **STOP THE LINE** - Immediately halt all work
 2. **FILE GITHUB ISSUE** - Create issue at https://github.com/paiml/ruchy/issues
@@ -24,7 +26,7 @@ When you discover ANY bug or not-implemented feature in Ruchy:
    - Impact: how this blocks current work
    - Workaround: if any exists
 
-**Issue Template**:
+**Ruchy Issue Template**:
 ```markdown
 ## Bug Report: [Short Description]
 
@@ -68,11 +70,12 @@ When you discover ANY bug or not-implemented feature in Ruchy:
 - Ruchy install: [Cargo/Binary/etc]
 ```
 
-**After Filing Issue**:
+**After Filing Ruchy Issue**:
 1. Document the bug in BOUNDARIES.md
 2. Implement workaround if possible
 3. Continue with alternative approach
 4. Reference GitHub issue # in commit messages
+5. Update BUG_DISCOVERY_REPORT.md with finding
 
 **Example**:
 ```
@@ -81,6 +84,70 @@ Action: Filed https://github.com/paiml/ruchy/issues/XXX
 Workaround: Using unit variants only for Position tracking
 Status: BOOTSTRAP-002 proceeding with simplified enum design
 ```
+
+### RuchyRuchy Project Bugs (https://github.com/paiml/ruchyruchy/issues)
+
+**MANDATORY - BLOCKING - ALL BUGS MUST BE TRACKED**
+
+When you discover ANY bug in the RuchyRuchy codebase itself (not Ruchy compiler):
+
+1. **FILE GITHUB ISSUE** - Create issue at https://github.com/paiml/ruchyruchy/issues
+2. **CREATE TICKET** - Add to roadmap.yaml with proper ticket ID
+3. **DOCUMENT** - Add to BUG_DISCOVERY_REPORT.md with:
+   - Bug ID (BUG-XXX)
+   - Severity (CRITICAL/HIGH/MEDIUM/LOW)
+   - Discovery technique used
+   - Reproduction steps
+   - Impact assessment
+   - Fix status
+
+**RuchyRuchy Issue Template**:
+```markdown
+## Bug Report: [Short Description]
+
+**Component**: [bootstrap/discovery/validation/etc]
+**Severity**: [CRITICAL/HIGH/MEDIUM/LOW]
+**Discovery**: [Which discovery technique found this]
+**Version**: [ruchyruchy version]
+
+### Reproduction Steps
+1. [Step 1]
+2. [Step 2]
+
+### Expected Behavior
+[What should happen]
+
+### Actual Behavior
+[What actually happens]
+
+### Impact
+[How this affects users/developers]
+
+### Suggested Fix
+[If known]
+```
+
+**Bug Filing Requirements (MANDATORY)**:
+- ✅ ALL bugs MUST have GitHub issue
+- ✅ ALL bugs MUST have ticket in roadmap.yaml
+- ✅ ALL bugs MUST be in BUG_DISCOVERY_REPORT.md
+- ✅ Critical bugs MUST be fixed before release
+- ✅ All bug fixes MUST have tests
+- ✅ All bug fixes MUST update CHANGELOG.md
+
+**Severity Definitions**:
+- **CRITICAL**: Crash, data loss, security vulnerability, blocks all work
+- **HIGH**: Major functionality broken, blocks specific features
+- **MEDIUM**: Minor functionality broken, workaround exists
+- **LOW**: Cosmetic issues, documentation errors
+
+**Bug Discovery Tracking**:
+Every bug discovery session MUST:
+1. Update BUG_DISCOVERY_REPORT.md with findings
+2. File GitHub issues for all CRITICAL and HIGH bugs
+3. Create tickets in roadmap.yaml for fixes
+4. Update CHANGELOG.md with discoveries
+5. Commit with VALID-XXX ticket ID
 
 ## Critical Requirements
 
