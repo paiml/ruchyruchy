@@ -2,7 +2,7 @@
 
 **Project**: RuchyRuchy Bootstrap Compiler
 **Approach**: Pure Ruchy Dogfooding (Phase 2 Validation)
-**Last Updated**: 2025-10-19
+**Last Updated**: 2025-10-26
 
 This document tracks the exact boundaries where Ruchy works and where it has limitations, discovered through comprehensive testing and dogfooding.
 
@@ -1169,5 +1169,182 @@ fun count_chars(input: String) -> i32 {
 3. **Add indexed access** - `input[i]` for direct character access
 4. **Add for-each support** - `for c in input.chars() { }`
 5. **Document recommended pattern** - What's the correct way to iterate?
+
+---
+
+## 📚 MODULE SYSTEM: Multi-File Project Support Unclear (v3.111.0+)
+
+### ❓ Module/Import Syntax Not Documented
+
+**Discovered**: 2025-10-26 during DISCOVERY-001 (Framework Infrastructure) GREEN phase
+**Severity**: **MEDIUM** - Blocks modular project organization
+**Status**: 🟡 **DOCUMENTATION REQUEST** - Unclear if feature exists
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/59
+**Ticket**: DISCOVERY-001
+
+#### Problem Description
+
+The Ruchy language documentation does not explain how to organize multi-file projects with imports/exports. When attempting to create a modular project structure, it's unclear what syntax to use.
+
+#### What We Tried
+
+**Attempted Structure**:
+```
+discovery/
+├── framework/
+│   └── discovery_framework.ruchy  # Define types here
+└── tests/
+    └── test_framework.ruchy       # Use types here
+```
+
+**Attempted Syntax** (all failed):
+```ruchy
+// File: discovery/framework/discovery_framework.ruchy
+struct DiscoveryFramework {
+    initialized: bool,
+}
+
+// Attempt 1: Rust-style export
+pub use DiscoveryFramework;  // ❌ Syntax error
+
+// Attempt 2: Just define (unclear if visible)
+// (No export statement)
+```
+
+```ruchy
+// File: validation/discovery/test_framework.ruchy
+
+// Attempt 1: Rust-style import
+use discovery::framework::discovery_framework::*;  // ❌ Fails to parse
+
+// Attempt 2: Relative path
+use ../discovery/framework/discovery_framework::DiscoveryFramework;  // ❌ Unknown
+```
+
+**Error Message**:
+```
+✗ discovery/framework/discovery_framework.ruchy:271: Syntax error: Expected identifier in import list
+```
+
+#### Workaround Used
+
+**Single-file approach** - Consolidate all code into one file:
+```ruchy
+// File: discovery/framework_simple.ruchy
+// All types and functions in one file
+fun main() { ... }
+fun test_1() { ... }
+fun test_2() { ... }
+// Works but not scalable
+```
+
+#### Questions
+
+1. Does Ruchy support multi-file projects with imports?
+2. What is the correct syntax for exporting types from a module?
+3. What is the correct syntax for importing types into another file?
+4. Are there examples of multi-file Ruchy projects?
+
+#### Impact
+
+- **Current**: Blocks modular implementation of DISCOVERY system
+- **Workaround**: Single-file approach works but limits scalability
+- **Future**: 24-week Discovery implementation will need module system
+
+#### Requested Solutions
+
+1. **Documentation Chapter**: Add "Module System" chapter to Ruchy book
+2. **Example Project**: Provide multi-file project example in Ruchy repository
+3. **Language Reference**: Document import/export grammar and module resolution
+4. **Clarification**: If modules aren't supported yet, document this limitation
+
+---
+
+## 🔧 FORMATTER: ruchy fmt Changes 'fun' to 'fn' (v3.111.0+)
+
+### ❌ ruchy fmt Violates Ruchy Language Specification
+
+**Discovered**: 2025-10-26 during DISCOVERY-001 (Framework Infrastructure) REFACTOR phase
+**Severity**: **MEDIUM** - Breaks formatter workflow
+**Status**: 🔴 **OPEN** - Formatter configuration issue
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/60
+**Ticket**: DISCOVERY-001
+
+#### Problem Description
+
+The `ruchy fmt` command incorrectly transforms the `fun` keyword (correct Ruchy syntax) to `fn` (Rust syntax). This violates Ruchy language conventions where `fun` is the canonical keyword.
+
+#### Minimal Reproduction
+
+**Before `ruchy fmt`** (Correct Ruchy):
+```ruchy
+fun main() {
+    println("Hello");
+}
+
+fun test() {
+    println("Test");
+}
+```
+
+**After `ruchy fmt`** (Incorrect - changed to Rust):
+```ruchy
+fn main() {
+    println("Hello")
+}
+fn test() {
+    println("Test")
+}
+```
+
+**Command**:
+```bash
+$ ruchy fmt discovery/framework_simple.ruchy
+✓ Formatted discovery/framework_simple.ruchy
+
+# All 'fun' keywords changed to 'fn'!
+```
+
+#### Evidence from Existing Code
+
+All RuchyRuchy bootstrap code uses `fun`:
+```bash
+$ grep -E "^(fun|fn) " bootstrap/stage0/lexer.ruchy | head -5
+fun main() {
+fun test_cli_interface() {
+fun test_self_tokenization() {
+fun test_performance() {
+fun test_verification() {
+```
+
+**Interesting Note**: `ruchy check` accepts BOTH `fun` and `fn`:
+```bash
+$ ruchy check discovery/framework_simple.ruchy  # with 'fn'
+✓ Syntax is valid  # Surprisingly accepts 'fn'!
+```
+
+This suggests either:
+- `ruchy check` is too permissive (accepts Rust syntax)
+- `ruchy fmt` has wrong canonical format configured
+
+#### Workaround Used
+
+Manual post-processing after `ruchy fmt`:
+```bash
+ruchy fmt file.ruchy
+sed -i 's/^fn /fun /g' file.ruchy  # Fix formatter output
+```
+
+#### Impact
+
+- **Workflow Disruption**: Cannot use `ruchy fmt` without manual fixes
+- **Inconsistency**: Formatted code diverges from project conventions
+- **Confusion**: Unclear whether `fun` or `fn` is canonical Ruchy syntax
+
+#### Requested Solutions
+
+1. **Fix Formatter**: Update `ruchy fmt` to preserve `fun` keyword
+2. **Canonical Syntax**: Document which keyword is official Ruchy syntax
+3. **Optionally**: Convert `fn` → `fun` (not the other way around)
 
 ---
