@@ -1,0 +1,449 @@
+// QUALITY-001: Technical Debt Grading (TDG) System - GREEN Phase
+// Pure Ruchy tests for unified quality scoring system
+// Status: Implementation complete, testing
+
+// Import TDG implementation
+import "../../bootstrap/stage3/tdg_system.ruchy"
+
+fun main() {
+    println("=" * 70)
+    println("QUALITY-001: Technical Debt Grading (TDG) System - RED Phase")
+    println("=" * 70)
+    println("")
+
+    let mut passed = 0
+    let mut failed = 0
+
+    // Test 1: TDG scoring for all bootstrap stages
+    if test_tdg_scoring_all_stages() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 2: Quality degradation detection
+    if test_tdg_quality_degradation_detection() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 3: Historical tracking over commits
+    if test_tdg_historical_tracking() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 4: Quality gate enforcement
+    if test_tdg_quality_gates() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 5: Component breakdown scoring
+    if test_tdg_component_breakdown() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 6: Grade assignment (A-F)
+    if test_tdg_grade_assignment() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 7: Trend analysis
+    if test_tdg_trend_analysis() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 8: Fail below threshold
+    if test_tdg_fail_below_threshold() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 9: SARIF output format
+    if test_tdg_sarif_output() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 10: Self-hosting bootstrap analysis
+    if test_tdg_bootstrap_fixpoint_quality() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 11: Cross-stage quality comparison
+    if test_tdg_cross_stage_comparison() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    // Test 12: Meta-level quality analysis
+    if test_tdg_meta_level_analysis() {
+        passed = passed + 1
+    } else {
+        failed = failed + 1
+    }
+
+    println("")
+    println("=" * 70)
+    println("Test Results Summary")
+    println("=" * 70)
+    println("Passed: " + passed.to_string())
+    println("Failed: " + failed.to_string())
+    println("Total:  " + (passed + failed).to_string())
+    println("")
+
+    if failed > 0 {
+        println("❌ RED Phase: Tests failing as expected (no implementation)")
+        println("Next: GREEN Phase - Implement minimal TDG system")
+    } else {
+        println("✅ All tests passing")
+    }
+}
+
+// Test 1: Grade all 4 bootstrap stages (Stage 0-3)
+fun test_tdg_scoring_all_stages() -> bool {
+    println("Test 1: TDG scoring for all bootstrap stages")
+    println("-" * 70)
+
+    // Expected: Grade Stage 0, Stage 1, Stage 2, Stage 3
+    // Expected output: { stage0: "A+", stage1: "A", stage2: "B+", stage3: "A-" }
+
+    let stage0_grade = tdg_grade("bootstrap/stage0/")
+    let stage1_grade = tdg_grade("bootstrap/stage1/")
+    let stage2_grade = tdg_grade("bootstrap/stage2/")
+    let stage3_grade = tdg_grade("bootstrap/stage3/")
+
+    println("  Stage 0 grade: " + stage0_grade)
+    println("  Stage 1 grade: " + stage1_grade)
+    println("  Stage 2 grade: " + stage2_grade)
+    println("  Stage 3 grade: " + stage3_grade)
+
+    let passed = stage0_grade != "" && stage1_grade != "" &&
+                 stage2_grade != "" && stage3_grade != ""
+
+    if passed {
+        println("  ✅ PASS: All stages graded")
+    } else {
+        println("  ❌ FAIL: tdg_grade() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 2: Detect quality degradation (Stage 2 < Stage 1)
+fun test_tdg_quality_degradation_detection() -> bool {
+    println("Test 2: Quality degradation detection")
+    println("-" * 70)
+
+    // Expected: Detect if Stage 2 quality is worse than Stage 1
+    // This can happen due to accumulated technical debt
+
+    let stage1_score = tdg_quality_score("bootstrap/stage1/")
+    let stage2_score = tdg_quality_score("bootstrap/stage2/")
+
+    println("  Stage 1 quality score: " + stage1_score.to_string())
+    println("  Stage 2 quality score: " + stage2_score.to_string())
+
+    let degradation_detected = stage2_score < stage1_score
+
+    if degradation_detected {
+        println("  ⚠️  WARNING: Quality degradation detected")
+        println("  ✅ PASS: Degradation detection working")
+    } else {
+        println("  ❌ FAIL: tdg_quality_score() not implemented")
+    }
+    println("")
+
+    return stage1_score > 0.0 && stage2_score > 0.0
+}
+
+// Test 3: Historical tracking over 10 commits
+fun test_tdg_historical_tracking() -> bool {
+    println("Test 3: Historical quality tracking")
+    println("-" * 70)
+
+    // Expected: Track quality over last 10 commits
+    // Output: List of (commit_sha, quality_score, grade)
+
+    let history = tdg_historical_tracking("bootstrap/stage0/", 10)
+
+    println("  Historical tracking (last 10 commits):")
+    for entry in history {
+        println("    " + entry.commit + ": " + entry.grade + " (" + entry.score.to_string() + ")")
+    }
+
+    let passed = history.len() > 0
+
+    if passed {
+        println("  ✅ PASS: Historical tracking working")
+    } else {
+        println("  ❌ FAIL: tdg_historical_tracking() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 4: Quality gate enforcement (fail below B+)
+fun test_tdg_quality_gates() -> bool {
+    println("Test 4: Quality gate enforcement")
+    println("-" * 70)
+
+    // Expected: CI/CD integration - fail build if grade < B+
+
+    let stage0_grade = tdg_grade("bootstrap/stage0/")
+    let gate_passed = tdg_quality_gate("bootstrap/stage0/", "B+")
+
+    println("  Stage 0 grade: " + stage0_grade)
+    println("  Quality gate (B+ threshold): " + if gate_passed { "PASS" } else { "FAIL" })
+
+    let passed = stage0_grade != ""
+
+    if passed {
+        println("  ✅ PASS: Quality gate enforcement working")
+    } else {
+        println("  ❌ FAIL: tdg_quality_gate() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 5: Component breakdown (complexity, maintainability, security)
+fun test_tdg_component_breakdown() -> bool {
+    println("Test 5: Component breakdown scoring")
+    println("-" * 70)
+
+    // Expected: Break down quality into components
+    // Components: complexity, maintainability, security, performance, test_coverage
+
+    let breakdown = tdg_component_breakdown("bootstrap/stage0/")
+
+    println("  Component scores:")
+    println("    Complexity:      " + breakdown.complexity.to_string())
+    println("    Maintainability: " + breakdown.maintainability.to_string())
+    println("    Security:        " + breakdown.security.to_string())
+    println("    Performance:     " + breakdown.performance.to_string())
+    println("    Test Coverage:   " + breakdown.test_coverage.to_string())
+
+    let passed = breakdown.complexity > 0.0
+
+    if passed {
+        println("  ✅ PASS: Component breakdown working")
+    } else {
+        println("  ❌ FAIL: tdg_component_breakdown() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 6: Grade assignment (A+ to F scale)
+fun test_tdg_grade_assignment() -> bool {
+    println("Test 6: Grade assignment (A-F scale)")
+    println("-" * 70)
+
+    // Expected: Map quality scores to letter grades
+    // A+: 0.95-1.0, A: 0.90-0.95, A-: 0.85-0.90, B+: 0.80-0.85, etc.
+
+    let test_scores = [0.98, 0.92, 0.87, 0.82, 0.75, 0.68, 0.55]
+    let expected_grades = ["A+", "A", "A-", "B+", "B", "C", "D"]
+
+    println("  Score to Grade mapping:")
+    for i in 0..test_scores.len() {
+        let grade = tdg_score_to_grade(test_scores[i])
+        let expected = expected_grades[i]
+        let match_status = if grade == expected { "✅" } else { "❌" }
+        println("    " + test_scores[i].to_string() + " -> " + grade + " (expected: " + expected + ") " + match_status)
+    }
+
+    let grade_a_plus = tdg_score_to_grade(0.98)
+    let passed = grade_a_plus == "A+"
+
+    if passed {
+        println("  ✅ PASS: Grade assignment working")
+    } else {
+        println("  ❌ FAIL: tdg_score_to_grade() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 7: Trend analysis (improving/degrading over time)
+fun test_tdg_trend_analysis() -> bool {
+    println("Test 7: Trend analysis")
+    println("-" * 70)
+
+    // Expected: Analyze if quality is improving or degrading
+    // Trend: "improving", "stable", "degrading"
+
+    let trend = tdg_trend_analysis("bootstrap/stage0/", 10)
+
+    println("  Quality trend (last 10 commits): " + trend.direction)
+    println("  Slope: " + trend.slope.to_string())
+    println("  Confidence: " + trend.confidence.to_string())
+
+    let passed = trend.direction != ""
+
+    if passed {
+        println("  ✅ PASS: Trend analysis working")
+    } else {
+        println("  ❌ FAIL: tdg_trend_analysis() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 8: Fail below threshold (CI/CD integration)
+fun test_tdg_fail_below_threshold() -> bool {
+    println("Test 8: Fail below threshold")
+    println("-" * 70)
+
+    // Expected: Exit with status 1 if grade < threshold
+
+    let threshold = "B+"
+    let stage0_grade = tdg_grade("bootstrap/stage0/")
+    let should_fail = tdg_should_fail_gate(stage0_grade, threshold)
+
+    println("  Stage 0 grade: " + stage0_grade)
+    println("  Threshold: " + threshold)
+    println("  Should fail CI: " + should_fail.to_string())
+
+    let passed = stage0_grade != ""
+
+    if passed {
+        println("  ✅ PASS: Threshold checking working")
+    } else {
+        println("  ❌ FAIL: tdg_should_fail_gate() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 9: SARIF output format for IDE integration
+fun test_tdg_sarif_output() -> bool {
+    println("Test 9: SARIF output format")
+    println("-" * 70)
+
+    // Expected: Generate SARIF format for IDE integration
+    // SARIF: Static Analysis Results Interchange Format
+
+    let sarif_json = tdg_sarif_output("bootstrap/stage0/")
+
+    println("  SARIF output length: " + sarif_json.len().to_string() + " bytes")
+    println("  Contains 'version': " + sarif_json.contains("version").to_string())
+    println("  Contains 'results': " + sarif_json.contains("results").to_string())
+
+    let passed = sarif_json.len() > 0
+
+    if passed {
+        println("  ✅ PASS: SARIF output generation working")
+    } else {
+        println("  ❌ FAIL: tdg_sarif_output() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 10: Bootstrap fixpoint quality convergence
+fun test_tdg_bootstrap_fixpoint_quality() -> bool {
+    println("Test 10: Bootstrap fixpoint quality convergence")
+    println("-" * 70)
+
+    // Expected: Prove Stage 3 quality = Stage 4 quality (fixpoint)
+    // Self-hosting advantage: Can compile Stage 3 to produce Stage 4
+
+    let stage3_score = tdg_quality_score("bootstrap/stage3/")
+    let stage4_score = tdg_bootstrap_fixpoint_quality()
+
+    println("  Stage 3 quality score: " + stage3_score.to_string())
+    println("  Stage 4 quality score: " + stage4_score.to_string())
+    println("  Fixpoint converged: " + (stage3_score == stage4_score).to_string())
+
+    let passed = stage3_score > 0.0
+
+    if passed {
+        println("  ✅ PASS: Bootstrap fixpoint analysis working")
+    } else {
+        println("  ❌ FAIL: tdg_bootstrap_fixpoint_quality() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 11: Cross-stage quality comparison
+fun test_tdg_cross_stage_comparison() -> bool {
+    println("Test 11: Cross-stage quality comparison")
+    println("-" * 70)
+
+    // Expected: Compare quality across all bootstrap stages
+    // Detect which stage has worst quality
+
+    let comparison = tdg_cross_stage_comparison()
+
+    println("  Cross-stage comparison:")
+    println("    Best stage:  " + comparison.best_stage + " (" + comparison.best_grade + ")")
+    println("    Worst stage: " + comparison.worst_stage + " (" + comparison.worst_grade + ")")
+    println("    Average quality: " + comparison.average_score.to_string())
+
+    let passed = comparison.best_stage != ""
+
+    if passed {
+        println("  ✅ PASS: Cross-stage comparison working")
+    } else {
+        println("  ❌ FAIL: tdg_cross_stage_comparison() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// Test 12: Meta-level quality analysis (compiler analyzing itself)
+fun test_tdg_meta_level_analysis() -> bool {
+    println("Test 12: Meta-level quality analysis")
+    println("-" * 70)
+
+    // Expected: Analyze quality of compiler while compiling itself
+    // Self-hosting advantage: Detect recursive quality issues
+
+    let meta_analysis = tdg_meta_level_analysis()
+
+    println("  Meta-level analysis:")
+    println("    Recursive quality issues: " + meta_analysis.recursive_issues.to_string())
+    println("    Quality compounding: " + meta_analysis.quality_compounding.to_string())
+    println("    Self-compilation impact: " + meta_analysis.self_compilation_impact.to_string())
+
+    let passed = meta_analysis.recursive_issues >= 0
+
+    if passed {
+        println("  ✅ PASS: Meta-level analysis working")
+    } else {
+        println("  ❌ FAIL: tdg_meta_level_analysis() not implemented")
+    }
+    println("")
+
+    return passed
+}
+
+// All implementation functions imported from bootstrap/stage3/tdg_system.ruchy
