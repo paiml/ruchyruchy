@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- IDE-004: Go-to-Definition & Find References (CYCLE 5)
+- src/lsp/symbols.rs: Symbol tracking and navigation (~280 lines)
+  - SymbolKind enum (Function, Variable, Type, Constant)
+  - Symbol struct with location tracking
+  - SymbolTable implementation with parse_document()
+  - Position-based symbol lookup (find_symbol_at_position)
+  - Reference tracking and retrieval
+- src/lsp/server.rs: Navigation method additions
+  - symbol_tables: HashMap<String, SymbolTable> per document
+  - goto_definition(): Jump to symbol definition
+  - find_references(): Find all symbol uses
+  - Integration with text_document_did_open for symbol parsing
+- src/lsp/protocol.rs: Location type for navigation
+- validation/ide/goto_definition_test.ruchy: Pure Ruchy navigation demo
+- scripts/validate-ide-004.sh: Navigation validation script
+- 6 new Rust tests for navigation (44 total LSP tests passing)
+- IDE-003: Code Completion (CYCLE 5)
+- src/lsp/completion.rs: Code completion provider (~280 lines)
+  - CompletionProvider with get_completions()
+  - 18+ keyword completions (fun, let, if, match, loop, etc.)
+  - 13+ type completions (i8-i64, u8-u64, f32, f64, bool, String, str)
+  - 2+ function completions (println, print)
+  - Snippet support with placeholders ($0, $1, $2)
+  - Documentation for all completion items
+- src/lsp/protocol.rs: CompletionItem and CompletionItemKind types
+- src/lsp/server.rs: get_completions() method integration
+- validation/ide/code_completion_test.ruchy: Pure Ruchy completion demo
+- scripts/validate-ide-003.sh: Code completion validation script
+- 12 new Rust tests for completion (31 total tests passing)
 - IDE-002: VS Code Extension Base (CYCLE 5)
 - vscode-extension/: Complete VS Code extension for Ruchy language support
   - package.json: Extension manifest with dependencies and commands

@@ -101,6 +101,19 @@ pub struct TextDocumentItem {
     pub text: String,
 }
 
+/// Location in a document
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Location {
+    pub uri: String,
+    pub range: Range,
+}
+
+impl Location {
+    pub fn new(uri: String, range: Range) -> Self {
+        Self { uri, range }
+    }
+}
+
 /// Completion item kind
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompletionItemKind {

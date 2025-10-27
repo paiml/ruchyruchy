@@ -3,8 +3,10 @@
 
 use super::completion::CompletionProvider;
 use super::diagnostics::DiagnosticsProvider;
-use super::protocol::{CompletionItem, Diagnostic, Position, TextDocumentItem};
+use super::protocol::{CompletionItem, Diagnostic, Location, Position, TextDocumentItem};
+use super::symbols::SymbolTable;
 use super::text_sync::TextDocumentManager;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// LSP Server state
@@ -12,6 +14,7 @@ pub struct LspServer {
     text_documents: Arc<Mutex<TextDocumentManager>>,
     diagnostics: DiagnosticsProvider,
     completion: CompletionProvider,
+    symbol_tables: Arc<Mutex<HashMap<String, SymbolTable>>>,
     initialized: bool,
 }
 
@@ -22,6 +25,7 @@ impl LspServer {
             text_documents: Arc::new(Mutex::new(TextDocumentManager::new())),
             diagnostics: DiagnosticsProvider::new(),
             completion: CompletionProvider::new(),
+            symbol_tables: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
         }
     }
@@ -47,6 +51,13 @@ impl LspServer {
         let mut docs = self.text_documents.lock().unwrap();
         docs.open(item.uri.clone(), item.version, item.text.clone());
         drop(docs);
+
+        // Parse symbols
+        let mut tables = self.symbol_tables.lock().unwrap();
+        let mut table = SymbolTable::new();
+        table.parse_document(&item.uri, &item.text);
+        tables.insert(item.uri.clone(), table);
+        drop(tables);
 
         // Run diagnostics
         self.diagnostics.check_file(&item.uri, &item.text)
@@ -103,6 +114,68 @@ impl LspServer {
 
         // Get completions from provider
         self.completion.get_completions(text, position)
+    }
+
+    /// Go to definition
+    pub fn goto_definition(&self, uri: &str, position: Position) -> Option<Location> {
+        if !self.initialized {
+            return None;
+        }
+
+        // Get document text
+        let docs = self.text_documents.lock().unwrap();
+        let text = docs.get_text(uri)?;
+
+        // Get symbol table
+        let tables = self.symbol_tables.lock().unwrap();
+        let table = tables.get(uri)?;
+
+        // Find symbol at cursor position
+        let symbol_name = table.find_symbol_at_position(text, position)?;
+
+        // Look up symbol definition
+        let symbol = table.get_symbol(&symbol_name)?;
+
+        Some(symbol.location.clone())
+    }
+
+    /// Find all references
+    pub fn find_references(&self, uri: &str, position: Position) -> Vec<Location> {
+        if !self.initialized {
+            return vec![];
+        }
+
+        // Get document text (convert to owned String to avoid lifetime issues)
+        let text = {
+            let docs = self.text_documents.lock().unwrap();
+            match docs.get_text(uri) {
+                Some(t) => t.to_string(),
+                None => return vec![],
+            }
+        };
+
+        // Get symbol table
+        let tables = self.symbol_tables.lock().unwrap();
+        let table = match tables.get(uri) {
+            Some(t) => t,
+            None => return vec![],
+        };
+
+        // Find symbol at cursor position
+        let symbol_name = match table.find_symbol_at_position(&text, position) {
+            Some(name) => name,
+            None => return vec![],
+        };
+
+        // Get all references
+        let mut locations = table.get_references(&symbol_name);
+
+        // Add the definition location as well
+        if let Some(symbol) = table.get_symbol(&symbol_name) {
+            locations.push(symbol.location.clone());
+        }
+
+        locations
     }
 
     /// Shutdown the server
@@ -254,5 +327,86 @@ mod tests {
 
         let completions = server.get_completions("file:///nonexistent.ruchy", Position::new(0, 0));
         assert_eq!(completions.len(), 0);
+    }
+
+    #[test]
+    fn test_goto_definition() {
+        let mut server = LspServer::new();
+        server.initialize();
+
+        let item = TextDocumentItem {
+            uri: "file:///test.ruchy".to_string(),
+            language_id: "ruchy".to_string(),
+            version: 1,
+            text: "fun main() {\n    let x = 5\n}".to_string(),
+        };
+
+        server.text_document_did_open(item);
+
+        // Test go-to-definition on "main" (position at character 5 on line 0)
+        let location = server.goto_definition("file:///test.ruchy", Position::new(0, 5));
+        assert!(location.is_some());
+        let loc = location.unwrap();
+        assert_eq!(loc.uri, "file:///test.ruchy");
+        assert_eq!(loc.range.start.line, 0);
+
+        // Test go-to-definition on "x" (position at character 8 on line 1)
+        let location = server.goto_definition("file:///test.ruchy", Position::new(1, 8));
+        assert!(location.is_some());
+        let loc = location.unwrap();
+        assert_eq!(loc.uri, "file:///test.ruchy");
+        assert_eq!(loc.range.start.line, 1);
+    }
+
+    #[test]
+    fn test_goto_definition_before_initialize() {
+        let server = LspServer::new();
+        let location = server.goto_definition("file:///test.ruchy", Position::new(0, 0));
+        assert_eq!(location, None);
+    }
+
+    #[test]
+    fn test_goto_definition_nonexistent_document() {
+        let mut server = LspServer::new();
+        server.initialize();
+
+        let location = server.goto_definition("file:///nonexistent.ruchy", Position::new(0, 0));
+        assert_eq!(location, None);
+    }
+
+    #[test]
+    fn test_find_references() {
+        let mut server = LspServer::new();
+        server.initialize();
+
+        let item = TextDocumentItem {
+            uri: "file:///test.ruchy".to_string(),
+            language_id: "ruchy".to_string(),
+            version: 1,
+            text: "fun main() {\n    let x = 5\n}".to_string(),
+        };
+
+        server.text_document_did_open(item);
+
+        // Test find-references on "main" (should find definition)
+        let refs = server.find_references("file:///test.ruchy", Position::new(0, 5));
+        assert_eq!(refs.len(), 1); // Just the definition for now
+        assert_eq!(refs[0].uri, "file:///test.ruchy");
+    }
+
+    #[test]
+    fn test_find_references_before_initialize() {
+        let server = LspServer::new();
+        let refs = server.find_references("file:///test.ruchy", Position::new(0, 0));
+        assert_eq!(refs.len(), 0);
+    }
+
+    #[test]
+    fn test_find_references_nonexistent_document() {
+        let mut server = LspServer::new();
+        server.initialize();
+
+        let refs = server.find_references("file:///nonexistent.ruchy", Position::new(0, 0));
+        assert_eq!(refs.len(), 0);
     }
 }
