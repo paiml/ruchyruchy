@@ -12,6 +12,7 @@ pub mod server;
 pub mod diagnostics;
 pub mod text_sync;
 pub mod completion;
+pub mod symbols;
 
 pub use server::LspServer;
-pub use protocol::{Position, Range, Diagnostic, DiagnosticSeverity, CompletionItem, CompletionItemKind};
+pub use protocol::{Position, Range, Diagnostic, DiagnosticSeverity, CompletionItem, CompletionItemKind, Location};
