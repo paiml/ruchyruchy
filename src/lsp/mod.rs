@@ -11,6 +11,7 @@ pub mod protocol;
 pub mod server;
 pub mod diagnostics;
 pub mod text_sync;
+pub mod completion;
 
 pub use server::LspServer;
-pub use protocol::{Position, Range, Diagnostic, DiagnosticSeverity};
+pub use protocol::{Position, Range, Diagnostic, DiagnosticSeverity, CompletionItem, CompletionItemKind};
