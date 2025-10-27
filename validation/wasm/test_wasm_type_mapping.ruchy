@@ -1,0 +1,214 @@
+// WASM Type Mapping Tests
+// Date: October 23, 2025
+// Part of the RuchyRuchy WASM Compilation Target
+
+// Import type mapping system
+// In production, this would be: import { ... } from "bootstrap/stage3/wasm_types"
+
+// Test basic primitive type mappings
+fun test_primitive_mappings() {
+    // Create mapping system
+    let type_system = create_type_mapping_system();
+    
+    // Test i32 mapping
+    let i32_mapping = get_wasm_type(&type_system, "i32");
+    assert_eq(i32_mapping.ruchy_type, "i32", "i32 Ruchy type should match");
+    assert_eq(i32_mapping.wasm_type, WasmType::I32, "i32 should map to WASM i32");
+    assert_eq(i32_mapping.is_reference, false, "i32 should not be a reference type");
+    
+    // Test bool mapping
+    let bool_mapping = get_wasm_type(&type_system, "bool");
+    assert_eq(bool_mapping.ruchy_type, "bool", "bool Ruchy type should match");
+    assert_eq(bool_mapping.wasm_type, WasmType::I32, "bool should map to WASM i32");
+    assert_eq(bool_mapping.is_reference, false, "bool should not be a reference type");
+    
+    // Test f64 mapping
+    let f64_mapping = get_wasm_type(&type_system, "f64");
+    assert_eq(f64_mapping.ruchy_type, "f64", "f64 Ruchy type should match");
+    assert_eq(f64_mapping.wasm_type, WasmType::F64, "f64 should map to WASM f64");
+    assert_eq(f64_mapping.is_reference, false, "f64 should not be a reference type");
+    
+    println("✅ All primitive type mappings pass!");
+}
+
+// Test string and array reference type mappings
+fun test_reference_mappings() {
+    // Create mapping system
+    let type_system = create_type_mapping_system();
+    
+    // Test String mapping
+    let string_mapping = get_wasm_type(&type_system, "String");
+    assert_eq(string_mapping.ruchy_type, "String", "String Ruchy type should match");
+    assert_eq(string_mapping.wasm_type, WasmType::Memory, "String should use memory");
+    assert_eq(string_mapping.is_reference, true, "String should be a reference type");
+    
+    assert(string_mapping.memory_layout.is_some(), "String should have memory layout");
+    if let Some(layout) = string_mapping.memory_layout {
+        assert_eq(layout.tag, WasmTypeTag::String, "String should have String tag");
+        assert(layout.size >= 8, "String layout should have header size");
+    }
+    
+    // Test Array mapping
+    let array_mapping = get_wasm_type(&type_system, "Array");
+    assert_eq(array_mapping.ruchy_type, "Array", "Array Ruchy type should match");
+    assert_eq(array_mapping.wasm_type, WasmType::Memory, "Array should use memory");
+    assert_eq(array_mapping.is_reference, true, "Array should be a reference type");
+    
+    assert(array_mapping.memory_layout.is_some(), "Array should have memory layout");
+    if let Some(layout) = array_mapping.memory_layout {
+        assert_eq(layout.tag, WasmTypeTag::Array, "Array should have Array tag");
+        assert(layout.size >= 8, "Array layout should have header size");
+    }
+    
+    println("✅ All reference type mappings pass!");
+}
+
+// Test creating specialized array mappings
+fun test_array_specialization() {
+    // Create mapping system
+    let type_system = create_type_mapping_system();
+    
+    // Create array of i32
+    let i32_array = create_array_mapping("i32", &type_system);
+    assert_eq(i32_array.ruchy_type, "Array<i32>", "Array<i32> type should match");
+    assert_eq(i32_array.wasm_type, WasmType::Memory, "Array should use memory");
+    
+    assert(i32_array.memory_layout.is_some(), "Array should have memory layout");
+    if let Some(layout) = i32_array.memory_layout {
+        assert_eq(layout.tag, WasmTypeTag::Array, "Should have Array tag");
+        assert(layout.element_type.is_some(), "Should have element type");
+        
+        if let Some(elem_type) = layout.element_type {
+            assert_eq(elem_type.ruchy_type, "i32", "Element type should be i32");
+            assert_eq(elem_type.wasm_type, WasmType::I32, "Element WASM type should be i32");
+        }
+    }
+    
+    // Create array of String
+    let string_array = create_array_mapping("String", &type_system);
+    assert_eq(string_array.ruchy_type, "Array<String>", "Array<String> type should match");
+    
+    if let Some(layout) = string_array.memory_layout {
+        if let Some(elem_type) = layout.element_type {
+            assert_eq(elem_type.ruchy_type, "String", "Element type should be String");
+            assert_eq(elem_type.wasm_type, WasmType::Memory, "Element should use memory");
+            assert_eq(elem_type.is_reference, true, "Element should be reference");
+        }
+    }
+    
+    println("✅ All array specialization tests pass!");
+}
+
+// Test struct layout calculations
+fun test_struct_layout() {
+    // Create mapping system
+    let type_system = create_type_mapping_system();
+    
+    // Define a simple Point struct
+    let point_fields = [
+        ("x", "f32"),
+        ("y", "f32")
+    ];
+    
+    let point_layout = calculate_struct_layout(point_fields, &type_system);
+    assert_eq(point_layout.tag, WasmTypeTag::Object, "Struct should have Object tag");
+    assert_eq(point_layout.fields.length(), 2, "Point should have 2 fields");
+    
+    // Check field offsets (4-byte alignment)
+    assert_eq(point_layout.fields[0].name, "x", "First field should be x");
+    assert_eq(point_layout.fields[0].offset, 4, "x should be at offset 4 (after tag)");
+    assert_eq(point_layout.fields[1].name, "y", "Second field should be y");
+    assert_eq(point_layout.fields[1].offset, 8, "y should be at offset 8");
+    
+    // Define a more complex struct with mixed types
+    let person_fields = [
+        ("name", "String"),
+        ("age", "i32"),
+        ("height", "f64"),
+        ("active", "bool")
+    ];
+    
+    let person_layout = calculate_struct_layout(person_fields, &type_system);
+    assert_eq(person_layout.fields.length(), 4, "Person should have 4 fields");
+    
+    // Check field types
+    assert_eq(person_layout.fields[0].type_mapping.ruchy_type, "String", "Field should be String");
+    assert_eq(person_layout.fields[1].type_mapping.ruchy_type, "i32", "Field should be i32");
+    assert_eq(person_layout.fields[2].type_mapping.ruchy_type, "f64", "Field should be f64");
+    assert_eq(person_layout.fields[3].type_mapping.ruchy_type, "bool", "Field should be bool");
+    
+    // Check alignment handling (f64 should be 8-byte aligned)
+    assert(person_layout.fields[2].offset % 8 == 0, "f64 field should be 8-byte aligned");
+    
+    println("✅ All struct layout tests pass!");
+}
+
+// Test function type creation
+fun test_function_types() {
+    // Create mapping system
+    let type_system = create_type_mapping_system();
+    
+    // Test simple function: fun add(a: i32, b: i32) -> i32
+    let add_func = create_function_type(
+        ["i32", "i32"],  // params
+        "i32",           // return
+        false,           // not a closure
+        &type_system
+    );
+    
+    assert_eq(add_func.params.length(), 2, "add should have 2 params");
+    assert_eq(add_func.results.length(), 1, "add should have 1 result");
+    assert_eq(add_func.params[0].ruchy_type, "i32", "First param should be i32");
+    assert_eq(add_func.params[1].ruchy_type, "i32", "Second param should be i32");
+    assert_eq(add_func.results[0].ruchy_type, "i32", "Result should be i32");
+    assert_eq(add_func.is_closure, false, "add is not a closure");
+    
+    // Test function string conversion
+    let add_func_str = function_type_to_string(&add_func);
+    assert(add_func_str.contains("(param i32) (param i32) (result i32)"), "Function type string should match");
+    
+    // Test closure function
+    let counter_func = create_function_type(
+        ["i32"],         // params
+        "i32",           // return
+        true,            // is a closure
+        &type_system
+    );
+    
+    assert_eq(counter_func.params.length(), 2, "closure should have 2 params");
+    assert_eq(counter_func.params[0].ruchy_type, "i32", "First param should be closure record");
+    assert_eq(counter_func.params[1].ruchy_type, "i32", "Second param should be i32 value");
+    assert_eq(counter_func.is_closure, true, "counter is a closure");
+    
+    // Test unit return type
+    let void_func = create_function_type(
+        ["String"],      // params
+        "unit",          // return
+        false,           // not a closure
+        &type_system
+    );
+    
+    assert_eq(void_func.results.length(), 0, "void func should have no results");
+    let void_func_str = function_type_to_string(&void_func);
+    assert(!void_func_str.contains("(result"), "Void function should have no result type");
+    
+    println("✅ All function type tests pass!");
+}
+
+// Run all tests
+fun run_wasm_type_mapping_tests() {
+    println("Running WASM Type Mapping Tests...");
+    
+    test_primitive_mappings();
+    test_reference_mappings();
+    test_array_specialization();
+    test_struct_layout();
+    test_function_types();
+    
+    println("✅ All WASM type mapping tests pass!");
+}
+
+// Main test function
+fun main() {
+    run_wasm_type_mapping_tests();
+}

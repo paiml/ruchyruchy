@@ -1,0 +1,419 @@
+// WASM-007: Browser Debugging Integration - Source Map Tests (RED Phase)
+//
+// These tests verify source map generation for WebAssembly debugging.
+// All tests should FAIL in the RED phase, indicating missing implementation.
+
+use std::path::Path;
+use std::collections::HashMap;
+
+// ============================================================================
+// Test 1: Basic Function Source Map
+// ============================================================================
+
+test test_source_map_basic_function() {
+    println("Testing source map generation for basic function...");
+
+    // Simple Ruchy function
+    let source = r#"
+fun add(x: i32, y: i32) -> i32 {
+    return x + y;
+}
+"#;
+
+    // Compile with source map generation
+    let result = compile_with_source_map("test.ruchy", source);
+
+    assert(result.source_map.is_some(), "Should generate source map");
+
+    let source_map = result.source_map.unwrap();
+
+    // Verify source map structure
+    assert(source_map.version == 3, "Should use Source Map v3");
+    assert(source_map.sources.contains(&"test.ruchy"), "Should include source file");
+    assert(source_map.names.contains(&"add"), "Should include function name");
+    assert(!source_map.mappings.is_empty(), "Should have mappings");
+
+    // Verify line mapping
+    let mapping = find_mapping_for_source_line(&source_map, 2);  // Line 2: return statement
+    assert(mapping.is_some(), "Should map return statement");
+
+    println("✅ Basic function source map test passed");
+}
+
+// ============================================================================
+// Test 2: Multiple Functions Source Map
+// ============================================================================
+
+test test_source_map_multiple_functions() {
+    println("Testing source map for multiple functions...");
+
+    let source = r#"
+fun add(x: i32, y: i32) -> i32 {
+    return x + y;
+}
+
+fun sub(x: i32, y: i32) -> i32 {
+    return x - y;
+}
+
+fun mul(x: i32, y: i32) -> i32 {
+    return x * y;
+}
+"#;
+
+    let result = compile_with_source_map("multi.ruchy", source);
+    let source_map = result.source_map.unwrap();
+
+    // Verify all function names
+    assert(source_map.names.contains(&"add"), "Should include 'add'");
+    assert(source_map.names.contains(&"sub"), "Should include 'sub'");
+    assert(source_map.names.contains(&"mul"), "Should include 'mul'");
+
+    // Verify each function has mappings
+    let add_mapping = find_mapping_for_name(&source_map, "add");
+    let sub_mapping = find_mapping_for_name(&source_map, "sub");
+    let mul_mapping = find_mapping_for_name(&source_map, "mul");
+
+    assert(add_mapping.is_some(), "Should map 'add' function");
+    assert(sub_mapping.is_some(), "Should map 'sub' function");
+    assert(mul_mapping.is_some(), "Should map 'mul' function");
+
+    println("✅ Multiple functions source map test passed");
+}
+
+// ============================================================================
+// Test 3: Expression Mappings
+// ============================================================================
+
+test test_source_map_expressions() {
+    println("Testing source map for complex expressions...");
+
+    let source = r#"
+fun calc(x: i32, y: i32) -> i32 {
+    let a = x + y;
+    let b = a * 2;
+    let c = b - x;
+    return c;
+}
+"#;
+
+    let result = compile_with_source_map("expr.ruchy", source);
+    let source_map = result.source_map.unwrap();
+
+    // Verify mappings for each line
+    assert(find_mapping_for_source_line(&source_map, 2).is_some(), "Should map line 2 (a = x + y)");
+    assert(find_mapping_for_source_line(&source_map, 3).is_some(), "Should map line 3 (b = a * 2)");
+    assert(find_mapping_for_source_line(&source_map, 4).is_some(), "Should map line 4 (c = b - x)");
+    assert(find_mapping_for_source_line(&source_map, 5).is_some(), "Should map line 5 (return c)");
+
+    println("✅ Expression mappings test passed");
+}
+
+// ============================================================================
+// Test 4: Control Flow Mappings
+// ============================================================================
+
+test test_source_map_control_flow() {
+    println("Testing source map for control flow...");
+
+    let source = r#"
+fun max(x: i32, y: i32) -> i32 {
+    if x > y {
+        return x;
+    } else {
+        return y;
+    }
+}
+"#;
+
+    let result = compile_with_source_map("control.ruchy", source);
+    let source_map = result.source_map.unwrap();
+
+    // Verify mappings for control flow
+    assert(find_mapping_for_source_line(&source_map, 2).is_some(), "Should map if condition");
+    assert(find_mapping_for_source_line(&source_map, 3).is_some(), "Should map then branch");
+    assert(find_mapping_for_source_line(&source_map, 5).is_some(), "Should map else branch");
+
+    println("✅ Control flow mappings test passed");
+}
+
+// ============================================================================
+// Test 5: Multi-File Source Map
+// ============================================================================
+
+test test_source_map_multi_file() {
+    println("Testing source map for multiple files...");
+
+    let file1 = ("module_a.ruchy", "pub fun func_a() -> i32 { return 42; }");
+    let file2 = ("module_b.ruchy", "pub fun func_b() -> i32 { return 99; }");
+
+    let result = compile_multi_file_with_source_map(vec![file1, file2]);
+    let source_map = result.source_map.unwrap();
+
+    // Verify both files included
+    assert(source_map.sources.contains(&"module_a.ruchy"), "Should include module_a.ruchy");
+    assert(source_map.sources.contains(&"module_b.ruchy"), "Should include module_b.ruchy");
+
+    // Verify both functions mapped
+    assert(source_map.names.contains(&"func_a"), "Should include func_a");
+    assert(source_map.names.contains(&"func_b"), "Should include func_b");
+
+    println("✅ Multi-file source map test passed");
+}
+
+// ============================================================================
+// Test 6: Source Map Format Compliance
+// ============================================================================
+
+test test_source_map_format_compliance() {
+    println("Testing source map format compliance...");
+
+    let source = "fun test() -> i32 { return 1; }";
+    let result = compile_with_source_map("test.ruchy", source);
+
+    let source_map = result.source_map.unwrap();
+
+    // Verify required fields
+    assert(source_map.version == 3, "Version must be 3");
+    assert(!source_map.sources.is_empty(), "Sources must not be empty");
+    assert(!source_map.mappings.is_empty(), "Mappings must not be empty");
+
+    // Verify JSON serialization
+    let json = source_map.to_json();
+    assert(is_valid_json(&json), "Should produce valid JSON");
+
+    // Verify schema compliance
+    assert(json.contains("\"version\":3"), "JSON should have version field");
+    assert(json.contains("\"sources\":["), "JSON should have sources array");
+    assert(json.contains("\"mappings\":"), "JSON should have mappings field");
+
+    println("✅ Format compliance test passed");
+}
+
+// ============================================================================
+// Test 7: Names Section Population
+// ============================================================================
+
+test test_source_map_names_section() {
+    println("Testing source map names section...");
+
+    let source = r#"
+fun process(input: i32, factor: i32) -> i32 {
+    let result = input * factor;
+    let adjusted = result + 10;
+    return adjusted;
+}
+"#;
+
+    let result = compile_with_source_map("names.ruchy", source);
+    let source_map = result.source_map.unwrap();
+
+    // Verify function name
+    assert(source_map.names.contains(&"process"), "Should include function name");
+
+    // Verify parameter names
+    assert(source_map.names.contains(&"input"), "Should include parameter 'input'");
+    assert(source_map.names.contains(&"factor"), "Should include parameter 'factor'");
+
+    // Verify local variable names
+    assert(source_map.names.contains(&"result"), "Should include variable 'result'");
+    assert(source_map.names.contains(&"adjusted"), "Should include variable 'adjusted'");
+
+    println("✅ Names section test passed");
+}
+
+// ============================================================================
+// Test 8: Inline Source Content
+// ============================================================================
+
+test test_source_map_inline_content() {
+    println("Testing source map inline content...");
+
+    let source = "fun hello() -> i32 { return 42; }";
+    let result = compile_with_source_map("inline.ruchy", source);
+
+    let source_map = result.source_map.unwrap();
+
+    // Verify sourcesContent field
+    assert(!source_map.sources_content.is_empty(), "Should have sources content");
+    assert(source_map.sources_content[0] == source, "Content should match original source");
+
+    println("✅ Inline source content test passed");
+}
+
+// ============================================================================
+// Test 9: Mapping Accuracy
+// ============================================================================
+
+test test_source_map_accuracy() {
+    println("Testing source map accuracy...");
+
+    let source = r#"
+fun test() -> i32 {
+    let x = 10;
+    let y = 20;
+    return x + y;
+}
+"#;
+
+    let result = compile_with_source_map("accuracy.ruchy", source);
+    let source_map = result.source_map.unwrap();
+
+    // Test specific line mapping
+    let line_3_mapping = find_mapping_for_source_line(&source_map, 3);  // let x = 10;
+    assert(line_3_mapping.is_some(), "Should map line 3");
+
+    let mapping = line_3_mapping.unwrap();
+
+    // Verify mapping accuracy (WASM offset should be close to actual instruction)
+    let wasm_offset = mapping.generated_column;
+    let expected_offset = result.function_offsets.get("test").unwrap();
+
+    let offset_diff = if wasm_offset > *expected_offset {
+        wasm_offset - expected_offset
+    } else {
+        expected_offset - wasm_offset
+    };
+
+    assert(offset_diff < 5, format!("Mapping should be accurate within 5 bytes, got {}", offset_diff));
+
+    println("✅ Mapping accuracy test passed");
+}
+
+// ============================================================================
+// Test 10: Optimization Resilience
+// ============================================================================
+
+test test_source_map_optimization_resilience() {
+    println("Testing source map with optimizations...");
+
+    let source = r#"
+fun optimize_me() -> i32 {
+    let a = 10;
+    let b = 20;
+    let c = a + b;
+    return c;
+}
+"#;
+
+    // Compile with optimizations enabled
+    let result = compile_with_source_map_optimized("opt.ruchy", source);
+    let source_map = result.source_map.unwrap();
+
+    // Even with optimizations, source map should be valid
+    assert(!source_map.mappings.is_empty(), "Should have mappings after optimization");
+    assert(source_map.names.contains(&"optimize_me"), "Should preserve function name");
+
+    // At least function entry should be mapped
+    let entry_mapping = find_mapping_for_name(&source_map, "optimize_me");
+    assert(entry_mapping.is_some(), "Should map function entry even after optimization");
+
+    println("✅ Optimization resilience test passed");
+}
+
+// ============================================================================
+// Helper Types (will fail in RED - not implemented)
+// ============================================================================
+
+struct CompileResult {
+    wasm_binary: Vec<u8>,
+    source_map: Option<SourceMap>,
+    function_offsets: HashMap<String, u32>,
+}
+
+struct SourceMap {
+    version: u32,
+    sources: Vec<String>,
+    names: Vec<String>,
+    mappings: String,
+    sources_content: Vec<String>,
+}
+
+impl SourceMap {
+    fun to_json(&self) -> String {
+        panic!("Source map JSON serialization not implemented");
+    }
+}
+
+struct Mapping {
+    generated_line: u32,
+    generated_column: u32,
+    source_index: u32,
+    source_line: u32,
+    source_column: u32,
+    name_index: Option<u32>,
+}
+
+// ============================================================================
+// Helper Functions (will fail in RED - not implemented)
+// ============================================================================
+
+fun compile_with_source_map(path: &str, source: &str) -> CompileResult {
+    panic!("Source map generation not implemented");
+}
+
+fun compile_multi_file_with_source_map(files: Vec<(&str, &str)>) -> CompileResult {
+    panic!("Multi-file source map generation not implemented");
+}
+
+fun compile_with_source_map_optimized(path: &str, source: &str) -> CompileResult {
+    panic!("Optimized source map generation not implemented");
+}
+
+fun find_mapping_for_source_line(source_map: &SourceMap, line: u32) -> Option<Mapping> {
+    panic!("Source map query not implemented");
+}
+
+fun find_mapping_for_name(source_map: &SourceMap, name: &str) -> Option<Mapping> {
+    panic!("Name-based source map query not implemented");
+}
+
+fun is_valid_json(json: &str) -> bool {
+    panic!("JSON validation not implemented");
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("=== WASM-007: Source Map Tests (RED Phase) ===");
+    println("All tests should FAIL - implementation not yet done");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    let tests = vec![
+        ("Basic Function Source Map", test_source_map_basic_function),
+        ("Multiple Functions Source Map", test_source_map_multiple_functions),
+        ("Expression Mappings", test_source_map_expressions),
+        ("Control Flow Mappings", test_source_map_control_flow),
+        ("Multi-File Source Map", test_source_map_multi_file),
+        ("Source Map Format Compliance", test_source_map_format_compliance),
+        ("Names Section Population", test_source_map_names_section),
+        ("Inline Source Content", test_source_map_inline_content),
+        ("Mapping Accuracy", test_source_map_accuracy),
+        ("Optimization Resilience", test_source_map_optimization_resilience),
+    ];
+
+    for (name, test_fn) in tests {
+        println("\\nRunning: {}", name);
+        match std::panic::catch_unwind(test_fn) {
+            Ok(_) => {
+                println!("❌ UNEXPECTED PASS: {}", name);
+                passed += 1;
+            },
+            Err(e) => {
+                println!("✅ EXPECTED FAIL: {}", name);
+                println!("   Reason: {:?}", e);
+                failed += 1;
+            }
+        }
+    }
+
+    println!("\\n=== Test Summary ===");
+    println!("Expected Failures: {}", failed);
+    println!("Unexpected Passes: {}", passed);
+    println!("\\n✅ RED Phase: All tests failing as expected!");
+}

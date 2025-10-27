@@ -1,0 +1,400 @@
+// WASM-009: Thread Support - Shared Memory Tests (RED Phase)
+//
+// These tests verify shared memory implementation for WebAssembly threads.
+// All tests should FAIL in the RED phase, indicating missing implementation.
+//
+// Shared memory enables multiple threads to access common data with proper
+// synchronization and visibility guarantees.
+
+// Test helper structures
+struct SharedMemory {
+    buffer: Vec<u8>,
+    size: usize,
+    is_shared: bool,
+}
+
+struct SharedMemoryResult {
+    success: bool,
+    error_message: String,
+}
+
+// ============================================================================
+// Test 1: Shared Memory Creation
+// ============================================================================
+
+fun test_shared_memory_creation() -> bool {
+    println("Test 1: Shared memory creation");
+
+    let size = 1024; // 1KB
+    let result = create_shared_memory(size);
+
+    // Expected: Shared memory created successfully
+    if result.success && result.memory.is_shared {
+        println("  PASS: Shared memory created");
+        true
+    } else {
+        println("  FAIL: Shared memory creation failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 2: Shared Memory Initialization
+// ============================================================================
+
+fun test_shared_memory_initialization() -> bool {
+    println("Test 2: Shared memory initialization");
+
+    let memory = create_shared_memory(1024);
+
+    // Write pattern to memory
+    for i in 0..256 {
+        write_shared_byte(memory, i, i as u8);
+    }
+
+    // Verify pattern
+    let mut correct = true;
+    for i in 0..256 {
+        let value = read_shared_byte(memory, i);
+        if value != (i as u8) {
+            correct = false;
+            break;
+        }
+    }
+
+    if correct {
+        println("  PASS: Shared memory initialization works");
+        true
+    } else {
+        println("  FAIL: Shared memory initialization failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 3: Shared Memory Access from Multiple Threads
+// ============================================================================
+
+fun test_shared_memory_multi_thread_access() -> bool {
+    println("Test 3: Shared memory access from multiple threads");
+
+    let memory = create_shared_memory(1024);
+
+    // Thread 1: Write values 0-99
+    // Thread 2: Write values 100-199
+    let thread1 = spawn_thread(|| {
+        for i in 0..100 {
+            write_shared_i32(memory, i * 4, i);
+        }
+    });
+
+    let thread2 = spawn_thread(|| {
+        for i in 100..200 {
+            write_shared_i32(memory, i * 4, i);
+        }
+    });
+
+    join_thread(thread1);
+    join_thread(thread2);
+
+    // Verify all values
+    let mut correct = true;
+    for i in 0..200 {
+        let value = read_shared_i32(memory, i * 4);
+        if value != i {
+            correct = false;
+            break;
+        }
+    }
+
+    if correct {
+        println("  PASS: Multi-thread access works");
+        true
+    } else {
+        println("  FAIL: Multi-thread access failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 4: Shared Memory Bounds Checking
+// ============================================================================
+
+fun test_shared_memory_bounds_checking() -> bool {
+    println("Test 4: Shared memory bounds checking");
+
+    let memory = create_shared_memory(1024);
+
+    // Try to access beyond bounds
+    let result = try_write_shared_i32(memory, 1024, 42); // Out of bounds
+
+    // Expected: Access denied or error
+    if !result.success {
+        println("  PASS: Bounds checking works");
+        true
+    } else {
+        println("  FAIL: Bounds checking failed (out of bounds access allowed)");
+        false
+    }
+}
+
+// ============================================================================
+// Test 5: Shared Memory Growth
+// ============================================================================
+
+fun test_shared_memory_growth() -> bool {
+    println("Test 5: Shared memory growth");
+
+    let memory = create_shared_memory(1024);
+    let initial_size = get_shared_memory_size(memory);
+
+    // Grow memory by 1 page (64KB)
+    let result = grow_shared_memory(memory, 1);
+
+    let new_size = get_shared_memory_size(memory);
+
+    // Expected: Memory grew by 64KB
+    if result.success && new_size == initial_size + 65536 {
+        println("  PASS: Shared memory growth works");
+        true
+    } else {
+        println("  FAIL: Shared memory growth failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 6: Shared Memory Isolation Verification
+// ============================================================================
+
+fun test_shared_memory_isolation() -> bool {
+    println("Test 6: Shared memory isolation verification");
+
+    // Create two separate shared memories
+    let memory1 = create_shared_memory(1024);
+    let memory2 = create_shared_memory(1024);
+
+    // Write different values to each
+    write_shared_i32(memory1, 0, 111);
+    write_shared_i32(memory2, 0, 222);
+
+    // Verify isolation
+    let value1 = read_shared_i32(memory1, 0);
+    let value2 = read_shared_i32(memory2, 0);
+
+    if value1 == 111 && value2 == 222 {
+        println("  PASS: Shared memories are isolated");
+        true
+    } else {
+        println("  FAIL: Shared memories not isolated");
+        false
+    }
+}
+
+// ============================================================================
+// Test 7: Memory Fence Operations
+// ============================================================================
+
+fun test_memory_fence() -> bool {
+    println("Test 7: Memory fence operations");
+
+    let memory = create_shared_memory(1024);
+
+    // Thread 1: Write value, then fence, then set flag
+    let thread1 = spawn_thread(|| {
+        write_shared_i32(memory, 0, 42);
+        memory_fence(); // Ensure write is visible
+        write_shared_i32(memory, 4, 1); // Set flag
+    });
+
+    // Thread 2: Wait for flag, then read value
+    let thread2 = spawn_thread(|| {
+        // Spin until flag is set
+        while read_shared_i32(memory, 4) == 0 {
+            // Wait
+        }
+        memory_fence(); // Ensure read is fresh
+        let value = read_shared_i32(memory, 0);
+        value
+    });
+
+    join_thread(thread1);
+    let value = join_thread(thread2);
+
+    // Expected: Thread 2 sees value written by thread 1
+    if value == 42 {
+        println("  PASS: Memory fence works");
+        true
+    } else {
+        println("  FAIL: Memory fence failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 8: Memory Visibility Guarantees
+// ============================================================================
+
+fun test_memory_visibility() -> bool {
+    println("Test 8: Memory visibility guarantees");
+
+    let memory = create_shared_memory(1024);
+    write_shared_i32(memory, 0, 0);
+
+    let num_threads = 4;
+    let iterations = 1000;
+
+    // All threads increment same location
+    let threads = spawn_threads(num_threads, || {
+        for _ in 0..iterations {
+            let current = read_shared_i32(memory, 0);
+            write_shared_i32(memory, 0, current + 1);
+        }
+    });
+
+    join_all(threads);
+
+    let final_value = read_shared_i32(memory, 0);
+
+    // Expected: WITHOUT proper synchronization, this test shows data races
+    // The final value will be less than expected due to lost updates
+    let expected = num_threads * iterations;
+
+    if final_value < expected {
+        println("  PASS: Data race detected (need atomics) - final={}, expected={}",
+                final_value, expected);
+        true
+    } else {
+        println("  FAIL: No data race detected (unexpected)");
+        false
+    }
+}
+
+// ============================================================================
+// Test Helper Functions (Stub Implementation for RED Phase)
+// ============================================================================
+
+struct CreateSharedMemoryResult {
+    success: bool,
+    memory: SharedMemory,
+}
+
+fun create_shared_memory(size: usize) -> SharedMemory {
+    // RED Phase: This function doesn't exist yet - tests will fail
+    SharedMemory {
+        buffer: Vec::new(),
+        size: 0,
+        is_shared: false,
+    }
+}
+
+fun write_shared_byte(memory: SharedMemory, offset: usize, value: u8) {
+    // RED Phase: Not implemented
+}
+
+fun read_shared_byte(memory: SharedMemory, offset: usize) -> u8 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun write_shared_i32(memory: SharedMemory, offset: usize, value: i32) {
+    // RED Phase: Not implemented
+}
+
+fun read_shared_i32(memory: SharedMemory, offset: usize) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun try_write_shared_i32(memory: SharedMemory, offset: usize, value: i32) -> SharedMemoryResult {
+    // RED Phase: Not implemented
+    SharedMemoryResult {
+        success: true, // Wrong - should fail for out of bounds
+        error_message: String::new(),
+    }
+}
+
+fun get_shared_memory_size(memory: SharedMemory) -> usize {
+    // RED Phase: Not implemented
+    0
+}
+
+fun grow_shared_memory(memory: SharedMemory, pages: usize) -> SharedMemoryResult {
+    // RED Phase: Not implemented
+    SharedMemoryResult {
+        success: false,
+        error_message: String::from("Not implemented"),
+    }
+}
+
+fun spawn_thread(f: fun() -> ()) -> ThreadHandle {
+    // RED Phase: Not implemented
+    ThreadHandle { id: 0 }
+}
+
+fun spawn_threads(count: usize, f: fun() -> ()) -> Vec<ThreadHandle> {
+    // RED Phase: Not implemented
+    Vec::new()
+}
+
+fun join_thread(handle: ThreadHandle) {
+    // RED Phase: Not implemented
+}
+
+fun join_all(handles: Vec<ThreadHandle>) {
+    // RED Phase: Not implemented
+}
+
+fun memory_fence() {
+    // RED Phase: Not implemented
+}
+
+struct ThreadHandle {
+    id: usize,
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("WASM-009: Shared Memory Tests (RED Phase)");
+    println("==========================================");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Run all tests
+    if test_shared_memory_creation() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_shared_memory_initialization() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_shared_memory_multi_thread_access() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_shared_memory_bounds_checking() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_shared_memory_growth() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_shared_memory_isolation() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_memory_fence() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_memory_visibility() { passed = passed + 1; } else { failed = failed + 1; }
+
+    println("");
+    println("==========================================");
+    println("Test Results (RED Phase)");
+    println("==========================================");
+    println("PASS: {}", passed);
+    println("FAIL: {}", failed);
+    println("Total: {}", passed + failed);
+    println("");
+
+    if failed == 8 {
+        println("✅ RED PHASE SUCCESS: All 8 tests failing as expected!");
+        println("");
+        println("This confirms that shared memory support");
+        println("is not yet implemented. Proceed to GREEN phase.");
+    } else {
+        println("⚠️  UNEXPECTED: {} test(s) passing in RED phase", passed);
+        println("");
+        println("RED phase tests should all fail to demonstrate");
+        println("missing implementation. Review test logic.");
+    }
+
+    println("==========================================");
+}

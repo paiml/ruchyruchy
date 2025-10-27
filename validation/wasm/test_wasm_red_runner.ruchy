@@ -1,0 +1,47 @@
+// test_wasm_red_runner.ruchy
+// Test runner for RED phase of WASM-001: WASM Type Mapping
+// This file verifies that our tests fail as expected before implementation
+
+fun test_expected_failures() {
+    println("Running WASM Type Mapping RED phase tests");
+    println("Expecting failures since implementation doesn't exist yet");
+    
+    // Run the test file, expecting it to fail since we haven't implemented
+    // the actual WASM emitter yet
+    let result = execute("ruchy run validation/wasm/test_wasm_emitter_red.ruchy");
+    
+    // The test should fail to compile due to missing implementations
+    assert(!result.success, "Tests should fail in RED phase");
+    
+    // Check that the error messages mention the missing components
+    let stderr = result.stderr;
+    
+    // Verify expected error messages
+    assert(stderr.contains("bootstrap::stage3::WasmEmitter"), 
+           "Error should mention missing WasmEmitter type");
+    assert(stderr.contains("bootstrap::stage3::RuchyWasmType"), 
+           "Error should mention missing RuchyWasmType");
+    
+    println("✅ RED phase verification successful - tests fail as expected");
+}
+
+// Helper function to execute a command
+fun execute(cmd) {
+    println("Executing: " + cmd);
+    
+    let process = spawn(cmd);
+    let stdout = process.stdout;
+    let stderr = process.stderr;
+    let status = process.status;
+    
+    return {
+        stdout: stdout,
+        stderr: stderr,
+        success: status == 0,
+        status: status
+    };
+}
+
+fun main() {
+    test_expected_failures();
+}

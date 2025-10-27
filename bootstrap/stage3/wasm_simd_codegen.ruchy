@@ -1,0 +1,844 @@
+//
+// WASM-004: WebAssembly SIMD Support - Code Generation
+//
+// This file contains the code generation for WebAssembly SIMD instructions.
+// It translates Ruchy SIMD operations into WebAssembly bytecode.
+//
+
+import { WasmOpcode, WasmInstruction, WasmModule, WasmFunction } from "./wasm_types";
+import { VectorType, VectorBinaryOp, VectorUnaryOp, VectorLaneOp, VectorMemoryOp } from "./simd_types";
+import { Type } from "../../bootstrap/stage2/type_environment";
+import { Expression, BinaryOp, UnaryOp, MemoryOp } from "../../bootstrap/stage1/ast";
+
+// -----------------------------------------------------------------------------
+// WebAssembly SIMD Instruction Opcodes
+// -----------------------------------------------------------------------------
+
+// WebAssembly SIMD instruction opcodes
+// Based on the WebAssembly SIMD proposal: https://github.com/WebAssembly/simd
+enum WasmSimdOpcode {
+    // Vector creation
+    V128Const = 0xFD00,
+    I8x16Splat = 0xFD0F,
+    I16x8Splat = 0xFD10,
+    I32x4Splat = 0xFD11,
+    I64x2Splat = 0xFD12,
+    F32x4Splat = 0xFD13,
+    F64x2Splat = 0xFD14,
+    
+    // Vector lane access
+    I8x16ExtractLaneS = 0xFD15,
+    I8x16ExtractLaneU = 0xFD16,
+    I8x16ReplaceLane = 0xFD17,
+    I16x8ExtractLaneS = 0xFD18,
+    I16x8ExtractLaneU = 0xFD19,
+    I16x8ReplaceLane = 0xFD1A,
+    I32x4ExtractLane = 0xFD1B,
+    I32x4ReplaceLane = 0xFD1C,
+    I64x2ExtractLane = 0xFD1D,
+    I64x2ReplaceLane = 0xFD1E,
+    F32x4ExtractLane = 0xFD1F,
+    F32x4ReplaceLane = 0xFD20,
+    F64x2ExtractLane = 0xFD21,
+    F64x2ReplaceLane = 0xFD22,
+    
+    // Vector arithmetic operations
+    I8x16Eq = 0xFD23,
+    I8x16Ne = 0xFD24,
+    I8x16LtS = 0xFD25,
+    I8x16LtU = 0xFD26,
+    I8x16GtS = 0xFD27,
+    I8x16GtU = 0xFD28,
+    I8x16LeS = 0xFD29,
+    I8x16LeU = 0xFD2A,
+    I8x16GeS = 0xFD2B,
+    I8x16GeU = 0xFD2C,
+    I16x8Eq = 0xFD2D,
+    I16x8Ne = 0xFD2E,
+    I16x8LtS = 0xFD2F,
+    I16x8LtU = 0xFD30,
+    I16x8GtS = 0xFD31,
+    I16x8GtU = 0xFD32,
+    I16x8LeS = 0xFD33,
+    I16x8LeU = 0xFD34,
+    I16x8GeS = 0xFD35,
+    I16x8GeU = 0xFD36,
+    I32x4Eq = 0xFD37,
+    I32x4Ne = 0xFD38,
+    I32x4LtS = 0xFD39,
+    I32x4LtU = 0xFD3A,
+    I32x4GtS = 0xFD3B,
+    I32x4GtU = 0xFD3C,
+    I32x4LeS = 0xFD3D,
+    I32x4LeU = 0xFD3E,
+    I32x4GeS = 0xFD3F,
+    I32x4GeU = 0xFD40,
+    I64x2Eq = 0xFD41,
+    I64x2Ne = 0xFD42,
+    I64x2LtS = 0xFD43,
+    I64x2GtS = 0xFD44,
+    I64x2LeS = 0xFD45,
+    I64x2GeS = 0xFD46,
+    F32x4Eq = 0xFD47,
+    F32x4Ne = 0xFD48,
+    F32x4Lt = 0xFD49,
+    F32x4Gt = 0xFD4A,
+    F32x4Le = 0xFD4B,
+    F32x4Ge = 0xFD4C,
+    F64x2Eq = 0xFD4D,
+    F64x2Ne = 0xFD4E,
+    F64x2Lt = 0xFD4F,
+    F64x2Gt = 0xFD50,
+    F64x2Le = 0xFD51,
+    F64x2Ge = 0xFD52,
+    
+    // Vector bitwise operations
+    V128Not = 0xFD53,
+    V128And = 0xFD54,
+    V128AndNot = 0xFD55,
+    V128Or = 0xFD56,
+    V128Xor = 0xFD57,
+    V128BitSelect = 0xFD58,
+    V128AnyTrue = 0xFD59,
+    
+    // Vector integer operations
+    I8x16Abs = 0xFD5A,
+    I8x16Neg = 0xFD5B,
+    I8x16AllTrue = 0xFD5C,
+    I8x16Bitmask = 0xFD5D,
+    I8x16NarrowI16x8S = 0xFD5E,
+    I8x16NarrowI16x8U = 0xFD5F,
+    I8x16Shl = 0xFD60,
+    I8x16ShrS = 0xFD61,
+    I8x16ShrU = 0xFD62,
+    I8x16Add = 0xFD63,
+    I8x16AddSatS = 0xFD64,
+    I8x16AddSatU = 0xFD65,
+    I8x16Sub = 0xFD66,
+    I8x16SubSatS = 0xFD67,
+    I8x16SubSatU = 0xFD68,
+    I8x16MinS = 0xFD69,
+    I8x16MinU = 0xFD6A,
+    I8x16MaxS = 0xFD6B,
+    I8x16MaxU = 0xFD6C,
+    I8x16AvgrU = 0xFD6D,
+    
+    I16x8Abs = 0xFD6E,
+    I16x8Neg = 0xFD6F,
+    I16x8AllTrue = 0xFD70,
+    I16x8Bitmask = 0xFD71,
+    I16x8NarrowI32x4S = 0xFD72,
+    I16x8NarrowI32x4U = 0xFD73,
+    I16x8WidenLowI8x16S = 0xFD74,
+    I16x8WidenHighI8x16S = 0xFD75,
+    I16x8WidenLowI8x16U = 0xFD76,
+    I16x8WidenHighI8x16U = 0xFD77,
+    I16x8Shl = 0xFD78,
+    I16x8ShrS = 0xFD79,
+    I16x8ShrU = 0xFD7A,
+    I16x8Add = 0xFD7B,
+    I16x8AddSatS = 0xFD7C,
+    I16x8AddSatU = 0xFD7D,
+    I16x8Sub = 0xFD7E,
+    I16x8SubSatS = 0xFD7F,
+    I16x8SubSatU = 0xFD80,
+    I16x8Mul = 0xFD81,
+    I16x8MinS = 0xFD82,
+    I16x8MinU = 0xFD83,
+    I16x8MaxS = 0xFD84,
+    I16x8MaxU = 0xFD85,
+    I16x8AvgrU = 0xFD86,
+    
+    I32x4Abs = 0xFD87,
+    I32x4Neg = 0xFD88,
+    I32x4AllTrue = 0xFD89,
+    I32x4Bitmask = 0xFD8A,
+    I32x4WidenLowI16x8S = 0xFD8B,
+    I32x4WidenHighI16x8S = 0xFD8C,
+    I32x4WidenLowI16x8U = 0xFD8D,
+    I32x4WidenHighI16x8U = 0xFD8E,
+    I32x4Shl = 0xFD8F,
+    I32x4ShrS = 0xFD90,
+    I32x4ShrU = 0xFD91,
+    I32x4Add = 0xFD92,
+    I32x4Sub = 0xFD93,
+    I32x4Mul = 0xFD94,
+    I32x4MinS = 0xFD95,
+    I32x4MinU = 0xFD96,
+    I32x4MaxS = 0xFD97,
+    I32x4MaxU = 0xFD98,
+    I32x4DotI16x8S = 0xFD99,
+    
+    I64x2Abs = 0xFD9A,
+    I64x2Neg = 0xFD9B,
+    I64x2AllTrue = 0xFD9C,
+    I64x2Bitmask = 0xFD9D,
+    I64x2WidenLowI32x4S = 0xFD9E,
+    I64x2WidenHighI32x4S = 0xFD9F,
+    I64x2WidenLowI32x4U = 0xFDA0,
+    I64x2WidenHighI32x4U = 0xFDA1,
+    I64x2Shl = 0xFDA2,
+    I64x2ShrS = 0xFDA3,
+    I64x2ShrU = 0xFDA4,
+    I64x2Add = 0xFDA5,
+    I64x2Sub = 0xFDA6,
+    I64x2Mul = 0xFDA7,
+    
+    // Vector floating point operations
+    F32x4Abs = 0xFDA8,
+    F32x4Neg = 0xFDA9,
+    F32x4Sqrt = 0xFDAA,
+    F32x4Add = 0xFDAB,
+    F32x4Sub = 0xFDAC,
+    F32x4Mul = 0xFDAD,
+    F32x4Div = 0xFDAE,
+    F32x4Min = 0xFDAF,
+    F32x4Max = 0xFDB0,
+    F32x4PMin = 0xFDB1,
+    F32x4PMax = 0xFDB2,
+    
+    F64x2Abs = 0xFDB3,
+    F64x2Neg = 0xFDB4,
+    F64x2Sqrt = 0xFDB5,
+    F64x2Add = 0xFDB6,
+    F64x2Sub = 0xFDB7,
+    F64x2Mul = 0xFDB8,
+    F64x2Div = 0xFDB9,
+    F64x2Min = 0xFDBA,
+    F64x2Max = 0xFDBB,
+    F64x2PMin = 0xFDBC,
+    F64x2PMax = 0xFDBD,
+    
+    // Conversions
+    I32x4TruncSatF32x4S = 0xFDBE,
+    I32x4TruncSatF32x4U = 0xFDBF,
+    F32x4ConvertI32x4S = 0xFDC0,
+    F32x4ConvertI32x4U = 0xFDC1,
+    
+    // Vector memory operations
+    V128Load = 0xFD00,
+    V128Store = 0xFD01,
+    V128Load8x8S = 0xFD02,
+    V128Load8x8U = 0xFD03,
+    V128Load16x4S = 0xFD04,
+    V128Load16x4U = 0xFD05,
+    V128Load32x2S = 0xFD06,
+    V128Load32x2U = 0xFD07,
+    V128Load8Splat = 0xFD08,
+    V128Load16Splat = 0xFD09,
+    V128Load32Splat = 0xFD0A,
+    V128Load64Splat = 0xFD0B,
+    V128Load8Lane = 0xFD54,
+    V128Load16Lane = 0xFD55,
+    V128Load32Lane = 0xFD56,
+    V128Load64Lane = 0xFD57,
+    V128Store8Lane = 0xFD58,
+    V128Store16Lane = 0xFD59,
+    V128Store32Lane = 0xFD5A,
+    V128Store64Lane = 0xFD5B,
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Code Generation
+// -----------------------------------------------------------------------------
+
+// SIMD Code generator
+pub struct SimdCodeGenerator {
+    module: WasmModule,
+}
+
+impl SimdCodeGenerator {
+    // Create a new SIMD code generator
+    pub fun new(module: WasmModule) -> Self {
+        Self { module }
+    }
+    
+    // Generate code for a vector binary operation
+    pub fun generate_vector_binary_op(
+        &mut self,
+        op: &VectorBinaryOp,
+        left_type: &Type,
+        right_type: &Type
+    ) -> Vec<WasmInstruction> {
+        let left_vec = left_type.as_vector_type().unwrap();
+        let right_vec = right_type.as_vector_type().unwrap();
+        
+        match (op, &left_vec, &right_vec) {
+            // Addition operations
+            (VectorBinaryOp::Add, VectorType::I8x16, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Add)]
+            },
+            (VectorBinaryOp::Add, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Add)]
+            },
+            (VectorBinaryOp::Add, VectorType::I32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Add)]
+            },
+            (VectorBinaryOp::Add, VectorType::I64x2, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Add)]
+            },
+            (VectorBinaryOp::Add, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Add)]
+            },
+            (VectorBinaryOp::Add, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Add)]
+            },
+            
+            // Subtraction operations
+            (VectorBinaryOp::Sub, VectorType::I8x16, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Sub)]
+            },
+            (VectorBinaryOp::Sub, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Sub)]
+            },
+            (VectorBinaryOp::Sub, VectorType::I32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Sub)]
+            },
+            (VectorBinaryOp::Sub, VectorType::I64x2, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Sub)]
+            },
+            (VectorBinaryOp::Sub, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Sub)]
+            },
+            (VectorBinaryOp::Sub, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Sub)]
+            },
+            
+            // Multiplication operations
+            (VectorBinaryOp::Mul, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Mul)]
+            },
+            (VectorBinaryOp::Mul, VectorType::I32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Mul)]
+            },
+            (VectorBinaryOp::Mul, VectorType::I64x2, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Mul)]
+            },
+            (VectorBinaryOp::Mul, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Mul)]
+            },
+            (VectorBinaryOp::Mul, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Mul)]
+            },
+            
+            // Division operations
+            (VectorBinaryOp::Div, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Div)]
+            },
+            (VectorBinaryOp::Div, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Div)]
+            },
+            
+            // Bitwise operations
+            (VectorBinaryOp::And, _, _) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128And)]
+            },
+            (VectorBinaryOp::Or, _, _) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Or)]
+            },
+            (VectorBinaryOp::Xor, _, _) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Xor)]
+            },
+            (VectorBinaryOp::AndNot, _, _) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128AndNot)]
+            },
+            
+            // Comparison operations
+            (VectorBinaryOp::Eq, VectorType::I8x16, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Eq)]
+            },
+            (VectorBinaryOp::Eq, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Eq)]
+            },
+            (VectorBinaryOp::Eq, VectorType::I32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Eq)]
+            },
+            (VectorBinaryOp::Eq, VectorType::I64x2, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Eq)]
+            },
+            (VectorBinaryOp::Eq, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Eq)]
+            },
+            (VectorBinaryOp::Eq, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Eq)]
+            },
+            
+            // Not equal operations
+            (VectorBinaryOp::Ne, VectorType::I8x16, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Ne)]
+            },
+            (VectorBinaryOp::Ne, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Ne)]
+            },
+            (VectorBinaryOp::Ne, VectorType::I32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Ne)]
+            },
+            (VectorBinaryOp::Ne, VectorType::I64x2, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Ne)]
+            },
+            (VectorBinaryOp::Ne, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Ne)]
+            },
+            (VectorBinaryOp::Ne, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Ne)]
+            },
+            
+            // Minimum operations
+            (VectorBinaryOp::Min, VectorType::I8x16, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16MinS)]
+            },
+            (VectorBinaryOp::Min, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8MinS)]
+            },
+            (VectorBinaryOp::Min, VectorType::I32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4MinS)]
+            },
+            (VectorBinaryOp::Min, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Min)]
+            },
+            (VectorBinaryOp::Min, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Min)]
+            },
+            
+            // Maximum operations
+            (VectorBinaryOp::Max, VectorType::I8x16, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16MaxS)]
+            },
+            (VectorBinaryOp::Max, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8MaxS)]
+            },
+            (VectorBinaryOp::Max, VectorType::I32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4MaxS)]
+            },
+            (VectorBinaryOp::Max, VectorType::F32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Max)]
+            },
+            (VectorBinaryOp::Max, VectorType::F64x2, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Max)]
+            },
+            
+            // Dot product
+            (VectorBinaryOp::Dot, VectorType::I16x8, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4DotI16x8S)]
+            },
+            
+            _ => {
+                panic!("Unsupported vector binary operation: {:?} for types {:?} and {:?}", op, left_vec, right_vec);
+            }
+        }
+    }
+    
+    // Generate code for a vector unary operation
+    pub fun generate_vector_unary_op(
+        &mut self,
+        op: &VectorUnaryOp,
+        operand_type: &Type
+    ) -> Vec<WasmInstruction> {
+        let vec_type = operand_type.as_vector_type().unwrap();
+        
+        match (op, &vec_type) {
+            // Negation operations
+            (VectorUnaryOp::Neg, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Neg)]
+            },
+            (VectorUnaryOp::Neg, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Neg)]
+            },
+            (VectorUnaryOp::Neg, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Neg)]
+            },
+            (VectorUnaryOp::Neg, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Neg)]
+            },
+            (VectorUnaryOp::Neg, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Neg)]
+            },
+            (VectorUnaryOp::Neg, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Neg)]
+            },
+            
+            // Absolute value operations
+            (VectorUnaryOp::Abs, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Abs)]
+            },
+            (VectorUnaryOp::Abs, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Abs)]
+            },
+            (VectorUnaryOp::Abs, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Abs)]
+            },
+            (VectorUnaryOp::Abs, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Abs)]
+            },
+            (VectorUnaryOp::Abs, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Abs)]
+            },
+            (VectorUnaryOp::Abs, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Abs)]
+            },
+            
+            // Square root operations
+            (VectorUnaryOp::Sqrt, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Sqrt)]
+            },
+            (VectorUnaryOp::Sqrt, VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Sqrt)]
+            },
+            
+            // Bitwise not
+            (VectorUnaryOp::Not, _) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Not)]
+            },
+            
+            // All true operations
+            (VectorUnaryOp::AllTrue, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16AllTrue)]
+            },
+            (VectorUnaryOp::AllTrue, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8AllTrue)]
+            },
+            (VectorUnaryOp::AllTrue, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4AllTrue)]
+            },
+            (VectorUnaryOp::AllTrue, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2AllTrue)]
+            },
+            
+            // Any true operation
+            (VectorUnaryOp::AnyTrue, _) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128AnyTrue)]
+            },
+            
+            // Conversion operations
+            (VectorUnaryOp::ConvertToF32x4, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::F32x4ConvertI32x4S)]
+            },
+            (VectorUnaryOp::ConvertToI32x4, VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4TruncSatF32x4S)]
+            },
+            
+            // Shift operations
+            (VectorUnaryOp::Shl, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Shl)]
+            },
+            (VectorUnaryOp::Shl, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Shl)]
+            },
+            (VectorUnaryOp::Shl, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Shl)]
+            },
+            (VectorUnaryOp::Shl, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Shl)]
+            },
+            (VectorUnaryOp::ShrS, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16ShrS)]
+            },
+            (VectorUnaryOp::ShrS, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8ShrS)]
+            },
+            (VectorUnaryOp::ShrS, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4ShrS)]
+            },
+            (VectorUnaryOp::ShrS, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2ShrS)]
+            },
+            (VectorUnaryOp::ShrU, VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I8x16ShrU)]
+            },
+            (VectorUnaryOp::ShrU, VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I16x8ShrU)]
+            },
+            (VectorUnaryOp::ShrU, VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4ShrU)]
+            },
+            (VectorUnaryOp::ShrU, VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::I64x2ShrU)]
+            },
+            
+            _ => {
+                panic!("Unsupported vector unary operation: {:?} for type {:?}", op, vec_type);
+            }
+        }
+    }
+    
+    // Generate code for a vector lane operation
+    pub fun generate_vector_lane_op(
+        &mut self,
+        op: &VectorLaneOp,
+        operand_type: &Type
+    ) -> Vec<WasmInstruction> {
+        let vec_type = operand_type.as_vector_type().unwrap();
+        
+        match (op, &vec_type) {
+            // Extract lane operations
+            (VectorLaneOp::ExtractLane(lane), VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I8x16ExtractLaneS, *lane as u32)]
+            },
+            (VectorLaneOp::ExtractLane(lane), VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I16x8ExtractLaneS, *lane as u32)]
+            },
+            (VectorLaneOp::ExtractLane(lane), VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I32x4ExtractLane, *lane as u32)]
+            },
+            (VectorLaneOp::ExtractLane(lane), VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I64x2ExtractLane, *lane as u32)]
+            },
+            (VectorLaneOp::ExtractLane(lane), VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::F32x4ExtractLane, *lane as u32)]
+            },
+            (VectorLaneOp::ExtractLane(lane), VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::F64x2ExtractLane, *lane as u32)]
+            },
+            
+            // Replace lane operations
+            (VectorLaneOp::ReplaceLane(lane), VectorType::I8x16) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I8x16ReplaceLane, *lane as u32)]
+            },
+            (VectorLaneOp::ReplaceLane(lane), VectorType::I16x8) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I16x8ReplaceLane, *lane as u32)]
+            },
+            (VectorLaneOp::ReplaceLane(lane), VectorType::I32x4) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I32x4ReplaceLane, *lane as u32)]
+            },
+            (VectorLaneOp::ReplaceLane(lane), VectorType::I64x2) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::I64x2ReplaceLane, *lane as u32)]
+            },
+            (VectorLaneOp::ReplaceLane(lane), VectorType::F32x4) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::F32x4ReplaceLane, *lane as u32)]
+            },
+            (VectorLaneOp::ReplaceLane(lane), VectorType::F64x2) => {
+                vec![WasmInstruction::SimdOpWithParam(WasmSimdOpcode::F64x2ReplaceLane, *lane as u32)]
+            },
+            
+            // Shuffle operation requires both vectors and a shuffle mask
+            // Simplified implementation here
+            (VectorLaneOp::Shuffle(_), _) => {
+                // Simplified - real implementation would generate the shuffle mask
+                // For now, we just use a placeholder instruction
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect)]
+            },
+            
+            // Swizzle operation similarly simplified
+            (VectorLaneOp::Swizzle(_), _) => {
+                // Simplified - real implementation would generate the swizzle mask
+                // For now, we just use a placeholder instruction
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect)]
+            },
+            
+            _ => {
+                panic!("Unsupported vector lane operation: {:?} for type {:?}", op, vec_type);
+            }
+        }
+    }
+    
+    // Generate code for a vector memory operation
+    pub fun generate_vector_memory_op(
+        &mut self,
+        op: &VectorMemoryOp,
+        ptr_type: &Type
+    ) -> Vec<WasmInstruction> {
+        match op {
+            // Load operations
+            VectorMemoryOp::Load => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load, 0, 0)]
+            },
+            VectorMemoryOp::Load8x8S => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load8x8S, 0, 0)]
+            },
+            VectorMemoryOp::Load8x8U => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load8x8U, 0, 0)]
+            },
+            VectorMemoryOp::Load16x4S => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load16x4S, 0, 0)]
+            },
+            VectorMemoryOp::Load16x4U => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load16x4U, 0, 0)]
+            },
+            VectorMemoryOp::Load32x2S => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load32x2S, 0, 0)]
+            },
+            VectorMemoryOp::Load32x2U => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load32x2U, 0, 0)]
+            },
+            VectorMemoryOp::Load8Splat => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load8Splat, 0, 0)]
+            },
+            VectorMemoryOp::Load16Splat => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load16Splat, 0, 0)]
+            },
+            VectorMemoryOp::Load32Splat => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load32Splat, 0, 0)]
+            },
+            VectorMemoryOp::Load64Splat => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Load64Splat, 0, 0)]
+            },
+            
+            // Store operations
+            VectorMemoryOp::Store => {
+                vec![WasmInstruction::SimdMemOp(WasmSimdOpcode::V128Store, 0, 0)]
+            },
+            
+            // Lane-specific load/store operations
+            VectorMemoryOp::Load8Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Load8Lane, 0, 0, *lane as u32)]
+            },
+            VectorMemoryOp::Load16Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Load16Lane, 0, 0, *lane as u32)]
+            },
+            VectorMemoryOp::Load32Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Load32Lane, 0, 0, *lane as u32)]
+            },
+            VectorMemoryOp::Load64Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Load64Lane, 0, 0, *lane as u32)]
+            },
+            VectorMemoryOp::Store8Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Store8Lane, 0, 0, *lane as u32)]
+            },
+            VectorMemoryOp::Store16Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Store16Lane, 0, 0, *lane as u32)]
+            },
+            VectorMemoryOp::Store32Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Store32Lane, 0, 0, *lane as u32)]
+            },
+            VectorMemoryOp::Store64Lane(lane) => {
+                vec![WasmInstruction::SimdMemOpWithParam(WasmSimdOpcode::V128Store64Lane, 0, 0, *lane as u32)]
+            },
+        }
+    }
+    
+    // Generate vector constants
+    pub fun generate_vector_const(
+        &mut self,
+        vec_type: &VectorType,
+        values: Vec<i32>
+    ) -> Vec<WasmInstruction> {
+        // Simplified implementation - real implementation would encode the values properly
+        match vec_type {
+            VectorType::I8x16 => {
+                if values.len() == 1 {
+                    // Splat
+                    vec![
+                        WasmInstruction::I32Const(values[0]),
+                        WasmInstruction::SimdOp(WasmSimdOpcode::I8x16Splat)
+                    ]
+                } else {
+                    // Full vector const (simplified)
+                    vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)]
+                }
+            },
+            VectorType::I16x8 => {
+                if values.len() == 1 {
+                    // Splat
+                    vec![
+                        WasmInstruction::I32Const(values[0]),
+                        WasmInstruction::SimdOp(WasmSimdOpcode::I16x8Splat)
+                    ]
+                } else {
+                    // Full vector const (simplified)
+                    vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)]
+                }
+            },
+            VectorType::I32x4 => {
+                if values.len() == 1 {
+                    // Splat
+                    vec![
+                        WasmInstruction::I32Const(values[0]),
+                        WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Splat)
+                    ]
+                } else {
+                    // Full vector const (simplified)
+                    vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)]
+                }
+            },
+            VectorType::I64x2 => {
+                if values.len() == 1 {
+                    // Splat
+                    vec![
+                        WasmInstruction::I64Const(values[0] as i64),
+                        WasmInstruction::SimdOp(WasmSimdOpcode::I64x2Splat)
+                    ]
+                } else {
+                    // Full vector const (simplified)
+                    vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)]
+                }
+            },
+            VectorType::F32x4 => {
+                if values.len() == 1 {
+                    // Splat
+                    vec![
+                        WasmInstruction::F32Const(values[0] as f32),
+                        WasmInstruction::SimdOp(WasmSimdOpcode::F32x4Splat)
+                    ]
+                } else {
+                    // Full vector const (simplified)
+                    vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)]
+                }
+            },
+            VectorType::F64x2 => {
+                if values.len() == 1 {
+                    // Splat
+                    vec![
+                        WasmInstruction::F64Const(values[0] as f64),
+                        WasmInstruction::SimdOp(WasmSimdOpcode::F64x2Splat)
+                    ]
+                } else {
+                    // Full vector const (simplified)
+                    vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)]
+                }
+            },
+            VectorType::V128 => {
+                // Generic 128-bit vector
+                vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)]
+            },
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Integration with Wasm Module
+// -----------------------------------------------------------------------------
+
+impl WasmModule {
+    // Add SIMD feature to the module
+    pub fun enable_simd(&mut self) {
+        self.features.insert("simd".to_string());
+    }
+    
+    // Check if SIMD is enabled for the module
+    pub fun has_simd(&self) -> bool {
+        self.features.contains("simd")
+    }
+}
+
+// Extend WasmFunction with SIMD-specific methods
+impl WasmFunction {
+    // Add SIMD instructions to the function
+    pub fun add_simd_instructions(&mut self, instructions: Vec<WasmInstruction>) {
+        for instruction in instructions {
+            self.body.push(instruction);
+        }
+    }
+}
+
+// Update WasmInstruction to include SIMD operations
+impl WasmInstruction {
+    // Create a new SIMD operation instruction
+    pub fun simd_op(opcode: WasmSimdOpcode) -> Self {
+        WasmInstruction::SimdOp(opcode)
+    }
+    
+    // Create a new SIMD operation with a parameter
+    pub fun simd_op_with_param(opcode: WasmSimdOpcode, param: u32) -> Self {
+        WasmInstruction::SimdOpWithParam(opcode, param)
+    }
+    
+    // Create a new SIMD memory operation
+    pub fun simd_mem_op(opcode: WasmSimdOpcode, align: u32, offset: u32) -> Self {
+        WasmInstruction::SimdMemOp(opcode, align, offset)
+    }
+    
+    // Create a new SIMD memory operation with a lane parameter
+    pub fun simd_mem_op_with_param(opcode: WasmSimdOpcode, align: u32, offset: u32, lane: u32) -> Self {
+        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, lane)
+    }
+}

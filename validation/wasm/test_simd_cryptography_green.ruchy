@@ -1,0 +1,288 @@
+// SIMD Cryptography Tests for WASM-004 TOOL phase
+// This file demonstrates SIMD acceleration for cryptographic algorithms
+
+import { 
+    V128, I32x4, I8x16,
+    i32x4, v128_as_i32x4,
+    property_simd_scalar_equivalence,
+    simd_equals, assert_simd_equals,
+    gen_i32x4, gen_v128, gen_special_patterns,
+    benchmark_scalar_vs_simd,
+    register_simd_test_suite,
+    run_simd_tests
+} from "./simd_test_framework.ruchy";
+
+// -----------------------------------------------------------------------------
+// SIMD-accelerated cryptographic operations
+// -----------------------------------------------------------------------------
+
+// Simplified AES round function (actual AES is more complex)
+// This is a teaching example showing how SIMD can be used for crypto
+
+// SIMD implementation of 4 parallel XOR operations (common in crypto)
+fun simd_xor(a: I32x4, b: I32x4) -> I32x4 {
+    return [
+        a[0] ^ b[0],
+        a[1] ^ b[1],
+        a[2] ^ b[2],
+        a[3] ^ b[3]
+    ];
+}
+
+// SIMD implementation of 4 parallel rotations (common in crypto)
+fun simd_rotate_right(a: I32x4, bits: i32) -> I32x4 {
+    return [
+        rotate_right(a[0], bits),
+        rotate_right(a[1], bits),
+        rotate_right(a[2], bits),
+        rotate_right(a[3], bits)
+    ];
+}
+
+// Helper for integer rotation (normally hardware-accelerated)
+fun rotate_right(value: i32, bits: i32) -> i32 {
+    // In a real implementation, this would use CPU rotation instructions
+    // For this example, we'll simulate with shift operations
+    let mask = 32;  // 32-bit integers
+    let shift = bits % mask;
+    return ((value >> shift) | (value << (mask - shift))) & 0xFFFFFFFF;
+}
+
+// Simplified SHA-256 mixing function using SIMD
+// Real SHA-256 is more complex but uses similar operations
+fun sha256_mix_simd(state: I32x4) -> I32x4 {
+    // Apply a series of rotations, shifts, and XORs (simplified)
+    let temp1 = simd_rotate_right(state, 2);
+    let temp2 = simd_rotate_right(state, 13);
+    let temp3 = simd_rotate_right(state, 22);
+    
+    // XOR results together
+    let result = simd_xor(temp1, temp2);
+    return simd_xor(result, temp3);
+}
+
+// Scalar implementation for comparison
+fun sha256_mix_scalar(state: I32x4) -> I32x4 {
+    return [
+        sha256_mix_one(state[0]),
+        sha256_mix_one(state[1]),
+        sha256_mix_one(state[2]),
+        sha256_mix_one(state[3])
+    ];
+}
+
+// Single element SHA-256 mixing
+fun sha256_mix_one(value: i32) -> i32 {
+    let temp1 = rotate_right(value, 2);
+    let temp2 = rotate_right(value, 13);
+    let temp3 = rotate_right(value, 22);
+    
+    return temp1 ^ temp2 ^ temp3;
+}
+
+// ChaCha20 quarter round (simplified)
+// Real ChaCha20 is more complex but uses similar operations
+fun chacha20_quarter_round_simd(state: I32x4) -> I32x4 {
+    // Apply a series of additions, XORs, and rotations (simplified)
+    let a = [state[0], state[1], state[2], state[3]];
+    
+    // First step
+    a[0] = a[0] + a[1];
+    a[3] = a[3] ^ a[0];
+    a[3] = rotate_right(a[3], 16);
+    
+    // Second step
+    a[2] = a[2] + a[3];
+    a[1] = a[1] ^ a[2];
+    a[1] = rotate_right(a[1], 12);
+    
+    // Third step
+    a[0] = a[0] + a[1];
+    a[3] = a[3] ^ a[0];
+    a[3] = rotate_right(a[3], 8);
+    
+    // Fourth step
+    a[2] = a[2] + a[3];
+    a[1] = a[1] ^ a[2];
+    a[1] = rotate_right(a[1], 7);
+    
+    return a;
+}
+
+// -----------------------------------------------------------------------------
+// Property-based tests for cryptographic operations
+// -----------------------------------------------------------------------------
+
+// Test that XOR operation is its own inverse when applied twice
+fun test_simd_xor_inverse() -> bool {
+    for _ in 0..100 {
+        let a = gen_i32x4();
+        let b = gen_i32x4();
+        
+        // Apply XOR twice - should get back original value
+        let xored = simd_xor(a, b);
+        let restored = simd_xor(xored, b);
+        
+        if !simd_equals(a, restored) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Test that XOR is commutative
+fun test_simd_xor_commutative() -> bool {
+    for _ in 0..100 {
+        let a = gen_i32x4();
+        let b = gen_i32x4();
+        
+        let result1 = simd_xor(a, b);
+        let result2 = simd_xor(b, a);
+        
+        if !simd_equals(result1, result2) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Test that SIMD SHA-256 mix matches scalar implementation
+fun test_sha256_mix_equivalence() -> bool {
+    for _ in 0..100 {
+        let state = gen_i32x4();
+        
+        let simd_result = sha256_mix_simd(state);
+        let scalar_result = sha256_mix_scalar(state);
+        
+        if !simd_equals(simd_result, scalar_result) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Test SIMD rotation with known values
+fun test_simd_rotation_specific() -> bool {
+    let input = i32x4(0x12345678, 0xABCDEF01, 0x87654321, 0xFEDCBA09);
+    
+    // Test rotation by 8 bits
+    let rotated8 = simd_rotate_right(input, 8);
+    let expected8 = i32x4(
+        rotate_right(0x12345678, 8),
+        rotate_right(0xABCDEF01, 8),
+        rotate_right(0x87654321, 8),
+        rotate_right(0xFEDCBA09, 8)
+    );
+    assert_simd_equals(rotated8, expected8, "Rotation by 8 bits failed");
+    
+    // Test rotation by 16 bits
+    let rotated16 = simd_rotate_right(input, 16);
+    let expected16 = i32x4(
+        rotate_right(0x12345678, 16),
+        rotate_right(0xABCDEF01, 16),
+        rotate_right(0x87654321, 16),
+        rotate_right(0xFEDCBA09, 16)
+    );
+    assert_simd_equals(rotated16, expected16, "Rotation by 16 bits failed");
+    
+    return true;
+}
+
+// -----------------------------------------------------------------------------
+// Performance benchmark tests for cryptographic operations
+// -----------------------------------------------------------------------------
+
+// Benchmark SIMD vs scalar SHA-256 mix
+fun benchmark_sha256_mix() -> bool {
+    // Generate test data
+    let state = i32x4(0x12345678, 0xABCDEF01, 0x87654321, 0xFEDCBA09);
+    
+    // Run benchmark
+    let iterations = 1000000; // 1 million iterations
+    let [scalar_time, simd_time, speedup] = benchmark_scalar_vs_simd(
+        state,
+        sha256_mix_scalar,
+        sha256_mix_simd,
+        iterations
+    );
+    
+    println("SHA-256 mix benchmark:");
+    println("  Scalar time: " + scalar_time.to_string() + " ms");
+    println("  SIMD time: " + simd_time.to_string() + " ms");
+    println("  Speedup factor: " + speedup.to_string() + "x");
+    
+    // In a real test, we'd have a specific threshold
+    return speedup >= 1.0;  // At least some improvement
+}
+
+// Benchmark ChaCha20 quarter round
+fun benchmark_chacha20_quarter_round() -> bool {
+    // Define scalar implementation for comparison
+    fun chacha20_quarter_round_scalar(state: I32x4) -> I32x4 {
+        // Apply each step individually to each element
+        // This is a simplified version for comparison
+        
+        let result = [state[0], state[1], state[2], state[3]];
+        
+        // Process each element separately (non-SIMD)
+        for i in 0..4 {
+            // Apply a simple transformation (not actual ChaCha20)
+            result[i] = rotate_right(result[i], 8) ^ result[(i + 1) % 4];
+        }
+        
+        return result;
+    }
+    
+    // Generate test data
+    let state = i32x4(0x12345678, 0xABCDEF01, 0x87654321, 0xFEDCBA09);
+    
+    // Run benchmark
+    let iterations = 1000000; // 1 million iterations
+    let [scalar_time, simd_time, speedup] = benchmark_scalar_vs_simd(
+        state,
+        chacha20_quarter_round_scalar,
+        chacha20_quarter_round_simd,
+        iterations
+    );
+    
+    println("ChaCha20 quarter round benchmark:");
+    println("  Scalar time: " + scalar_time.to_string() + " ms");
+    println("  SIMD time: " + simd_time.to_string() + " ms");
+    println("  Speedup factor: " + speedup.to_string() + "x");
+    
+    return speedup >= 1.0;  // At least some improvement
+}
+
+// -----------------------------------------------------------------------------
+// Main test runner
+// -----------------------------------------------------------------------------
+
+fun main() {
+    // Register all tests
+    let tests = [
+        // Property tests
+        test_simd_xor_inverse,
+        test_simd_xor_commutative,
+        test_sha256_mix_equivalence,
+        
+        // Specific tests
+        test_simd_rotation_specific,
+        
+        // Performance tests
+        benchmark_sha256_mix,
+        benchmark_chacha20_quarter_round
+    ];
+    
+    register_simd_test_suite("SIMD Cryptography Tests", tests);
+    
+    // Run tests
+    let all_passed = run_simd_tests();
+    
+    if all_passed {
+        println("✅ All SIMD cryptography tests passed!");
+        return 0;
+    } else {
+        println("❌ Some SIMD cryptography tests failed!");
+        return 1;
+    }
+}

@@ -1,0 +1,473 @@
+// WASM-006: Incremental Compilation - Dependency Graph
+//
+// Implements dependency tracking for minimal rebuild computation
+// Builds and maintains module dependency graphs
+
+use std::collections::{HashMap, HashSet, VecDeque};
+
+// ============================================================================
+// Dependency Graph Types
+// ============================================================================
+
+/// A node in the dependency graph representing a module
+#[derive(Debug, Clone)]
+pub struct ModuleNode {
+    pub path: String,
+    pub source_hash: String,
+    pub dependencies: Vec<String>,  // Modules this module depends on
+    pub dependents: Vec<String>,    // Modules that depend on this module
+}
+
+impl ModuleNode {
+    pub fun new(path: String, source_hash: String) -> Self {
+        ModuleNode {
+            path,
+            source_hash,
+            dependencies: vec![],
+            dependents: vec![],
+        }
+    }
+
+    pub fun add_dependency(&mut self, dep: String) {
+        if !self.dependencies.contains(&dep) {
+            self.dependencies.push(dep);
+        }
+    }
+
+    pub fun add_dependent(&mut self, dependent: String) {
+        if !self.dependents.contains(&dependent) {
+            self.dependents.push(dependent);
+        }
+    }
+}
+
+/// Dependency graph for a project
+pub struct DependencyGraph {
+    nodes: HashMap<String, ModuleNode>,
+    edges: Vec<(String, String)>,  // (from, to) edges
+}
+
+impl DependencyGraph {
+    pub fun new() -> Self {
+        DependencyGraph {
+            nodes: HashMap::new(),
+            edges: vec![],
+        }
+    }
+
+    /// Add a module to the graph
+    pub fun add_module(&mut self, path: String, source_hash: String, dependencies: Vec<String>) {
+        // Create or update node
+        let mut node = self.nodes.get(&path)
+            .cloned()
+            .unwrap_or_else(|| ModuleNode::new(path.clone(), source_hash.clone()));
+
+        node.source_hash = source_hash;
+        node.dependencies = dependencies.clone();
+
+        // Add edges
+        for dep in &dependencies {
+            let edge = (path.clone(), dep.clone());
+            if !self.edges.contains(&edge) {
+                self.edges.push(edge);
+            }
+
+            // Update dependent's list
+            if let Some(dep_node) = self.nodes.get_mut(dep) {
+                dep_node.add_dependent(path.clone());
+            } else {
+                // Create placeholder node for dependency
+                let mut dep_node = ModuleNode::new(dep.clone(), String::new());
+                dep_node.add_dependent(path.clone());
+                self.nodes.insert(dep.clone(), dep_node);
+            }
+        }
+
+        self.nodes.insert(path, node);
+    }
+
+    /// Get all modules that depend on a given module (directly or transitively)
+    pub fun get_affected_modules(&self, changed: Vec<String>) -> Vec<String> {
+        let mut affected = HashSet::new();
+
+        // Add all changed modules
+        for module in &changed {
+            affected.insert(module.clone());
+        }
+
+        // BFS to find all dependent modules
+        let mut queue = VecDeque::new();
+        for module in &changed {
+            queue.push_back(module.clone());
+        }
+
+        while let Some(module) = queue.pop_front() {
+            if let Some(node) = self.nodes.get(&module) {
+                for dependent in &node.dependents {
+                    if !affected.contains(dependent) {
+                        affected.insert(dependent.clone());
+                        queue.push_back(dependent.clone());
+                    }
+                }
+            }
+        }
+
+        affected.into_iter().collect()
+    }
+
+    /// Get all transitive dependencies of a module
+    pub fun get_transitive_deps(&self, module: &str) -> Vec<String> {
+        let mut deps = HashSet::new();
+        let mut queue = VecDeque::new();
+        queue.push_back(module.to_string());
+
+        while let Some(current) = queue.pop_front() {
+            if let Some(node) = self.nodes.get(&current) {
+                for dep in &node.dependencies {
+                    if !deps.contains(dep) && dep != module {
+                        deps.insert(dep.clone());
+                        queue.push_back(dep.clone());
+                    }
+                }
+            }
+        }
+
+        deps.into_iter().collect()
+    }
+
+    /// Perform topological sort of modules for build order
+    pub fun topological_sort(&self) -> Result<Vec<String>, String> {
+        let mut in_degree: HashMap<String, usize> = HashMap::new();
+        let mut result = vec![];
+
+        // Calculate in-degrees
+        for node in self.nodes.values() {
+            in_degree.entry(node.path.clone()).or_insert(0);
+
+            for dep in &node.dependencies {
+                *in_degree.entry(dep.clone()).or_insert(0) += 1;
+            }
+        }
+
+        // Find all nodes with in-degree 0
+        let mut queue = VecDeque::new();
+        for (path, &degree) in &in_degree {
+            if degree == 0 {
+                queue.push_back(path.clone());
+            }
+        }
+
+        // Process queue
+        while let Some(module) = queue.pop_front() {
+            result.push(module.clone());
+
+            if let Some(node) = self.nodes.get(&module) {
+                // Reduce in-degree for all dependents
+                for dependent in &node.dependents {
+                    if let Some(degree) = in_degree.get_mut(dependent) {
+                        *degree -= 1;
+                        if *degree == 0 {
+                            queue.push_back(dependent.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for cycles
+        if result.len() != self.nodes.len() {
+            return Err("Circular dependency detected".to_string());
+        }
+
+        Ok(result)
+    }
+
+    /// Check if there's an edge from one module to another
+    pub fun has_edge(&self, from: &str, to: &str) -> bool {
+        self.edges.iter().any(|(f, t)| f == from && t == to)
+    }
+
+    /// Get all dependents of a module (direct only)
+    pub fun get_dependents(&self, module: &str) -> Vec<String> {
+        self.nodes.get(module)
+            .map(|node| node.dependents.clone())
+            .unwrap_or_else(Vec::new)
+    }
+
+    /// Get all dependencies of a module (direct only)
+    pub fun get_dependencies(&self, module: &str) -> Vec<String> {
+        self.nodes.get(module)
+            .map(|node| node.dependencies.clone())
+            .unwrap_or_else(Vec::new)
+    }
+
+    /// Detect circular dependencies
+    pub fun detect_cycles(&self) -> Vec<Vec<String>> {
+        let mut cycles = vec![];
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+
+        for node_path in self.nodes.keys() {
+            if !visited.contains(node_path) {
+                self.detect_cycle_dfs(
+                    node_path,
+                    &mut visited,
+                    &mut rec_stack,
+                    &mut vec![],
+                    &mut cycles
+                );
+            }
+        }
+
+        cycles
+    }
+
+    /// DFS helper for cycle detection
+    fun detect_cycle_dfs(
+        &self,
+        node: &str,
+        visited: &mut HashSet<String>,
+        rec_stack: &mut HashSet<String>,
+        path: &mut Vec<String>,
+        cycles: &mut Vec<Vec<String>>
+    ) {
+        visited.insert(node.to_string());
+        rec_stack.insert(node.to_string());
+        path.push(node.to_string());
+
+        if let Some(node_data) = self.nodes.get(node) {
+            for dep in &node_data.dependencies {
+                if !visited.contains(dep) {
+                    self.detect_cycle_dfs(dep, visited, rec_stack, path, cycles);
+                } else if rec_stack.contains(dep) {
+                    // Found a cycle
+                    let cycle_start = path.iter().position(|p| p == dep).unwrap();
+                    let cycle = path[cycle_start..].to_vec();
+                    cycles.push(cycle);
+                }
+            }
+        }
+
+        path.pop();
+        rec_stack.remove(node);
+    }
+
+    /// Get modules that can be compiled in parallel
+    pub fun get_parallel_batches(&self) -> Vec<Vec<String>> {
+        let mut batches = vec![];
+        let mut remaining: HashSet<String> = self.nodes.keys().cloned().collect();
+        let mut in_degree: HashMap<String, usize> = HashMap::new();
+
+        // Calculate initial in-degrees
+        for node in self.nodes.values() {
+            in_degree.insert(node.path.clone(), node.dependencies.len());
+        }
+
+        // Process in batches
+        while !remaining.is_empty() {
+            let mut batch = vec![];
+
+            // Find all modules with no unresolved dependencies
+            for module in &remaining {
+                if *in_degree.get(module).unwrap_or(&0) == 0 {
+                    batch.push(module.clone());
+                }
+            }
+
+            if batch.is_empty() && !remaining.is_empty() {
+                // Circular dependency - can't proceed
+                break;
+            }
+
+            // Remove batch from remaining
+            for module in &batch {
+                remaining.remove(module);
+
+                // Decrease in-degree for dependents
+                if let Some(node) = self.nodes.get(module) {
+                    for dependent in &node.dependents {
+                        if let Some(degree) = in_degree.get_mut(dependent) {
+                            *degree -= 1;
+                        }
+                    }
+                }
+            }
+
+            batches.push(batch);
+        }
+
+        batches
+    }
+
+    /// Update source hash for a module
+    pub fun update_hash(&mut self, module: &str, new_hash: String) {
+        if let Some(node) = self.nodes.get_mut(module) {
+            node.source_hash = new_hash;
+        }
+    }
+
+    /// Get number of nodes in graph
+    pub fun node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Get number of edges in graph
+    pub fun edge_count(&self) -> usize {
+        self.edges.len()
+    }
+}
+
+// ============================================================================
+// Dependency Parser
+// ============================================================================
+
+/// Parse dependencies from source code
+pub fun parse_dependencies(source: &str) -> Vec<String> {
+    let mut deps = vec![];
+    let lines = source.lines();
+
+    for line in lines {
+        let trimmed = line.trim();
+
+        // Look for "use" statements
+        if trimmed.starts_with("use ") {
+            if let Some(module) = extract_module_from_use(trimmed) {
+                deps.push(module);
+            }
+        }
+    }
+
+    deps
+}
+
+/// Extract module name from use statement
+fun extract_module_from_use(use_stmt: &str) -> Option<String> {
+    // Example: "use std::io::println;" -> "std::io"
+    // Example: "use moduleA::func;" -> "moduleA"
+
+    let parts: Vec<&str> = use_stmt.split_whitespace().collect();
+    if parts.len() < 2 {
+        return None;
+    }
+
+    let path = parts[1].trim_end_matches(';');
+    let components: Vec<&str> = path.split("::").collect();
+
+    if components.is_empty() {
+        return None;
+    }
+
+    // Return first component as module name
+    Some(components[0].to_string())
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    test test_graph_creation() {
+        let graph = DependencyGraph::new();
+        assert(graph.node_count() == 0, "New graph should be empty");
+        assert(graph.edge_count() == 0, "New graph should have no edges");
+    }
+
+    test test_add_module() {
+        let mut graph = DependencyGraph::new();
+
+        graph.add_module(
+            "moduleA.ruchy".to_string(),
+            "hash_a".to_string(),
+            vec!["moduleB.ruchy".to_string()]
+        );
+
+        assert(graph.node_count() >= 1, "Should have at least 1 node");
+        assert(graph.has_edge("moduleA.ruchy", "moduleB.ruchy"), "Should have edge A->B");
+    }
+
+    test test_transitive_deps() {
+        let mut graph = DependencyGraph::new();
+
+        // A -> B -> C
+        graph.add_module("A".to_string(), "a".to_string(), vec!["B".to_string()]);
+        graph.add_module("B".to_string(), "b".to_string(), vec!["C".to_string()]);
+        graph.add_module("C".to_string(), "c".to_string(), vec![]);
+
+        let deps = graph.get_transitive_deps("A");
+
+        assert(deps.contains(&"B".to_string()), "A should transitively depend on B");
+        assert(deps.contains(&"C".to_string()), "A should transitively depend on C");
+    }
+
+    test test_affected_modules() {
+        let mut graph = DependencyGraph::new();
+
+        // A -> B -> C
+        graph.add_module("A".to_string(), "a".to_string(), vec!["B".to_string()]);
+        graph.add_module("B".to_string(), "b".to_string(), vec!["C".to_string()]);
+        graph.add_module("C".to_string(), "c".to_string(), vec![]);
+
+        let affected = graph.get_affected_modules(vec!["C".to_string()]);
+
+        assert(affected.contains(&"B".to_string()), "Changing C should affect B");
+        assert(affected.contains(&"A".to_string()), "Changing C should affect A (transitive)");
+    }
+
+    test test_topological_sort() {
+        let mut graph = DependencyGraph::new();
+
+        // Create simple graph: A depends on B, B depends on C
+        graph.add_module("A".to_string(), "a".to_string(), vec!["B".to_string()]);
+        graph.add_module("B".to_string(), "b".to_string(), vec!["C".to_string()]);
+        graph.add_module("C".to_string(), "c".to_string(), vec![]);
+
+        let sorted = graph.topological_sort().unwrap();
+
+        let pos_c = sorted.iter().position(|x| x == "C").unwrap();
+        let pos_b = sorted.iter().position(|x| x == "B").unwrap();
+        let pos_a = sorted.iter().position(|x| x == "A").unwrap();
+
+        assert(pos_c < pos_b, "C should come before B");
+        assert(pos_b < pos_a, "B should come before A");
+    }
+
+    test test_parallel_batches() {
+        let mut graph = DependencyGraph::new();
+
+        // Independent modules A and B, both depend on C
+        graph.add_module("A".to_string(), "a".to_string(), vec!["C".to_string()]);
+        graph.add_module("B".to_string(), "b".to_string(), vec!["C".to_string()]);
+        graph.add_module("C".to_string(), "c".to_string(), vec![]);
+
+        let batches = graph.get_parallel_batches();
+
+        assert(batches.len() >= 2, "Should have at least 2 batches");
+
+        // First batch should contain only C
+        assert(batches[0].contains(&"C".to_string()), "First batch should contain C");
+
+        // Second batch should contain A and B (can be compiled in parallel)
+        assert(batches[1].len() == 2, "Second batch should have 2 modules");
+    }
+
+    test test_parse_dependencies() {
+        let source = r#"
+            use std::io;
+            use moduleA::func;
+            use moduleB::helper;
+
+            fun main() {
+                println("Hello");
+            }
+        "#;
+
+        let deps = parse_dependencies(source);
+
+        assert(deps.contains(&"std".to_string()), "Should find std dependency");
+        assert(deps.contains(&"moduleA".to_string()), "Should find moduleA dependency");
+        assert(deps.contains(&"moduleB".to_string()), "Should find moduleB dependency");
+    }
+}

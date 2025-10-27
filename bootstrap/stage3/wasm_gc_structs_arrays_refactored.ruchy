@@ -1,0 +1,658 @@
+// WebAssembly GC Struct and Array Types - Refactored Implementation
+// WASM-005 REFACTOR Phase
+//
+// This refactored implementation improves upon the GREEN phase with:
+// - Optimized memory layout for better performance
+// - Improved field access mechanisms
+// - Enhanced array operations
+// - Better integration with GC references
+// - Smaller binary size through optimization
+
+use std::collections::HashMap;
+use std::vec::Vec;
+
+// ============================================================================
+// Type Definitions - Optimized Data Structures
+// ============================================================================
+
+/// WebAssembly primitive types with optimized representation
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WasmType {
+    I32,
+    I64,
+    F32,
+    F64,
+    V128,
+    FuncRef,
+    ExternRef,
+    AnyRef,
+}
+
+impl WasmType {
+    /// Get the size in bytes for memory layout
+    #[inline]
+    pub fun size(&self) -> usize {
+        match self {
+            WasmType::I32 | WasmType::F32 => 4,
+            WasmType::I64 | WasmType::F64 => 8,
+            WasmType::V128 => 16,
+            WasmType::FuncRef | WasmType::ExternRef | WasmType::AnyRef => 8, // Pointer size
+        }
+    }
+
+    /// Get the alignment requirement
+    #[inline]
+    pub fun alignment(&self) -> usize {
+        self.size()
+    }
+}
+
+/// Field definition with optimized storage
+#[derive(Clone, Debug)]
+pub struct StructField {
+    pub name: String,
+    pub field_type: WasmType,
+    pub mutable: bool,
+    pub offset: usize,  // Pre-calculated offset for fast access
+}
+
+/// Optimized struct type definition
+#[derive(Clone, Debug)]
+pub struct WasmStructType {
+    pub name: String,
+    pub fields: Vec<StructField>,
+    pub total_size: usize,  // Pre-calculated total size
+    pub alignment: usize,   // Pre-calculated alignment
+    pub type_index: u32,    // WebAssembly type index
+    pub super_type: Option<u32>,  // For inheritance
+}
+
+impl WasmStructType {
+    /// Create a new struct type with optimized layout
+    pub fun new(name: String, field_defs: Vec<(String, WasmType, bool)>) -> Self {
+        let mut fields = Vec::new();
+        let mut current_offset = 0usize;
+        let mut max_alignment = 1usize;
+
+        // Sort fields by alignment (descending) for optimal packing
+        let mut sorted_fields = field_defs.clone();
+        sorted_fields.sort_by(|a, b| {
+            b.1.alignment().cmp(&a.1.alignment())
+        });
+
+        // Calculate offsets with proper alignment
+        for (field_name, field_type, mutable) in sorted_fields {
+            let align = field_type.alignment();
+            max_alignment = max_alignment.max(align);
+
+            // Align current offset
+            current_offset = (current_offset + align - 1) / align * align;
+
+            fields.push(StructField {
+                name: field_name,
+                field_type,
+                mutable,
+                offset: current_offset,
+            });
+
+            current_offset += field_type.size();
+        }
+
+        // Align total size to max alignment
+        let total_size = (current_offset + max_alignment - 1) / max_alignment * max_alignment;
+
+        WasmStructType {
+            name,
+            fields,
+            total_size,
+            alignment: max_alignment,
+            type_index: 0,  // Set later during registration
+            super_type: None,
+        }
+    }
+
+    /// Get field by name (optimized lookup)
+    #[inline]
+    pub fun get_field(&self, name: &str) -> Option<&StructField> {
+        self.fields.iter().find(|f| f.name == name)
+    }
+
+    /// Get field index for code generation
+    #[inline]
+    pub fun get_field_index(&self, name: &str) -> Option<usize> {
+        self.fields.iter().position(|f| f.name == name)
+    }
+}
+
+/// Array type definition with optimized representation
+#[derive(Clone, Debug)]
+pub struct WasmArrayType {
+    pub name: String,
+    pub element_type: WasmType,
+    pub mutable: bool,
+    pub type_index: u32,
+}
+
+impl WasmArrayType {
+    /// Create a new array type
+    pub fun new(name: String, element_type: WasmType, mutable: bool) -> Self {
+        WasmArrayType {
+            name,
+            element_type,
+            mutable,
+            type_index: 0,
+        }
+    }
+
+    /// Get element size for offset calculations
+    #[inline]
+    pub fun element_size(&self) -> usize {
+        self.element_type.size()
+    }
+}
+
+// ============================================================================
+// Struct and Array Registry - Optimized Global State
+// ============================================================================
+
+/// Global registry for struct and array types with fast lookups
+pub struct TypeRegistry {
+    structs: HashMap<String, WasmStructType>,
+    arrays: HashMap<String, WasmArrayType>,
+    next_type_index: u32,
+
+    // Caches for fast lookups
+    struct_index_cache: HashMap<String, u32>,
+    array_index_cache: HashMap<String, u32>,
+}
+
+impl TypeRegistry {
+    /// Create a new registry
+    pub fun new() -> Self {
+        TypeRegistry {
+            structs: HashMap::new(),
+            arrays: HashMap::new(),
+            next_type_index: 0,
+            struct_index_cache: HashMap::new(),
+            array_index_cache: HashMap::new(),
+        }
+    }
+
+    /// Register a struct type
+    pub fun register_struct(&mut self, mut struct_type: WasmStructType) -> u32 {
+        let type_index = self.next_type_index;
+        self.next_type_index += 1;
+
+        struct_type.type_index = type_index;
+        self.struct_index_cache.insert(struct_type.name.clone(), type_index);
+        self.structs.insert(struct_type.name.clone(), struct_type);
+
+        type_index
+    }
+
+    /// Register an array type
+    pub fun register_array(&mut self, mut array_type: WasmArrayType) -> u32 {
+        let type_index = self.next_type_index;
+        self.next_type_index += 1;
+
+        array_type.type_index = type_index;
+        self.array_index_cache.insert(array_type.name.clone(), type_index);
+        self.arrays.insert(array_type.name.clone(), array_type);
+
+        type_index
+    }
+
+    /// Get struct type by name (fast lookup)
+    #[inline]
+    pub fun get_struct(&self, name: &str) -> Option<&WasmStructType> {
+        self.structs.get(name)
+    }
+
+    /// Get array type by name (fast lookup)
+    #[inline]
+    pub fun get_array(&self, name: &str) -> Option<&WasmArrayType> {
+        self.arrays.get(name)
+    }
+
+    /// Get struct type index (cached)
+    #[inline]
+    pub fun get_struct_index(&self, name: &str) -> Option<u32> {
+        self.struct_index_cache.get(name).copied()
+    }
+
+    /// Get array type index (cached)
+    #[inline]
+    pub fun get_array_index(&self, name: &str) -> Option<u32> {
+        self.array_index_cache.get(name).copied()
+    }
+}
+
+// Global singleton registry
+static mut REGISTRY: Option<TypeRegistry> = None;
+
+pub fun get_registry() -> &'static mut TypeRegistry {
+    unsafe {
+        if REGISTRY.is_none() {
+            REGISTRY = Some(TypeRegistry::new());
+        }
+        REGISTRY.as_mut().unwrap()
+    }
+}
+
+// ============================================================================
+// WebAssembly Code Generation - Optimized
+// ============================================================================
+
+/// Generate WebAssembly type section for a struct
+pub fun generate_struct_type(struct_type: &WasmStructType) -> Vec<u8> {
+    let mut bytes = Vec::new();
+
+    // Type form: struct
+    bytes.push(0x5f);
+
+    // Field count
+    encode_uleb128(&mut bytes, struct_type.fields.len() as u32);
+
+    // Fields (in optimized order)
+    for field in &struct_type.fields {
+        // Field type
+        bytes.push(wasm_type_byte(&field.field_type));
+
+        // Mutability
+        bytes.push(if field.mutable { 0x01 } else { 0x00 });
+    }
+
+    bytes
+}
+
+/// Generate WebAssembly type section for an array
+pub fun generate_array_type(array_type: &WasmArrayType) -> Vec<u8> {
+    let mut bytes = Vec::new();
+
+    // Type form: array
+    bytes.push(0x5e);
+
+    // Element type
+    bytes.push(wasm_type_byte(&array_type.element_type));
+
+    // Mutability
+    bytes.push(if array_type.mutable { 0x01 } else { 0x00 });
+
+    bytes
+}
+
+// ============================================================================
+// Struct Operations - Optimized Code Generation
+// ============================================================================
+
+/// Generate code for struct instantiation (optimized)
+pub fun generate_struct_new(struct_type: &WasmStructType, field_values: Vec<Vec<u8>>) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    // Push field values in field order
+    for (i, field) in struct_type.fields.iter().enumerate() {
+        if i < field_values.len() {
+            code.extend_from_slice(&field_values[i]);
+        } else {
+            // Default value
+            code.extend_from_slice(&generate_default_value(&field.field_type));
+        }
+    }
+
+    // struct.new instruction
+    code.push(0xfb);  // GC prefix
+    code.push(0x00);  // struct.new opcode
+    encode_uleb128(&mut code, struct_type.type_index);
+
+    code
+}
+
+/// Generate code for field access (optimized with pre-calculated offsets)
+pub fun generate_struct_get(struct_type: &WasmStructType, field_name: &str) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    if let Some(field_index) = struct_type.get_field_index(field_name) {
+        // struct.get instruction
+        code.push(0xfb);  // GC prefix
+        code.push(0x02);  // struct.get opcode
+        encode_uleb128(&mut code, struct_type.type_index);
+        encode_uleb128(&mut code, field_index as u32);
+    }
+
+    code
+}
+
+/// Generate code for field mutation (optimized)
+pub fun generate_struct_set(struct_type: &WasmStructType, field_name: &str, value: Vec<u8>) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    if let Some(field_index) = struct_type.get_field_index(field_name) {
+        // Push new value
+        code.extend_from_slice(&value);
+
+        // struct.set instruction
+        code.push(0xfb);  // GC prefix
+        code.push(0x03);  // struct.set opcode
+        encode_uleb128(&mut code, struct_type.type_index);
+        encode_uleb128(&mut code, field_index as u32);
+    }
+
+    code
+}
+
+// ============================================================================
+// Array Operations - Optimized Code Generation
+// ============================================================================
+
+/// Generate code for array instantiation with default values
+pub fun generate_array_new_default(array_type: &WasmArrayType, length: u32) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    // Push length
+    code.push(0x41);  // i32.const
+    encode_sleb128(&mut code, length as i32);
+
+    // Push default value
+    code.extend_from_slice(&generate_default_value(&array_type.element_type));
+
+    // array.new_default instruction
+    code.push(0xfb);  // GC prefix
+    code.push(0x1c);  // array.new_default opcode
+    encode_uleb128(&mut code, array_type.type_index);
+
+    code
+}
+
+/// Generate code for array instantiation from elements
+pub fun generate_array_new_fixed(array_type: &WasmArrayType, elements: Vec<Vec<u8>>) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    // Push all element values
+    for element in &elements {
+        code.extend_from_slice(element);
+    }
+
+    // array.new_fixed instruction
+    code.push(0xfb);  // GC prefix
+    code.push(0x1d);  // array.new_fixed opcode
+    encode_uleb128(&mut code, array_type.type_index);
+    encode_uleb128(&mut code, elements.len() as u32);
+
+    code
+}
+
+/// Generate code for array element access (optimized)
+pub fun generate_array_get(array_type: &WasmArrayType, index: Vec<u8>) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    // Push index
+    code.extend_from_slice(&index);
+
+    // array.get instruction
+    code.push(0xfb);  // GC prefix
+    code.push(0x13);  // array.get opcode
+    encode_uleb128(&mut code, array_type.type_index);
+
+    code
+}
+
+/// Generate code for array element mutation (optimized)
+pub fun generate_array_set(array_type: &WasmArrayType, index: Vec<u8>, value: Vec<u8>) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    // Push index
+    code.extend_from_slice(&index);
+
+    // Push value
+    code.extend_from_slice(&value);
+
+    // array.set instruction
+    code.push(0xfb);  // GC prefix
+    code.push(0x14);  // array.set opcode
+    encode_uleb128(&mut code, array_type.type_index);
+
+    code
+}
+
+/// Generate code for array length (optimized)
+pub fun generate_array_len() -> Vec<u8> {
+    vec![
+        0xfb,  // GC prefix
+        0x15,  // array.len opcode
+    ]
+}
+
+// ============================================================================
+// Advanced Operations
+// ============================================================================
+
+/// Generate code for nested struct access (path-based)
+pub fun generate_nested_struct_get(path: Vec<(&WasmStructType, &str)>) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    for (struct_type, field_name) in path {
+        code.extend_from_slice(&generate_struct_get(struct_type, field_name));
+    }
+
+    code
+}
+
+/// Generate code for multidimensional array access
+pub fun generate_multidimensional_array_get(
+    array_types: Vec<&WasmArrayType>,
+    indices: Vec<Vec<u8>>
+) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    for (i, (array_type, index)) in array_types.iter().zip(indices.iter()).enumerate() {
+        if i > 0 {
+            // We already have the array reference from the previous get
+        }
+        code.extend_from_slice(&generate_array_get(array_type, index.clone()));
+    }
+
+    code
+}
+
+// ============================================================================
+// Iteration Support
+// ============================================================================
+
+/// Generate code for array iteration
+pub fun generate_array_foreach(
+    array_type: &WasmArrayType,
+    body: Vec<u8>
+) -> Vec<u8> {
+    let mut code = Vec::new();
+
+    // Local variables: array ref, index, length
+    // (block
+    //   (local.set $arr ...)
+    //   (local.set $len (array.len (local.get $arr)))
+    //   (local.set $i (i32.const 0))
+    //   (loop
+    //     (if (i32.lt_u (local.get $i) (local.get $len))
+    //       (then
+    //         (local.set $elem (array.get $arr (local.get $i)))
+    //         ... body ...
+    //         (local.set $i (i32.add (local.get $i) (i32.const 1)))
+    //         (br 0)
+    //       )
+    //     )
+    //   )
+    // )
+
+    // This is a simplified version - actual implementation would use proper local management
+    code.extend_from_slice(&body);
+
+    code
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Get WebAssembly type byte encoding
+#[inline]
+fn wasm_type_byte(wasm_type: &WasmType) -> u8 {
+    match wasm_type {
+        WasmType::I32 => 0x7f,
+        WasmType::I64 => 0x7e,
+        WasmType::F32 => 0x7d,
+        WasmType::F64 => 0x7c,
+        WasmType::V128 => 0x7b,
+        WasmType::FuncRef => 0x70,
+        WasmType::ExternRef => 0x6f,
+        WasmType::AnyRef => 0x6e,
+    }
+}
+
+/// Generate default value for a type
+fn generate_default_value(wasm_type: &WasmType) -> Vec<u8> {
+    match wasm_type {
+        WasmType::I32 => vec![0x41, 0x00],  // i32.const 0
+        WasmType::I64 => vec![0x42, 0x00],  // i64.const 0
+        WasmType::F32 => vec![0x43, 0x00, 0x00, 0x00, 0x00],  // f32.const 0.0
+        WasmType::F64 => vec![0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],  // f64.const 0.0
+        WasmType::V128 => vec![0xfd, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],  // v128.const 0
+        WasmType::FuncRef | WasmType::ExternRef | WasmType::AnyRef => vec![0xd0, 0x70],  // ref.null
+    }
+}
+
+/// Encode unsigned LEB128
+fn encode_uleb128(bytes: &mut Vec<u8>, mut value: u32) {
+    loop {
+        let mut byte = (value & 0x7f) as u8;
+        value >>= 7;
+        if value != 0 {
+            byte |= 0x80;
+        }
+        bytes.push(byte);
+        if value == 0 {
+            break;
+        }
+    }
+}
+
+/// Encode signed LEB128
+fn encode_sleb128(bytes: &mut Vec<u8>, mut value: i32) {
+    loop {
+        let mut byte = (value & 0x7f) as u8;
+        value >>= 7;
+        let done = (value == 0 && (byte & 0x40) == 0) || (value == -1 && (byte & 0x40) != 0);
+        if !done {
+            byte |= 0x80;
+        }
+        bytes.push(byte);
+        if done {
+            break;
+        }
+    }
+}
+
+// ============================================================================
+// High-Level Builder API
+// ============================================================================
+
+/// Builder for struct types with fluent interface
+pub struct StructTypeBuilder {
+    name: String,
+    fields: Vec<(String, WasmType, bool)>,
+    super_type: Option<String>,
+}
+
+impl StructTypeBuilder {
+    pub fun new(name: String) -> Self {
+        StructTypeBuilder {
+            name,
+            fields: Vec::new(),
+            super_type: None,
+        }
+    }
+
+    pub fun add_field(mut self, name: String, field_type: WasmType, mutable: bool) -> Self {
+        self.fields.push((name, field_type, mutable));
+        self
+    }
+
+    pub fun extends(mut self, super_type: String) -> Self {
+        self.super_type = Some(super_type);
+        self
+    }
+
+    pub fun build(self) -> WasmStructType {
+        let mut struct_type = WasmStructType::new(self.name, self.fields);
+
+        if let Some(super_name) = self.super_type {
+            let registry = get_registry();
+            if let Some(super_index) = registry.get_struct_index(&super_name) {
+                struct_type.super_type = Some(super_index);
+            }
+        }
+
+        struct_type
+    }
+}
+
+/// Builder for array types with fluent interface
+pub struct ArrayTypeBuilder {
+    name: String,
+    element_type: Option<WasmType>,
+    mutable: bool,
+}
+
+impl ArrayTypeBuilder {
+    pub fun new(name: String) -> Self {
+        ArrayTypeBuilder {
+            name,
+            element_type: None,
+            mutable: true,
+        }
+    }
+
+    pub fun element_type(mut self, element_type: WasmType) -> Self {
+        self.element_type = Some(element_type);
+        self
+    }
+
+    pub fun immutable(mut self) -> Self {
+        self.mutable = false;
+        self
+    }
+
+    pub fun build(self) -> WasmArrayType {
+        WasmArrayType::new(
+            self.name,
+            self.element_type.expect("Element type must be set"),
+            self.mutable
+        )
+    }
+}
+
+// ============================================================================
+// Performance Metrics and Optimization Hints
+// ============================================================================
+
+/// Calculate memory overhead for a struct type
+pub fun calculate_struct_overhead(struct_type: &WasmStructType) -> usize {
+    // Padding bytes
+    let field_sizes: usize = struct_type.fields.iter()
+        .map(|f| f.field_type.size())
+        .sum();
+    struct_type.total_size - field_sizes
+}
+
+/// Suggest optimizations for struct layout
+pub fun suggest_struct_optimizations(struct_type: &WasmStructType) -> Vec<String> {
+    let mut suggestions = Vec::new();
+
+    let overhead = calculate_struct_overhead(struct_type);
+    if overhead > 0 {
+        suggestions.push(format!(
+            "Struct '{}' has {} bytes of padding. Consider reordering fields.",
+            struct_type.name, overhead
+        ));
+    }
+
+    suggestions
+}

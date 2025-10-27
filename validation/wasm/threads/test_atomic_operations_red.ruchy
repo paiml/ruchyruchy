@@ -1,0 +1,421 @@
+// WASM-009: Thread Support - Atomic Operations Tests (RED Phase)
+//
+// These tests verify atomic memory operations for WebAssembly threads.
+// All tests should FAIL in the RED phase, indicating missing implementation.
+//
+// Atomic operations provide thread-safe access to shared memory without
+// explicit locking, guaranteeing atomicity and proper memory ordering.
+
+// Test helper structures
+struct AtomicResult {
+    success: bool,
+    value: i64,
+    error_message: String,
+}
+
+// ============================================================================
+// Test 1: Atomic Load/Store (i32)
+// ============================================================================
+
+fun test_atomic_load_store_i32() -> bool {
+    println("Test 1: Atomic load/store i32");
+
+    let memory = create_shared_memory(1024);
+
+    // Store value atomically
+    atomic_store_i32(memory, 0, 42);
+
+    // Load value atomically
+    let value = atomic_load_i32(memory, 0);
+
+    if value == 42 {
+        println("  PASS: Atomic i32 load/store works");
+        true
+    } else {
+        println("  FAIL: Atomic i32 load/store failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 2: Atomic Load/Store (i64)
+// ============================================================================
+
+fun test_atomic_load_store_i64() -> bool {
+    println("Test 2: Atomic load/store i64");
+
+    let memory = create_shared_memory(1024);
+
+    // Store 64-bit value atomically
+    atomic_store_i64(memory, 0, 9223372036854775807); // i64::MAX
+
+    // Load value atomically
+    let value = atomic_load_i64(memory, 0);
+
+    if value == 9223372036854775807 {
+        println("  PASS: Atomic i64 load/store works");
+        true
+    } else {
+        println("  FAIL: Atomic i64 load/store failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 3: Atomic Add (RMW)
+// ============================================================================
+
+fun test_atomic_add() -> bool {
+    println("Test 3: Atomic add");
+
+    let memory = create_shared_memory(1024);
+    atomic_store_i32(memory, 0, 10);
+
+    // Atomically add 5
+    let old_value = atomic_add_i32(memory, 0, 5);
+
+    let new_value = atomic_load_i32(memory, 0);
+
+    if old_value == 10 && new_value == 15 {
+        println("  PASS: Atomic add works");
+        true
+    } else {
+        println("  FAIL: Atomic add failed (old={}, new={})", old_value, new_value);
+        false
+    }
+}
+
+// ============================================================================
+// Test 4: Atomic Sub (RMW)
+// ============================================================================
+
+fun test_atomic_sub() -> bool {
+    println("Test 4: Atomic sub");
+
+    let memory = create_shared_memory(1024);
+    atomic_store_i32(memory, 0, 20);
+
+    // Atomically subtract 7
+    let old_value = atomic_sub_i32(memory, 0, 7);
+
+    let new_value = atomic_load_i32(memory, 0);
+
+    if old_value == 20 && new_value == 13 {
+        println("  PASS: Atomic sub works");
+        true
+    } else {
+        println("  FAIL: Atomic sub failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 5: Atomic And/Or/Xor (RMW)
+// ============================================================================
+
+fun test_atomic_bitwise() -> bool {
+    println("Test 5: Atomic bitwise operations");
+
+    let memory = create_shared_memory(1024);
+
+    // Test AND
+    atomic_store_i32(memory, 0, 0b1111);
+    atomic_and_i32(memory, 0, 0b1010);
+    let and_result = atomic_load_i32(memory, 0);
+
+    // Test OR
+    atomic_store_i32(memory, 4, 0b1010);
+    atomic_or_i32(memory, 4, 0b0101);
+    let or_result = atomic_load_i32(memory, 4);
+
+    // Test XOR
+    atomic_store_i32(memory, 8, 0b1111);
+    atomic_xor_i32(memory, 8, 0b1010);
+    let xor_result = atomic_load_i32(memory, 8);
+
+    if and_result == 0b1010 && or_result == 0b1111 && xor_result == 0b0101 {
+        println("  PASS: Atomic bitwise operations work");
+        true
+    } else {
+        println("  FAIL: Atomic bitwise operations failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 6: Atomic Exchange (RMW)
+// ============================================================================
+
+fun test_atomic_exchange() -> bool {
+    println("Test 6: Atomic exchange");
+
+    let memory = create_shared_memory(1024);
+    atomic_store_i32(memory, 0, 100);
+
+    // Atomically exchange with new value
+    let old_value = atomic_exchange_i32(memory, 0, 200);
+
+    let new_value = atomic_load_i32(memory, 0);
+
+    if old_value == 100 && new_value == 200 {
+        println("  PASS: Atomic exchange works");
+        true
+    } else {
+        println("  FAIL: Atomic exchange failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 7: Compare-and-Swap (CAS)
+// ============================================================================
+
+fun test_compare_and_swap() -> bool {
+    println("Test 7: Compare-and-swap");
+
+    let memory = create_shared_memory(1024);
+    atomic_store_i32(memory, 0, 50);
+
+    // CAS: if current == 50, set to 75
+    let cas_result = atomic_compare_exchange_i32(memory, 0, 50, 75);
+
+    let new_value = atomic_load_i32(memory, 0);
+
+    // Try CAS with wrong expected value
+    let cas_fail = atomic_compare_exchange_i32(memory, 0, 50, 100);
+
+    if cas_result == 50 && new_value == 75 && cas_fail == 75 {
+        println("  PASS: Compare-and-swap works");
+        true
+    } else {
+        println("  FAIL: Compare-and-swap failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 8: Concurrent Atomic Increment (Correctness)
+// ============================================================================
+
+fun test_concurrent_atomic_increment() -> bool {
+    println("Test 8: Concurrent atomic increment");
+
+    let memory = create_shared_memory(1024);
+    atomic_store_i32(memory, 0, 0);
+
+    let num_threads = 4;
+    let increments_per_thread = 10000;
+
+    // Spawn threads that atomically increment counter
+    let threads = spawn_threads(num_threads, || {
+        for _ in 0..increments_per_thread {
+            atomic_add_i32(memory, 0, 1);
+        }
+    });
+
+    join_all(threads);
+
+    let final_value = atomic_load_i32(memory, 0);
+    let expected = num_threads * increments_per_thread;
+
+    if final_value == expected {
+        println("  PASS: Concurrent atomic increment correct ({})", final_value);
+        true
+    } else {
+        println("  FAIL: Lost updates (expected {}, got {})", expected, final_value);
+        false
+    }
+}
+
+// ============================================================================
+// Test 9: Atomic Wait/Notify
+// ============================================================================
+
+fun test_atomic_wait_notify() -> bool {
+    println("Test 9: Atomic wait/notify");
+
+    let memory = create_shared_memory(1024);
+    atomic_store_i32(memory, 0, 0);
+
+    // Thread 1: Wait for value to become 1
+    let thread1 = spawn_thread(|| {
+        let result = atomic_wait_i32(memory, 0, 0, 5000); // Wait up to 5 seconds
+        result // Should be woken up
+    });
+
+    // Thread 2: Sleep briefly, then set value and notify
+    let thread2 = spawn_thread(|| {
+        sleep_ms(100); // Give thread1 time to wait
+        atomic_store_i32(memory, 0, 1);
+        atomic_notify(memory, 0, 1); // Wake 1 waiter
+    });
+
+    let wait_result = join_thread(thread1);
+    join_thread(thread2);
+
+    if wait_result == WaitResult::Woken {
+        println("  PASS: Atomic wait/notify works");
+        true
+    } else {
+        println("  FAIL: Atomic wait/notify failed");
+        false
+    }
+}
+
+// ============================================================================
+// Test 10: Atomic Operation Performance
+// ============================================================================
+
+fun test_atomic_performance() -> bool {
+    println("Test 10: Atomic operation performance");
+
+    let memory = create_shared_memory(1024);
+    let iterations = 1000000;
+
+    let start_time = current_time_ns();
+
+    for _ in 0..iterations {
+        atomic_add_i32(memory, 0, 1);
+    }
+
+    let elapsed_ns = current_time_ns() - start_time;
+    let ns_per_op = elapsed_ns / iterations;
+
+    if ns_per_op < 100 {
+        println("  PASS: Atomic ops fast ({}ns per op)", ns_per_op);
+        true
+    } else {
+        println("  FAIL: Atomic ops too slow ({}ns per op)", ns_per_op);
+        false
+    }
+}
+
+// ============================================================================
+// Test Helper Functions (Stub Implementation for RED Phase)
+// ============================================================================
+
+fun atomic_load_i32(memory: SharedMemory, offset: usize) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_store_i32(memory: SharedMemory, offset: usize, value: i32) {
+    // RED Phase: Not implemented
+}
+
+fun atomic_load_i64(memory: SharedMemory, offset: usize) -> i64 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_store_i64(memory: SharedMemory, offset: usize, value: i64) {
+    // RED Phase: Not implemented
+}
+
+fun atomic_add_i32(memory: SharedMemory, offset: usize, value: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_sub_i32(memory: SharedMemory, offset: usize, value: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_and_i32(memory: SharedMemory, offset: usize, value: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_or_i32(memory: SharedMemory, offset: usize, value: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_xor_i32(memory: SharedMemory, offset: usize, value: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_exchange_i32(memory: SharedMemory, offset: usize, value: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun atomic_compare_exchange_i32(memory: SharedMemory, offset: usize, expected: i32, desired: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+enum WaitResult {
+    Woken,
+    Timeout,
+    NotEqual,
+}
+
+fun atomic_wait_i32(memory: SharedMemory, offset: usize, expected: i32, timeout_ms: i64) -> WaitResult {
+    // RED Phase: Not implemented
+    WaitResult::Timeout
+}
+
+fun atomic_notify(memory: SharedMemory, offset: usize, count: i32) -> i32 {
+    // RED Phase: Not implemented
+    0
+}
+
+fun sleep_ms(ms: i64) {
+    // RED Phase: Not implemented
+}
+
+fun current_time_ns() -> i64 {
+    // RED Phase: Not implemented
+    0
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("WASM-009: Atomic Operations Tests (RED Phase)");
+    println("==============================================");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Run all tests
+    if test_atomic_load_store_i32() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_atomic_load_store_i64() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_atomic_add() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_atomic_sub() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_atomic_bitwise() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_atomic_exchange() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_compare_and_swap() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_concurrent_atomic_increment() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_atomic_wait_notify() { passed = passed + 1; } else { failed = failed + 1; }
+    if test_atomic_performance() { passed = passed + 1; } else { failed = failed + 1; }
+
+    println("");
+    println("==============================================");
+    println("Test Results (RED Phase)");
+    println("==============================================");
+    println("PASS: {}", passed);
+    println("FAIL: {}", failed);
+    println("Total: {}", passed + failed);
+    println("");
+
+    if failed == 10 {
+        println("✅ RED PHASE SUCCESS: All 10 tests failing as expected!");
+        println("");
+        println("This confirms that atomic operations");
+        println("are not yet implemented. Proceed to GREEN phase.");
+    } else {
+        println("⚠️  UNEXPECTED: {} test(s) passing in RED phase", passed);
+        println("");
+        println("RED phase tests should all fail to demonstrate");
+        println("missing implementation. Review test logic.");
+    }
+
+    println("==============================================");
+}

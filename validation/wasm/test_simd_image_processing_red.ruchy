@@ -1,0 +1,703 @@
+//
+// WASM-004: WebAssembly SIMD Support - Image Processing Tests (RED Phase)
+//
+// This file contains failing tests for SIMD-based image processing operations.
+// These tests define requirements for implementing efficient image manipulation
+// algorithms using SIMD instructions.
+//
+
+import { compile_to_wasm, run_wasm, WasmCompilationOptions } from "../multi_target/wasm_compiler";
+import { assert, assert_eq, assert_approx_eq } from "../../bootstrap/stage0/test_utils";
+import { benchmark } from "../../validation/benchmarks/benchmark_utils";
+
+// Image representation for testing
+struct RGBAImage {
+    width: usize,
+    height: usize,
+    pixels: Vec<u32>,  // RGBA format: 0xRRGGBBAA
+}
+
+impl RGBAImage {
+    // Create a new image with specified dimensions
+    fun new(width: usize, height: usize) -> Self {
+        let mut pixels = Vec::with_capacity(width * height);
+        for _ in 0..(width * height) {
+            pixels.push(0);
+        }
+        
+        Self { width, height, pixels }
+    }
+    
+    // Create a test pattern image
+    fun create_test_pattern(width: usize, height: usize) -> Self {
+        let mut img = Self::new(width, height);
+        
+        for y in 0..height {
+            for x in 0..width {
+                let r = ((x as f32 / width as f32) * 255.0) as u8;
+                let g = ((y as f32 / height as f32) * 255.0) as u8;
+                let b = (((x + y) as f32 / (width + height) as f32) * 255.0) as u8;
+                let a = 255u8;
+                
+                let pixel = (r as u32) << 24 | (g as u32) << 16 | (b as u32) << 8 | (a as u32);
+                img.pixels[y * width + x] = pixel;
+            }
+        }
+        
+        img
+    }
+    
+    // Get a pixel value
+    fun get_pixel(&self, x: usize, y: usize) -> u32 {
+        if x < self.width && y < self.height {
+            return self.pixels[y * self.width + x];
+        } else {
+            return 0;
+        }
+    }
+    
+    // Set a pixel value
+    fun set_pixel(&mut self, x: usize, y: usize, rgba: u32) {
+        if x < self.width && y < self.height {
+            self.pixels[y * self.width + x] = rgba;
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Gaussian Blur Implementation - Scalar vs SIMD
+// -----------------------------------------------------------------------------
+
+// Scalar implementation of a 3x3 Gaussian blur
+fun gaussian_blur_3x3_scalar(input: &RGBAImage) -> RGBAImage {
+    let width = input.width;
+    let height = input.height;
+    let mut output = RGBAImage::new(width, height);
+    
+    // Gaussian kernel weights (1/16, 2/16, 1/16, 2/16, 4/16, 2/16, 1/16, 2/16, 1/16)
+    let kernel = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+    let kernel_sum = 16;
+    
+    for y in 1..(height - 1) {
+        for x in 1..(width - 1) {
+            let mut r_sum = 0u32;
+            let mut g_sum = 0u32;
+            let mut b_sum = 0u32;
+            let mut a_sum = 0u32;
+            let mut k = 0;
+            
+            for ky in -1..=1 {
+                for kx in -1..=1 {
+                    let px = input.get_pixel((x as i32 + kx) as usize, (y as i32 + ky) as usize);
+                    let r = (px >> 24) & 0xFF;
+                    let g = (px >> 16) & 0xFF;
+                    let b = (px >> 8) & 0xFF;
+                    let a = px & 0xFF;
+                    
+                    let weight = kernel[k];
+                    r_sum += r * weight;
+                    g_sum += g * weight;
+                    b_sum += b * weight;
+                    a_sum += a * weight;
+                    
+                    k += 1;
+                }
+            }
+            
+            // Normalize by kernel sum
+            r_sum = r_sum / kernel_sum;
+            g_sum = g_sum / kernel_sum;
+            b_sum = b_sum / kernel_sum;
+            a_sum = a_sum / kernel_sum;
+            
+            let blurred_pixel = (r_sum << 24) | (g_sum << 16) | (b_sum << 8) | a_sum;
+            output.set_pixel(x, y, blurred_pixel);
+        }
+    }
+    
+    output
+}
+
+// SIMD implementation of a 3x3 Gaussian blur
+fun gaussian_blur_3x3_simd(input: &RGBAImage) -> RGBAImage {
+    let width = input.width;
+    let height = input.height;
+    let mut output = RGBAImage::new(width, height);
+    
+    // Create vector constants for the kernel
+    let kernel_v = i32x4(1, 2, 1, 0);
+    let kernel_mid_v = i32x4(2, 4, 2, 0);
+    let kernel_sum_v = i32x4(16, 16, 16, 16);
+    
+    for y in 1..(height - 1) {
+        for x in 1..(width - 1) {
+            // Initialize accumulators for RGBA channels
+            let mut rgba_sum_v = i32x4(0, 0, 0, 0);
+            
+            // Top row
+            let p0 = input.get_pixel(x - 1, y - 1);
+            let p1 = input.get_pixel(x, y - 1);
+            let p2 = input.get_pixel(x + 1, y - 1);
+            
+            // Convert to SIMD vectors
+            let p0_v = i32x4(
+                ((p0 >> 24) & 0xFF) as i32, 
+                ((p0 >> 16) & 0xFF) as i32,
+                ((p0 >> 8) & 0xFF) as i32,
+                (p0 & 0xFF) as i32
+            );
+            
+            let p1_v = i32x4(
+                ((p1 >> 24) & 0xFF) as i32, 
+                ((p1 >> 16) & 0xFF) as i32,
+                ((p1 >> 8) & 0xFF) as i32,
+                (p1 & 0xFF) as i32
+            );
+            
+            let p2_v = i32x4(
+                ((p2 >> 24) & 0xFF) as i32, 
+                ((p2 >> 16) & 0xFF) as i32,
+                ((p2 >> 8) & 0xFF) as i32,
+                (p2 & 0xFF) as i32
+            );
+            
+            // Multiply by kernel weights and add to accumulator
+            rgba_sum_v = rgba_sum_v + p0_v * kernel_v;
+            rgba_sum_v = rgba_sum_v + p1_v * kernel_v.shuffle(1, 0, 2, 3); // Shuffle to get 2,1,1,0
+            rgba_sum_v = rgba_sum_v + p2_v * kernel_v;
+            
+            // Middle row
+            let p3 = input.get_pixel(x - 1, y);
+            let p4 = input.get_pixel(x, y);
+            let p5 = input.get_pixel(x + 1, y);
+            
+            let p3_v = i32x4(
+                ((p3 >> 24) & 0xFF) as i32, 
+                ((p3 >> 16) & 0xFF) as i32,
+                ((p3 >> 8) & 0xFF) as i32,
+                (p3 & 0xFF) as i32
+            );
+            
+            let p4_v = i32x4(
+                ((p4 >> 24) & 0xFF) as i32, 
+                ((p4 >> 16) & 0xFF) as i32,
+                ((p4 >> 8) & 0xFF) as i32,
+                (p4 & 0xFF) as i32
+            );
+            
+            let p5_v = i32x4(
+                ((p5 >> 24) & 0xFF) as i32, 
+                ((p5 >> 16) & 0xFF) as i32,
+                ((p5 >> 8) & 0xFF) as i32,
+                (p5 & 0xFF) as i32
+            );
+            
+            // Middle row has different kernel weights
+            rgba_sum_v = rgba_sum_v + p3_v * kernel_mid_v.shuffle(0, 3, 3, 3); // Get 2,0,0,0
+            rgba_sum_v = rgba_sum_v + p4_v * kernel_mid_v.shuffle(1, 3, 3, 3); // Get 4,0,0,0
+            rgba_sum_v = rgba_sum_v + p5_v * kernel_mid_v.shuffle(2, 3, 3, 3); // Get 2,0,0,0
+            
+            // Bottom row
+            let p6 = input.get_pixel(x - 1, y + 1);
+            let p7 = input.get_pixel(x, y + 1);
+            let p8 = input.get_pixel(x + 1, y + 1);
+            
+            let p6_v = i32x4(
+                ((p6 >> 24) & 0xFF) as i32, 
+                ((p6 >> 16) & 0xFF) as i32,
+                ((p6 >> 8) & 0xFF) as i32,
+                (p6 & 0xFF) as i32
+            );
+            
+            let p7_v = i32x4(
+                ((p7 >> 24) & 0xFF) as i32, 
+                ((p7 >> 16) & 0xFF) as i32,
+                ((p7 >> 8) & 0xFF) as i32,
+                (p7 & 0xFF) as i32
+            );
+            
+            let p8_v = i32x4(
+                ((p8 >> 24) & 0xFF) as i32, 
+                ((p8 >> 16) & 0xFF) as i32,
+                ((p8 >> 8) & 0xFF) as i32,
+                (p8 & 0xFF) as i32
+            );
+            
+            // Bottom row has same weights as top row
+            rgba_sum_v = rgba_sum_v + p6_v * kernel_v;
+            rgba_sum_v = rgba_sum_v + p7_v * kernel_v.shuffle(1, 0, 2, 3); // Shuffle to get 2,1,1,0
+            rgba_sum_v = rgba_sum_v + p8_v * kernel_v;
+            
+            // Divide by kernel sum to normalize
+            let normalized_v = rgba_sum_v / kernel_sum_v;
+            
+            // Extract components and build pixel value
+            let r = normalized_v.extract_lane(0) as u32;
+            let g = normalized_v.extract_lane(1) as u32;
+            let b = normalized_v.extract_lane(2) as u32;
+            let a = normalized_v.extract_lane(3) as u32;
+            
+            let blurred_pixel = (r << 24) | (g << 16) | (b << 8) | a;
+            output.set_pixel(x, y, blurred_pixel);
+        }
+    }
+    
+    output
+}
+
+fun test_gaussian_blur() {
+    let width = 100;
+    let height = 100;
+    let input = RGBAImage::create_test_pattern(width, height);
+    
+    // Apply blur using both implementations
+    let scalar_result = gaussian_blur_3x3_scalar(&input);
+    let simd_result = gaussian_blur_3x3_simd(&input);
+    
+    // Check that both implementations produce the same result
+    for y in 0..height {
+        for x in 0..width {
+            let scalar_pixel = scalar_result.get_pixel(x, y);
+            let simd_pixel = simd_result.get_pixel(x, y);
+            
+            // Note: there might be minor rounding differences between scalar and SIMD
+            // implementations due to different computation order, so we don't check
+            // for exact equality
+            let scalar_r = (scalar_pixel >> 24) & 0xFF;
+            let scalar_g = (scalar_pixel >> 16) & 0xFF;
+            let scalar_b = (scalar_pixel >> 8) & 0xFF;
+            let scalar_a = scalar_pixel & 0xFF;
+            
+            let simd_r = (simd_pixel >> 24) & 0xFF;
+            let simd_g = (simd_pixel >> 16) & 0xFF;
+            let simd_b = (simd_pixel >> 8) & 0xFF;
+            let simd_a = simd_pixel & 0xFF;
+            
+            // Allow for small rounding differences (±1)
+            assert(
+                (scalar_r as i32 - simd_r as i32).abs() <= 1 &&
+                (scalar_g as i32 - simd_g as i32).abs() <= 1 &&
+                (scalar_b as i32 - simd_b as i32).abs() <= 1 &&
+                (scalar_a as i32 - simd_a as i32).abs() <= 1,
+                "Pixel mismatch at ({}, {}): scalar={:08X}, simd={:08X}",
+                x, y, scalar_pixel, simd_pixel
+            );
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Edge Detection Implementation - Scalar vs SIMD
+// -----------------------------------------------------------------------------
+
+// Sobel edge detection - Scalar implementation
+fun sobel_edge_detection_scalar(input: &RGBAImage) -> RGBAImage {
+    let width = input.width;
+    let height = input.height;
+    let mut output = RGBAImage::new(width, height);
+    
+    // Sobel kernels for x and y derivatives
+    let kernel_x = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+    let kernel_y = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+    
+    for y in 1..(height - 1) {
+        for x in 1..(width - 1) {
+            let mut gx_r = 0i32;
+            let mut gx_g = 0i32;
+            let mut gx_b = 0i32;
+            
+            let mut gy_r = 0i32;
+            let mut gy_g = 0i32;
+            let mut gy_b = 0i32;
+            
+            let mut k = 0;
+            for ky in -1..=1 {
+                for kx in -1..=1 {
+                    let px = input.get_pixel((x as i32 + kx) as usize, (y as i32 + ky) as usize);
+                    let r = ((px >> 24) & 0xFF) as i32;
+                    let g = ((px >> 16) & 0xFF) as i32;
+                    let b = ((px >> 8) & 0xFF) as i32;
+                    
+                    gx_r += r * kernel_x[k];
+                    gx_g += g * kernel_x[k];
+                    gx_b += b * kernel_x[k];
+                    
+                    gy_r += r * kernel_y[k];
+                    gy_g += g * kernel_y[k];
+                    gy_b += b * kernel_y[k];
+                    
+                    k += 1;
+                }
+            }
+            
+            // Calculate magnitude of gradient
+            let mag_r = ((gx_r * gx_r + gy_r * gy_r) as f32).sqrt() as u32;
+            let mag_g = ((gx_g * gx_g + gy_g * gy_g) as f32).sqrt() as u32;
+            let mag_b = ((gx_b * gx_b + gy_b * gy_b) as f32).sqrt() as u32;
+            
+            // Clamp to 0-255
+            let r = if mag_r > 255 { 255 } else { mag_r };
+            let g = if mag_g > 255 { 255 } else { mag_g };
+            let b = if mag_b > 255 { 255 } else { mag_b };
+            
+            let edge_pixel = (r << 24) | (g << 16) | (b << 8) | 0xFF;
+            output.set_pixel(x, y, edge_pixel);
+        }
+    }
+    
+    output
+}
+
+// Sobel edge detection - SIMD implementation
+fun sobel_edge_detection_simd(input: &RGBAImage) -> RGBAImage {
+    let width = input.width;
+    let height = input.height;
+    let mut output = RGBAImage::new(width, height);
+    
+    // Sobel kernels as vectors
+    let kx_row1 = i32x4(-1, 0, 1, 0);
+    let kx_row2 = i32x4(-2, 0, 2, 0);
+    let kx_row3 = i32x4(-1, 0, 1, 0);
+    
+    let ky_row1 = i32x4(-1, -2, -1, 0);
+    let ky_row2 = i32x4(0, 0, 0, 0);
+    let ky_row3 = i32x4(1, 2, 1, 0);
+    
+    for y in 1..(height - 1) {
+        for x in 1..(width - 1) {
+            // Initialize gradient accumulators
+            let mut gx_v = i32x4(0, 0, 0, 0);
+            let mut gy_v = i32x4(0, 0, 0, 0);
+            
+            // Top row
+            let p0 = input.get_pixel(x - 1, y - 1);
+            let p1 = input.get_pixel(x, y - 1);
+            let p2 = input.get_pixel(x + 1, y - 1);
+            
+            let p0_v = i32x4(
+                ((p0 >> 24) & 0xFF) as i32, 
+                ((p0 >> 16) & 0xFF) as i32,
+                ((p0 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            let p1_v = i32x4(
+                ((p1 >> 24) & 0xFF) as i32, 
+                ((p1 >> 16) & 0xFF) as i32,
+                ((p1 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            let p2_v = i32x4(
+                ((p2 >> 24) & 0xFF) as i32, 
+                ((p2 >> 16) & 0xFF) as i32,
+                ((p2 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            // Apply kernels to top row
+            gx_v += p0_v * kx_row1.shuffle(0, 0, 0, 3); // Apply -1 to all channels
+            gx_v += p1_v * kx_row1.shuffle(1, 1, 1, 3); // Apply 0 to all channels
+            gx_v += p2_v * kx_row1.shuffle(2, 2, 2, 3); // Apply 1 to all channels
+            
+            gy_v += p0_v * ky_row1.shuffle(0, 0, 0, 3); // Apply -1 to all channels
+            gy_v += p1_v * ky_row1.shuffle(1, 1, 1, 3); // Apply -2 to all channels
+            gy_v += p2_v * ky_row1.shuffle(2, 2, 2, 3); // Apply -1 to all channels
+            
+            // Middle row
+            let p3 = input.get_pixel(x - 1, y);
+            let p4 = input.get_pixel(x, y);
+            let p5 = input.get_pixel(x + 1, y);
+            
+            let p3_v = i32x4(
+                ((p3 >> 24) & 0xFF) as i32, 
+                ((p3 >> 16) & 0xFF) as i32,
+                ((p3 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            let p4_v = i32x4(
+                ((p4 >> 24) & 0xFF) as i32, 
+                ((p4 >> 16) & 0xFF) as i32,
+                ((p4 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            let p5_v = i32x4(
+                ((p5 >> 24) & 0xFF) as i32, 
+                ((p5 >> 16) & 0xFF) as i32,
+                ((p5 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            // Apply kernels to middle row
+            gx_v += p3_v * kx_row2.shuffle(0, 0, 0, 3); // Apply -2 to all channels
+            gx_v += p4_v * kx_row2.shuffle(1, 1, 1, 3); // Apply 0 to all channels
+            gx_v += p5_v * kx_row2.shuffle(2, 2, 2, 3); // Apply 2 to all channels
+            
+            gy_v += p3_v * ky_row2.shuffle(0, 0, 0, 3); // Apply 0 to all channels
+            gy_v += p4_v * ky_row2.shuffle(1, 1, 1, 3); // Apply 0 to all channels
+            gy_v += p5_v * ky_row2.shuffle(2, 2, 2, 3); // Apply 0 to all channels
+            
+            // Bottom row
+            let p6 = input.get_pixel(x - 1, y + 1);
+            let p7 = input.get_pixel(x, y + 1);
+            let p8 = input.get_pixel(x + 1, y + 1);
+            
+            let p6_v = i32x4(
+                ((p6 >> 24) & 0xFF) as i32, 
+                ((p6 >> 16) & 0xFF) as i32,
+                ((p6 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            let p7_v = i32x4(
+                ((p7 >> 24) & 0xFF) as i32, 
+                ((p7 >> 16) & 0xFF) as i32,
+                ((p7 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            let p8_v = i32x4(
+                ((p8 >> 24) & 0xFF) as i32, 
+                ((p8 >> 16) & 0xFF) as i32,
+                ((p8 >> 8) & 0xFF) as i32,
+                0
+            );
+            
+            // Apply kernels to bottom row
+            gx_v += p6_v * kx_row3.shuffle(0, 0, 0, 3); // Apply -1 to all channels
+            gx_v += p7_v * kx_row3.shuffle(1, 1, 1, 3); // Apply 0 to all channels
+            gx_v += p8_v * kx_row3.shuffle(2, 2, 2, 3); // Apply 1 to all channels
+            
+            gy_v += p6_v * ky_row3.shuffle(0, 0, 0, 3); // Apply 1 to all channels
+            gy_v += p7_v * ky_row3.shuffle(1, 1, 1, 3); // Apply 2 to all channels
+            gy_v += p8_v * ky_row3.shuffle(2, 2, 2, 3); // Apply 1 to all channels
+            
+            // Square gradients (gx^2, gy^2)
+            let gx_squared = gx_v * gx_v;
+            let gy_squared = gy_v * gy_v;
+            
+            // Sum of squares (gx^2 + gy^2)
+            let sum_squares = gx_squared + gy_squared;
+            
+            // Take square root to get magnitude
+            // In a real implementation, we'd use a SIMD-optimized square root approximation
+            // For this test, we'll extract and compute scalar square roots
+            let mag_r = (sum_squares.extract_lane(0) as f32).sqrt() as u32;
+            let mag_g = (sum_squares.extract_lane(1) as f32).sqrt() as u32;
+            let mag_b = (sum_squares.extract_lane(2) as f32).sqrt() as u32;
+            
+            // Clamp to 0-255
+            let r = if mag_r > 255 { 255 } else { mag_r };
+            let g = if mag_g > 255 { 255 } else { mag_g };
+            let b = if mag_b > 255 { 255 } else { mag_b };
+            
+            let edge_pixel = (r << 24) | (g << 16) | (b << 8) | 0xFF;
+            output.set_pixel(x, y, edge_pixel);
+        }
+    }
+    
+    output
+}
+
+fun test_sobel_edge_detection() {
+    let width = 100;
+    let height = 100;
+    let input = RGBAImage::create_test_pattern(width, height);
+    
+    // Apply edge detection using both implementations
+    let scalar_result = sobel_edge_detection_scalar(&input);
+    let simd_result = sobel_edge_detection_simd(&input);
+    
+    // Check that both implementations produce similar results
+    for y in 0..height {
+        for x in 0..width {
+            let scalar_pixel = scalar_result.get_pixel(x, y);
+            let simd_pixel = simd_result.get_pixel(x, y);
+            
+            let scalar_r = (scalar_pixel >> 24) & 0xFF;
+            let scalar_g = (scalar_pixel >> 16) & 0xFF;
+            let scalar_b = (scalar_pixel >> 8) & 0xFF;
+            
+            let simd_r = (simd_pixel >> 24) & 0xFF;
+            let simd_g = (simd_pixel >> 16) & 0xFF;
+            let simd_b = (simd_pixel >> 8) & 0xFF;
+            
+            // Allow for small differences due to different computation order
+            assert(
+                (scalar_r as i32 - simd_r as i32).abs() <= 2 &&
+                (scalar_g as i32 - simd_g as i32).abs() <= 2 &&
+                (scalar_b as i32 - simd_b as i32).abs() <= 2,
+                "Pixel mismatch at ({}, {}): scalar={:08X}, simd={:08X}",
+                x, y, scalar_pixel, simd_pixel
+            );
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Brightness Adjustment - Scalar vs SIMD
+// -----------------------------------------------------------------------------
+
+// Scalar implementation of brightness adjustment
+fun adjust_brightness_scalar(input: &RGBAImage, factor: f32) -> RGBAImage {
+    let width = input.width;
+    let height = input.height;
+    let mut output = RGBAImage::new(width, height);
+    
+    for y in 0..height {
+        for x in 0..width {
+            let pixel = input.get_pixel(x, y);
+            
+            let r = ((pixel >> 24) & 0xFF) as f32 * factor;
+            let g = ((pixel >> 16) & 0xFF) as f32 * factor;
+            let b = ((pixel >> 8) & 0xFF) as f32 * factor;
+            let a = (pixel & 0xFF) as u32; // Keep alpha unchanged
+            
+            // Clamp to 0-255
+            let r_clamped = if r > 255.0 { 255 } else { r as u32 };
+            let g_clamped = if g > 255.0 { 255 } else { g as u32 };
+            let b_clamped = if b > 255.0 { 255 } else { b as u32 };
+            
+            let adjusted_pixel = (r_clamped << 24) | (g_clamped << 16) | (b_clamped << 8) | a;
+            output.set_pixel(x, y, adjusted_pixel);
+        }
+    }
+    
+    output
+}
+
+// SIMD implementation of brightness adjustment
+fun adjust_brightness_simd(input: &RGBAImage, factor: f32) -> RGBAImage {
+    let width = input.width;
+    let height = input.height;
+    let mut output = RGBAImage::new(width, height);
+    
+    // Create a vector with the factor applied to all channels
+    let factor_v = f32x4(factor, factor, factor, 1.0); // 1.0 for alpha to keep it unchanged
+    
+    for y in 0..height {
+        for x in 0..width {
+            let pixel = input.get_pixel(x, y);
+            
+            // Extract RGBA components
+            let r = ((pixel >> 24) & 0xFF) as f32;
+            let g = ((pixel >> 16) & 0xFF) as f32;
+            let b = ((pixel >> 8) & 0xFF) as f32;
+            let a = (pixel & 0xFF) as f32;
+            
+            // Create vector with RGBA values
+            let rgba_v = f32x4(r, g, b, a);
+            
+            // Apply brightness factor
+            let adjusted_v = rgba_v * factor_v;
+            
+            // Convert back to integers and clamp to 0-255
+            let r_int = if adjusted_v.extract_lane(0) > 255.0 { 255 } else { adjusted_v.extract_lane(0) as u32 };
+            let g_int = if adjusted_v.extract_lane(1) > 255.0 { 255 } else { adjusted_v.extract_lane(1) as u32 };
+            let b_int = if adjusted_v.extract_lane(2) > 255.0 { 255 } else { adjusted_v.extract_lane(2) as u32 };
+            let a_int = if adjusted_v.extract_lane(3) > 255.0 { 255 } else { adjusted_v.extract_lane(3) as u32 };
+            
+            let adjusted_pixel = (r_int << 24) | (g_int << 16) | (b_int << 8) | a_int;
+            output.set_pixel(x, y, adjusted_pixel);
+        }
+    }
+    
+    output
+}
+
+fun test_brightness_adjustment() {
+    let width = 100;
+    let height = 100;
+    let input = RGBAImage::create_test_pattern(width, height);
+    let factor = 1.5;
+    
+    // Apply brightness adjustment using both implementations
+    let scalar_result = adjust_brightness_scalar(&input, factor);
+    let simd_result = adjust_brightness_simd(&input, factor);
+    
+    // Check that both implementations produce the same result
+    for y in 0..height {
+        for x in 0..width {
+            let scalar_pixel = scalar_result.get_pixel(x, y);
+            let simd_pixel = simd_result.get_pixel(x, y);
+            
+            assert_eq(scalar_pixel, simd_pixel, 
+                      "Pixel mismatch at ({}, {}): scalar={:08X}, simd={:08X}",
+                      x, y, scalar_pixel, simd_pixel);
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Performance Benchmarks
+// -----------------------------------------------------------------------------
+
+fun benchmark_image_processing() {
+    let width = 1000;
+    let height = 1000;
+    let input = RGBAImage::create_test_pattern(width, height);
+    
+    println("Running image processing benchmarks ({}x{} image):", width, height);
+    
+    // Gaussian blur benchmarks
+    let blur_scalar_time = benchmark(|| {
+        gaussian_blur_3x3_scalar(&input);
+    }, 10);
+    
+    let blur_simd_time = benchmark(|| {
+        gaussian_blur_3x3_simd(&input);
+    }, 10);
+    
+    println("Gaussian Blur:");
+    println("  Scalar: {} ms", blur_scalar_time);
+    println("  SIMD: {} ms", blur_simd_time);
+    println("  Speedup: {:.2}x", blur_scalar_time / blur_simd_time);
+    
+    // Edge detection benchmarks
+    let edge_scalar_time = benchmark(|| {
+        sobel_edge_detection_scalar(&input);
+    }, 10);
+    
+    let edge_simd_time = benchmark(|| {
+        sobel_edge_detection_simd(&input);
+    }, 10);
+    
+    println("Sobel Edge Detection:");
+    println("  Scalar: {} ms", edge_scalar_time);
+    println("  SIMD: {} ms", edge_simd_time);
+    println("  Speedup: {:.2}x", edge_scalar_time / edge_simd_time);
+    
+    // Brightness adjustment benchmarks
+    let brightness_scalar_time = benchmark(|| {
+        adjust_brightness_scalar(&input, 1.5);
+    }, 10);
+    
+    let brightness_simd_time = benchmark(|| {
+        adjust_brightness_simd(&input, 1.5);
+    }, 10);
+    
+    println("Brightness Adjustment:");
+    println("  Scalar: {} ms", brightness_scalar_time);
+    println("  SIMD: {} ms", brightness_simd_time);
+    println("  Speedup: {:.2}x", brightness_scalar_time / brightness_simd_time);
+    
+    // In the RED phase, we expect minimal speedup since SIMD is not implemented yet
+    // In the GREEN phase, we expect 2-4x speedup for these operations
+}
+
+// -----------------------------------------------------------------------------
+// Main test function
+// -----------------------------------------------------------------------------
+
+fun main() {
+    println("Running SIMD Image Processing tests (RED phase - expected to fail)");
+    
+    test_gaussian_blur();
+    test_sobel_edge_detection();
+    test_brightness_adjustment();
+    benchmark_image_processing();
+    
+    println("All tests passed (unexpected in RED phase)");
+}

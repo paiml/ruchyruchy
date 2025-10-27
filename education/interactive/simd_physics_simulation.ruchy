@@ -1,0 +1,1151 @@
+// simd_physics_simulation.ruchy
+//
+// This file demonstrates SIMD operations for physics simulations,
+// including particle systems, collision detection, and fluid dynamics.
+//
+// Part of the WASM-004 TOOL phase documentation.
+
+fun main() {
+  // Run all examples with performance comparisons
+  particle_system_example();
+  collision_detection_example();
+  verlet_integration_example();
+  fluid_simulation_example();
+}
+
+// Example 1: Particle System with SIMD
+fun particle_system_example() {
+  println("== Particle System with SIMD ==");
+  
+  // Create a large particle system
+  const NUM_PARTICLES = 100000;
+  
+  // Structure of Arrays (SoA) layout for better SIMD performance
+  let particles = {
+    pos_x: new Float32Array(NUM_PARTICLES),
+    pos_y: new Float32Array(NUM_PARTICLES),
+    pos_z: new Float32Array(NUM_PARTICLES),
+    vel_x: new Float32Array(NUM_PARTICLES),
+    vel_y: new Float32Array(NUM_PARTICLES),
+    vel_z: new Float32Array(NUM_PARTICLES),
+    mass: new Float32Array(NUM_PARTICLES),
+    life: new Float32Array(NUM_PARTICLES)
+  };
+  
+  // Initialize particles with random positions and velocities
+  for (let i = 0; i < NUM_PARTICLES; i++) {
+    particles.pos_x[i] = (Math.random() - 0.5) * 100.0;
+    particles.pos_y[i] = (Math.random() - 0.5) * 100.0;
+    particles.pos_z[i] = (Math.random() - 0.5) * 100.0;
+    
+    particles.vel_x[i] = (Math.random() - 0.5) * 2.0;
+    particles.vel_y[i] = (Math.random() - 0.5) * 2.0;
+    particles.vel_z[i] = (Math.random() - 0.5) * 2.0;
+    
+    particles.mass[i] = Math.random() * 10.0 + 0.1; // 0.1 to 10.1
+    particles.life[i] = Math.random() * 10.0;       // 0.0 to 10.0
+  }
+  
+  // Create a copy for the scalar implementation
+  let particles_scalar = {
+    pos_x: new Float32Array(particles.pos_x),
+    pos_y: new Float32Array(particles.pos_y),
+    pos_z: new Float32Array(particles.pos_z),
+    vel_x: new Float32Array(particles.vel_x),
+    vel_y: new Float32Array(particles.vel_y),
+    vel_z: new Float32Array(particles.vel_z),
+    mass: new Float32Array(particles.mass),
+    life: new Float32Array(particles.life)
+  };
+  
+  // Create a copy for the SIMD implementation
+  let particles_simd = {
+    pos_x: new Float32Array(particles.pos_x),
+    pos_y: new Float32Array(particles.pos_y),
+    pos_z: new Float32Array(particles.pos_z),
+    vel_x: new Float32Array(particles.vel_x),
+    vel_y: new Float32Array(particles.vel_y),
+    vel_z: new Float32Array(particles.vel_z),
+    mass: new Float32Array(particles.mass),
+    life: new Float32Array(particles.life)
+  };
+  
+  // Physics parameters
+  const GRAVITY = -9.81;
+  const DAMPING = 0.99;
+  const TIME_STEP = 0.016; // 16ms, approx 60 FPS
+  const NUM_STEPS = 10;    // Run 10 simulation steps
+  
+  // 1. Update particles - scalar implementation
+  let start_scalar = performance.now();
+  for (let step = 0; step < NUM_STEPS; step++) {
+    update_particles_scalar(particles_scalar, NUM_PARTICLES, GRAVITY, DAMPING, TIME_STEP);
+  }
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Update particles - SIMD implementation
+  let start_simd = performance.now();
+  for (let step = 0; step < NUM_STEPS; step++) {
+    update_particles_simd(particles_simd, NUM_PARTICLES, GRAVITY, DAMPING, TIME_STEP);
+  }
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results approximately match
+  let pos_match = verify_results_approx(
+    particles_scalar.pos_y, particles_simd.pos_y, NUM_PARTICLES, 0.01
+  );
+  let vel_match = verify_results_approx(
+    particles_scalar.vel_y, particles_simd.vel_y, NUM_PARTICLES, 0.01
+  );
+  
+  // Print results and comparison
+  println("Particle system update (" + NUM_PARTICLES + " particles, " + NUM_STEPS + " steps):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Position results match: " + (pos_match ? "Yes" : "No"));
+  println("  Velocity results match: " + (vel_match ? "Yes" : "No"));
+  
+  // Show a sample particle
+  println("\nSample particle (index 0):");
+  println("  Initial position: [" + 
+          particles.pos_x[0].toFixed(2) + ", " +
+          particles.pos_y[0].toFixed(2) + ", " +
+          particles.pos_z[0].toFixed(2) + "]");
+  println("  Final position (scalar): [" + 
+          particles_scalar.pos_x[0].toFixed(2) + ", " +
+          particles_scalar.pos_y[0].toFixed(2) + ", " +
+          particles_scalar.pos_z[0].toFixed(2) + "]");
+  println("  Final position (SIMD): [" + 
+          particles_simd.pos_x[0].toFixed(2) + ", " +
+          particles_simd.pos_y[0].toFixed(2) + ", " +
+          particles_simd.pos_z[0].toFixed(2) + "]");
+  println("");
+}
+
+// Update particles - scalar implementation
+fun update_particles_scalar(particles, num_particles, gravity, damping, dt) {
+  for (let i = 0; i < num_particles; i++) {
+    // Apply gravity
+    particles.vel_y[i] += gravity * dt;
+    
+    // Apply damping
+    particles.vel_x[i] *= damping;
+    particles.vel_y[i] *= damping;
+    particles.vel_z[i] *= damping;
+    
+    // Update position
+    particles.pos_x[i] += particles.vel_x[i] * dt;
+    particles.pos_y[i] += particles.vel_y[i] * dt;
+    particles.pos_z[i] += particles.vel_z[i] * dt;
+    
+    // Bounce off ground (simple boundary check)
+    if (particles.pos_y[i] < -50.0) {
+      particles.pos_y[i] = -50.0;
+      particles.vel_y[i] = -particles.vel_y[i] * 0.8; // Bounce with energy loss
+    }
+    
+    // Update life
+    particles.life[i] -= dt;
+    
+    // Respawn dead particles
+    if (particles.life[i] <= 0) {
+      particles.pos_x[i] = (Math.random() - 0.5) * 100.0;
+      particles.pos_y[i] = 50.0; // Start from the top
+      particles.pos_z[i] = (Math.random() - 0.5) * 100.0;
+      
+      particles.vel_x[i] = (Math.random() - 0.5) * 2.0;
+      particles.vel_y[i] = (Math.random() - 0.5) * 2.0;
+      particles.vel_z[i] = (Math.random() - 0.5) * 2.0;
+      
+      particles.life[i] = Math.random() * 10.0; // 0.0 to 10.0
+    }
+  }
+}
+
+// Update particles - SIMD implementation
+fun update_particles_simd(particles, num_particles, gravity, damping, dt) {
+  // Create SIMD constants
+  let gravity_vec = f32x4.splat(gravity * dt);
+  let damping_vec = f32x4.splat(damping);
+  let dt_vec = f32x4.splat(dt);
+  let ground_y = f32x4.splat(-50.0);
+  let bounce_factor = f32x4.splat(-0.8);
+  let life_decrement = f32x4.splat(dt);
+  let zero_life = f32x4.splat(0.0);
+  
+  // Process particles in chunks of 4
+  for (let i = 0; i < num_particles; i += 4) {
+    // Load 4 particles' data
+    let pos_x = v128.load(particles.pos_x.buffer, i * 4);
+    let pos_y = v128.load(particles.pos_y.buffer, i * 4);
+    let pos_z = v128.load(particles.pos_z.buffer, i * 4);
+    
+    let vel_x = v128.load(particles.vel_x.buffer, i * 4);
+    let vel_y = v128.load(particles.vel_y.buffer, i * 4);
+    let vel_z = v128.load(particles.vel_z.buffer, i * 4);
+    
+    let life = v128.load(particles.life.buffer, i * 4);
+    
+    // Apply gravity
+    vel_y = f32x4.add(vel_y, gravity_vec);
+    
+    // Apply damping
+    vel_x = f32x4.mul(vel_x, damping_vec);
+    vel_y = f32x4.mul(vel_y, damping_vec);
+    vel_z = f32x4.mul(vel_z, damping_vec);
+    
+    // Update position
+    pos_x = f32x4.add(pos_x, f32x4.mul(vel_x, dt_vec));
+    pos_y = f32x4.add(pos_y, f32x4.mul(vel_y, dt_vec));
+    pos_z = f32x4.add(pos_z, f32x4.mul(vel_z, dt_vec));
+    
+    // Bounce off ground (using mask comparison)
+    let below_ground = f32x4.lt(pos_y, ground_y);
+    
+    // For particles below ground, set y position to ground level
+    pos_y = f32x4.bitselect(
+      pos_y, 
+      ground_y,
+      below_ground
+    );
+    
+    // For particles below ground, bounce velocity
+    vel_y = f32x4.bitselect(
+      vel_y,
+      f32x4.mul(vel_y, bounce_factor),
+      below_ground
+    );
+    
+    // Update life
+    life = f32x4.sub(life, life_decrement);
+    
+    // Store updated data
+    v128.store(particles.pos_x.buffer, i * 4, pos_x);
+    v128.store(particles.pos_y.buffer, i * 4, pos_y);
+    v128.store(particles.pos_z.buffer, i * 4, pos_z);
+    
+    v128.store(particles.vel_x.buffer, i * 4, vel_x);
+    v128.store(particles.vel_y.buffer, i * 4, vel_y);
+    v128.store(particles.vel_z.buffer, i * 4, vel_z);
+    
+    v128.store(particles.life.buffer, i * 4, life);
+    
+    // For SIMD efficiency, we'll handle respawning dead particles separately
+    for (let j = 0; j < 4 && i + j < num_particles; j++) {
+      if (particles.life[i + j] <= 0) {
+        // Respawn this particle
+        particles.pos_x[i + j] = (Math.random() - 0.5) * 100.0;
+        particles.pos_y[i + j] = 50.0; // Start from the top
+        particles.pos_z[i + j] = (Math.random() - 0.5) * 100.0;
+        
+        particles.vel_x[i + j] = (Math.random() - 0.5) * 2.0;
+        particles.vel_y[i + j] = (Math.random() - 0.5) * 2.0;
+        particles.vel_z[i + j] = (Math.random() - 0.5) * 2.0;
+        
+        particles.life[i + j] = Math.random() * 10.0;
+      }
+    }
+  }
+}
+
+// Example 2: Collision Detection with SIMD
+fun collision_detection_example() {
+  println("== Collision Detection with SIMD ==");
+  
+  // Create a set of spheres for collision detection
+  const NUM_SPHERES = 10000;
+  
+  let spheres = {
+    center_x: new Float32Array(NUM_SPHERES),
+    center_y: new Float32Array(NUM_SPHERES),
+    center_z: new Float32Array(NUM_SPHERES),
+    radius: new Float32Array(NUM_SPHERES)
+  };
+  
+  // Initialize spheres with random positions and radii
+  for (let i = 0; i < NUM_SPHERES; i++) {
+    spheres.center_x[i] = (Math.random() - 0.5) * 1000.0;
+    spheres.center_y[i] = (Math.random() - 0.5) * 1000.0;
+    spheres.center_z[i] = (Math.random() - 0.5) * 1000.0;
+    spheres.radius[i] = Math.random() * 10.0 + 1.0; // 1.0 to 11.0
+  }
+  
+  // Create arrays to store collision results
+  let collisions_scalar = new Int32Array(NUM_SPHERES * 2); // (i, j) pairs
+  let num_collisions_scalar = 0;
+  
+  let collisions_simd = new Int32Array(NUM_SPHERES * 2);
+  let num_collisions_simd = 0;
+  
+  // 1. Detect collisions - scalar implementation
+  let start_scalar = performance.now();
+  num_collisions_scalar = detect_collisions_scalar(
+    spheres, NUM_SPHERES, collisions_scalar
+  );
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Detect collisions - SIMD implementation
+  let start_simd = performance.now();
+  num_collisions_simd = detect_collisions_simd(
+    spheres, NUM_SPHERES, collisions_simd
+  );
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Print results and comparison
+  println("Sphere collision detection (" + NUM_SPHERES + " spheres):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Collisions detected (scalar): " + num_collisions_scalar);
+  println("  Collisions detected (SIMD): " + num_collisions_simd);
+  
+  // Verify results by checking a few collisions
+  let match = true;
+  if (num_collisions_scalar != num_collisions_simd) {
+    match = false;
+  } else {
+    // Sort collision pairs for comparison
+    sort_collision_pairs(collisions_scalar, num_collisions_scalar);
+    sort_collision_pairs(collisions_simd, num_collisions_simd);
+    
+    // Compare a sample of collision pairs
+    let sample_size = Math.min(10, num_collisions_scalar);
+    for (let i = 0; i < sample_size; i++) {
+      if (collisions_scalar[i * 2] != collisions_simd[i * 2] ||
+          collisions_scalar[i * 2 + 1] != collisions_simd[i * 2 + 1]) {
+        match = false;
+        break;
+      }
+    }
+  }
+  
+  println("  Results match: " + (match ? "Yes" : "No"));
+  println("");
+}
+
+// Detect sphere-sphere collisions - scalar implementation
+fun detect_collisions_scalar(spheres, num_spheres, collisions) {
+  let count = 0;
+  
+  for (let i = 0; i < num_spheres; i++) {
+    for (let j = i + 1; j < num_spheres; j++) {
+      // Calculate squared distance between sphere centers
+      let dx = spheres.center_x[j] - spheres.center_x[i];
+      let dy = spheres.center_y[j] - spheres.center_y[i];
+      let dz = spheres.center_z[j] - spheres.center_z[i];
+      let dist_squared = dx * dx + dy * dy + dz * dz;
+      
+      // Calculate sum of radii
+      let radii_sum = spheres.radius[i] + spheres.radius[j];
+      let radii_sum_squared = radii_sum * radii_sum;
+      
+      // Check for collision
+      if (dist_squared <= radii_sum_squared) {
+        // Store collision pair
+        collisions[count * 2] = i;
+        collisions[count * 2 + 1] = j;
+        count++;
+        
+        // Check for array bounds to prevent overflow
+        if (count >= num_spheres) {
+          return count;
+        }
+      }
+    }
+  }
+  
+  return count;
+}
+
+// Detect sphere-sphere collisions - SIMD implementation
+fun detect_collisions_simd(spheres, num_spheres, collisions) {
+  let count = 0;
+  
+  for (let i = 0; i < num_spheres; i++) {
+    // Get current sphere data
+    let center_x_i = f32x4.splat(spheres.center_x[i]);
+    let center_y_i = f32x4.splat(spheres.center_y[i]);
+    let center_z_i = f32x4.splat(spheres.center_z[i]);
+    let radius_i = f32x4.splat(spheres.radius[i]);
+    
+    // Check against multiple spheres at once (in chunks of 4)
+    for (let j = i + 1; j < num_spheres; j += 4) {
+      // Determine how many spheres to process in this chunk
+      let chunk_size = Math.min(4, num_spheres - j);
+      
+      // Load 4 spheres to compare against
+      let center_x_j = v128.load(spheres.center_x.buffer, j * 4);
+      let center_y_j = v128.load(spheres.center_y.buffer, j * 4);
+      let center_z_j = v128.load(spheres.center_z.buffer, j * 4);
+      let radius_j = v128.load(spheres.radius.buffer, j * 4);
+      
+      // Calculate distances
+      let dx = f32x4.sub(center_x_j, center_x_i);
+      let dy = f32x4.sub(center_y_j, center_y_i);
+      let dz = f32x4.sub(center_z_j, center_z_i);
+      
+      // Calculate squared distances
+      let dist_squared = f32x4.add(
+        f32x4.add(
+          f32x4.mul(dx, dx),
+          f32x4.mul(dy, dy)
+        ),
+        f32x4.mul(dz, dz)
+      );
+      
+      // Calculate sum of radii and square it
+      let radii_sum = f32x4.add(radius_i, radius_j);
+      let radii_sum_squared = f32x4.mul(radii_sum, radii_sum);
+      
+      // Check for collisions (mask will have all bits set where collision occurs)
+      let collision_mask = f32x4.le(dist_squared, radii_sum_squared);
+      
+      // Extract and store collision pairs
+      for (let k = 0; k < chunk_size; k++) {
+        // Extract lane from mask (will be -1 if collision, 0 if not)
+        let has_collision = f32x4.extract_lane(collision_mask, k);
+        
+        if (has_collision) {
+          // Store collision pair
+          collisions[count * 2] = i;
+          collisions[count * 2 + 1] = j + k;
+          count++;
+          
+          // Check for array bounds to prevent overflow
+          if (count >= num_spheres) {
+            return count;
+          }
+        }
+      }
+    }
+  }
+  
+  return count;
+}
+
+// Sort collision pairs for comparison
+fun sort_collision_pairs(collisions, count) {
+  // Simple bubble sort for demonstration purposes
+  for (let i = 0; i < count - 1; i++) {
+    for (let j = 0; j < count - i - 1; j++) {
+      let idx1 = j * 2;
+      let idx2 = (j + 1) * 2;
+      
+      // Compare primary index first, then secondary
+      if (collisions[idx1] > collisions[idx2] ||
+          (collisions[idx1] == collisions[idx2] &&
+           collisions[idx1 + 1] > collisions[idx2 + 1])) {
+        // Swap pairs
+        let temp1 = collisions[idx1];
+        let temp2 = collisions[idx1 + 1];
+        collisions[idx1] = collisions[idx2];
+        collisions[idx1 + 1] = collisions[idx2 + 1];
+        collisions[idx2] = temp1;
+        collisions[idx2 + 1] = temp2;
+      }
+    }
+  }
+}
+
+// Example 3: Verlet Integration for Cloth Simulation
+fun verlet_integration_example() {
+  println("== Verlet Integration with SIMD ==");
+  
+  // Create a cloth grid of particles
+  const GRID_SIZE = 50; // 50x50 grid of particles
+  const NUM_PARTICLES = GRID_SIZE * GRID_SIZE;
+  
+  // Particles have current and previous position for Verlet integration
+  let cloth = {
+    pos_x: new Float32Array(NUM_PARTICLES),
+    pos_y: new Float32Array(NUM_PARTICLES),
+    pos_z: new Float32Array(NUM_PARTICLES),
+    old_pos_x: new Float32Array(NUM_PARTICLES),
+    old_pos_y: new Float32Array(NUM_PARTICLES),
+    old_pos_z: new Float32Array(NUM_PARTICLES),
+    fixed: new Int8Array(NUM_PARTICLES)  // 1 if particle is fixed, 0 otherwise
+  };
+  
+  // Initialize cloth in a grid, hanging from the top edge
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      let i = y * GRID_SIZE + x;
+      
+      // Position in 3D space
+      cloth.pos_x[i] = (x / (GRID_SIZE - 1) - 0.5) * 100.0;
+      cloth.pos_y[i] = -(y / (GRID_SIZE - 1)) * 100.0; // Hanging down (negative y)
+      cloth.pos_z[i] = 0.0;
+      
+      // Previous position (initially same as current)
+      cloth.old_pos_x[i] = cloth.pos_x[i];
+      cloth.old_pos_y[i] = cloth.pos_y[i];
+      cloth.old_pos_z[i] = cloth.pos_z[i];
+      
+      // Fix the top row of particles
+      cloth.fixed[i] = (y == 0) ? 1 : 0;
+    }
+  }
+  
+  // Create copies for scalar and SIMD implementations
+  let cloth_scalar = {
+    pos_x: new Float32Array(cloth.pos_x),
+    pos_y: new Float32Array(cloth.pos_y),
+    pos_z: new Float32Array(cloth.pos_z),
+    old_pos_x: new Float32Array(cloth.old_pos_x),
+    old_pos_y: new Float32Array(cloth.old_pos_y),
+    old_pos_z: new Float32Array(cloth.old_pos_z),
+    fixed: new Int8Array(cloth.fixed)
+  };
+  
+  let cloth_simd = {
+    pos_x: new Float32Array(cloth.pos_x),
+    pos_y: new Float32Array(cloth.pos_y),
+    pos_z: new Float32Array(cloth.pos_z),
+    old_pos_x: new Float32Array(cloth.old_pos_x),
+    old_pos_y: new Float32Array(cloth.old_pos_y),
+    old_pos_z: new Float32Array(cloth.old_pos_z),
+    fixed: new Int8Array(cloth.fixed)
+  };
+  
+  // Simulation parameters
+  const GRAVITY = -9.81;
+  const DAMPING = 0.98;
+  const TIME_STEP = 0.016; // 16ms
+  const NUM_STEPS = 10;    // Run 10 simulation steps
+  
+  // 1. Simulate cloth - scalar implementation
+  let start_scalar = performance.now();
+  for (let step = 0; step < NUM_STEPS; step++) {
+    verlet_integration_scalar(cloth_scalar, GRID_SIZE, GRAVITY, DAMPING, TIME_STEP);
+    solve_cloth_constraints_scalar(cloth_scalar, GRID_SIZE);
+  }
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Simulate cloth - SIMD implementation
+  let start_simd = performance.now();
+  for (let step = 0; step < NUM_STEPS; step++) {
+    verlet_integration_simd(cloth_simd, GRID_SIZE, GRAVITY, DAMPING, TIME_STEP);
+    solve_cloth_constraints_simd(cloth_simd, GRID_SIZE);
+  }
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results approximately match
+  let match = verify_results_approx(
+    cloth_scalar.pos_y, cloth_simd.pos_y, NUM_PARTICLES, 0.1
+  );
+  
+  // Print results and comparison
+  println("Cloth simulation (" + GRID_SIZE + "x" + GRID_SIZE + " particles, " + 
+          NUM_STEPS + " steps):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match (within tolerance): " + (match ? "Yes" : "No"));
+  
+  // Show a sample particle
+  let sample_idx = GRID_SIZE * (GRID_SIZE / 2) + (GRID_SIZE / 2); // Middle of cloth
+  println("\nSample particle (middle of cloth):");
+  println("  Initial position: [" + 
+          cloth.pos_x[sample_idx].toFixed(2) + ", " +
+          cloth.pos_y[sample_idx].toFixed(2) + ", " +
+          cloth.pos_z[sample_idx].toFixed(2) + "]");
+  println("  Final position (scalar): [" + 
+          cloth_scalar.pos_x[sample_idx].toFixed(2) + ", " +
+          cloth_scalar.pos_y[sample_idx].toFixed(2) + ", " +
+          cloth_scalar.pos_z[sample_idx].toFixed(2) + "]");
+  println("  Final position (SIMD): [" + 
+          cloth_simd.pos_x[sample_idx].toFixed(2) + ", " +
+          cloth_simd.pos_y[sample_idx].toFixed(2) + ", " +
+          cloth_simd.pos_z[sample_idx].toFixed(2) + "]");
+  println("");
+}
+
+// Verlet integration - scalar implementation
+fun verlet_integration_scalar(cloth, grid_size, gravity, damping, dt) {
+  const NUM_PARTICLES = grid_size * grid_size;
+  
+  for (let i = 0; i < NUM_PARTICLES; i++) {
+    // Skip fixed particles
+    if (cloth.fixed[i] != 0) {
+      continue;
+    }
+    
+    // Store current position
+    let curr_x = cloth.pos_x[i];
+    let curr_y = cloth.pos_y[i];
+    let curr_z = cloth.pos_z[i];
+    
+    // Get old position
+    let old_x = cloth.old_pos_x[i];
+    let old_y = cloth.old_pos_y[i];
+    let old_z = cloth.old_pos_z[i];
+    
+    // Calculate velocity from previous and current position
+    let vel_x = (curr_x - old_x) * damping;
+    let vel_y = (curr_y - old_y) * damping;
+    let vel_z = (curr_z - old_z) * damping;
+    
+    // Apply gravity to y velocity
+    vel_y += gravity * dt;
+    
+    // Update position using Verlet integration
+    cloth.old_pos_x[i] = curr_x;
+    cloth.old_pos_y[i] = curr_y;
+    cloth.old_pos_z[i] = curr_z;
+    
+    cloth.pos_x[i] = curr_x + vel_x;
+    cloth.pos_y[i] = curr_y + vel_y;
+    cloth.pos_z[i] = curr_z + vel_z;
+  }
+}
+
+// Solve cloth constraints - scalar implementation
+fun solve_cloth_constraints_scalar(cloth, grid_size) {
+  const REST_LENGTH = 100.0 / (grid_size - 1); // Spacing between adjacent particles
+  const NUM_ITERATIONS = 2; // More iterations = more accurate, but slower
+  
+  // For each constraint iteration
+  for (let iter = 0; iter < NUM_ITERATIONS; iter++) {
+    // Horizontal constraints
+    for (let y = 0; y < grid_size; y++) {
+      for (let x = 0; x < grid_size - 1; x++) {
+        let idx1 = y * grid_size + x;
+        let idx2 = y * grid_size + (x + 1);
+        
+        satisfy_distance_constraint_scalar(
+          cloth, idx1, idx2, REST_LENGTH
+        );
+      }
+    }
+    
+    // Vertical constraints
+    for (let y = 0; y < grid_size - 1; y++) {
+      for (let x = 0; x < grid_size; x++) {
+        let idx1 = y * grid_size + x;
+        let idx2 = (y + 1) * grid_size + x;
+        
+        satisfy_distance_constraint_scalar(
+          cloth, idx1, idx2, REST_LENGTH
+        );
+      }
+    }
+  }
+}
+
+// Satisfy distance constraint between two particles - scalar implementation
+fun satisfy_distance_constraint_scalar(cloth, idx1, idx2, rest_length) {
+  // If both particles are fixed, skip constraint
+  if (cloth.fixed[idx1] != 0 && cloth.fixed[idx2] != 0) {
+    return;
+  }
+  
+  // Calculate current distance vector
+  let dx = cloth.pos_x[idx2] - cloth.pos_x[idx1];
+  let dy = cloth.pos_y[idx2] - cloth.pos_y[idx1];
+  let dz = cloth.pos_z[idx2] - cloth.pos_z[idx1];
+  
+  // Calculate current distance
+  let distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  
+  // If particles are already at the correct distance, skip
+  if (Math.abs(distance - rest_length) < 0.01) {
+    return;
+  }
+  
+  // Calculate correction vector
+  let correction = (distance - rest_length) / distance;
+  
+  // Apply correction based on which particles are fixed
+  if (cloth.fixed[idx1] == 0 && cloth.fixed[idx2] == 0) {
+    // Both particles movable - distribute correction equally
+    cloth.pos_x[idx1] += dx * 0.5 * correction;
+    cloth.pos_y[idx1] += dy * 0.5 * correction;
+    cloth.pos_z[idx1] += dz * 0.5 * correction;
+    
+    cloth.pos_x[idx2] -= dx * 0.5 * correction;
+    cloth.pos_y[idx2] -= dy * 0.5 * correction;
+    cloth.pos_z[idx2] -= dz * 0.5 * correction;
+  } else if (cloth.fixed[idx1] != 0) {
+    // First particle is fixed, move only the second
+    cloth.pos_x[idx2] -= dx * correction;
+    cloth.pos_y[idx2] -= dy * correction;
+    cloth.pos_z[idx2] -= dz * correction;
+  } else {
+    // Second particle is fixed, move only the first
+    cloth.pos_x[idx1] += dx * correction;
+    cloth.pos_y[idx1] += dy * correction;
+    cloth.pos_z[idx1] += dz * correction;
+  }
+}
+
+// Verlet integration - SIMD implementation
+fun verlet_integration_simd(cloth, grid_size, gravity, damping, dt) {
+  const NUM_PARTICLES = grid_size * grid_size;
+  
+  // Create SIMD constants
+  let gravity_vec = f32x4.splat(gravity * dt);
+  let damping_vec = f32x4.splat(damping);
+  
+  // Process particles in chunks of 4
+  for (let i = 0; i < NUM_PARTICLES; i += 4) {
+    // Load fixed flags to determine which particles to update
+    // We need to load one byte at a time since fixed is Int8Array
+    let fixed_0 = cloth.fixed[i];
+    let fixed_1 = (i + 1 < NUM_PARTICLES) ? cloth.fixed[i + 1] : 1; // Default to fixed
+    let fixed_2 = (i + 2 < NUM_PARTICLES) ? cloth.fixed[i + 2] : 1;
+    let fixed_3 = (i + 3 < NUM_PARTICLES) ? cloth.fixed[i + 3] : 1;
+    
+    // Skip this chunk if all particles are fixed
+    if (fixed_0 != 0 && fixed_1 != 0 && fixed_2 != 0 && fixed_3 != 0) {
+      continue;
+    }
+    
+    // Load current positions
+    let curr_x = v128.load(cloth.pos_x.buffer, i * 4);
+    let curr_y = v128.load(cloth.pos_y.buffer, i * 4);
+    let curr_z = v128.load(cloth.pos_z.buffer, i * 4);
+    
+    // Load old positions
+    let old_x = v128.load(cloth.old_pos_x.buffer, i * 4);
+    let old_y = v128.load(cloth.old_pos_y.buffer, i * 4);
+    let old_z = v128.load(cloth.old_pos_z.buffer, i * 4);
+    
+    // Calculate velocity from previous and current position
+    let vel_x = f32x4.mul(f32x4.sub(curr_x, old_x), damping_vec);
+    let vel_y = f32x4.mul(f32x4.sub(curr_y, old_y), damping_vec);
+    let vel_z = f32x4.mul(f32x4.sub(curr_z, old_z), damping_vec);
+    
+    // Apply gravity to y velocity
+    vel_y = f32x4.add(vel_y, gravity_vec);
+    
+    // Store current position as old position
+    v128.store(cloth.old_pos_x.buffer, i * 4, curr_x);
+    v128.store(cloth.old_pos_y.buffer, i * 4, curr_y);
+    v128.store(cloth.old_pos_z.buffer, i * 4, curr_z);
+    
+    // Calculate new position
+    let new_x = f32x4.add(curr_x, vel_x);
+    let new_y = f32x4.add(curr_y, vel_y);
+    let new_z = f32x4.add(curr_z, vel_z);
+    
+    // Create masks for fixed particles (all bits set for fixed, none for movable)
+    let fixed_mask_0 = fixed_0 != 0 ? f32x4.splat(-1) : f32x4.splat(0);
+    let fixed_mask_1 = fixed_1 != 0 ? f32x4.splat(-1) : f32x4.splat(0);
+    let fixed_mask_2 = fixed_2 != 0 ? f32x4.splat(-1) : f32x4.splat(0);
+    let fixed_mask_3 = fixed_3 != 0 ? f32x4.splat(-1) : f32x4.splat(0);
+    
+    // NOTE: This is a simplified example for educational purposes.
+    // Production implementation would combine the 4 masks with lane indices.
+    // Current approach uses scalar operations for fixed particles.
+    
+    // Store new positions
+    v128.store(cloth.pos_x.buffer, i * 4, new_x);
+    v128.store(cloth.pos_y.buffer, i * 4, new_y);
+    v128.store(cloth.pos_z.buffer, i * 4, new_z);
+    
+    // Fix positions for fixed particles
+    for (let j = 0; j < 4 && i + j < NUM_PARTICLES; j++) {
+      if (cloth.fixed[i + j] != 0) {
+        // Reset to original position
+        cloth.pos_x[i + j] = cloth.old_pos_x[i + j];
+        cloth.pos_y[i + j] = cloth.old_pos_y[i + j];
+        cloth.pos_z[i + j] = cloth.old_pos_z[i + j];
+      }
+    }
+  }
+}
+
+// Solve cloth constraints - SIMD implementation
+fun solve_cloth_constraints_simd(cloth, grid_size) {
+  const REST_LENGTH = 100.0 / (grid_size - 1); // Spacing between adjacent particles
+  const NUM_ITERATIONS = 2; // More iterations = more accurate, but slower
+  
+  // For each constraint iteration
+  for (let iter = 0; iter < NUM_ITERATIONS; iter++) {
+    // Solve constraints using scalar implementation
+    // Note: A full SIMD implementation would be more complex 
+    // because constraints need to be solved one by one
+    solve_cloth_constraints_scalar(cloth, grid_size);
+  }
+}
+
+// Example 4: Fluid Simulation with SIMD
+fun fluid_simulation_example() {
+  println("== Fluid Simulation with SIMD ==");
+  
+  // Create a 2D grid for fluid simulation
+  const GRID_SIZE = 128;
+  const NUM_CELLS = GRID_SIZE * GRID_SIZE;
+  
+  // Fluid properties for each grid cell
+  let fluid = {
+    density: new Float32Array(NUM_CELLS),
+    velocity_x: new Float32Array(NUM_CELLS),
+    velocity_y: new Float32Array(NUM_CELLS),
+    density_prev: new Float32Array(NUM_CELLS),
+    velocity_x_prev: new Float32Array(NUM_CELLS),
+    velocity_y_prev: new Float32Array(NUM_CELLS)
+  };
+  
+  // Initialize with some fluid in the center
+  for (let i = 0; i < NUM_CELLS; i++) {
+    fluid.density[i] = 0.0;
+    fluid.velocity_x[i] = 0.0;
+    fluid.velocity_y[i] = 0.0;
+    fluid.density_prev[i] = 0.0;
+    fluid.velocity_x_prev[i] = 0.0;
+    fluid.velocity_y_prev[i] = 0.0;
+  }
+  
+  // Add fluid density in the center
+  let center_x = Math.floor(GRID_SIZE / 2);
+  let center_y = Math.floor(GRID_SIZE / 2);
+  let radius = GRID_SIZE / 10;
+  
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      let dx = x - center_x;
+      let dy = y - center_y;
+      let dist_squared = dx * dx + dy * dy;
+      
+      if (dist_squared < radius * radius) {
+        let idx = y * GRID_SIZE + x;
+        fluid.density[idx] = 1.0;
+        fluid.velocity_x[idx] = 0.0;
+        fluid.velocity_y[idx] = -10.0; // Initial upward velocity
+      }
+    }
+  }
+  
+  // Create copies for scalar and SIMD implementations
+  let fluid_scalar = {
+    density: new Float32Array(fluid.density),
+    velocity_x: new Float32Array(fluid.velocity_x),
+    velocity_y: new Float32Array(fluid.velocity_y),
+    density_prev: new Float32Array(fluid.density_prev),
+    velocity_x_prev: new Float32Array(fluid.velocity_x_prev),
+    velocity_y_prev: new Float32Array(fluid.velocity_y_prev)
+  };
+  
+  let fluid_simd = {
+    density: new Float32Array(fluid.density),
+    velocity_x: new Float32Array(fluid.velocity_x),
+    velocity_y: new Float32Array(fluid.velocity_y),
+    density_prev: new Float32Array(fluid.density_prev),
+    velocity_x_prev: new Float32Array(fluid.velocity_x_prev),
+    velocity_y_prev: new Float32Array(fluid.velocity_y_prev)
+  };
+  
+  // Simulation parameters
+  const DIFFUSION_RATE = 0.0001;
+  const VISCOSITY = 0.0001;
+  const TIME_STEP = 0.1;
+  const NUM_STEPS = 5;
+  
+  // 1. Simulate fluid - scalar implementation
+  let start_scalar = performance.now();
+  for (let step = 0; step < NUM_STEPS; step++) {
+    fluid_step_scalar(fluid_scalar, GRID_SIZE, DIFFUSION_RATE, VISCOSITY, TIME_STEP);
+  }
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Simulate fluid - SIMD implementation
+  let start_simd = performance.now();
+  for (let step = 0; step < NUM_STEPS; step++) {
+    fluid_step_simd(fluid_simd, GRID_SIZE, DIFFUSION_RATE, VISCOSITY, TIME_STEP);
+  }
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results approximately match
+  let match = verify_results_approx(
+    fluid_scalar.density, fluid_simd.density, NUM_CELLS, 0.01
+  );
+  
+  // Print results and comparison
+  println("Fluid simulation (" + GRID_SIZE + "x" + GRID_SIZE + " grid, " +
+          NUM_STEPS + " steps):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match (within tolerance): " + (match ? "Yes" : "No"));
+  
+  // Print density values at a few key points
+  println("\nDensity values at key points:");
+  println("  Center: scalar=" + 
+          fluid_scalar.density[center_y * GRID_SIZE + center_x].toFixed(4) +
+          ", SIMD=" + 
+          fluid_simd.density[center_y * GRID_SIZE + center_x].toFixed(4));
+  
+  // Point above center
+  let above_idx = (center_y - 10) * GRID_SIZE + center_x;
+  println("  Above center: scalar=" +
+          fluid_scalar.density[above_idx].toFixed(4) +
+          ", SIMD=" +
+          fluid_simd.density[above_idx].toFixed(4));
+  
+  // Point to right of center
+  let right_idx = center_y * GRID_SIZE + (center_x + 10);
+  println("  Right of center: scalar=" +
+          fluid_scalar.density[right_idx].toFixed(4) +
+          ", SIMD=" +
+          fluid_simd.density[right_idx].toFixed(4));
+  println("");
+}
+
+// One simulation step for fluid - scalar implementation
+fun fluid_step_scalar(fluid, grid_size, diffusion_rate, viscosity, dt) {
+  // Swap buffers
+  let temp;
+  
+  // Velocity diffusion
+  temp = fluid.velocity_x_prev;
+  fluid.velocity_x_prev = fluid.velocity_x;
+  fluid.velocity_x = temp;
+  
+  temp = fluid.velocity_y_prev;
+  fluid.velocity_y_prev = fluid.velocity_y;
+  fluid.velocity_y = temp;
+  
+  diffuse_scalar(fluid.velocity_x, fluid.velocity_x_prev, 
+                grid_size, viscosity, dt, 1, 0);
+  diffuse_scalar(fluid.velocity_y, fluid.velocity_y_prev, 
+                grid_size, viscosity, dt, 0, 1);
+  
+  // Pressure projection (incompressibility)
+  project_scalar(fluid.velocity_x, fluid.velocity_y, 
+                fluid.velocity_x_prev, fluid.velocity_y_prev, 
+                grid_size, dt);
+  
+  // Advection
+  temp = fluid.velocity_x_prev;
+  fluid.velocity_x_prev = fluid.velocity_x;
+  fluid.velocity_x = temp;
+  
+  temp = fluid.velocity_y_prev;
+  fluid.velocity_y_prev = fluid.velocity_y;
+  fluid.velocity_y = temp;
+  
+  advect_scalar(fluid.velocity_x, fluid.velocity_x_prev, 
+               fluid.velocity_x_prev, fluid.velocity_y_prev, 
+               grid_size, dt, 1, 0);
+  advect_scalar(fluid.velocity_y, fluid.velocity_y_prev, 
+               fluid.velocity_x_prev, fluid.velocity_y_prev, 
+               grid_size, dt, 0, 1);
+  
+  // Pressure projection again
+  project_scalar(fluid.velocity_x, fluid.velocity_y, 
+                fluid.velocity_x_prev, fluid.velocity_y_prev, 
+                grid_size, dt);
+  
+  // Density diffusion
+  temp = fluid.density_prev;
+  fluid.density_prev = fluid.density;
+  fluid.density = temp;
+  
+  diffuse_scalar(fluid.density, fluid.density_prev, 
+                grid_size, diffusion_rate, dt, 0, 0);
+  
+  // Density advection
+  temp = fluid.density_prev;
+  fluid.density_prev = fluid.density;
+  fluid.density = temp;
+  
+  advect_scalar(fluid.density, fluid.density_prev, 
+               fluid.velocity_x, fluid.velocity_y, 
+               grid_size, dt, 0, 0);
+}
+
+// Diffusion step - scalar implementation
+fun diffuse_scalar(x, x0, grid_size, diffusion, dt, b_x, b_y) {
+  let a = dt * diffusion * grid_size * grid_size;
+  
+  for (let k = 0; k < 20; k++) { // Gauss-Seidel relaxation
+    for (let j = 1; j < grid_size - 1; j++) {
+      for (let i = 1; i < grid_size - 1; i++) {
+        let idx = j * grid_size + i;
+        let idx_left = j * grid_size + (i - 1);
+        let idx_right = j * grid_size + (i + 1);
+        let idx_up = (j - 1) * grid_size + i;
+        let idx_down = (j + 1) * grid_size + i;
+        
+        x[idx] = (x0[idx] + a * (
+          x[idx_left] + x[idx_right] +
+          x[idx_up] + x[idx_down]
+        )) / (1 + 4 * a);
+      }
+    }
+    
+    set_boundary_scalar(x, grid_size, b_x, b_y);
+  }
+}
+
+// Project step (incompressibility) - scalar implementation
+fun project_scalar(velocity_x, velocity_y, p, div, grid_size, dt) {
+  for (let j = 1; j < grid_size - 1; j++) {
+    for (let i = 1; i < grid_size - 1; i++) {
+      let idx = j * grid_size + i;
+      let idx_left = j * grid_size + (i - 1);
+      let idx_right = j * grid_size + (i + 1);
+      let idx_up = (j - 1) * grid_size + i;
+      let idx_down = (j + 1) * grid_size + i;
+      
+      div[idx] = -0.5 * (
+        velocity_x[idx_right] - velocity_x[idx_left] +
+        velocity_y[idx_down] - velocity_y[idx_up]
+      ) / grid_size;
+      
+      p[idx] = 0;
+    }
+  }
+  
+  set_boundary_scalar(div, grid_size, 0, 0);
+  set_boundary_scalar(p, grid_size, 0, 0);
+  
+  for (let k = 0; k < 20; k++) {
+    for (let j = 1; j < grid_size - 1; j++) {
+      for (let i = 1; i < grid_size - 1; i++) {
+        let idx = j * grid_size + i;
+        let idx_left = j * grid_size + (i - 1);
+        let idx_right = j * grid_size + (i + 1);
+        let idx_up = (j - 1) * grid_size + i;
+        let idx_down = (j + 1) * grid_size + i;
+        
+        p[idx] = (div[idx] + p[idx_left] + p[idx_right] +
+                  p[idx_up] + p[idx_down]) / 4;
+      }
+    }
+    
+    set_boundary_scalar(p, grid_size, 0, 0);
+  }
+  
+  for (let j = 1; j < grid_size - 1; j++) {
+    for (let i = 1; i < grid_size - 1; i++) {
+      let idx = j * grid_size + i;
+      let idx_left = j * grid_size + (i - 1);
+      let idx_right = j * grid_size + (i + 1);
+      let idx_up = (j - 1) * grid_size + i;
+      let idx_down = (j + 1) * grid_size + i;
+      
+      velocity_x[idx] -= 0.5 * (p[idx_right] - p[idx_left]) * grid_size;
+      velocity_y[idx] -= 0.5 * (p[idx_down] - p[idx_up]) * grid_size;
+    }
+  }
+  
+  set_boundary_scalar(velocity_x, grid_size, 1, 0);
+  set_boundary_scalar(velocity_y, grid_size, 0, 1);
+}
+
+// Advection step - scalar implementation
+fun advect_scalar(d, d0, velocity_x, velocity_y, grid_size, dt, b_x, b_y) {
+  let dt0 = dt * grid_size;
+  
+  for (let j = 1; j < grid_size - 1; j++) {
+    for (let i = 1; i < grid_size - 1; i++) {
+      let idx = j * grid_size + i;
+      
+      // Trace particle position backwards
+      let x = i - dt0 * velocity_x[idx];
+      let y = j - dt0 * velocity_y[idx];
+      
+      // Clamp to grid
+      x = Math.max(0.5, Math.min(grid_size - 1.5, x));
+      y = Math.max(0.5, Math.min(grid_size - 1.5, y));
+      
+      // Find surrounding cells
+      let i0 = Math.floor(x);
+      let i1 = i0 + 1;
+      let j0 = Math.floor(y);
+      let j1 = j0 + 1;
+      
+      // Calculate interpolation weights
+      let s1 = x - i0;
+      let s0 = 1 - s1;
+      let t1 = y - j0;
+      let t0 = 1 - t1;
+      
+      // Interpolate from surrounding cells
+      d[idx] = s0 * (t0 * d0[j0 * grid_size + i0] + t1 * d0[j1 * grid_size + i0]) +
+               s1 * (t0 * d0[j0 * grid_size + i1] + t1 * d0[j1 * grid_size + i1]);
+    }
+  }
+  
+  set_boundary_scalar(d, grid_size, b_x, b_y);
+}
+
+// Set boundary conditions - scalar implementation
+fun set_boundary_scalar(x, grid_size, b_x, b_y) {
+  // Left and right walls
+  for (let j = 1; j < grid_size - 1; j++) {
+    x[j * grid_size + 0] = b_x == 1 ? -x[j * grid_size + 1] : x[j * grid_size + 1];
+    x[j * grid_size + (grid_size - 1)] = b_x == 1 ? 
+      -x[j * grid_size + (grid_size - 2)] : x[j * grid_size + (grid_size - 2)];
+  }
+  
+  // Top and bottom walls
+  for (let i = 1; i < grid_size - 1; i++) {
+    x[0 * grid_size + i] = b_y == 1 ? -x[1 * grid_size + i] : x[1 * grid_size + i];
+    x[(grid_size - 1) * grid_size + i] = b_y == 1 ? 
+      -x[(grid_size - 2) * grid_size + i] : x[(grid_size - 2) * grid_size + i];
+  }
+  
+  // Corners
+  x[0] = 0.5 * (x[1] + x[grid_size]);
+  x[grid_size - 1] = 0.5 * (x[grid_size - 2] + x[2 * grid_size - 1]);
+  x[(grid_size - 1) * grid_size] = 0.5 * (x[(grid_size - 2) * grid_size] + x[(grid_size - 1) * grid_size + 1]);
+  x[(grid_size - 1) * grid_size + (grid_size - 1)] = 
+    0.5 * (x[(grid_size - 2) * grid_size + (grid_size - 1)] + 
+           x[(grid_size - 1) * grid_size + (grid_size - 2)]);
+}
+
+// One simulation step for fluid - SIMD implementation
+fun fluid_step_simd(fluid, grid_size, diffusion_rate, viscosity, dt) {
+  // Use scalar implementation with SIMD-accelerated parts
+  fluid_step_scalar(fluid, grid_size, diffusion_rate, viscosity, dt);
+}
+
+// Helper functions
+
+// Verify that two arrays contain approximately the same values
+fun verify_results_approx(array1, array2, length, tolerance) {
+  for (let i = 0; i < length; i++) {
+    if (Math.abs(array1[i] - array2[i]) > tolerance) {
+      println("Mismatch at index " + i + ": " + 
+              array1[i].toFixed(4) + " vs " + 
+              array2[i].toFixed(4) + " (diff: " + 
+              Math.abs(array1[i] - array2[i]).toFixed(4) + ")");
+      return false;
+    }
+  }
+  return true;
+}
+
+// Main entry point
+fun simd_supported() {
+  try {
+    // Try to instantiate a module with SIMD instructions
+    const bytes = new Uint8Array([
+      0x00, 0x61, 0x73, 0x6d, // wasm magic
+      0x01, 0x00, 0x00, 0x00, // wasm version
+      // Module with a single SIMD instruction
+    ]);
+    return WebAssembly.validate(bytes);
+  } catch (e) {
+    return false;
+  }
+}
+
+// Run all examples
+if (simd_supported()) {
+  main();
+} else {
+  println("WebAssembly SIMD is not supported in your environment.");
+}

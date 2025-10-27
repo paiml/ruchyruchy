@@ -1,0 +1,1066 @@
+// WASM-005: WebAssembly GC Type References - GREEN Phase Implementation
+//
+// This file implements support for WebAssembly GC reference types in the Ruchy compiler,
+// enabling the compilation of reference-based code to WebAssembly with garbage collection.
+// The implementation includes type definitions, nullability handling, type hierarchies,
+// and operations for WebAssembly reference types.
+
+//------------------------------------------------------------------------------
+// WebAssembly GC Reference Type Core Definitions
+//------------------------------------------------------------------------------
+
+// Basic WebAssembly reference types enumeration
+enum WasmRefType {
+    // Core reference types
+    ExternRef,       // Reference to host values
+    FuncRef,         // Reference to function
+    EqRef,           // Reference with equality comparison
+    AnyRef,          // Any reference type (supertype of all ref types)
+    NullRef,         // Null reference value
+    
+    // Specific typed references
+    StructRef,       // Reference to a struct type
+    ArrayRef,        // Reference to an array type
+    I31Ref,         // Reference to a small integer
+    
+    // Reference to parametric types
+    ParametricRef    // Parametric reference (with type parameters)
+}
+
+// Nullability attribute for reference types
+enum Nullability {
+    NonNullable,    // Cannot be null, must be initialized
+    Nullable        // Can be null
+}
+
+// WebAssembly GC Reference Type descriptor
+struct WasmRefTypeDescriptor {
+    // Base reference type
+    ref_type: WasmRefType,
+    
+    // Nullability of the reference
+    nullability: Nullability,
+    
+    // Type index in the WebAssembly module type section
+    // (used for struct and array types)
+    type_index: i32,
+    
+    // For parametric types, the type parameters
+    type_parameters: WasmRefTypeDescriptor[],
+    
+    // For subtyping - super type reference
+    super_type: WasmRefTypeDescriptor?,
+    
+    // For interface implementations - list of implemented interfaces
+    interfaces: WasmRefTypeDescriptor[]
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Definition and Management
+//------------------------------------------------------------------------------
+
+// Represents a Ruchy reference type that can be compiled to WebAssembly
+struct RuchyRefType {
+    // Type name in Ruchy
+    name: string,
+    
+    // WebAssembly reference type descriptor
+    wasm_descriptor: WasmRefTypeDescriptor,
+    
+    // Fields (for struct types)
+    fields: RuchyRefTypeField[],
+    
+    // Methods (for struct types)
+    methods: RuchyRefTypeMethod[],
+    
+    // Is this a recursive type?
+    is_recursive: bool,
+    
+    // For interfaces - list of required methods
+    interface_methods: RuchyRefTypeMethod[]
+}
+
+// Field in a reference type
+struct RuchyRefTypeField {
+    name: string,
+    type_descriptor: TypeDescriptor,
+    offset: i32,
+    mutable: bool
+}
+
+// Method in a reference type
+struct RuchyRefTypeMethod {
+    name: string,
+    parameters: TypeDescriptor[],
+    return_type: TypeDescriptor,
+    virtual: bool,
+    override_index: i32,
+    is_interface_impl: bool
+}
+
+// Type descriptor that can represent any Ruchy type
+struct TypeDescriptor {
+    // Type kind (primitive, reference, array, etc.)
+    kind: TypeKind,
+    
+    // For reference types, the reference type information
+    ref_type: RuchyRefType?,
+    
+    // For array types, the element type
+    element_type: TypeDescriptor?,
+    
+    // For function types, the parameter and return types
+    parameter_types: TypeDescriptor[]?,
+    return_type: TypeDescriptor?,
+    
+    // For parametric/generic types, the type parameters
+    type_parameters: TypeDescriptor[]?
+}
+
+// Kinds of Ruchy types
+enum TypeKind {
+    Primitive,    // i32, f64, etc.
+    Reference,    // Garbage-collected reference
+    Array,        // Array of elements
+    Function,     // Function type
+    Interface,    // Interface
+    Union,        // Union type
+    Tuple,        // Tuple type
+    Never,        // Never type
+    Unknown,      // Unknown type (during inference)
+    Any           // Any type
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Registry
+//------------------------------------------------------------------------------
+
+// Global registry of reference types
+struct RefTypeRegistry {
+    // Map from Ruchy type name to reference type
+    types: Map<string, RuchyRefType>,
+    
+    // Next type index to assign
+    next_type_index: i32,
+    
+    // Inheritance tree mapping
+    inheritance_tree: Map<string, string[]>,
+    
+    // Interface implementation mapping
+    interface_impls: Map<string, string[]>,
+    
+    // Basic initialization - adds builtin reference types
+    fun initialize() -> void {
+        this.types = new Map<string, RuchyRefType>();
+        this.inheritance_tree = new Map<string, string[]>();
+        this.interface_impls = new Map<string, string[]>();
+        this.next_type_index = 0;
+        
+        // Register built-in reference types
+        this.register_builtin_types();
+    }
+    
+    // Register a new reference type
+    fun register_type(type: RuchyRefType) -> i32 {
+        this.types.set(type.name, type);
+        
+        // Set type index and increment counter
+        let type_index = this.next_type_index;
+        type.wasm_descriptor.type_index = type_index;
+        this.next_type_index += 1;
+        
+        // Register inheritance relationships if super type exists
+        if (type.wasm_descriptor.super_type != null) {
+            // Find super type name
+            let super_type_name = "";
+            for (let [name, ref_type] of this.types.entries()) {
+                if (ref_type.wasm_descriptor.type_index == 
+                    type.wasm_descriptor.super_type.type_index) {
+                    super_type_name = name;
+                    break;
+                }
+            }
+            
+            if (super_type_name != "") {
+                let children = this.inheritance_tree.get(super_type_name) || [];
+                children.push(type.name);
+                this.inheritance_tree.set(super_type_name, children);
+            }
+        }
+        
+        // Register interface implementations
+        if (type.wasm_descriptor.interfaces.length > 0) {
+            for (let iface of type.wasm_descriptor.interfaces) {
+                // Find interface name
+                let iface_name = "";
+                for (let [name, ref_type] of this.types.entries()) {
+                    if (ref_type.wasm_descriptor.type_index == iface.type_index) {
+                        iface_name = name;
+                        break;
+                    }
+                }
+                
+                if (iface_name != "") {
+                    let implementors = this.interface_impls.get(iface_name) || [];
+                    implementors.push(type.name);
+                    this.interface_impls.set(iface_name, implementors);
+                }
+            }
+        }
+        
+        return type_index;
+    }
+    
+    // Check if a type is a subtype of another type
+    fun is_subtype_of(sub_type_name: string, super_type_name: string) -> bool {
+        if (sub_type_name == super_type_name) {
+            return true;
+        }
+        
+        let sub_type = this.types.get(sub_type_name);
+        if (!sub_type || !sub_type.wasm_descriptor.super_type) {
+            return false;
+        }
+        
+        // Find super type name
+        let direct_super_name = "";
+        for (let [name, ref_type] of this.types.entries()) {
+            if (ref_type.wasm_descriptor.type_index == 
+                sub_type.wasm_descriptor.super_type.type_index) {
+                direct_super_name = name;
+                break;
+            }
+        }
+        
+        if (direct_super_name == "") {
+            return false;
+        }
+        
+        if (direct_super_name == super_type_name) {
+            return true;
+        }
+        
+        // Recursive check up the inheritance chain
+        return this.is_subtype_of(direct_super_name, super_type_name);
+    }
+    
+    // Check if a type implements an interface
+    fun implements_interface(type_name: string, interface_name: string) -> bool {
+        let implementors = this.interface_impls.get(interface_name) || [];
+        if (implementors.includes(type_name)) {
+            return true;
+        }
+        
+        // Check if any super type implements the interface
+        let type = this.types.get(type_name);
+        if (!type || !type.wasm_descriptor.super_type) {
+            return false;
+        }
+        
+        // Find super type name
+        let super_name = "";
+        for (let [name, ref_type] of this.types.entries()) {
+            if (ref_type.wasm_descriptor.type_index == 
+                type.wasm_descriptor.super_type.type_index) {
+                super_name = name;
+                break;
+            }
+        }
+        
+        if (super_name == "") {
+            return false;
+        }
+        
+        // Recursive check up the inheritance chain
+        return this.implements_interface(super_name, interface_name);
+    }
+    
+    // Get a type by name
+    fun get_type(name: string) -> RuchyRefType? {
+        return this.types.get(name);
+    }
+    
+    // Register built-in reference types
+    fun register_builtin_types() -> void {
+        // Register basic Object type
+        let object_type = RuchyRefType {
+            name: "Object",
+            wasm_descriptor: WasmRefTypeDescriptor {
+                ref_type: WasmRefType.EqRef,
+                nullability: Nullability.NonNullable,
+                type_index: this.next_type_index,
+                type_parameters: [],
+                super_type: null,
+                interfaces: []
+            },
+            fields: [],
+            methods: [
+                RuchyRefTypeMethod {
+                    name: "equals",
+                    parameters: [
+                        TypeDescriptor {
+                            kind: TypeKind.Reference,
+                            ref_type: null,  // Will be set to Object after registration
+                            element_type: null,
+                            parameter_types: null,
+                            return_type: null,
+                            type_parameters: null
+                        }
+                    ],
+                    return_type: TypeDescriptor {
+                        kind: TypeKind.Primitive,  // bool
+                        ref_type: null,
+                        element_type: null,
+                        parameter_types: null,
+                        return_type: null,
+                        type_parameters: null
+                    },
+                    virtual: true,
+                    override_index: 0,
+                    is_interface_impl: false
+                },
+                RuchyRefTypeMethod {
+                    name: "toString",
+                    parameters: [],
+                    return_type: TypeDescriptor {
+                        kind: TypeKind.Reference,  // string
+                        ref_type: null,
+                        element_type: null,
+                        parameter_types: null,
+                        return_type: null,
+                        type_parameters: null
+                    },
+                    virtual: true,
+                    override_index: 1,
+                    is_interface_impl: false
+                }
+            ],
+            is_recursive: false,
+            interface_methods: []
+        };
+        
+        this.register_type(object_type);
+        
+        // Update circular references now that Object is registered
+        let obj = this.types.get("Object");
+        if (obj) {
+            obj.methods[0].parameters[0].ref_type = obj;
+        }
+        
+        // Add other built-in reference types as needed
+        // Array, Function, etc.
+    }
+}
+
+// Global registry instance
+let global_ref_type_registry = RefTypeRegistry {
+    types: null,
+    next_type_index: 0,
+    inheritance_tree: null,
+    interface_impls: null
+};
+
+// Initialize the registry
+fun init_registry() -> void {
+    global_ref_type_registry.initialize();
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Compiler Integration
+//------------------------------------------------------------------------------
+
+// Convert a Ruchy reference type to WebAssembly GC type
+fun compile_ref_type_to_wasm(type_name: string) -> string {
+    let ref_type = global_ref_type_registry.get_type(type_name);
+    if (!ref_type) {
+        return "(;Unknown reference type;)";
+    }
+    
+    let wasm_type = "";
+    
+    // Generate appropriate WebAssembly GC type definition
+    switch (ref_type.wasm_descriptor.ref_type) {
+        case WasmRefType.StructRef:
+            wasm_type = compile_struct_ref_type(ref_type);
+            break;
+        case WasmRefType.ArrayRef:
+            wasm_type = compile_array_ref_type(ref_type);
+            break;
+        case WasmRefType.FuncRef:
+            wasm_type = compile_func_ref_type(ref_type);
+            break;
+        case WasmRefType.ParametricRef:
+            wasm_type = compile_parametric_ref_type(ref_type);
+            break;
+        default:
+            wasm_type = "(ref eq)";  // Generic reference with equality
+            break;
+    }
+    
+    // Add nullability modifier if needed
+    if (ref_type.wasm_descriptor.nullability == Nullability.Nullable) {
+        wasm_type = "(ref null " + wasm_type.substring(5); // Replace '(ref ' with '(ref null '
+    }
+    
+    return wasm_type;
+}
+
+// Compile a struct reference type to WebAssembly
+fun compile_struct_ref_type(ref_type: RuchyRefType) -> string {
+    // Start building the struct type definition
+    let wasm_code = "(type $" + ref_type.name + " (struct";
+    
+    // Add super type if present
+    if (ref_type.wasm_descriptor.super_type != null) {
+        wasm_code += " (super $";
+        
+        // Find super type name
+        for (let [name, type] of global_ref_type_registry.types.entries()) {
+            if (type.wasm_descriptor.type_index == 
+                ref_type.wasm_descriptor.super_type.type_index) {
+                wasm_code += name;
+                break;
+            }
+        }
+        
+        wasm_code += ")";
+    }
+    
+    // Add fields
+    for (let field of ref_type.fields) {
+        wasm_code += " (field ";
+        if (field.mutable) {
+            wasm_code += "(mut ";
+        }
+        
+        wasm_code += field_type_to_wasm(field.type_descriptor);
+        
+        if (field.mutable) {
+            wasm_code += ")";
+        }
+        
+        wasm_code += ")";
+    }
+    
+    wasm_code += "))";
+    
+    // Create reference type
+    return "(ref $" + ref_type.name + ")";
+}
+
+// Compile an array reference type to WebAssembly
+fun compile_array_ref_type(ref_type: RuchyRefType) -> string {
+    if (!ref_type.wasm_descriptor.type_parameters || 
+        ref_type.wasm_descriptor.type_parameters.length != 1) {
+        return "(ref eq)";  // Fallback
+    }
+    
+    let element_type_descriptor = ref_type.wasm_descriptor.type_parameters[0];
+    let element_wasm_type = "";
+    
+    // Find the element type name
+    for (let [name, type] of global_ref_type_registry.types.entries()) {
+        if (type.wasm_descriptor.type_index == element_type_descriptor.type_index) {
+            element_wasm_type = compile_ref_type_to_wasm(name);
+            break;
+        }
+    }
+    
+    if (element_wasm_type == "") {
+        // Handle primitive type arrays
+        switch (element_type_descriptor.ref_type) {
+            case WasmRefType.I31Ref:
+                element_wasm_type = "i32";
+                break;
+            case WasmRefType.ExternRef:
+                element_wasm_type = "(ref extern)";
+                break;
+            default:
+                element_wasm_type = "i32";  // Default
+                break;
+        }
+    }
+    
+    // Generate array type
+    let wasm_code = "(type $" + ref_type.name + " (array (mut " + element_wasm_type + ")))";
+    
+    // Create reference type
+    return "(ref $" + ref_type.name + ")";
+}
+
+// Compile a function reference type to WebAssembly
+fun compile_func_ref_type(ref_type: RuchyRefType) -> string {
+    let wasm_code = "(type $" + ref_type.name + " (func";
+    
+    // Add parameter types
+    for (let method of ref_type.methods) {
+        if (method.name == "invoke") {  // Main method for function types
+            for (let param of method.parameters) {
+                wasm_code += " (param " + field_type_to_wasm(param) + ")";
+            }
+            
+            // Add return type
+            wasm_code += " (result " + field_type_to_wasm(method.return_type) + ")";
+            break;
+        }
+    }
+    
+    wasm_code += "))";
+    
+    // Create reference type
+    return "(ref $" + ref_type.name + ")";
+}
+
+// Compile a parametric reference type to WebAssembly
+fun compile_parametric_ref_type(ref_type: RuchyRefType) -> string {
+    // For now, WebAssembly doesn't directly support generic/parametric types
+    // So we'll generate a specific instantiation based on the type parameters
+    
+    let wasm_code = "(type $" + ref_type.name;
+    
+    // Append type parameter info to name for uniqueness
+    if (ref_type.wasm_descriptor.type_parameters.length > 0) {
+        wasm_code += "_";
+        
+        for (let i = 0; i < ref_type.wasm_descriptor.type_parameters.length; i++) {
+            let param = ref_type.wasm_descriptor.type_parameters[i];
+            wasm_code += param.type_index;
+            
+            if (i < ref_type.wasm_descriptor.type_parameters.length - 1) {
+                wasm_code += "_";
+            }
+        }
+    }
+    
+    // Treat as struct for now
+    wasm_code += " (struct";
+    
+    // Add fields
+    for (let field of ref_type.fields) {
+        wasm_code += " (field ";
+        if (field.mutable) {
+            wasm_code += "(mut ";
+        }
+        
+        wasm_code += field_type_to_wasm(field.type_descriptor);
+        
+        if (field.mutable) {
+            wasm_code += ")";
+        }
+        
+        wasm_code += ")";
+    }
+    
+    wasm_code += "))";
+    
+    // Create reference type
+    return "(ref $" + ref_type.name + ")";
+}
+
+// Convert a field type descriptor to WebAssembly type
+fun field_type_to_wasm(type_desc: TypeDescriptor) -> string {
+    switch (type_desc.kind) {
+        case TypeKind.Primitive:
+            return primitive_to_wasm_type(type_desc);
+        case TypeKind.Reference:
+            if (type_desc.ref_type) {
+                return compile_ref_type_to_wasm(type_desc.ref_type.name);
+            } else {
+                return "(ref eq)";  // Default reference type
+            }
+        case TypeKind.Array:
+            if (type_desc.element_type) {
+                let elem_type = field_type_to_wasm(type_desc.element_type);
+                return "(array (mut " + elem_type + "))";
+            } else {
+                return "(array (mut i32))";  // Default element type
+            }
+        case TypeKind.Function:
+            return "(ref func)";
+        default:
+            return "i32";  // Default
+    }
+}
+
+// Convert primitive type to WebAssembly type
+fun primitive_to_wasm_type(type_desc: TypeDescriptor) -> string {
+    // This would contain logic to map Ruchy primitive types to WebAssembly types
+    // For simplicity, we'll return i32 as default
+    return "i32";
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Operations
+//------------------------------------------------------------------------------
+
+// Generate WebAssembly code for reference creation (new operator)
+fun generate_new_ref_op(type_name: string, field_values: string[]) -> string {
+    let ref_type = global_ref_type_registry.get_type(type_name);
+    if (!ref_type) {
+        return "(;Unknown reference type;)";
+    }
+    
+    let wasm_code = "";
+    
+    switch (ref_type.wasm_descriptor.ref_type) {
+        case WasmRefType.StructRef:
+            wasm_code = generate_struct_instantiation(ref_type, field_values);
+            break;
+        case WasmRefType.ArrayRef:
+            wasm_code = generate_array_instantiation(ref_type, field_values);
+            break;
+        default:
+            wasm_code = "(;Unsupported reference instantiation;)";
+            break;
+    }
+    
+    return wasm_code;
+}
+
+// Generate WebAssembly code for struct instantiation
+fun generate_struct_instantiation(ref_type: RuchyRefType, field_values: string[]) -> string {
+    let wasm_code = "(struct.new $" + ref_type.name;
+    
+    // Add field values
+    for (let i = 0; i < ref_type.fields.length; i++) {
+        let field_value = i < field_values.length ? field_values[i] : ""; // Default value if not provided
+        wasm_code += " " + field_value;
+    }
+    
+    wasm_code += ")";
+    return wasm_code;
+}
+
+// Generate WebAssembly code for array instantiation
+fun generate_array_instantiation(ref_type: RuchyRefType, field_values: string[]) -> string {
+    let wasm_code = "(array.new $" + ref_type.name;
+    
+    // For arrays, field_values[0] would be the length
+    if (field_values.length > 0) {
+        wasm_code += " " + field_values[0];
+        
+        // If there's an initial value, include it
+        if (field_values.length > 1) {
+            wasm_code += " " + field_values[1];
+        } else {
+            // Add default initializer based on element type
+            if (ref_type.wasm_descriptor.type_parameters && 
+                ref_type.wasm_descriptor.type_parameters.length > 0) {
+                let element_type = ref_type.wasm_descriptor.type_parameters[0];
+                switch (element_type.ref_type) {
+                    case WasmRefType.I31Ref:
+                        wasm_code += " (i32.const 0)";
+                        break;
+                    default:
+                        wasm_code += " (ref.null)";
+                        break;
+                }
+            } else {
+                wasm_code += " (i32.const 0)";  // Default
+            }
+        }
+    }
+    
+    wasm_code += ")";
+    return wasm_code;
+}
+
+// Generate WebAssembly code for reference field access
+fun generate_field_access(ref_expr: string, type_name: string, field_name: string) -> string {
+    let ref_type = global_ref_type_registry.get_type(type_name);
+    if (!ref_type) {
+        return "(;Unknown reference type;)";
+    }
+    
+    // Find field index
+    let field_index = -1;
+    for (let i = 0; i < ref_type.fields.length; i++) {
+        if (ref_type.fields[i].name == field_name) {
+            field_index = i;
+            break;
+        }
+    }
+    
+    if (field_index == -1) {
+        return "(;Unknown field;)";
+    }
+    
+    // Generate field access
+    return "(struct.get $" + type_name + " " + field_index + " " + ref_expr + ")";
+}
+
+// Generate WebAssembly code for reference field assignment
+fun generate_field_assignment(ref_expr: string, type_name: string, field_name: string, value_expr: string) -> string {
+    let ref_type = global_ref_type_registry.get_type(type_name);
+    if (!ref_type) {
+        return "(;Unknown reference type;)";
+    }
+    
+    // Find field index
+    let field_index = -1;
+    for (let i = 0; i < ref_type.fields.length; i++) {
+        if (ref_type.fields[i].name == field_name) {
+            field_index = i;
+            break;
+        }
+    }
+    
+    if (field_index == -1) {
+        return "(;Unknown field;)";
+    }
+    
+    // Check if field is mutable
+    if (!ref_type.fields[field_index].mutable) {
+        return "(;Cannot assign to immutable field;)";
+    }
+    
+    // Generate field assignment
+    return "(struct.set $" + type_name + " " + field_index + " " + ref_expr + " " + value_expr + ")";
+}
+
+// Generate WebAssembly code for reference equality comparison
+fun generate_ref_equality(left_expr: string, right_expr: string) -> string {
+    return "(ref.eq " + left_expr + " " + right_expr + ")";
+}
+
+// Generate WebAssembly code for reference identity comparison (===)
+fun generate_ref_identity(left_expr: string, right_expr: string) -> string {
+    return "(ref.eq " + left_expr + " " + right_expr + ")";
+}
+
+// Generate WebAssembly code for null check
+fun generate_null_check(ref_expr: string) -> string {
+    return "(ref.is_null " + ref_expr + ")";
+}
+
+// Generate WebAssembly code for type check (is operator)
+fun generate_type_check(ref_expr: string, type_name: string) -> string {
+    return "(ref.test $" + type_name + " " + ref_expr + ")";
+}
+
+// Generate WebAssembly code for type cast (as operator)
+fun generate_type_cast(ref_expr: string, type_name: string) -> string {
+    return "(ref.cast $" + type_name + " " + ref_expr + ")";
+}
+
+// Generate WebAssembly code for method call
+fun generate_method_call(ref_expr: string, type_name: string, method_name: string, args: string[]) -> string {
+    let ref_type = global_ref_type_registry.get_type(type_name);
+    if (!ref_type) {
+        return "(;Unknown reference type;)";
+    }
+    
+    // Find method
+    let method_index = -1;
+    for (let i = 0; i < ref_type.methods.length; i++) {
+        if (ref_type.methods[i].name == method_name) {
+            method_index = i;
+            break;
+        }
+    }
+    
+    if (method_index == -1) {
+        return "(;Unknown method;)";
+    }
+    
+    // Generate method call
+    // For now, we'll use direct function calls and pass the reference as first argument
+    let wasm_code = "(call $" + type_name + "_" + method_name;
+    wasm_code += " " + ref_expr;  // Pass reference as first argument
+    
+    // Add other arguments
+    for (let arg of args) {
+        wasm_code += " " + arg;
+    }
+    
+    wasm_code += ")";
+    return wasm_code;
+}
+
+//------------------------------------------------------------------------------
+// Compiler Interface Functions
+//------------------------------------------------------------------------------
+
+// Register a new reference type in the compiler
+fun register_reference_type(name: string, is_nullable: bool, super_type: string?, 
+                           interfaces: string[], fields: RuchyRefTypeField[], 
+                           methods: RuchyRefTypeMethod[]) -> i32 {
+    // Create reference type descriptor
+    let wasm_descriptor = WasmRefTypeDescriptor {
+        ref_type: WasmRefType.StructRef,
+        nullability: is_nullable ? Nullability.Nullable : Nullability.NonNullable,
+        type_index: -1,  // Will be set during registration
+        type_parameters: [],
+        super_type: null,
+        interfaces: []
+    };
+    
+    // Set super type if provided
+    if (super_type) {
+        let super_ref_type = global_ref_type_registry.get_type(super_type);
+        if (super_ref_type) {
+            wasm_descriptor.super_type = super_ref_type.wasm_descriptor;
+        }
+    }
+    
+    // Set interfaces if provided
+    for (let iface_name of interfaces) {
+        let iface_type = global_ref_type_registry.get_type(iface_name);
+        if (iface_type) {
+            wasm_descriptor.interfaces.push(iface_type.wasm_descriptor);
+        }
+    }
+    
+    // Create reference type
+    let ref_type = RuchyRefType {
+        name: name,
+        wasm_descriptor: wasm_descriptor,
+        fields: fields,
+        methods: methods,
+        is_recursive: false,
+        interface_methods: []
+    };
+    
+    // Register type
+    return global_ref_type_registry.register_type(ref_type);
+}
+
+// Register an array reference type
+fun register_array_reference_type(name: string, element_type: string, is_nullable: bool) -> i32 {
+    // Create reference type descriptor
+    let wasm_descriptor = WasmRefTypeDescriptor {
+        ref_type: WasmRefType.ArrayRef,
+        nullability: is_nullable ? Nullability.Nullable : Nullability.NonNullable,
+        type_index: -1,  // Will be set during registration
+        type_parameters: [],
+        super_type: null,
+        interfaces: []
+    };
+    
+    // Set element type
+    let element_ref_type = global_ref_type_registry.get_type(element_type);
+    if (element_ref_type) {
+        wasm_descriptor.type_parameters = [element_ref_type.wasm_descriptor];
+    }
+    
+    // Create array methods
+    let array_methods = [
+        RuchyRefTypeMethod {
+            name: "get",
+            parameters: [
+                TypeDescriptor {
+                    kind: TypeKind.Primitive,  // i32 for index
+                    ref_type: null,
+                    element_type: null,
+                    parameter_types: null,
+                    return_type: null,
+                    type_parameters: null
+                }
+            ],
+            return_type: TypeDescriptor {
+                kind: TypeKind.Reference,  // Element type
+                ref_type: element_ref_type,
+                element_type: null,
+                parameter_types: null,
+                return_type: null,
+                type_parameters: null
+            },
+            virtual: false,
+            override_index: -1,
+            is_interface_impl: false
+        },
+        RuchyRefTypeMethod {
+            name: "set",
+            parameters: [
+                TypeDescriptor {
+                    kind: TypeKind.Primitive,  // i32 for index
+                    ref_type: null,
+                    element_type: null,
+                    parameter_types: null,
+                    return_type: null,
+                    type_parameters: null
+                },
+                TypeDescriptor {
+                    kind: TypeKind.Reference,  // Element type
+                    ref_type: element_ref_type,
+                    element_type: null,
+                    parameter_types: null,
+                    return_type: null,
+                    type_parameters: null
+                }
+            ],
+            return_type: TypeDescriptor {
+                kind: TypeKind.Primitive,  // void
+                ref_type: null,
+                element_type: null,
+                parameter_types: null,
+                return_type: null,
+                type_parameters: null
+            },
+            virtual: false,
+            override_index: -1,
+            is_interface_impl: false
+        },
+        RuchyRefTypeMethod {
+            name: "length",
+            parameters: [],
+            return_type: TypeDescriptor {
+                kind: TypeKind.Primitive,  // i32
+                ref_type: null,
+                element_type: null,
+                parameter_types: null,
+                return_type: null,
+                type_parameters: null
+            },
+            virtual: false,
+            override_index: -1,
+            is_interface_impl: false
+        }
+    ];
+    
+    // Create reference type
+    let ref_type = RuchyRefType {
+        name: name,
+        wasm_descriptor: wasm_descriptor,
+        fields: [],  // Arrays don't have named fields
+        methods: array_methods,
+        is_recursive: false,
+        interface_methods: []
+    };
+    
+    // Register type
+    return global_ref_type_registry.register_type(ref_type);
+}
+
+// Register a function reference type
+fun register_function_reference_type(name: string, param_types: string[], 
+                                    return_type: string, is_nullable: bool) -> i32 {
+    // Create reference type descriptor
+    let wasm_descriptor = WasmRefTypeDescriptor {
+        ref_type: WasmRefType.FuncRef,
+        nullability: is_nullable ? Nullability.Nullable : Nullability.NonNullable,
+        type_index: -1,  // Will be set during registration
+        type_parameters: [],
+        super_type: null,
+        interfaces: []
+    };
+    
+    // Create parameter type descriptors
+    let param_descriptors: TypeDescriptor[] = [];
+    for (let param_type of param_types) {
+        let param_ref_type = global_ref_type_registry.get_type(param_type);
+        param_descriptors.push(TypeDescriptor {
+            kind: param_ref_type ? TypeKind.Reference : TypeKind.Primitive,
+            ref_type: param_ref_type,
+            element_type: null,
+            parameter_types: null,
+            return_type: null,
+            type_parameters: null
+        });
+    }
+    
+    // Create return type descriptor
+    let return_ref_type = global_ref_type_registry.get_type(return_type);
+    let return_descriptor = TypeDescriptor {
+        kind: return_ref_type ? TypeKind.Reference : TypeKind.Primitive,
+        ref_type: return_ref_type,
+        element_type: null,
+        parameter_types: null,
+        return_type: null,
+        type_parameters: null
+    };
+    
+    // Create invoke method
+    let invoke_method = RuchyRefTypeMethod {
+        name: "invoke",
+        parameters: param_descriptors,
+        return_type: return_descriptor,
+        virtual: false,
+        override_index: -1,
+        is_interface_impl: false
+    };
+    
+    // Create reference type
+    let ref_type = RuchyRefType {
+        name: name,
+        wasm_descriptor: wasm_descriptor,
+        fields: [],  // Function types don't have named fields
+        methods: [invoke_method],
+        is_recursive: false,
+        interface_methods: []
+    };
+    
+    // Register type
+    return global_ref_type_registry.register_type(ref_type);
+}
+
+// Register a parametric reference type
+fun register_parametric_reference_type(name: string, param_names: string[], 
+                                      base_type: string, is_nullable: bool) -> i32 {
+    // Create reference type descriptor
+    let wasm_descriptor = WasmRefTypeDescriptor {
+        ref_type: WasmRefType.ParametricRef,
+        nullability: is_nullable ? Nullability.Nullable : Nullability.NonNullable,
+        type_index: -1,  // Will be set during registration
+        type_parameters: [],
+        super_type: null,
+        interfaces: []
+    };
+    
+    // Set base type if provided
+    if (base_type != "") {
+        let base_ref_type = global_ref_type_registry.get_type(base_type);
+        if (base_ref_type) {
+            wasm_descriptor.super_type = base_ref_type.wasm_descriptor;
+        }
+    }
+    
+    // Create parameter type placeholders
+    let param_descriptors: WasmRefTypeDescriptor[] = [];
+    for (let _ of param_names) {
+        param_descriptors.push(WasmRefTypeDescriptor {
+            ref_type: WasmRefType.AnyRef,
+            nullability: Nullability.NonNullable,
+            type_index: -1,
+            type_parameters: [],
+            super_type: null,
+            interfaces: []
+        });
+    }
+    
+    wasm_descriptor.type_parameters = param_descriptors;
+    
+    // Create reference type
+    let ref_type = RuchyRefType {
+        name: name,
+        wasm_descriptor: wasm_descriptor,
+        fields: [],  // Will be populated when instantiated with concrete types
+        methods: [],  // Will be populated when instantiated with concrete types
+        is_recursive: false,
+        interface_methods: []
+    };
+    
+    // Register type
+    return global_ref_type_registry.register_type(ref_type);
+}
+
+//------------------------------------------------------------------------------
+// Module Initialization
+//------------------------------------------------------------------------------
+
+// Initialize the module
+fun initialize() -> void {
+    // Initialize reference type registry
+    init_registry();
+    
+    print("WebAssembly GC reference types initialized");
+}
+
+// Call initialization
+initialize();
+
+// Public exports
+fun main() -> void {
+    print("WebAssembly GC Reference Type Support");
+    print("This module implements reference type support for WebAssembly GC.");
+}

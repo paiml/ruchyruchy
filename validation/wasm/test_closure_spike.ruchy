@@ -1,0 +1,158 @@
+// WASM Closure Compilation Spike - Test File
+// Date: October 23, 2025
+// Purpose: Validate feasibility of closure compilation for WASM target
+
+// Simple counter implementation with closure
+fun test_counter_implementation() {
+    // This function creates a counter that captures a mutable variable
+    fun make_counter() {
+        let mut count = 0
+        (x) => {
+            count = count + x
+            count
+        }
+    }
+    
+    // Create two independent counters
+    let counter1 = make_counter()
+    let counter2 = make_counter()
+    
+    // Test first counter
+    assert_eq(counter1(5), 5, "Counter1 should return 5 after adding 5")
+    assert_eq(counter1(3), 8, "Counter1 should return 8 after adding 3")
+    
+    // Test second counter (independent)
+    assert_eq(counter2(10), 10, "Counter2 should return 10 after adding 10")
+    assert_eq(counter2(2), 12, "Counter2 should return 12 after adding 2")
+    
+    // Further test first counter (still independent)
+    assert_eq(counter1(4), 12, "Counter1 should return 12 after adding 4")
+    
+    // Test with negative numbers
+    assert_eq(counter1(-2), 10, "Counter1 should return 10 after subtracting 2")
+    assert_eq(counter2(-5), 7, "Counter2 should return 7 after subtracting 5")
+    
+    println("All counter tests passed!")
+}
+
+// Test nested closures with multiple captured variables
+fun test_nested_closures() {
+    // This function creates a calculator that has multiple captured variables
+    fun make_calculator() {
+        let mut base = 100
+        let mut factor = 2
+        
+        // Return a closure that itself returns another closure
+        () => {
+            // Capture both base and factor
+            let local_copy = base
+            
+            // Modify captured variables
+            base = base + 50
+            
+            // Return another closure that uses both captures
+            (x) => {
+                local_copy + (x * factor)
+            }
+        }
+    }
+    
+    // Create calculator factory
+    let calc_factory = make_calculator()
+    
+    // Create two calculator instances
+    let calc1 = calc_factory()  // base=100, then incremented to 150
+    let calc2 = calc_factory()  // base=150, then incremented to 200
+    
+    // Test calculations
+    assert_eq(calc1(10), 120, "calc1(10) should be 100 + (10 * 2) = 120")
+    assert_eq(calc2(10), 170, "calc2(10) should be 150 + (10 * 2) = 170")
+    
+    println("All nested closure tests passed!")
+}
+
+// Test closures that capture and modify multiple variables
+fun test_multiple_captures() {
+    fun make_stateful_transformer() {
+        let mut count = 0
+        let mut sum = 0
+        let mut product = 1
+        
+        (x) => {
+            count = count + 1
+            sum = sum + x
+            product = product * x
+            
+            // Return a tuple of stats
+            (count, sum, product)
+        }
+    }
+    
+    let transformer = make_stateful_transformer()
+    
+    // Test multiple calls with different values
+    let result1 = transformer(5)
+    assert_eq(result1.0, 1, "Count should be 1")
+    assert_eq(result1.1, 5, "Sum should be 5")
+    assert_eq(result1.2, 5, "Product should be 5")
+    
+    let result2 = transformer(10)
+    assert_eq(result2.0, 2, "Count should be 2")
+    assert_eq(result2.1, 15, "Sum should be 15")
+    assert_eq(result2.2, 50, "Product should be 50")
+    
+    println("All multiple capture tests passed!")
+}
+
+// Test functions that return multiple independent closures
+fun test_multiple_closures() {
+    fun make_operations() {
+        let mut value = 0
+        
+        // Return a tuple of functions that share the same captured variable
+        (
+            // Increment function
+            (x) => {
+                value = value + x
+                value
+            },
+            // Double function
+            () => {
+                value = value * 2
+                value
+            },
+            // Reset function
+            () => {
+                value = 0
+                value
+            }
+        )
+    }
+    
+    let (increment, double, reset) = make_operations()
+    
+    assert_eq(increment(5), 5, "Value should be 5 after increment(5)")
+    assert_eq(double(), 10, "Value should be 10 after double()")
+    assert_eq(increment(2), 12, "Value should be 12 after increment(2)")
+    assert_eq(reset(), 0, "Value should be 0 after reset()")
+    assert_eq(increment(3), 3, "Value should be 3 after increment(3)")
+    
+    println("All multiple closure tests passed!")
+}
+
+// Run all tests
+fun run_all_closure_tests() {
+    println("Starting closure compilation spike tests...")
+    
+    test_counter_implementation()
+    test_nested_closures()
+    test_multiple_captures()
+    test_multiple_closures()
+    
+    println("All closure compilation spike tests passed!")
+}
+
+// Export main function
+fun main() {
+    run_all_closure_tests()
+}

@@ -1,0 +1,543 @@
+// test_multi_target_green.ruchy
+// GREEN phase tests for WASM-003: Multi-Target Integration
+// These tests validate the implementation of the multi-target compilation interface
+
+// Import the multi-target compiler implementation
+import bootstrap::stage3::multi_target_compiler_impl::create_multi_target_compiler_impl;
+import bootstrap::stage3::multi_target_compiler::CompilationTarget;
+import bootstrap::stage3::multi_target_compiler::CompilationOptions;
+import bootstrap::stage3::multi_target_compiler::TargetOptions;
+
+// Test basic multi-target compilation
+fn test_basic_compilation() {
+    // Create compiler
+    let mut compiler = create_multi_target_compiler_impl();
+    
+    // Simple Ruchy program
+    let source = "fun main() { println(\"Hello, World!\"); }";
+    
+    // Parse source
+    let ast_result = compiler.parse(source.to_string());
+    assert(ast_result.is_ok(), "Parsing should succeed");
+    
+    // Type check
+    let type_check_result = compiler.type_check();
+    assert(type_check_result.is_ok(), "Type checking should succeed");
+    
+    // Try setting a target
+    let set_target_result = compiler.set_target(CompilationTarget::WebAssembly);
+    assert(set_target_result.is_ok(), "Set target should succeed");
+    
+    // Compile to the active target
+    let compile_result = compiler.compile();
+    assert(compile_result.is_ok(), "Compilation should succeed");
+    
+    // Check the output
+    let output = compile_result.unwrap();
+    assert(output.target == CompilationTarget::WebAssembly, "Target should be WebAssembly");
+    assert(output.content.contains("module"), "Output should contain WebAssembly module");
+    assert(output.content.contains("func $main"), "Output should contain main function");
+    
+    // Try compiling to all targets
+    let all_results = compiler.compile_all();
+    
+    // There should be exactly 3 results (one for each target)
+    assert_eq(all_results.len(), 3, "There should be exactly 3 compilation results");
+    
+    // All results should be successes
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target);
+        assert(result.is_some(), format!("Should have a result for {}", target.to_string()));
+        assert(result.unwrap().is_ok(), format!("Result for {} should be a success", target.to_string()));
+        
+        // Check the output for each target
+        let output = result.unwrap().as_ref().unwrap();
+        assert(output.target == target, format!("Target should be {}", target.to_string()));
+        
+        match target {
+            CompilationTarget::WebAssembly => {
+                assert(output.content.contains("module"), "WebAssembly output should contain module");
+                assert(output.content.contains("func $main"), "WebAssembly output should contain main function");
+            },
+            CompilationTarget::TypeScript => {
+                assert(output.content.contains("function main()"), "TypeScript output should contain main function");
+                assert(output.content.contains("console.log"), "TypeScript output should contain console.log");
+            },
+            CompilationTarget::Rust => {
+                assert(output.content.contains("fn main()"), "Rust output should contain main function");
+                assert(output.content.contains("println!"), "Rust output should contain println!");
+            },
+        }
+    }
+    
+    println("✅ test_basic_compilation passed");
+}
+
+// Test target-specific compilation options
+fn test_target_options() {
+    // Create compiler
+    let mut compiler = create_multi_target_compiler_impl();
+    
+    // Create compilation options
+    let mut options = CompilationOptions::new();
+    
+    // Set general options
+    options.optimization_level = 2;
+    options.debug_info = true;
+    options.source_maps = true;
+    
+    // Set target-specific options
+    let mut wasm_options = TargetOptions::new();
+    wasm_options.set("memory-size".to_string(), "1024".to_string());
+    wasm_options.set("enable-threads".to_string(), "true".to_string());
+    options.set_target_options(CompilationTarget::WebAssembly, wasm_options);
+    
+    let mut ts_options = TargetOptions::new();
+    ts_options.set("module".to_string(), "commonjs".to_string());
+    ts_options.set("target".to_string(), "es2020".to_string());
+    options.set_target_options(CompilationTarget::TypeScript, ts_options);
+    
+    let mut rust_options = TargetOptions::new();
+    rust_options.set("edition".to_string(), "2021".to_string());
+    rust_options.set("crate-type".to_string(), "lib".to_string());
+    options.set_target_options(CompilationTarget::Rust, rust_options);
+    
+    // Set options in compiler
+    let result = compiler.set_options(options);
+    assert(result.is_ok(), "Setting options should succeed");
+    
+    // Parse and type check a simple program
+    let source = "fun main() { println(\"Hello, World!\"); }";
+    compiler.parse(source.to_string()).unwrap();
+    compiler.type_check().unwrap();
+    
+    // Compile to all targets
+    let all_results = compiler.compile_all();
+    
+    // Check target-specific options were applied
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target).unwrap();
+        let output = result.as_ref().unwrap();
+        
+        // Check that source maps were generated for TypeScript
+        if target == CompilationTarget::TypeScript {
+            assert(output.additional_files.contains_key(&"main.js.map".to_string()),
+                   "TypeScript output should include source map");
+        }
+        
+        // Check that Cargo.toml was generated with optimization level for Rust
+        if target == CompilationTarget::Rust {
+            assert(output.additional_files.contains_key(&"Cargo.toml".to_string()),
+                   "Rust output should include Cargo.toml");
+            
+            let cargo_toml = output.additional_files.get(&"Cargo.toml".to_string()).unwrap();
+            assert(cargo_toml.contains("opt-level = 2"),
+                   "Cargo.toml should include optimization level 2");
+        }
+        
+        // Check that metadata includes target-specific options
+        match target {
+            CompilationTarget::WebAssembly => {
+                let memory_size = output.metadata.target_metadata.get(&"memory-size".to_string());
+                assert(memory_size.is_some() && memory_size.unwrap() == "1024",
+                       "WebAssembly metadata should include memory-size");
+            },
+            CompilationTarget::TypeScript => {
+                let module_type = output.metadata.target_metadata.get(&"module".to_string());
+                assert(module_type.is_some() && module_type.unwrap() == "commonjs",
+                       "TypeScript metadata should include module type");
+                
+                let target_version = output.metadata.target_metadata.get(&"target".to_string());
+                assert(target_version.is_some() && target_version.unwrap() == "es2020",
+                       "TypeScript metadata should include target version");
+            },
+            CompilationTarget::Rust => {
+                let edition = output.metadata.target_metadata.get(&"edition".to_string());
+                assert(edition.is_some() && edition.unwrap() == "2021",
+                       "Rust metadata should include edition");
+            },
+        }
+    }
+    
+    println("✅ test_target_options passed");
+}
+
+// Test closure compilation across targets
+fn test_closure_compilation() {
+    // Create compiler
+    let mut compiler = create_multi_target_compiler_impl();
+    
+    // Ruchy program with closures
+    let source = "
+    fun make_counter() {
+        let mut count = 0;
+        return () => {
+            count = count + 1;
+            count
+        };
+    }
+    
+    fun make_adder(x: i32) {
+        return (y: i32) => x + y;
+    }
+    
+    fun main() {
+        let counter = make_counter();
+        let add5 = make_adder(5);
+        
+        println(counter()); // 1
+        println(counter()); // 2
+        println(add5(10));  // 15
+    }
+    ";
+    
+    // Parse and type check
+    compiler.parse(source.to_string()).unwrap();
+    compiler.type_check().unwrap();
+    
+    // Compile to all targets
+    let all_results = compiler.compile_all();
+    
+    // Check closure implementation for each target
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target).unwrap();
+        let output = result.as_ref().unwrap();
+        
+        match target {
+            CompilationTarget::WebAssembly => {
+                assert(output.content.contains("$make_counter"),
+                       "WebAssembly output should contain make_counter function");
+                assert(output.content.contains("call $alloc"),
+                       "WebAssembly output should include memory allocation for closure");
+                assert(output.content.contains("i32.store"),
+                       "WebAssembly output should include storing function index");
+            },
+            CompilationTarget::TypeScript => {
+                assert(output.content.contains("function makeCounter()"),
+                       "TypeScript output should contain makeCounter function");
+                assert(output.content.contains("let count = 0"),
+                       "TypeScript output should include captured variable");
+                assert(output.content.contains("return () =>"),
+                       "TypeScript output should include closure return");
+            },
+            CompilationTarget::Rust => {
+                assert(output.content.contains("fn make_counter()"),
+                       "Rust output should contain make_counter function");
+                assert(output.content.contains("let mut count = 0"),
+                       "Rust output should include captured variable");
+                assert(output.content.contains("move ||"),
+                       "Rust output should include closure with move semantics");
+            },
+        }
+    }
+    
+    println("✅ test_closure_compilation passed");
+}
+
+// Test type system across targets
+fn test_type_system() {
+    // Create compiler
+    let mut compiler = create_multi_target_compiler_impl();
+    
+    // Ruchy program with various type features
+    let source = "
+    struct Point {
+        x: f64,
+        y: f64,
+    }
+    
+    enum Shape {
+        Circle { center: Point, radius: f64 },
+        Rectangle { top_left: Point, bottom_right: Point },
+        Triangle { a: Point, b: Point, c: Point },
+    }
+    
+    fun calculate_area(shape: Shape) -> f64 {
+        match shape {
+            Shape::Circle { center, radius } => 3.14159 * radius * radius,
+            Shape::Rectangle { top_left, bottom_right } => {
+                let width = bottom_right.x - top_left.x;
+                let height = bottom_right.y - top_left.y;
+                width * height
+            },
+            Shape::Triangle { a, b, c } => {
+                // Heron's formula
+                let ab = ((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)).sqrt();
+                let bc = ((c.x - b.x) * (c.x - b.x) + (c.y - b.y) * (c.y - b.y)).sqrt();
+                let ca = ((a.x - c.x) * (a.x - c.x) + (a.y - c.y) * (a.y - c.y)).sqrt();
+                
+                let s = (ab + bc + ca) / 2.0;
+                (s * (s - ab) * (s - bc) * (s - ca)).sqrt()
+            },
+        }
+    }
+    ";
+    
+    // Parse and type check
+    compiler.parse(source.to_string()).unwrap();
+    compiler.type_check().unwrap();
+    
+    // Compile to all targets
+    let all_results = compiler.compile_all();
+    
+    // Check type system features for each target
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target).unwrap();
+        let output = result.as_ref().unwrap();
+        
+        match target {
+            CompilationTarget::WebAssembly => {
+                assert(output.content.contains(";; Struct implementation"),
+                       "WebAssembly output should include struct implementation");
+                assert(output.content.contains(";; Enum implementation"),
+                       "WebAssembly output should include enum implementation");
+            },
+            CompilationTarget::TypeScript => {
+                assert(output.content.contains("interface Point"),
+                       "TypeScript output should include Point interface");
+                assert(output.content.contains("type Shape ="),
+                       "TypeScript output should include Shape type");
+            },
+            CompilationTarget::Rust => {
+                assert(output.content.contains("struct Point"),
+                       "Rust output should include Point struct");
+                assert(output.content.contains("enum Shape"),
+                       "Rust output should include Shape enum");
+                assert(output.content.contains("#[derive(Debug, Clone)]"),
+                       "Rust output should include derive attributes");
+            },
+        }
+    }
+    
+    println("✅ test_type_system passed");
+}
+
+// Test target-specific features
+fn test_target_specific_features() {
+    // Create compiler
+    let mut compiler = create_multi_target_compiler_impl();
+    
+    // Ruchy program with target-specific annotations
+    let source = "
+    #[target(wasm)]
+    import wasm_bindgen::prelude::*;
+    
+    #[target(typescript)]
+    import { useState } from 'react';
+    
+    #[target(rust)]
+    use std::collections::HashMap;
+    
+    #[target(wasm)]
+    #[wasm_bindgen]
+    pub fun greet(name: String) -> String {
+        format(\"Hello, {}!\", name)
+    }
+    
+    #[target(typescript)]
+    export fun createCounter() {
+        const [count, setCount] = useState(0);
+        return () => {
+            setCount(count + 1);
+            return count;
+        };
+    }
+    
+    #[target(rust)]
+    pub fun create_map() -> HashMap<String, i32> {
+        let mut map = HashMap::new();
+        map.insert(\"one\".to_string(), 1);
+        map.insert(\"two\".to_string(), 2);
+        map
+    }
+    ";
+    
+    // Parse and type check
+    compiler.parse(source.to_string()).unwrap();
+    compiler.type_check().unwrap();
+    
+    // Compile to all targets
+    let all_results = compiler.compile_all();
+    
+    // Check target-specific features for each target
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target).unwrap();
+        let output = result.as_ref().unwrap();
+        
+        match target {
+            CompilationTarget::WebAssembly => {
+                assert(output.content.contains("wasm_bindgen"),
+                       "WebAssembly output should include wasm_bindgen import");
+                assert(output.warnings.len() > 0,
+                       "WebAssembly output should include warnings about target-specific features");
+            },
+            CompilationTarget::TypeScript => {
+                assert(output.content.contains("import { useState } from 'react'"),
+                       "TypeScript output should include React import");
+                assert(output.content.contains("export function createCounter()"),
+                       "TypeScript output should include exported createCounter function");
+                assert(output.content.contains("useState(0)"),
+                       "TypeScript output should use React hooks");
+                assert(output.warnings.len() > 0,
+                       "TypeScript output should include warnings about target-specific features");
+            },
+            CompilationTarget::Rust => {
+                assert(output.content.contains("use std::collections::HashMap"),
+                       "Rust output should include HashMap import");
+                assert(output.content.contains("pub fn create_map()"),
+                       "Rust output should include create_map function");
+                assert(output.content.contains("HashMap::new()"),
+                       "Rust output should use HashMap");
+                assert(output.warnings.len() > 0,
+                       "Rust output should include warnings about target-specific features");
+            },
+        }
+    }
+    
+    println("✅ test_target_specific_features passed");
+}
+
+// Test error handling across targets
+fn test_error_handling() {
+    // Create compiler
+    let mut compiler = create_multi_target_compiler_impl();
+    
+    // Ruchy program with error handling
+    let source = "
+    enum Result<T, E> {
+        Ok(T),
+        Err(E),
+    }
+    
+    fun divide(a: f64, b: f64) -> Result<f64, String> {
+        if b == 0.0 {
+            return Result::Err(\"Division by zero\".to_string());
+        }
+        return Result::Ok(a / b);
+    }
+    
+    fun main() {
+        match divide(10.0, 2.0) {
+            Result::Ok(result) => println(\"Result: {}\", result),
+            Result::Err(error) => println(\"Error: {}\", error),
+        }
+        
+        match divide(10.0, 0.0) {
+            Result::Ok(result) => println(\"Result: {}\", result),
+            Result::Err(error) => println(\"Error: {}\", error),
+        }
+    }
+    ";
+    
+    // Parse and type check
+    compiler.parse(source.to_string()).unwrap();
+    compiler.type_check().unwrap();
+    
+    // Compile to all targets
+    let all_results = compiler.compile_all();
+    
+    // Check error handling for each target
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target).unwrap();
+        let output = result.as_ref().unwrap();
+        
+        match target {
+            CompilationTarget::WebAssembly => {
+                assert(output.content.contains("$handle_error"),
+                       "WebAssembly output should include error handling function");
+            },
+            CompilationTarget::TypeScript => {
+                assert(output.content.contains("function handleError()"),
+                       "TypeScript output should include handleError function");
+                assert(output.content.contains("Result<number, string>"),
+                       "TypeScript output should include Result type");
+                assert(output.additional_files.contains_key(&"result.d.ts".to_string()),
+                       "TypeScript output should include Result type definition");
+            },
+            CompilationTarget::Rust => {
+                assert(output.content.contains("fn handle_error() -> Result<i32, String>"),
+                       "Rust output should include handle_error function");
+                assert(output.content.contains("Ok(42)"),
+                       "Rust output should use Result::Ok");
+            },
+        }
+    }
+    
+    println("✅ test_error_handling passed");
+}
+
+// Test that all compilation steps work together
+fn test_full_compilation_pipeline() {
+    // Create compiler
+    let mut compiler = create_multi_target_compiler_impl();
+    
+    // Mixed Ruchy program with various features
+    let source = "
+    // Struct definition
+    struct User {
+        id: i32,
+        name: String,
+        email: String,
+    }
+    
+    // Function that returns a closure
+    fun create_greeter(prefix: String) -> Function<(String) -> String> {
+        return (name) => format(\"{}, {}!\", prefix, name);
+    }
+    
+    // Main function
+    fun main() {
+        // Create a user
+        let user = User { id: 1, name: \"Alice\", email: \"alice@example.com\" };
+        
+        // Create a greeter
+        let greeter = create_greeter(\"Hello\");
+        
+        // Greet the user
+        println(greeter(user.name));
+    }
+    ";
+    
+    // Parse the source
+    let parse_result = compiler.parse(source.to_string());
+    assert(parse_result.is_ok(), "Parsing should succeed");
+    
+    // Type check
+    let type_check_result = compiler.type_check();
+    assert(type_check_result.is_ok(), "Type checking should succeed");
+    
+    // Compile to all targets
+    let all_results = compiler.compile_all();
+    
+    // All results should be successful
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target).unwrap();
+        assert(result.is_ok(), format!("Compilation for {} should succeed", target.to_string()));
+        
+        // Check output structure
+        let output = result.as_ref().unwrap();
+        
+        // Check metadata is populated
+        assert(output.metadata.compilation_time_ms > 0.0, "Compilation time should be recorded");
+        assert(output.metadata.code_size_bytes > 0, "Code size should be recorded");
+        assert(output.metadata.function_count > 0, "Function count should be recorded");
+    }
+    
+    println("✅ test_full_compilation_pipeline passed");
+}
+
+// Main function to run all tests
+fn main() {
+    println("Running WASM-003: Multi-Target Integration GREEN phase tests");
+    
+    // Run all tests
+    test_basic_compilation();
+    test_target_options();
+    test_closure_compilation();
+    test_type_system();
+    test_target_specific_features();
+    test_error_handling();
+    test_full_compilation_pipeline();
+    
+    println("✅ All GREEN phase tests passed");
+}

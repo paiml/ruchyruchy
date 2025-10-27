@@ -1,0 +1,1218 @@
+// Fuzz testing for the Multi-Target Compiler
+// Tests the compiler's robustness against various inputs
+
+// Import test framework
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
+use rand::distributions::Alphanumeric;
+use std::time::Instant;
+
+// Constants for test configuration
+const FUZZ_ITERATIONS: usize = 10000;
+const FUZZ_SEED: u64 = 42424242;
+const FUZZ_DIR: &str = "/tmp/ruchy_multi_target_fuzz";
+const MAX_PROGRAM_SIZE: usize = 5000; // characters
+const MAX_SYNTAX_DEPTH: usize = 10;
+
+// Global counters for test statistics
+static INPUTS_GENERATED: AtomicUsize = AtomicUsize::new(0);
+static INPUTS_COMPILED: AtomicUsize = AtomicUsize::new(0);
+static COMPILER_CRASHES: AtomicUsize = AtomicUsize::new(0);
+
+// Fuzzing utilities
+
+// Setup fuzz directory
+fun setup_fuzz_env() {
+    if Path::new(FUZZ_DIR).exists() {
+        fs::remove_dir_all(FUZZ_DIR).expect("Failed to clean fuzz directory");
+    }
+    fs::create_dir_all(FUZZ_DIR).expect("Failed to create fuzz directory");
+    println("📂 Created fuzz directory at: {}", FUZZ_DIR);
+}
+
+// Cleanup fuzz directory
+fun cleanup_fuzz_env() {
+    if Path::new(FUZZ_DIR).exists() {
+        fs::remove_dir_all(FUZZ_DIR).expect("Failed to clean fuzz directory");
+    }
+    println("🧹 Cleaned up fuzz directory");
+}
+
+// Write a program to a file
+fun write_program_to_file(program: &str, file_path: &str) -> std::io::Result<()> {
+    let mut file = File::create(file_path)?;
+    file.write_all(program.as_bytes())?;
+    Ok(())
+}
+
+// Generate a random Ruchy program using grammar-based generation
+fun generate_valid_program(rng: &mut StdRng, max_size: usize) -> String {
+    let mut program = String::new();
+    
+    // Add some standard imports
+    if rng.gen_bool(0.5) {
+        program.push_str("use std::collections::HashMap;\n");
+        program.push_str("use std::io::Write;\n");
+        program.push_str("use std::fs::File;\n\n");
+    }
+    
+    // Generate a few function declarations
+    let num_functions = rng.gen_range(1..5);
+    for i in 0..num_functions {
+        program.push_str(&generate_valid_function(rng, i, 0));
+        program.push_str("\n\n");
+    }
+    
+    // Add a main function
+    program.push_str("fun main() {\n");
+    for _ in 0..rng.gen_range(0..5) {
+        program.push_str(&format!("    {}();\n", generate_identifier(rng)));
+    }
+    program.push_str("}\n");
+    
+    // Truncate if necessary
+    if program.len() > max_size {
+        program.truncate(max_size);
+        // Ensure we don't cut off in the middle of a token or string
+        program.push_str("\n}\n");
+    }
+    
+    program
+}
+
+// Generate a random valid function
+fun generate_valid_function(rng: &mut StdRng, index: usize, depth: usize) -> String {
+    let mut function = String::new();
+    
+    // Function signature
+    let name = if rng.gen_bool(0.8) {
+        format!("function_{}", index)
+    } else {
+        generate_identifier(rng)
+    };
+    
+    function.push_str(&format!("fun {}(", name));
+    
+    // Parameters
+    let num_params = rng.gen_range(0..5);
+    for i in 0..num_params {
+        let param_name = format!("param_{}", i);
+        let type_name = generate_valid_type(rng);
+        function.push_str(&format!("{}: {}", param_name, type_name));
+        
+        if i < num_params - 1 {
+            function.push_str(", ");
+        }
+    }
+    
+    // Return type
+    if rng.gen_bool(0.7) {
+        let return_type = generate_valid_type(rng);
+        function.push_str(&format!(") -> {} {{\n", return_type));
+    } else {
+        function.push_str(") {\n");
+    }
+    
+    // Function body
+    if depth < MAX_SYNTAX_DEPTH {
+        function.push_str(&generate_valid_block(rng, depth + 1));
+    } else {
+        function.push_str("    return 0;\n");
+    }
+    
+    function.push_str("}");
+    
+    function
+}
+
+// Generate a random valid block of statements
+fun generate_valid_block(rng: &mut StdRng, depth: usize) -> String {
+    let mut block = String::new();
+    
+    let num_statements = rng.gen_range(1..10);
+    for _ in 0..num_statements {
+        let statement = generate_valid_statement(rng, depth);
+        block.push_str(&format!("    {}\n", statement));
+    }
+    
+    block
+}
+
+// Generate a random valid statement
+fun generate_valid_statement(rng: &mut StdRng, depth: usize) -> String {
+    if depth >= MAX_SYNTAX_DEPTH {
+        return "return;".to_string();
+    }
+    
+    match rng.gen_range(0..6) {
+        0 => {
+            // Variable declaration
+            let var_name = generate_identifier(rng);
+            let expr = generate_valid_expression(rng, depth + 1);
+            
+            if rng.gen_bool(0.3) {
+                // Typed variable
+                let type_name = generate_valid_type(rng);
+                format!("let {}: {} = {};", var_name, type_name, expr)
+            } else {
+                // Inferred type
+                format!("let {} = {};", var_name, expr)
+            }
+        },
+        1 => {
+            // If statement
+            let condition = generate_valid_expression(rng, depth + 1);
+            let then_body = generate_valid_statement(rng, depth + 1);
+            
+            if rng.gen_bool(0.5) && depth < MAX_SYNTAX_DEPTH - 1 {
+                let else_body = generate_valid_statement(rng, depth + 1);
+                format!("if ({}) {{ {} }} else {{ {} }}", condition, then_body, else_body)
+            } else {
+                format!("if ({}) {{ {} }}", condition, then_body)
+            }
+        },
+        2 => {
+            // For loop
+            let var_name = generate_identifier(rng);
+            let limit = rng.gen_range(1..20);
+            let body = generate_valid_statement(rng, depth + 1);
+            
+            format!("for {} in 0..{} {{ {} }}", var_name, limit, body)
+        },
+        3 => {
+            // Function call
+            let function_name = if rng.gen_bool(0.7) {
+                format!("function_{}", rng.gen_range(0..5))
+            } else {
+                generate_identifier(rng)
+            };
+            
+            let num_args = rng.gen_range(0..4);
+            let mut args = Vec::new();
+            
+            for _ in 0..num_args {
+                args.push(generate_valid_expression(rng, depth + 1));
+            }
+            
+            format!("{}({});", function_name, args.join(", "))
+        },
+        4 => {
+            // Return statement
+            if rng.gen_bool(0.5) {
+                let expr = generate_valid_expression(rng, depth + 1);
+                format!("return {};", expr)
+            } else {
+                "return;".to_string()
+            }
+        },
+        _ => {
+            // Expression statement
+            let expr = generate_valid_expression(rng, depth + 1);
+            format!("{};", expr)
+        }
+    }
+}
+
+// Generate a random valid expression
+fun generate_valid_expression(rng: &mut StdRng, depth: usize) -> String {
+    if depth >= MAX_SYNTAX_DEPTH {
+        // Simple literals
+        match rng.gen_range(0..5) {
+            0 => rng.gen_range(0..1000).to_string(),
+            1 => format!("{:.2}", rng.gen_range(0.0..100.0)),
+            2 => format!("\"{}\"", random_string(rng, 5)),
+            3 => ["true", "false"][rng.gen_range(0..2)].to_string(),
+            _ => format!("var_{}", rng.gen_range(0..10))
+        }
+    } else {
+        match rng.gen_range(0..6) {
+            0 => {
+                // Binary operation
+                let left = generate_valid_expression(rng, depth + 1);
+                let right = generate_valid_expression(rng, depth + 1);
+                let ops = ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&&", "||"];
+                let op = ops[rng.gen_range(0..ops.len())];
+                
+                format!("({} {} {})", left, op, right)
+            },
+            1 => {
+                // Function call
+                let function_name = if rng.gen_bool(0.7) {
+                    format!("function_{}", rng.gen_range(0..5))
+                } else {
+                    generate_identifier(rng)
+                };
+                
+                let num_args = rng.gen_range(0..3);
+                let mut args = Vec::new();
+                
+                for _ in 0..num_args {
+                    args.push(generate_valid_expression(rng, depth + 1));
+                }
+                
+                format!("{}({})", function_name, args.join(", "))
+            },
+            2 => {
+                // Conditional expression
+                let condition = generate_valid_expression(rng, depth + 1);
+                let then_expr = generate_valid_expression(rng, depth + 1);
+                let else_expr = generate_valid_expression(rng, depth + 1);
+                
+                format!("if ({}) {{ {} }} else {{ {} }}", condition, then_expr, else_expr)
+            },
+            3 => {
+                // Array literal
+                let size = rng.gen_range(0..5);
+                let mut elements = Vec::new();
+                
+                for _ in 0..size {
+                    elements.push(generate_valid_expression(rng, depth + 1));
+                }
+                
+                format!("[{}]", elements.join(", "))
+            },
+            4 => {
+                // Simple literals (same as base case)
+                match rng.gen_range(0..5) {
+                    0 => rng.gen_range(0..1000).to_string(),
+                    1 => format!("{:.2}", rng.gen_range(0.0..100.0)),
+                    2 => format!("\"{}\"", random_string(rng, 5)),
+                    3 => ["true", "false"][rng.gen_range(0..2)].to_string(),
+                    _ => format!("var_{}", rng.gen_range(0..10))
+                }
+            },
+            _ => {
+                // Unary operation
+                let expr = generate_valid_expression(rng, depth + 1);
+                let ops = ["!", "-"];
+                let op = ops[rng.gen_range(0..ops.len())];
+                
+                format!("{}({})", op, expr)
+            }
+        }
+    }
+}
+
+// Generate a random valid type
+fun generate_valid_type(rng: &mut StdRng) -> String {
+    match rng.gen_range(0..10) {
+        0 => "i32".to_string(),
+        1 => "i64".to_string(),
+        2 => "f32".to_string(),
+        3 => "f64".to_string(),
+        4 => "bool".to_string(),
+        5 => "string".to_string(),
+        6 => {
+            // Array type
+            let element_type = generate_valid_type(rng);
+            format!("Vec<{}>", element_type)
+        },
+        7 => {
+            // Map type
+            let key_type = generate_valid_type(rng);
+            let value_type = generate_valid_type(rng);
+            format!("HashMap<{}, {}>", key_type, value_type)
+        },
+        8 => {
+            // Function type
+            let return_type = generate_valid_type(rng);
+            format!("fun() -> {}", return_type)
+        },
+        _ => {
+            // Custom type
+            format!("Type{}", rng.gen_range(0..5))
+        }
+    }
+}
+
+// Generate a random identifier
+fun generate_identifier(rng: &mut StdRng) -> String {
+    let first_char = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
+    let mut id = first_char[rng.gen_range(0..first_char.len())].to_string();
+    
+    let len = rng.gen_range(3..10);
+    for _ in 0..(len - 1) {
+        let char_code = rng.gen_range(97..123) as u8; // a-z
+        id.push(char_code as char);
+    }
+    
+    id
+}
+
+// Generate a random string
+fun random_string(rng: &mut StdRng, length: usize) -> String {
+    (0..length)
+        .map(|_| rng.sample(Alphanumeric) as char)
+        .collect()
+}
+
+// Generate invalid Ruchy program by mutating a valid one
+fun generate_invalid_program(
+    rng: &mut StdRng,
+    valid_program: &str,
+    mutation_count: usize
+) -> String {
+    let mut program = valid_program.to_string();
+    let chars: Vec<char> = program.chars().collect();
+    
+    if chars.is_empty() {
+        return "fun invalid() { missing_syntax }".to_string();
+    }
+    
+    // Apply mutations
+    for _ in 0..mutation_count {
+        let mutation_type = rng.gen_range(0..6);
+        
+        match mutation_type {
+            0 => {
+                // Delete a random character
+                if chars.len() > 1 {
+                    let index = rng.gen_range(0..chars.len());
+                    program.remove(index);
+                }
+            },
+            1 => {
+                // Insert a random character
+                let index = rng.gen_range(0..chars.len());
+                let char_to_insert = ['(', ')', '{', '}', '[', ']', ';', ',', ':', '+', '-', '*', '/', '='][rng.gen_range(0..14)];
+                program.insert(index, char_to_insert);
+            },
+            2 => {
+                // Replace a random character
+                if !chars.is_empty() {
+                    let index = rng.gen_range(0..chars.len());
+                    let char_to_insert = ['(', ')', '{', '}', '[', ']', ';', ',', ':', '+', '-', '*', '/', '='][rng.gen_range(0..14)];
+                    program.replace_range(index..index+1, &char_to_insert.to_string());
+                }
+            },
+            3 => {
+                // Delete a random token
+                if program.len() > 10 {
+                    let start = rng.gen_range(0..program.len() - 5);
+                    let length = rng.gen_range(1..5.min(program.len() - start));
+                    program.replace_range(start..start+length, "");
+                }
+            },
+            4 => {
+                // Add unmatched bracket/parenthesis
+                let index = rng.gen_range(0..program.len());
+                let bracket = ['(', '{', '['][rng.gen_range(0..3)];
+                program.insert(index, bracket);
+            },
+            _ => {
+                // Replace valid identifier with invalid one
+                if program.len() > 10 {
+                    let keyword_replacement = ["fun-bad", "class", "typedef", "public:", "new", "const"][rng.gen_range(0..6)];
+                    if let Some(pos) = program.find("fun ") {
+                        program.replace_range(pos..pos+4, keyword_replacement);
+                    } else if let Some(pos) = program.find("let ") {
+                        program.replace_range(pos..pos+4, keyword_replacement);
+                    }
+                }
+            }
+        }
+    }
+    
+    program
+}
+
+// Generate malformed AST by manually creating invalid structures
+fun generate_malformed_ast(rng: &mut StdRng) -> Box<Ast> {
+    // Create an AST with potential issues
+    let mut ast = Box::new(Ast::new());
+    
+    // Add functions with edge-case properties
+    for i in 0..rng.gen_range(1..5) {
+        let mut function = Function::new();
+        
+        // Potentially problematic function names
+        let name_type = rng.gen_range(0..4);
+        function.name = match name_type {
+            0 => "", // Empty name
+            1 => "function".to_string() + &i.to_string(), // Normal name
+            2 => "\u{0000}".to_string(), // Null character
+            _ => "a".repeat(10000), // Extremely long name
+        };
+        
+        // Edge case parameters
+        let param_count = rng.gen_range(0..3);
+        for j in 0..param_count {
+            let mut param = Parameter::new();
+            param.name = format!("p{}", j);
+            
+            // Edge case type annotations
+            if rng.gen_bool(0.5) {
+                match rng.gen_range(0..3) {
+                    0 => param.type_annotation = Some(TypeInfo::Unresolved),
+                    1 => {
+                        // Deeply nested type
+                        let mut type_info = TypeInfo::Primitive("i32".to_string());
+                        for _ in 0..rng.gen_range(1..100) {
+                            type_info = TypeInfo::Function {
+                                param_types: vec![Box::new(type_info.clone())],
+                                return_type: Box::new(TypeInfo::Primitive("i32".to_string())),
+                            };
+                        }
+                        param.type_annotation = Some(type_info);
+                    },
+                    _ => {
+                        // Recursive type (should cause issues)
+                        let mut recursive_type = Box::new(TypeInfo::Struct {
+                            fields: HashMap::new(),
+                        });
+                        
+                        if let TypeInfo::Struct { ref mut fields } = *recursive_type {
+                            fields.insert("self".to_string(), recursive_type.clone());
+                        }
+                        
+                        param.type_annotation = Some(*recursive_type);
+                    },
+                }
+            }
+            
+            function.params.push(param);
+        }
+        
+        // Edge case statements
+        let statements = rng.gen_range(0..5);
+        for _ in 0..statements {
+            match rng.gen_range(0..3) {
+                0 => {
+                    // Valid statement
+                    let expr = Expression::Literal(Literal::Integer(rng.gen_range(0..100)));
+                    function.body.push(Statement::Expression(expr));
+                },
+                1 => {
+                    // Null expression statement
+                    function.body.push(Statement::Expression(Expression::Invalid));
+                },
+                _ => {
+                    // Very complex expression
+                    let mut expr = Expression::Literal(Literal::Integer(0));
+                    
+                    for _ in 0..rng.gen_range(1..100) {
+                        expr = Expression::Binary {
+                            left: Box::new(expr),
+                            operator: BinaryOperator::Add,
+                            right: Box::new(Expression::Literal(Literal::Integer(1))),
+                        };
+                    }
+                    
+                    function.body.push(Statement::Expression(expr));
+                }
+            }
+        }
+        
+        ast.functions.push(function);
+    }
+    
+    ast
+}
+
+// Create random compilation configuration
+fun generate_random_config(rng: &mut StdRng) -> CompilationConfig {
+    let optimization_level = match rng.gen_range(0..4) {
+        0 => OptimizationLevel::O0,
+        1 => OptimizationLevel::O1,
+        2 => OptimizationLevel::O2,
+        _ => OptimizationLevel::O3,
+    };
+    
+    let debug_info = rng.gen_bool(0.5);
+    let source_maps = rng.gen_bool(0.5);
+    
+    let mut target_features = HashMap::new();
+    
+    // Random WASM features
+    if rng.gen_bool(0.7) {
+        let mut wasm_features = HashMap::new();
+        if rng.gen_bool(0.5) { wasm_features.insert("simd".to_string(), "true".to_string()); }
+        if rng.gen_bool(0.5) { wasm_features.insert("threads".to_string(), "true".to_string()); }
+        if rng.gen_bool(0.5) { wasm_features.insert("bulk-memory".to_string(), "true".to_string()); }
+        
+        target_features.insert(CompilationTarget::Wasm, wasm_features);
+    }
+    
+    // Random TypeScript features
+    if rng.gen_bool(0.7) {
+        let mut ts_features = HashMap::new();
+        if rng.gen_bool(0.5) { ts_features.insert("strictNullChecks".to_string(), "true".to_string()); }
+        if rng.gen_bool(0.5) { ts_features.insert("esModuleInterop".to_string(), "true".to_string()); }
+        
+        target_features.insert(CompilationTarget::TypeScript, ts_features);
+    }
+    
+    // Random Rust features
+    if rng.gen_bool(0.7) {
+        let mut rust_features = HashMap::new();
+        if rng.gen_bool(0.5) { rust_features.insert("edition".to_string(), "2021".to_string()); }
+        
+        target_features.insert(CompilationTarget::Rust, rust_features);
+    }
+    
+    let mode = if rng.gen_bool(0.5) {
+        CompilationMode::Development
+    } else {
+        CompilationMode::Production
+    };
+    
+    CompilationConfig {
+        optimization_level,
+        debug_info,
+        source_maps,
+        target_features,
+        mode,
+    }
+}
+
+// Fuzzing test functions
+
+// Test random valid Ruchy programs
+fun test_valid_programs(num_tests: usize) {
+    println("\n🧪 Testing with Valid Programs");
+    println("-----------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(FUZZ_SEED);
+    
+    let mut success_count = 0;
+    let mut warning_count = 0;
+    let mut error_count = 0;
+    let start_time = Instant::now();
+    
+    for i in 0..num_tests {
+        INPUTS_GENERATED.fetch_add(1, Ordering::SeqCst);
+        
+        let program_size = rng.gen_range(100..MAX_PROGRAM_SIZE);
+        let program = generate_valid_program(&mut rng, program_size);
+        
+        let file_path = format!("{}/valid_{}.ruchy", FUZZ_DIR, i);
+        write_program_to_file(&program, &file_path).expect("Failed to write test program");
+        
+        // Create a source file
+        let source_file = SourceFile::new(
+            &file_path,
+            program.clone()
+        );
+        
+        // Random target
+        let targets = [
+            CompilationTarget::Wasm,
+            CompilationTarget::TypeScript,
+            CompilationTarget::Rust
+        ];
+        let target = targets[rng.gen_range(0..targets.len())];
+        
+        // Random configuration
+        let config = generate_random_config(&mut rng);
+        
+        // Compile
+        let mut compiler = MultiTargetCompilerRefactored::new(config);
+        
+        match std::panic::catch_unwind(|| {
+            INPUTS_COMPILED.fetch_add(1, Ordering::SeqCst);
+            let result = compiler.compile_to_target(source_file, target);
+            (result, compiler.diagnostics.clone())
+        }) {
+            Ok((result, diagnostics)) => {
+                if result.is_ok() {
+                    success_count += 1;
+                    if i % 100 == 0 {
+                        println("✅ Test case {} passed for target {:?}", i, target);
+                    }
+                } else {
+                    // Compilation failed but didn't crash
+                    error_count += 1;
+                    println("❌ Test case {} failed with error for target {:?}", i, target);
+                }
+                
+                if !diagnostics.get_warnings().is_empty() {
+                    warning_count += 1;
+                }
+            },
+            Err(_) => {
+                // Compiler crashed
+                COMPILER_CRASHES.fetch_add(1, Ordering::SeqCst);
+                println("💥 Test case {} caused compiler crash for target {:?}", i, target);
+                println("   Program size: {} bytes", program.len());
+                println("   Saving to {}/crash_{}.ruchy", FUZZ_DIR, i);
+                
+                // Save crashing input
+                write_program_to_file(
+                    &program,
+                    &format!("{}/crash_{}.ruchy", FUZZ_DIR, i)
+                ).expect("Failed to write crash file");
+            }
+        }
+    }
+    
+    let elapsed = start_time.elapsed();
+    
+    // Report results
+    println("\nValid Programs Test Results:");
+    println("- Total Test Cases: {}", num_tests);
+    println("- Success: {} ({:.2}%)", success_count, (success_count as f64 / num_tests as f64) * 100.0);
+    println("- With Warnings: {} ({:.2}%)", warning_count, (warning_count as f64 / num_tests as f64) * 100.0);
+    println("- With Errors: {} ({:.2}%)", error_count, (error_count as f64 / num_tests as f64) * 100.0);
+    println("- Compiler Crashes: {}", COMPILER_CRASHES.load(Ordering::SeqCst));
+    println("- Time: {:.2}s", elapsed.as_secs_f64());
+    
+    // Should have no crashes with valid programs
+    assert!(COMPILER_CRASHES.load(Ordering::SeqCst) == 0, "Compiler should not crash on valid programs");
+}
+
+// Test with invalid Ruchy programs (mutations of valid ones)
+fun test_invalid_programs(num_tests: usize) {
+    println("\n🧪 Testing with Invalid Programs");
+    println("-------------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(FUZZ_SEED + 1);
+    
+    let mut handled_count = 0;
+    let mut crash_count = 0;
+    let start_time = Instant::now();
+    
+    for i in 0..num_tests {
+        INPUTS_GENERATED.fetch_add(1, Ordering::SeqCst);
+        
+        // First generate a valid program
+        let program_size = rng.gen_range(100..MAX_PROGRAM_SIZE);
+        let valid_program = generate_valid_program(&mut rng, program_size);
+        
+        // Then mutate it to make it invalid
+        let mutations = rng.gen_range(1..10);
+        let invalid_program = generate_invalid_program(&mut rng, &valid_program, mutations);
+        
+        let file_path = format!("{}/invalid_{}.ruchy", FUZZ_DIR, i);
+        write_program_to_file(&invalid_program, &file_path).expect("Failed to write test program");
+        
+        // Create a source file
+        let source_file = SourceFile::new(
+            &file_path,
+            invalid_program.clone()
+        );
+        
+        // Random target
+        let targets = [
+            CompilationTarget::Wasm,
+            CompilationTarget::TypeScript,
+            CompilationTarget::Rust
+        ];
+        let target = targets[rng.gen_range(0..targets.len())];
+        
+        // Random configuration with recovery enabled
+        let mut config = generate_random_config(&mut rng);
+        config.mode = CompilationMode::Development; // Use development mode for better error recovery
+        
+        // Compile
+        let mut compiler = MultiTargetCompilerRefactored::new(config);
+        compiler.set_parser_options(ParserOptions {
+            strict_mode: false,
+            recover_from_errors: true,
+            max_errors: 100,
+        });
+        
+        match std::panic::catch_unwind(|| {
+            INPUTS_COMPILED.fetch_add(1, Ordering::SeqCst);
+            let result = compiler.compile_to_target(source_file, target);
+            (result, compiler.diagnostics.clone())
+        }) {
+            Ok((result, diagnostics)) => {
+                // Compiler didn't crash, which is good
+                handled_count += 1;
+                
+                if result.is_ok() && !diagnostics.has_errors() {
+                    // This is unexpected - an invalid program compiled without errors
+                    println("⚠️ Test case {} compiled without errors (unexpected)", i);
+                    println("   Mutations: {}", mutations);
+                    println("   Target: {:?}", target);
+                    println("   Saving to {}/unexpected_{}.ruchy", FUZZ_DIR, i);
+                    
+                    // Save this case for further investigation
+                    write_program_to_file(
+                        &invalid_program,
+                        &format!("{}/unexpected_{}.ruchy", FUZZ_DIR, i)
+                    ).expect("Failed to write unexpected file");
+                } else if i % 100 == 0 {
+                    println("✅ Test case {} handled errors correctly", i);
+                }
+            },
+            Err(_) => {
+                // Compiler crashed
+                crash_count += 1;
+                COMPILER_CRASHES.fetch_add(1, Ordering::SeqCst);
+                println("💥 Test case {} caused compiler crash", i);
+                println("   Mutations: {}", mutations);
+                println("   Target: {:?}", target);
+                println("   Saving to {}/crash_{}.ruchy", FUZZ_DIR, i);
+                
+                // Save crashing input
+                write_program_to_file(
+                    &invalid_program,
+                    &format!("{}/crash_{}.ruchy", FUZZ_DIR, i)
+                ).expect("Failed to write crash file");
+            }
+        }
+    }
+    
+    let elapsed = start_time.elapsed();
+    
+    // Report results
+    println("\nInvalid Programs Test Results:");
+    println("- Total Test Cases: {}", num_tests);
+    println("- Handled Correctly: {} ({:.2}%)", handled_count, (handled_count as f64 / num_tests as f64) * 100.0);
+    println("- Compiler Crashes: {} ({:.2}%)", crash_count, (crash_count as f64 / num_tests as f64) * 100.0);
+    println("- Time: {:.2}s", elapsed.as_secs_f64());
+    
+    // Some crashes might be acceptable for extremely invalid code, but should be low
+    let crash_percentage = (crash_count as f64 / num_tests as f64) * 100.0;
+    assert!(crash_percentage < 5.0, "Crash percentage too high: {:.2}%", crash_percentage);
+}
+
+// Test with extreme configuration values
+fun test_boundary_configurations(num_tests: usize) {
+    println("\n🧪 Testing with Boundary Configurations");
+    println("--------------------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(FUZZ_SEED + 2);
+    
+    let mut success_count = 0;
+    let start_time = Instant::now();
+    
+    let boundary_configs = [
+        // Empty config with defaults
+        CompilationConfig::default(),
+        
+        // All options enabled
+        CompilationConfig {
+            optimization_level: OptimizationLevel::O3,
+            debug_info: true,
+            source_maps: true,
+            target_features: {
+                let mut all_features = HashMap::new();
+                
+                // WASM features
+                let mut wasm_features = HashMap::new();
+                wasm_features.insert("simd".to_string(), "true".to_string());
+                wasm_features.insert("threads".to_string(), "true".to_string());
+                wasm_features.insert("bulk-memory".to_string(), "true".to_string());
+                wasm_features.insert("reference-types".to_string(), "true".to_string());
+                wasm_features.insert("multi-value".to_string(), "true".to_string());
+                all_features.insert(CompilationTarget::Wasm, wasm_features);
+                
+                // TypeScript features
+                let mut ts_features = HashMap::new();
+                ts_features.insert("strictNullChecks".to_string(), "true".to_string());
+                ts_features.insert("strictFunctionTypes".to_string(), "true".to_string());
+                ts_features.insert("strictBindCallApply".to_string(), "true".to_string());
+                ts_features.insert("strictPropertyInitialization".to_string(), "true".to_string());
+                ts_features.insert("alwaysStrict".to_string(), "true".to_string());
+                ts_features.insert("noImplicitAny".to_string(), "true".to_string());
+                ts_features.insert("noImplicitThis".to_string(), "true".to_string());
+                all_features.insert(CompilationTarget::TypeScript, ts_features);
+                
+                // Rust features
+                let mut rust_features = HashMap::new();
+                rust_features.insert("edition".to_string(), "2021".to_string());
+                rust_features.insert("unsafe".to_string(), "false".to_string());
+                all_features.insert(CompilationTarget::Rust, rust_features);
+                
+                all_features
+            },
+            mode: CompilationMode::Production,
+        },
+        
+        // No optimizations, all debug
+        CompilationConfig {
+            optimization_level: OptimizationLevel::O0,
+            debug_info: true,
+            source_maps: true,
+            target_features: HashMap::new(),
+            mode: CompilationMode::Development,
+        },
+        
+        // Max optimizations, no debug
+        CompilationConfig {
+            optimization_level: OptimizationLevel::O3,
+            debug_info: false,
+            source_maps: false,
+            target_features: HashMap::new(),
+            mode: CompilationMode::Production,
+        },
+        
+        // Invalid feature values
+        CompilationConfig {
+            optimization_level: OptimizationLevel::O2,
+            debug_info: true,
+            source_maps: true,
+            target_features: {
+                let mut features = HashMap::new();
+                
+                let mut wasm_features = HashMap::new();
+                wasm_features.insert("invalid-feature-1".to_string(), "true".to_string());
+                wasm_features.insert("invalid-feature-2".to_string(), "true".to_string());
+                features.insert(CompilationTarget::Wasm, wasm_features);
+                
+                features
+            },
+            mode: CompilationMode::Development,
+        },
+    ];
+    
+    for (config_index, config) in boundary_configs.iter().enumerate() {
+        // For each configuration, test with a few programs
+        let tests_per_config = num_tests / boundary_configs.len();
+        
+        for i in 0..tests_per_config {
+            INPUTS_GENERATED.fetch_add(1, Ordering::SeqCst);
+            
+            // Generate a simple valid program
+            let program = generate_valid_program(&mut rng, 500);
+            
+            let file_path = format!("{}/config_{}_{}.ruchy", FUZZ_DIR, config_index, i);
+            write_program_to_file(&program, &file_path).expect("Failed to write test program");
+            
+            // Create a source file
+            let source_file = SourceFile::new(
+                &file_path,
+                program.clone()
+            );
+            
+            // Test with all targets
+            let targets = [
+                CompilationTarget::Wasm,
+                CompilationTarget::TypeScript,
+                CompilationTarget::Rust
+            ];
+            
+            for target in &targets {
+                // Compile
+                let mut compiler = MultiTargetCompilerRefactored::new(config.clone());
+                
+                match std::panic::catch_unwind(|| {
+                    INPUTS_COMPILED.fetch_add(1, Ordering::SeqCst);
+                    compiler.compile_to_target(source_file.clone(), *target)
+                }) {
+                    Ok(result) => {
+                        // Compiler didn't crash
+                        if result.is_ok() {
+                            success_count += 1;
+                        }
+                        
+                        if i == 0 {
+                            // Only log the first test for each config to reduce noise
+                            println("✅ Config {} with target {:?}: {}",
+                                config_index,
+                                target,
+                                if result.is_ok() { "succeeded" } else { "failed but didn't crash" }
+                            );
+                        }
+                    },
+                    Err(_) => {
+                        // Compiler crashed
+                        COMPILER_CRASHES.fetch_add(1, Ordering::SeqCst);
+                        println("💥 Config {} with target {:?} caused compiler crash", config_index, target);
+                        println("   Saving to {}/config_crash_{}_{}_{:?}.ruchy", FUZZ_DIR, config_index, i, target);
+                        
+                        // Save crashing input
+                        write_program_to_file(
+                            &program,
+                            &format!("{}/config_crash_{}_{}_{:?}.ruchy", FUZZ_DIR, config_index, i, target)
+                        ).expect("Failed to write crash file");
+                    }
+                }
+            }
+        }
+    }
+    
+    let elapsed = start_time.elapsed();
+    let total_tests = num_tests * 3; // 3 targets per test
+    
+    // Report results
+    println("\nBoundary Configurations Test Results:");
+    println("- Total Test Cases: {}", total_tests);
+    println("- Success: {} ({:.2}%)", success_count, (success_count as f64 / total_tests as f64) * 100.0);
+    println("- Compiler Crashes: {}", COMPILER_CRASHES.load(Ordering::SeqCst));
+    println("- Time: {:.2}s", elapsed.as_secs_f64());
+    
+    // Should handle boundary configs without crashes
+    let crash_count = COMPILER_CRASHES.load(Ordering::SeqCst);
+    let crash_percentage = (crash_count as f64 / total_tests as f64) * 100.0;
+    assert!(crash_percentage < 1.0, "Crash percentage too high for boundary configs: {:.2}%", crash_percentage);
+}
+
+// Test with extremely large programs
+fun test_large_programs(num_tests: usize) {
+    println("\n🧪 Testing with Large Programs");
+    println("-----------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(FUZZ_SEED + 3);
+    
+    let mut success_count = 0;
+    let start_time = Instant::now();
+    
+    // Define various large program sizes
+    let sizes = [
+        10000,  // 10KB
+        50000,  // 50KB
+        100000, // 100KB
+    ];
+    
+    // Only test a few large programs due to their size
+    let tests_per_size = num_tests / sizes.len();
+    
+    for &size in &sizes {
+        for i in 0..tests_per_size {
+            INPUTS_GENERATED.fetch_add(1, Ordering::SeqCst);
+            
+            println("🔄 Generating {}KB program {}/{}...", size / 1000, i + 1, tests_per_size);
+            let program = generate_valid_program(&mut rng, size);
+            
+            let file_path = format!("{}/large_{}_{}kb.ruchy", FUZZ_DIR, i, size / 1000);
+            write_program_to_file(&program, &file_path).expect("Failed to write test program");
+            
+            // Create a source file
+            let source_file = SourceFile::new(
+                &file_path,
+                program.clone()
+            );
+            
+            // Use TypeScript target as it's typically fastest
+            let target = CompilationTarget::TypeScript;
+            
+            // Use minimal config for speed
+            let config = CompilationConfig {
+                optimization_level: OptimizationLevel::O0,
+                debug_info: false,
+                source_maps: false,
+                target_features: HashMap::new(),
+                mode: CompilationMode::Development,
+            };
+            
+            // Compile with timeout
+            let mut compiler = MultiTargetCompilerRefactored::new(config);
+            println("🔄 Compiling {}KB program...", size / 1000);
+            
+            let compile_start = Instant::now();
+            match std::panic::catch_unwind(|| {
+                INPUTS_COMPILED.fetch_add(1, Ordering::SeqCst);
+                compiler.compile_to_target(source_file, target)
+            }) {
+                Ok(result) => {
+                    let compile_time = compile_start.elapsed();
+                    if result.is_ok() {
+                        success_count += 1;
+                        println("✅ Large program {}KB compiled successfully in {:.2}s",
+                            size / 1000, compile_time.as_secs_f64());
+                    } else {
+                        println("❌ Large program {}KB failed to compile in {:.2}s, but didn't crash",
+                            size / 1000, compile_time.as_secs_f64());
+                    }
+                },
+                Err(_) => {
+                    // Compiler crashed
+                    COMPILER_CRASHES.fetch_add(1, Ordering::SeqCst);
+                    println("💥 Large program {}KB caused compiler crash", size / 1000);
+                }
+            }
+        }
+    }
+    
+    let elapsed = start_time.elapsed();
+    let total_tests = tests_per_size * sizes.len();
+    
+    // Report results
+    println("\nLarge Programs Test Results:");
+    println("- Total Test Cases: {}", total_tests);
+    println("- Success: {} ({:.2}%)", success_count, (success_count as f64 / total_tests as f64) * 100.0);
+    println("- Compiler Crashes: {}", COMPILER_CRASHES.load(Ordering::SeqCst));
+    println("- Time: {:.2}s", elapsed.as_secs_f64());
+    println("- Avg Time per Program: {:.2}s", elapsed.as_secs_f64() / total_tests as f64);
+    
+    // Should handle large programs without crashing
+    let crash_count = COMPILER_CRASHES.load(Ordering::SeqCst);
+    assert!(crash_count == 0, "Compiler crashed on large programs");
+}
+
+// Test with malformed AST
+fun test_malformed_ast(num_tests: usize) {
+    println("\n🧪 Testing with Malformed AST");
+    println("----------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(FUZZ_SEED + 4);
+    
+    let mut success_count = 0;
+    let start_time = Instant::now();
+    
+    for i in 0..num_tests {
+        INPUTS_GENERATED.fetch_add(1, Ordering::SeqCst);
+        
+        // Generate a malformed AST
+        let ast = generate_malformed_ast(&mut rng);
+        
+        // Random target
+        let targets = [
+            CompilationTarget::Wasm,
+            CompilationTarget::TypeScript,
+            CompilationTarget::Rust
+        ];
+        let target = targets[rng.gen_range(0..targets.len())];
+        
+        // Create a compiler with default config
+        let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        
+        // Inject the malformed AST directly
+        compiler.ast = Some(ast.clone());
+        
+        // Try to emit code
+        match std::panic::catch_unwind(|| {
+            INPUTS_COMPILED.fetch_add(1, Ordering::SeqCst);
+            compiler.emit_code(target)
+        }) {
+            Ok(result) => {
+                // Didn't crash, which is good
+                success_count += 1;
+                
+                if i % 10 == 0 {
+                    println("✅ Malformed AST test {} handled correctly for target {:?}", i, target);
+                    println("   Result: {}", if result.is_ok() { "success" } else { "failed but didn't crash" });
+                }
+            },
+            Err(_) => {
+                // Compiler crashed
+                COMPILER_CRASHES.fetch_add(1, Ordering::SeqCst);
+                println("💥 Malformed AST test {} caused compiler crash for target {:?}", i, target);
+                
+                // Save the AST description
+                let ast_desc = format!("{:?}", ast);
+                write_program_to_file(
+                    &ast_desc,
+                    &format!("{}/ast_crash_{}.txt", FUZZ_DIR, i)
+                ).expect("Failed to write crash AST file");
+            }
+        }
+    }
+    
+    let elapsed = start_time.elapsed();
+    
+    // Report results
+    println("\nMalformed AST Test Results:");
+    println("- Total Test Cases: {}", num_tests);
+    println("- Handled Correctly: {} ({:.2}%)", success_count, (success_count as f64 / num_tests as f64) * 100.0);
+    println("- Compiler Crashes: {}", COMPILER_CRASHES.load(Ordering::SeqCst));
+    println("- Time: {:.2}s", elapsed.as_secs_f64());
+    
+    // Should handle malformed AST with minimal crashes
+    let crash_count = COMPILER_CRASHES.load(Ordering::SeqCst);
+    let crash_percentage = (crash_count as f64 / num_tests as f64) * 100.0;
+    assert!(crash_percentage < 10.0, "Crash percentage too high for malformed AST: {:.2}%", crash_percentage);
+}
+
+// Run all fuzz tests
+fun run_fuzz_tests() {
+    println("🧪 Running Fuzz Tests for Multi-Target Compiler");
+    println("==============================================");
+    
+    setup_fuzz_env();
+    
+    // Reset global statistics
+    INPUTS_GENERATED.store(0, Ordering::SeqCst);
+    INPUTS_COMPILED.store(0, Ordering::SeqCst);
+    COMPILER_CRASHES.store(0, Ordering::SeqCst);
+    
+    let start_time = Instant::now();
+    
+    // Run each fuzz test type
+    test_valid_programs(5000);
+    test_invalid_programs(3000);
+    test_boundary_configurations(500);
+    test_large_programs(6);
+    test_malformed_ast(500);
+    
+    let elapsed = start_time.elapsed();
+    
+    // Report overall results
+    println("\n🎉 Fuzz Testing Complete!");
+    println("=========================");
+    println("- Total Inputs Generated: {}", INPUTS_GENERATED.load(Ordering::SeqCst));
+    println("- Total Inputs Compiled: {}", INPUTS_COMPILED.load(Ordering::SeqCst));
+    println("- Total Compiler Crashes: {}", COMPILER_CRASHES.load(Ordering::SeqCst));
+    println("- Crash Rate: {:.4}%", 
+        (COMPILER_CRASHES.load(Ordering::SeqCst) as f64 / INPUTS_COMPILED.load(Ordering::SeqCst) as f64) * 100.0);
+    println("- Total Time: {:.2}s", elapsed.as_secs_f64());
+    
+    // Generate a summary report
+    generate_fuzz_report(elapsed);
+    
+    cleanup_fuzz_env();
+    
+    // Final assertion
+    let crash_count = COMPILER_CRASHES.load(Ordering::SeqCst);
+    let compiled_count = INPUTS_COMPILED.load(Ordering::SeqCst);
+    let crash_rate = (crash_count as f64 / compiled_count as f64) * 100.0;
+    
+    assert!(crash_rate < 2.0, 
+        "Overall crash rate of {:.2}% exceeds threshold of 2.0%", crash_rate);
+    
+    println("\n✅ Fuzz testing completed with acceptable crash rate: {:.4}%", crash_rate);
+}
+
+// Generate a summary report for fuzz testing
+fun generate_fuzz_report(elapsed: std::time::Duration) {
+    let report_path = format!("{}/fuzz_report.md", FUZZ_DIR);
+    let mut file = File::create(&report_path).expect("Failed to create report file");
+    
+    // Calculate statistics
+    let total_inputs = INPUTS_GENERATED.load(Ordering::SeqCst);
+    let compiled_inputs = INPUTS_COMPILED.load(Ordering::SeqCst);
+    let crashes = COMPILER_CRASHES.load(Ordering::SeqCst);
+    let crash_rate = (crashes as f64 / compiled_inputs as f64) * 100.0;
+    let throughput = total_inputs as f64 / elapsed.as_secs_f64();
+    
+    // Write report
+    writeln!(file, "# Fuzz Testing Report for Multi-Target Compiler").unwrap();
+    writeln!(file, "\n## Summary").unwrap();
+    writeln!(file, "\n- **Date**: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")).unwrap();
+    writeln!(file, "- **Duration**: {:.2} seconds", elapsed.as_secs_f64()).unwrap();
+    writeln!(file, "- **Inputs Generated**: {}", total_inputs).unwrap();
+    writeln!(file, "- **Inputs Compiled**: {}", compiled_inputs).unwrap();
+    writeln!(file, "- **Compiler Crashes**: {}", crashes).unwrap();
+    writeln!(file, "- **Crash Rate**: {:.4}%", crash_rate).unwrap();
+    writeln!(file, "- **Throughput**: {:.2} inputs/second", throughput).unwrap();
+    
+    writeln!(file, "\n## Test Categories").unwrap();
+    writeln!(file, "\n| Category | Purpose |").unwrap();
+    writeln!(file, "|----------|---------|").unwrap();
+    writeln!(file, "| Valid Programs | Test correct handling of valid Ruchy code |").unwrap();
+    writeln!(file, "| Invalid Programs | Test error handling and recovery |").unwrap();
+    writeln!(file, "| Boundary Configurations | Test extreme compiler configurations |").unwrap();
+    writeln!(file, "| Large Programs | Test performance and memory handling |").unwrap();
+    writeln!(file, "| Malformed AST | Test robustness against invalid internal structures |").unwrap();
+    
+    writeln!(file, "\n## Conclusion").unwrap();
+    
+    if crash_rate < 2.0 {
+        writeln!(file, "\nThe multi-target compiler shows **good robustness** with a crash rate of {:.4}%, which is below the acceptable threshold of 2.0%.", crash_rate).unwrap();
+        writeln!(file, "\nThe compiler successfully handled most inputs, including invalid code and extreme configurations, demonstrating effective error handling and recovery mechanisms.").unwrap();
+    } else {
+        writeln!(file, "\nThe multi-target compiler shows **concerning robustness issues** with a crash rate of {:.4}%, which exceeds the acceptable threshold of 2.0%.", crash_rate).unwrap();
+        writeln!(file, "\nFurther investigation is needed to address the crash scenarios identified during testing.").unwrap();
+    }
+    
+    writeln!(file, "\n## Next Steps").unwrap();
+    writeln!(file, "\n1. Analyze crash reports to identify common failure patterns").unwrap();
+    writeln!(file, "2. Implement fixes for identified issues").unwrap();
+    writeln!(file, "3. Add regression tests for fixed crash cases").unwrap();
+    writeln!(file, "4. Consider integrating continuous fuzzing into the CI pipeline").unwrap();
+    
+    println("\n📊 Fuzz testing report generated at: {}", report_path);
+}
+
+// Entry point
+fun main() {
+    run_fuzz_tests();
+}

@@ -1,0 +1,430 @@
+// WASM Type Mapping System for Ruchy v3.125.0
+// Date: October 23, 2025
+// Part of the RuchyRuchy WASM Compilation Target
+
+// Import Ruchy v3.125.0 WASM APIs
+import ruchy::wasm::Module
+import ruchy::wasm::Type
+import ruchy::wasm::Function
+import ruchy::wasm::Instruction
+import ruchy::wasm::emit
+import ruchy::wasm::validate
+
+// Type tags for runtime type information (using Ruchy's enhanced RTTI)
+enum WasmTypeTag {
+    Null,       // 0: Null/undefined value
+    Boolean,    // 1: Boolean value
+    Number,     // 2: Numeric value (i32, i64, f32, f64)
+    String,     // 3: String value
+    Array,      // 4: Array value
+    Object,     // 5: Object/struct value
+    Function,   // 6: Function reference
+    Closure,    // 7: Closure with captured variables
+    Option,     // 8: Option<T> type
+    Result,     // 9: Result<T, E> type
+    Enum,       // 10: Enum value with variant
+    Tuple       // 11: Tuple value
+}
+
+// Map Ruchy types to WASM types using the new APIs
+fun map_ruchy_to_wasm_type(ruchy_type: String) -> Type {
+    match ruchy_type {
+        "i32" => Type::I32,
+        "i64" => Type::I64,
+        "f32" => Type::F32,
+        "f64" => Type::F64,
+        "bool" => Type::I32,
+        "String" => Type::I32,  // Memory address
+        "Array" => Type::I32,   // Memory address
+        "Option" => Type::I32,  // Tagged union
+        "Result" => Type::I32,  // Tagged union
+        "Function" => Type::FuncRef,
+        _ => Type::I32  // Default to i32 for complex types (memory address)
+    }
+}
+
+// Create a WASM module with proper imports
+fun create_wasm_module() -> Module {
+    let module = Module::new();
+    
+    // Add standard memory
+    module.add_memory("memory", 1, None);  // 1 page initial, no maximum
+    
+    // Add runtime imports from JavaScript host
+    module.add_import("js", "alloc", Function::new([Type::I32], [Type::I32]));
+    module.add_import("js", "free", Function::new([Type::I32], []));
+    module.add_import("js", "collect", Function::new([], []));
+    
+    // Add string operations imports
+    module.add_import("js", "string_concat", Function::new([Type::I32, Type::I32], [Type::I32]));
+    module.add_import("js", "string_char_at", Function::new([Type::I32, Type::I32], [Type::I32]));
+    module.add_import("js", "string_substr", Function::new([Type::I32, Type::I32, Type::I32], [Type::I32]));
+    
+    module
+}
+
+// Memory layout information for complex types
+struct MemoryLayout {
+    size: i32,           // Total size in bytes
+    alignment: i32,      // Required alignment
+    field_offsets: [i32] // For struct fields
+}
+
+// Calculate memory layout for a struct
+fun calculate_struct_layout(fields: [(String, String)]) -> MemoryLayout {
+    let mut total_size = 4;  // Start with 4 bytes for type tag
+    let mut offsets = [];
+    let alignment = 4;       // Default alignment
+    
+    for field in fields {
+        let (name, type_name) = field;
+        
+        // Align to field requirements
+        let field_alignment = match type_name {
+            "i32" => 4,
+            "i64" => 8,
+            "f32" => 4,
+            "f64" => 8,
+            _ => 4  // Default alignment for complex types
+        };
+        
+        // Align offset
+        total_size = (total_size + field_alignment - 1) & ~(field_alignment - 1);
+        
+        // Record offset
+        offsets.push(total_size);
+        
+        // Update size
+        total_size += match type_name {
+            "i32" => 4,
+            "i64" => 8,
+            "f32" => 4,
+            "f64" => 8,
+            _ => 4  // Default size for complex types (pointer)
+        };
+    }
+    
+    MemoryLayout {
+        size: total_size,
+        alignment: alignment,
+        field_offsets: offsets
+    }
+}
+
+// Generate closure record allocation instructions
+fun generate_closure_allocation(function_index: i32, captures: [String]) -> [Instruction] {
+    let mut instructions = [];
+    
+    // Calculate closure size: 4 bytes for function index + 4 bytes per capture
+    let closure_size = 4 + (4 * captures.length());
+    
+    // Call allocator
+    instructions.push(Instruction::I32Const(closure_size));
+    instructions.push(Instruction::Call("js.alloc"));
+    
+    // Store function index
+    instructions.push(Instruction::LocalTee("closure_ptr"));
+    instructions.push(Instruction::I32Const(function_index));
+    instructions.push(Instruction::I32Store(0, 0));
+    
+    // Store captures
+    for i in 0..captures.length() {
+        instructions.push(Instruction::LocalGet("closure_ptr"));
+        instructions.push(Instruction::I32Const(4 + (i * 4)));
+        instructions.push(Instruction::I32Add());
+        instructions.push(Instruction::LocalGet(captures[i]));
+        instructions.push(Instruction::I32Store(0, 0));
+    }
+    
+    // Return closure pointer
+    instructions.push(Instruction::LocalGet("closure_ptr"));
+    
+    instructions
+}
+
+// Generate closure invocation instructions
+fun generate_closure_invocation(closure_ptr: String, args: [String]) -> [Instruction] {
+    let mut instructions = [];
+    
+    // Load function index from closure record
+    instructions.push(Instruction::LocalGet(closure_ptr));
+    instructions.push(Instruction::I32Load(0, 0));
+    instructions.push(Instruction::LocalSet("func_idx"));
+    
+    // Push closure pointer as first argument
+    instructions.push(Instruction::LocalGet(closure_ptr));
+    
+    // Push other arguments
+    for arg in args {
+        instructions.push(Instruction::LocalGet(arg));
+    }
+    
+    // Indirect call
+    instructions.push(Instruction::CallIndirect("func_idx"));
+    
+    instructions
+}
+
+// Generate string operations
+struct StringOperations {
+    create_string: fun(value: String) -> [Instruction],
+    concat_strings: fun(str1: String, str2: String) -> [Instruction],
+    get_char_at: fun(str: String, index: String) -> [Instruction],
+    get_substring: fun(str: String, start: String, length: String) -> [Instruction]
+}
+
+// Create string operations using JavaScript host functions
+fun create_string_operations() -> StringOperations {
+    StringOperations {
+        create_string: fun(value: String) -> [Instruction] {
+            [
+                // String literal creation handled by runtime
+                Instruction::I32Const(0),  // Placeholder, will be replaced by actual value
+                Instruction::Call("string_literal")
+            ]
+        },
+        
+        concat_strings: fun(str1: String, str2: String) -> [Instruction] {
+            [
+                Instruction::LocalGet(str1),
+                Instruction::LocalGet(str2),
+                Instruction::Call("js.string_concat")
+            ]
+        },
+        
+        get_char_at: fun(str: String, index: String) -> [Instruction] {
+            [
+                Instruction::LocalGet(str),
+                Instruction::LocalGet(index),
+                Instruction::Call("js.string_char_at")
+            ]
+        },
+        
+        get_substring: fun(str: String, start: String, length: String) -> [Instruction] {
+            [
+                Instruction::LocalGet(str),
+                Instruction::LocalGet(start),
+                Instruction::LocalGet(length),
+                Instruction::Call("js.string_substr")
+            ]
+        }
+    }
+}
+
+// Generate array operations
+struct ArrayOperations {
+    create_array: fun(element_type: String, length: String) -> [Instruction],
+    get_element: fun(array: String, index: String) -> [Instruction],
+    set_element: fun(array: String, index: String, value: String) -> [Instruction],
+    get_length: fun(array: String) -> [Instruction]
+}
+
+// Create array operations
+fun create_array_operations() -> ArrayOperations {
+    ArrayOperations {
+        create_array: fun(element_type: String, length: String) -> [Instruction] {
+            [
+                // Calculate array size: 8 bytes for header + (element_size * length)
+                Instruction::LocalGet(length),
+                Instruction::I32Const(4),  // Assuming 4 bytes per element
+                Instruction::I32Mul(),
+                Instruction::I32Const(8),
+                Instruction::I32Add(),
+                
+                // Allocate memory
+                Instruction::Call("js.alloc"),
+                
+                // Store array header (length and type tag)
+                Instruction::LocalTee("array_ptr"),
+                Instruction::LocalGet(length),
+                Instruction::I32Store(0, 0),
+                
+                Instruction::LocalGet("array_ptr"),
+                Instruction::I32Const(4),
+                Instruction::I32Add(),
+                Instruction::I32Const(WasmTypeTag::Array as i32),
+                Instruction::I32Store(0, 0),
+                
+                // Return array pointer
+                Instruction::LocalGet("array_ptr")
+            ]
+        },
+        
+        get_element: fun(array: String, index: String) -> [Instruction] {
+            [
+                // Calculate element address: array + 8 + (index * element_size)
+                Instruction::LocalGet(array),
+                Instruction::I32Const(8),
+                Instruction::I32Add(),
+                Instruction::LocalGet(index),
+                Instruction::I32Const(4),  // Assuming 4 bytes per element
+                Instruction::I32Mul(),
+                Instruction::I32Add(),
+                
+                // Load element
+                Instruction::I32Load(0, 0)
+            ]
+        },
+        
+        set_element: fun(array: String, index: String, value: String) -> [Instruction] {
+            [
+                // Calculate element address: array + 8 + (index * element_size)
+                Instruction::LocalGet(array),
+                Instruction::I32Const(8),
+                Instruction::I32Add(),
+                Instruction::LocalGet(index),
+                Instruction::I32Const(4),  // Assuming 4 bytes per element
+                Instruction::I32Mul(),
+                Instruction::I32Add(),
+                
+                // Store value
+                Instruction::LocalGet(value),
+                Instruction::I32Store(0, 0)
+            ]
+        },
+        
+        get_length: fun(array: String) -> [Instruction] {
+            [
+                // Load length from array header
+                Instruction::LocalGet(array),
+                Instruction::I32Load(0, 0)
+            ]
+        }
+    }
+}
+
+// Generate Option type operations
+struct OptionOperations {
+    create_some: fun(value: String) -> [Instruction],
+    create_none: fun() -> [Instruction],
+    is_some: fun(opt: String) -> [Instruction],
+    unwrap: fun(opt: String) -> [Instruction]
+}
+
+// Create Option operations
+fun create_option_operations() -> OptionOperations {
+    OptionOperations {
+        create_some: fun(value: String) -> [Instruction] {
+            [
+                // Allocate memory for Some variant: 8 bytes (tag + value)
+                Instruction::I32Const(8),
+                Instruction::Call("js.alloc"),
+                
+                // Store Some tag (1)
+                Instruction::LocalTee("opt_ptr"),
+                Instruction::I32Const(1),
+                Instruction::I32Store(0, 0),
+                
+                // Store value
+                Instruction::LocalGet("opt_ptr"),
+                Instruction::I32Const(4),
+                Instruction::I32Add(),
+                Instruction::LocalGet(value),
+                Instruction::I32Store(0, 0),
+                
+                // Return option pointer
+                Instruction::LocalGet("opt_ptr")
+            ]
+        },
+        
+        create_none: fun() -> [Instruction] {
+            [
+                // Allocate memory for None variant: 4 bytes (tag only)
+                Instruction::I32Const(4),
+                Instruction::Call("js.alloc"),
+                
+                // Store None tag (0)
+                Instruction::LocalTee("opt_ptr"),
+                Instruction::I32Const(0),
+                Instruction::I32Store(0, 0),
+                
+                // Return option pointer
+                Instruction::LocalGet("opt_ptr")
+            ]
+        },
+        
+        is_some: fun(opt: String) -> [Instruction] {
+            [
+                // Check if tag is Some (1)
+                Instruction::LocalGet(opt),
+                Instruction::I32Load(0, 0),
+                Instruction::I32Const(1),
+                Instruction::I32Eq()
+            ]
+        },
+        
+        unwrap: fun(opt: String) -> [Instruction] {
+            [
+                // Check if Some
+                Instruction::LocalGet(opt),
+                Instruction::I32Load(0, 0),
+                Instruction::I32Const(1),
+                Instruction::I32Eq(),
+                
+                // If not Some, panic
+                Instruction::If(Type::I32),
+                
+                // Some case - load value
+                Instruction::LocalGet(opt),
+                Instruction::I32Const(4),
+                Instruction::I32Add(),
+                Instruction::I32Load(0, 0),
+                
+                // Else (None case) - panic
+                Instruction::Else(),
+                Instruction::Call("panic_none_unwrap"),
+                Instruction::I32Const(0),  // Unreachable, but needed for type checking
+                
+                Instruction::End()
+            ]
+        }
+    }
+}
+
+// Full type mapping system using Ruchy v3.125.0 APIs
+struct WasmTypeSystem {
+    module: Module,
+    string_ops: StringOperations,
+    array_ops: ArrayOperations,
+    option_ops: OptionOperations
+}
+
+// Initialize the WASM type system
+fun init_wasm_type_system() -> WasmTypeSystem {
+    let module = create_wasm_module();
+    let string_ops = create_string_operations();
+    let array_ops = create_array_operations();
+    let option_ops = create_option_operations();
+    
+    WasmTypeSystem {
+        module: module,
+        string_ops: string_ops,
+        array_ops: array_ops,
+        option_ops: option_ops
+    }
+}
+
+// Export module validation function
+fun validate_wasm_module(module: &Module) -> bool {
+    ruchy::wasm::validate(module)
+}
+
+// Generate WAT text from module
+fun generate_wat(module: &Module) -> String {
+    ruchy::wasm::emit(module)
+}
+
+// Export the WASM type system API
+export {
+    WasmTypeSystem,
+    init_wasm_type_system,
+    map_ruchy_to_wasm_type,
+    calculate_struct_layout,
+    generate_closure_allocation,
+    generate_closure_invocation,
+    create_string_operations,
+    create_array_operations,
+    create_option_operations,
+    validate_wasm_module,
+    generate_wat
+}

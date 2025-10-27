@@ -1,0 +1,598 @@
+// WASM-007: Browser Debugging Integration - Debug Symbol Tests (RED Phase)
+//
+// These tests verify DWARF debug information generation for WebAssembly.
+// All tests should FAIL in the RED phase, indicating missing implementation.
+
+use std::path::Path;
+use std::collections::HashMap;
+
+// ============================================================================
+// Test 1: Function Debug Info
+// ============================================================================
+
+test test_debug_info_functions() {
+    println("Testing debug info for functions...");
+
+    let source = r#"
+fun add(x: i32, y: i32) -> i32 {
+    return x + y;
+}
+
+fun sub(x: i32, y: i32) -> i32 {
+    return x - y;
+}
+"#;
+
+    let result = compile_with_debug_info("functions.ruchy", source);
+
+    assert(result.debug_info.is_some(), "Should generate debug info");
+
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify function entries (DW_TAG_subprogram)
+    assert(debug_info.has_function("add"), "Should have debug entry for 'add'");
+    assert(debug_info.has_function("sub"), "Should have debug entry for 'sub'");
+
+    let add_entry = debug_info.get_function("add").unwrap();
+    assert(add_entry.line_number == 2, "Function 'add' should be at line 2");
+    assert(add_entry.parameters.len() == 2, "Function 'add' should have 2 parameters");
+    assert(add_entry.parameters[0].name == "x", "First parameter should be 'x'");
+    assert(add_entry.parameters[1].name == "y", "Second parameter should be 'y'");
+
+    println("✅ Function debug info test passed");
+}
+
+// ============================================================================
+// Test 2: Variable Debug Info
+// ============================================================================
+
+test test_debug_info_variables() {
+    println("Testing debug info for variables...");
+
+    let source = r#"
+fun calculate() -> i32 {
+    let x = 10;
+    let y = 20;
+    let result = x + y;
+    return result;
+}
+"#;
+
+    let result = compile_with_debug_info("variables.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify local variable entries (DW_TAG_variable)
+    let func = debug_info.get_function("calculate").unwrap();
+    assert(func.local_variables.len() == 3, "Should have 3 local variables");
+
+    let var_names: Vec<&str> = func.local_variables.iter().map(|v| v.name.as_str()).collect();
+    assert(var_names.contains(&"x"), "Should have variable 'x'");
+    assert(var_names.contains(&"y"), "Should have variable 'y'");
+    assert(var_names.contains(&"result"), "Should have variable 'result'");
+
+    println("✅ Variable debug info test passed");
+}
+
+// ============================================================================
+// Test 3: Type Debug Info
+// ============================================================================
+
+test test_debug_info_types() {
+    println("Testing debug info for types...");
+
+    let source = r#"
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fun create_point() -> Point {
+    return Point { x: 10, y: 20 };
+}
+"#;
+
+    let result = compile_with_debug_info("types.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify type entries (DW_TAG_base_type, DW_TAG_structure_type)
+    assert(debug_info.has_type("i32"), "Should have type info for i32");
+    assert(debug_info.has_type("Point"), "Should have type info for Point");
+
+    let point_type = debug_info.get_type("Point").unwrap();
+    assert(point_type.kind == TypeKind::Struct, "Point should be a struct type");
+    assert(point_type.size_bytes == 8, "Point should be 8 bytes (2 i32s)");
+    assert(point_type.members.len() == 2, "Point should have 2 members");
+
+    println("✅ Type debug info test passed");
+}
+
+// ============================================================================
+// Test 4: Line Number Debug Info
+// ============================================================================
+
+test test_debug_info_line_numbers() {
+    println("Testing line number information...");
+
+    let source = r#"
+fun multi_line() -> i32 {
+    let a = 1;
+    let b = 2;
+    let c = 3;
+    let d = 4;
+    return a + b + c + d;
+}
+"#;
+
+    let result = compile_with_debug_info("lines.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify .debug_line section
+    assert(debug_info.has_line_info(), "Should have line number information");
+
+    let line_table = debug_info.get_line_table().unwrap();
+
+    // Verify line entries for each statement
+    assert(line_table.has_entry_for_line(3), "Should have entry for line 3 (let a = 1)");
+    assert(line_table.has_entry_for_line(4), "Should have entry for line 4 (let b = 2)");
+    assert(line_table.has_entry_for_line(5), "Should have entry for line 5 (let c = 3)");
+    assert(line_table.has_entry_for_line(6), "Should have entry for line 6 (let d = 4)");
+    assert(line_table.has_entry_for_line(7), "Should have entry for line 7 (return)");
+
+    println("✅ Line number debug info test passed");
+}
+
+// ============================================================================
+// Test 5: Scope Debug Info
+// ============================================================================
+
+test test_debug_info_scopes() {
+    println("Testing lexical scope information...");
+
+    let source = r#"
+fun nested_scopes() -> i32 {
+    let x = 1;
+    {
+        let y = 2;
+        {
+            let z = 3;
+            return x + y + z;
+        }
+    }
+}
+"#;
+
+    let result = compile_with_debug_info("scopes.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    let func = debug_info.get_function("nested_scopes").unwrap();
+
+    // Verify lexical blocks (DW_TAG_lexical_block)
+    assert(func.lexical_blocks.len() == 2, "Should have 2 nested lexical blocks");
+
+    let outer_block = &func.lexical_blocks[0];
+    let inner_block = &func.lexical_blocks[1];
+
+    assert(outer_block.start_line == 4, "Outer block should start at line 4");
+    assert(inner_block.start_line == 6, "Inner block should start at line 6");
+
+    assert(outer_block.variables.contains(&"y"), "Outer block should have variable 'y'");
+    assert(inner_block.variables.contains(&"z"), "Inner block should have variable 'z'");
+
+    println("✅ Scope debug info test passed");
+}
+
+// ============================================================================
+// Test 6: Inlining Debug Info
+// ============================================================================
+
+test test_debug_info_inlining() {
+    println("Testing inlined function debug info...");
+
+    let source = r#"
+#[inline]
+fun small_function(x: i32) -> i32 {
+    return x * 2;
+}
+
+fun caller() -> i32 {
+    return small_function(21);
+}
+"#;
+
+    let result = compile_with_debug_info_optimized("inline.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify inlined subroutine entries (DW_TAG_inlined_subroutine)
+    let caller = debug_info.get_function("caller").unwrap();
+    assert(caller.inlined_calls.len() > 0, "Should track inlined calls");
+
+    let inlined = &caller.inlined_calls[0];
+    assert(inlined.function_name == "small_function", "Should track inlined function name");
+    assert(inlined.call_line == 8, "Should track call site line");
+
+    println("✅ Inlining debug info test passed");
+}
+
+// ============================================================================
+// Test 7: Compilation Unit Debug Info
+// ============================================================================
+
+test test_debug_info_compilation_unit() {
+    println("Testing compilation unit debug info...");
+
+    let source = r#"
+fun main() -> i32 {
+    return 0;
+}
+"#;
+
+    let result = compile_with_debug_info("main.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify compilation unit (DW_TAG_compile_unit)
+    assert(debug_info.has_compilation_unit(), "Should have compilation unit");
+
+    let cu = debug_info.get_compilation_unit().unwrap();
+    assert(cu.source_file == "main.ruchy", "Should track source file name");
+    assert(cu.language == DwarfLanguage::Ruchy, "Should identify language as Ruchy");
+    assert(cu.producer.contains("ruchyruchy"), "Should identify compiler");
+
+    println("✅ Compilation unit debug info test passed");
+}
+
+// ============================================================================
+// Test 8: String Table Debug Info
+// ============================================================================
+
+test test_debug_info_string_table() {
+    println("Testing debug string table...");
+
+    let source = r#"
+fun function_with_long_name_for_testing() -> i32 {
+    let variable_with_long_name_for_testing = 42;
+    return variable_with_long_name_for_testing;
+}
+"#;
+
+    let result = compile_with_debug_info("strings.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify .debug_str section
+    assert(debug_info.has_string_table(), "Should have string table");
+
+    let string_table = debug_info.get_string_table().unwrap();
+
+    // Verify strings are deduplicated
+    assert(string_table.contains("function_with_long_name_for_testing"), "Should contain function name");
+    assert(string_table.contains("variable_with_long_name_for_testing"), "Should contain variable name");
+
+    // Verify deduplication (same string referenced multiple times should appear once)
+    let i32_count = string_table.count_occurrences("i32");
+    assert(i32_count == 1, "Type name 'i32' should appear once in string table (deduplicated)");
+
+    println("✅ String table debug info test passed");
+}
+
+// ============================================================================
+// Test 9: Abbreviation Table Debug Info
+// ============================================================================
+
+test test_debug_info_abbreviation_table() {
+    println("Testing debug abbreviation table...");
+
+    let source = r#"
+fun simple() -> i32 {
+    return 1;
+}
+"#;
+
+    let result = compile_with_debug_info("abbrev.ruchy", source);
+    let debug_info = result.debug_info.unwrap();
+
+    // Verify .debug_abbrev section
+    assert(debug_info.has_abbreviation_table(), "Should have abbreviation table");
+
+    let abbrev_table = debug_info.get_abbreviation_table().unwrap();
+
+    // Verify common abbreviations exist
+    assert(abbrev_table.has_abbrev_for_tag(DwarfTag::CompileUnit), "Should have abbrev for compile unit");
+    assert(abbrev_table.has_abbrev_for_tag(DwarfTag::Subprogram), "Should have abbrev for subprogram");
+    assert(abbrev_table.has_abbrev_for_tag(DwarfTag::BaseType), "Should have abbrev for base type");
+
+    println("✅ Abbreviation table debug info test passed");
+}
+
+// ============================================================================
+// Test 10: Custom Section Embedding
+// ============================================================================
+
+test test_debug_info_custom_section() {
+    println("Testing DWARF custom section embedding...");
+
+    let source = r#"
+fun test_func() -> i32 {
+    return 123;
+}
+"#;
+
+    let result = compile_with_debug_info("custom.ruchy", source);
+
+    assert(result.wasm_binary.len() > 0, "Should produce WASM binary");
+
+    // Parse WASM binary and verify custom sections
+    let wasm_module = parse_wasm(&result.wasm_binary).unwrap();
+
+    // Verify DWARF custom sections exist
+    assert(wasm_module.has_custom_section(".debug_info"), "Should have .debug_info section");
+    assert(wasm_module.has_custom_section(".debug_line"), "Should have .debug_line section");
+    assert(wasm_module.has_custom_section(".debug_abbrev"), "Should have .debug_abbrev section");
+    assert(wasm_module.has_custom_section(".debug_str"), "Should have .debug_str section");
+
+    // Verify sections are non-empty
+    let debug_info_section = wasm_module.get_custom_section(".debug_info").unwrap();
+    assert(debug_info_section.len() > 0, ".debug_info section should not be empty");
+
+    println("✅ Custom section embedding test passed");
+}
+
+// ============================================================================
+// Helper Types (will fail in RED - not implemented)
+// ============================================================================
+
+struct CompileResult {
+    wasm_binary: Vec<u8>,
+    debug_info: Option<DebugInfo>,
+}
+
+struct DebugInfo {
+    functions: HashMap<String, FunctionDebugInfo>,
+    types: HashMap<String, TypeDebugInfo>,
+    compilation_unit: Option<CompilationUnit>,
+    line_table: Option<LineTable>,
+    string_table: Option<StringTable>,
+    abbrev_table: Option<AbbreviationTable>,
+}
+
+impl DebugInfo {
+    fun has_function(&self, name: &str) -> bool {
+        panic!("Debug info query not implemented");
+    }
+
+    fun get_function(&self, name: &str) -> Option<&FunctionDebugInfo> {
+        panic!("Debug info query not implemented");
+    }
+
+    fun has_type(&self, name: &str) -> bool {
+        panic!("Debug info query not implemented");
+    }
+
+    fun get_type(&self, name: &str) -> Option<&TypeDebugInfo> {
+        panic!("Debug info query not implemented");
+    }
+
+    fun has_line_info(&self) -> bool {
+        panic!("Debug info query not implemented");
+    }
+
+    fun get_line_table(&self) -> Option<&LineTable> {
+        panic!("Debug info query not implemented");
+    }
+
+    fun has_compilation_unit(&self) -> bool {
+        panic!("Debug info query not implemented");
+    }
+
+    fun get_compilation_unit(&self) -> Option<&CompilationUnit> {
+        panic!("Debug info query not implemented");
+    }
+
+    fun has_string_table(&self) -> bool {
+        panic!("Debug info query not implemented");
+    }
+
+    fun get_string_table(&self) -> Option<&StringTable> {
+        panic!("Debug info query not implemented");
+    }
+
+    fun has_abbreviation_table(&self) -> bool {
+        panic!("Debug info query not implemented");
+    }
+
+    fun get_abbreviation_table(&self) -> Option<&AbbreviationTable> {
+        panic!("Debug info query not implemented");
+    }
+}
+
+struct FunctionDebugInfo {
+    name: String,
+    line_number: u32,
+    parameters: Vec<ParameterInfo>,
+    local_variables: Vec<VariableInfo>,
+    lexical_blocks: Vec<LexicalBlock>,
+    inlined_calls: Vec<InlinedCall>,
+}
+
+struct ParameterInfo {
+    name: String,
+    type_name: String,
+}
+
+struct VariableInfo {
+    name: String,
+    type_name: String,
+    scope_start: u32,
+    scope_end: u32,
+}
+
+struct LexicalBlock {
+    start_line: u32,
+    end_line: u32,
+    variables: Vec<String>,
+}
+
+struct InlinedCall {
+    function_name: String,
+    call_line: u32,
+}
+
+struct TypeDebugInfo {
+    name: String,
+    kind: TypeKind,
+    size_bytes: u32,
+    members: Vec<MemberInfo>,
+}
+
+enum TypeKind {
+    Base,
+    Struct,
+    Enum,
+    Array,
+}
+
+struct MemberInfo {
+    name: String,
+    type_name: String,
+    offset_bytes: u32,
+}
+
+struct CompilationUnit {
+    source_file: String,
+    language: DwarfLanguage,
+    producer: String,
+}
+
+enum DwarfLanguage {
+    Ruchy,
+    C,
+    Rust,
+}
+
+struct LineTable {
+    entries: Vec<LineEntry>,
+}
+
+impl LineTable {
+    fun has_entry_for_line(&self, line: u32) -> bool {
+        panic!("Line table query not implemented");
+    }
+}
+
+struct LineEntry {
+    line: u32,
+    column: u32,
+    wasm_offset: u32,
+}
+
+struct StringTable {
+    strings: Vec<String>,
+}
+
+impl StringTable {
+    fun contains(&self, s: &str) -> bool {
+        panic!("String table query not implemented");
+    }
+
+    fun count_occurrences(&self, s: &str) -> usize {
+        panic!("String table query not implemented");
+    }
+}
+
+struct AbbreviationTable {
+    abbreviations: Vec<Abbreviation>,
+}
+
+impl AbbreviationTable {
+    fun has_abbrev_for_tag(&self, tag: DwarfTag) -> bool {
+        panic!("Abbreviation table query not implemented");
+    }
+}
+
+struct Abbreviation {
+    code: u32,
+    tag: DwarfTag,
+}
+
+enum DwarfTag {
+    CompileUnit,
+    Subprogram,
+    Variable,
+    BaseType,
+    StructType,
+    LexicalBlock,
+}
+
+struct WasmModule {
+    custom_sections: HashMap<String, Vec<u8>>,
+}
+
+impl WasmModule {
+    fun has_custom_section(&self, name: &str) -> bool {
+        panic!("WASM module query not implemented");
+    }
+
+    fun get_custom_section(&self, name: &str) -> Option<&Vec<u8>> {
+        panic!("WASM module query not implemented");
+    }
+}
+
+// ============================================================================
+// Helper Functions (will fail in RED - not implemented)
+// ============================================================================
+
+fun compile_with_debug_info(path: &str, source: &str) -> CompileResult {
+    panic!("Debug info generation not implemented");
+}
+
+fun compile_with_debug_info_optimized(path: &str, source: &str) -> CompileResult {
+    panic!("Optimized debug info generation not implemented");
+}
+
+fun parse_wasm(binary: &[u8]) -> Result<WasmModule, String> {
+    panic!("WASM parsing not implemented");
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("=== WASM-007: Debug Symbol Tests (RED Phase) ===");
+    println("All tests should FAIL - implementation not yet done");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    let tests = vec![
+        ("Function Debug Info", test_debug_info_functions),
+        ("Variable Debug Info", test_debug_info_variables),
+        ("Type Debug Info", test_debug_info_types),
+        ("Line Number Debug Info", test_debug_info_line_numbers),
+        ("Scope Debug Info", test_debug_info_scopes),
+        ("Inlining Debug Info", test_debug_info_inlining),
+        ("Compilation Unit Debug Info", test_debug_info_compilation_unit),
+        ("String Table Debug Info", test_debug_info_string_table),
+        ("Abbreviation Table Debug Info", test_debug_info_abbreviation_table),
+        ("Custom Section Embedding", test_debug_info_custom_section),
+    ];
+
+    for (name, test_fn) in tests {
+        println("\\nRunning: {}", name);
+        match std::panic::catch_unwind(test_fn) {
+            Ok(_) => {
+                println("❌ UNEXPECTED PASS: {}", name);
+                passed += 1;
+            },
+            Err(e) => {
+                println("✅ EXPECTED FAIL: {}", name);
+                println("   Reason: {:?}", e);
+                failed += 1;
+            }
+        }
+    }
+
+    println("\\n=== Test Summary ===");
+    println("Expected Failures: {}", failed);
+    println("Unexpected Passes: {}", passed);
+    println("\\n✅ RED Phase: All tests failing as expected!");
+}

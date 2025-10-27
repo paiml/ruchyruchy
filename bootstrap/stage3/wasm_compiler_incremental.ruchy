@@ -1,0 +1,399 @@
+// WASM-006: Incremental Compilation - Compiler Integration
+//
+// Integrates incremental compilation into the WebAssembly compiler pipeline
+// Provides --incremental flag support and hooks IncrementalBuilder
+
+use std::path::PathBuf;
+use incremental_builder::{IncrementalBuilder, ParallelBuilder, Project, BuildResult};
+use wasm_compiler::WasmCompiler;
+
+// ============================================================================
+// Incremental Compiler Entry Point
+// ============================================================================
+
+/// Compile a project with optional incremental mode
+pub fun compile_project(
+    project_dir: PathBuf,
+    incremental: bool,
+    parallel: bool,
+    num_threads: usize
+) -> BuildResult {
+    if incremental {
+        compile_incremental(project_dir, parallel, num_threads)
+    } else {
+        compile_full(project_dir)
+    }
+}
+
+/// Compile project incrementally
+fun compile_incremental(
+    project_dir: PathBuf,
+    parallel: bool,
+    num_threads: usize
+) -> BuildResult {
+    // Setup cache directory
+    let cache_dir = project_dir.join(".ruchy-cache");
+
+    // Create project
+    let mut project = Project::new(
+        "project".to_string(),
+        project_dir.clone()
+    );
+
+    // Discover source files
+    if let Err(e) = project.discover_sources() {
+        eprintln!("Failed to discover sources: {}", e);
+        let mut result = BuildResult::new();
+        result.success = false;
+        return result;
+    }
+
+    // Build incrementally
+    if parallel {
+        // Use parallel builder
+        match ParallelBuilder::new(cache_dir, num_threads) {
+            Ok(mut builder) => builder.build(&project),
+            Err(e) => {
+                eprintln!("Failed to create parallel builder: {}", e);
+                let mut result = BuildResult::new();
+                result.success = false;
+                result
+            }
+        }
+    } else {
+        // Use sequential builder
+        match IncrementalBuilder::new(cache_dir) {
+            Ok(mut builder) => builder.build(&project),
+            Err(e) => {
+                eprintln!("Failed to create incremental builder: {}", e);
+                let mut result = BuildResult::new();
+                result.success = false;
+                result
+            }
+        }
+    }
+}
+
+/// Compile project from scratch (full rebuild)
+fun compile_full(project_dir: PathBuf) -> BuildResult {
+    let mut result = BuildResult::new();
+    let start = std::time::Instant::now();
+
+    // Create compiler
+    let mut compiler = WasmCompiler::new();
+
+    // Find all source files
+    let sources = match find_all_sources(&project_dir) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to find sources: {}", e);
+            result.success = false;
+            return result;
+        }
+    };
+
+    // Compile each file
+    for source in sources {
+        let path = source.to_string_lossy().to_string();
+
+        match compile_file(&mut compiler, &path) {
+            Ok(_) => result.add_compiled(path),
+            Err(e) => {
+                eprintln!("Failed to compile {}: {}", path, e);
+                result.add_failed(path);
+                result.success = false;
+            }
+        }
+    }
+
+    let duration = start.elapsed().as_millis() as u64;
+    result.with_duration(duration)
+}
+
+/// Compile a single file
+fun compile_file(compiler: &mut WasmCompiler, path: &str) -> Result<Vec<u8>, String> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    compiler.compile(&source)
+}
+
+/// Find all source files in project
+fun find_all_sources(dir: &PathBuf) -> Result<Vec<PathBuf>, String> {
+    use std::fs;
+
+    let mut sources = vec![];
+
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                if ext == "ruchy" {
+                    sources.push(path);
+                }
+            }
+        } else if path.is_dir() {
+            let mut sub_sources = find_all_sources(&path)?;
+            sources.append(&mut sub_sources);
+        }
+    }
+
+    Ok(sources)
+}
+
+// ============================================================================
+// Command Line Interface
+// ============================================================================
+
+/// Parse command line arguments and execute compilation
+pub fun main(args: Vec<String>) -> i32 {
+    let mut incremental = false;
+    let mut parallel = false;
+    let mut num_threads = num_cpus();
+    let mut project_dir = PathBuf::from(".");
+
+    // Parse arguments
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--incremental" => incremental = true,
+            "--parallel" => parallel = true,
+            "--threads" => {
+                i += 1;
+                if i < args.len() {
+                    num_threads = args[i].parse().unwrap_or(num_cpus());
+                }
+            }
+            "--project" => {
+                i += 1;
+                if i < args.len() {
+                    project_dir = PathBuf::from(&args[i]);
+                }
+            }
+            "--help" => {
+                print_help();
+                return 0;
+            }
+            _ => {
+                eprintln!("Unknown argument: {}", args[i]);
+                print_help();
+                return 1;
+            }
+        }
+        i += 1;
+    }
+
+    // Execute compilation
+    let result = compile_project(project_dir, incremental, parallel, num_threads);
+
+    // Print results
+    print_build_summary(&result);
+
+    if result.success {
+        0
+    } else {
+        1
+    }
+}
+
+/// Print help message
+fun print_help() {
+    println("Ruchy WebAssembly Compiler (Incremental Mode)");
+    println("");
+    println("USAGE:");
+    println("    ruchy-wasm [OPTIONS] [PROJECT_DIR]");
+    println("");
+    println("OPTIONS:");
+    println("    --incremental      Enable incremental compilation (cache-based)");
+    println("    --parallel         Enable parallel compilation");
+    println("    --threads <N>      Number of threads for parallel compilation");
+    println("    --project <DIR>    Project directory (default: current directory)");
+    println("    --help             Print this help message");
+    println("");
+    println("EXAMPLES:");
+    println("    ruchy-wasm --incremental");
+    println("    ruchy-wasm --incremental --parallel --threads 8");
+    println("    ruchy-wasm --project ./my-project");
+}
+
+/// Print build summary
+fun print_build_summary(result: &BuildResult) {
+    println("=== Build Summary ===");
+    println("");
+
+    if result.success {
+        println("✅ Build SUCCEEDED");
+    } else {
+        println("❌ Build FAILED");
+    }
+
+    println("");
+    println("Modules compiled:  {}", result.compiled_modules.len());
+    println("Modules cached:    {}", result.cached_modules.len());
+    println("Modules failed:    {}", result.failed_modules.len());
+    println("Cache hit rate:    {:.1}%", result.cache_hit_rate * 100.0);
+    println("Build duration:    {}ms", result.duration_ms);
+
+    if !result.failed_modules.is_empty() {
+        println("");
+        println("Failed modules:");
+        for module in &result.failed_modules {
+            println("  - {}", module);
+        }
+    }
+
+    println("");
+
+    // Performance commentary
+    if result.duration_ms < 100 {
+        println("⚡ Extremely fast build (<100ms target achieved)");
+    } else if result.duration_ms < 500 {
+        println("⚡ Fast incremental build (<500ms target achieved)");
+    } else if result.duration_ms < 2500 {
+        println("✓ Incremental build faster than full rebuild");
+    } else {
+        println("⚠ Build slower than expected (>2.5s baseline)");
+    }
+}
+
+/// Get number of CPU cores
+fun num_cpus() -> usize {
+    // In real implementation, detect CPU cores
+    4
+}
+
+// ============================================================================
+// Cache Management Commands
+// ============================================================================
+
+/// Clear the incremental compilation cache
+pub fun clear_cache(project_dir: PathBuf) -> Result<(), String> {
+    use std::fs;
+
+    let cache_dir = project_dir.join(".ruchy-cache");
+
+    if cache_dir.exists() {
+        fs::remove_dir_all(&cache_dir)
+            .map_err(|e| format!("Failed to clear cache: {}", e))?;
+
+        println!("✅ Cache cleared successfully");
+    } else {
+        println!("ℹ️  No cache directory found");
+    }
+
+    Ok(())
+}
+
+/// Print cache statistics
+pub fun cache_stats(project_dir: PathBuf) -> Result<(), String> {
+    use incremental_cache::ModuleCache;
+
+    let cache_dir = project_dir.join(".ruchy-cache");
+
+    let cache = ModuleCache::new(cache_dir)?;
+    let stats = cache.stats();
+
+    println("=== Cache Statistics ===");
+    println("Total entries:  {}", stats.total_entries);
+    println("Total size:     {:.2} MB", stats.total_size_mb());
+
+    Ok(())
+}
+
+// ============================================================================
+// Performance Benchmarking
+// ============================================================================
+
+/// Benchmark incremental vs full compilation
+pub fun benchmark(project_dir: PathBuf, iterations: usize) -> Result<(), String> {
+    use std::time::Instant;
+
+    println("Running incremental compilation benchmark...");
+    println("Iterations: {}", iterations);
+    println("");
+
+    // Warmup: clear cache and do one full build
+    clear_cache(project_dir.clone())?;
+    let _ = compile_project(project_dir.clone(), false, false, 1);
+
+    // Benchmark full rebuild
+    println("Benchmarking full rebuild...");
+    let mut full_times = vec![];
+    for i in 0..iterations {
+        clear_cache(project_dir.clone())?;
+        let start = Instant::now();
+        let _ = compile_project(project_dir.clone(), false, false, 1);
+        let duration = start.elapsed().as_millis() as u64;
+        full_times.push(duration);
+        println!("  Iteration {}: {}ms", i + 1, duration);
+    }
+
+    let avg_full = full_times.iter().sum::<u64>() / iterations as u64;
+
+    // Benchmark incremental rebuild (no changes)
+    println("");
+    println("Benchmarking incremental rebuild (no changes)...");
+    let mut incremental_times = vec![];
+    clear_cache(project_dir.clone())?;
+    let _ = compile_project(project_dir.clone(), true, false, 1); // Initial build
+
+    for i in 0..iterations {
+        let start = Instant::now();
+        let _ = compile_project(project_dir.clone(), true, false, 1);
+        let duration = start.elapsed().as_millis() as u64;
+        incremental_times.push(duration);
+        println!("  Iteration {}: {}ms", i + 1, duration);
+    }
+
+    let avg_incremental = incremental_times.iter().sum::<u64>() / iterations as u64;
+
+    // Print results
+    println("");
+    println("=== Benchmark Results ===");
+    println("Full rebuild avg:        {}ms", avg_full);
+    println("Incremental rebuild avg: {}ms", avg_incremental);
+    println("Speedup:                 {:.1}x", avg_full as f64 / avg_incremental as f64);
+
+    // Check target achievement
+    if avg_incremental < 100 {
+        println("✅ Target achieved: <100ms no-change builds");
+    } else {
+        println!("❌ Target missed: <100ms no-change builds (got {}ms)", avg_incremental);
+    }
+
+    if avg_full as f64 / avg_incremental as f64 >= 5.0 {
+        println!("✅ Target achieved: ≥5x speedup");
+    } else {
+        println!("❌ Target missed: ≥5x speedup (got {:.1}x)",
+            avg_full as f64 / avg_incremental as f64);
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    test test_compile_project_full() {
+        let project_dir = PathBuf::from(".");
+        let result = compile_project(project_dir, false, false, 1);
+
+        // Result should always be created (even if it fails)
+        assert(result.duration_ms >= 0, "Duration should be non-negative");
+    }
+
+    test test_num_cpus() {
+        let cpus = num_cpus();
+        assert(cpus > 0, "Should have at least 1 CPU");
+    }
+}

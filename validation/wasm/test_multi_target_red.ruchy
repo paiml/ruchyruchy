@@ -1,0 +1,309 @@
+// test_multi_target_red.ruchy
+// RED phase tests for WASM-003: Multi-Target Integration
+// These tests validate the multi-target compilation interface for Ruchy
+
+// Import the multi-target compiler implementation
+import bootstrap::stage3::multi_target_compiler::MultiTargetCompiler;
+import bootstrap::stage3::multi_target_compiler::CompilationTarget;
+import bootstrap::stage3::multi_target_compiler::CompilationOptions;
+import bootstrap::stage3::multi_target_compiler::CompilationError;
+
+// Test basic multi-target compilation
+fn test_basic_compilation() {
+    // Create compiler
+    let mut compiler = MultiTargetCompiler::new();
+    
+    // Simple Ruchy program
+    let source = "fun main() { println(\"Hello, World!\"); }";
+    
+    // Parse source - this should fail in RED phase
+    let ast_result = compiler.parse(source.to_string());
+    assert(ast_result.is_err(), "Parsing should fail in RED phase");
+    
+    // Try type checking - this should fail in RED phase
+    let type_check_result = compiler.type_check();
+    assert(type_check_result.is_err(), "Type checking should fail in RED phase");
+    
+    // Try setting a target
+    let set_target_result = compiler.set_target(CompilationTarget::WebAssembly);
+    assert(set_target_result.is_err(), "Set target should fail in RED phase because no emitters are registered");
+    
+    // Try compiling to the active target - this should fail in RED phase
+    let compile_result = compiler.compile();
+    assert(compile_result.is_err(), "Compilation should fail in RED phase");
+    
+    // Try compiling to all targets - this should return errors for all targets
+    let all_results = compiler.compile_all();
+    
+    // There should be exactly 3 results (one for each target)
+    assert_eq(all_results.len(), 3, "There should be exactly 3 compilation results");
+    
+    // All results should be errors
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target);
+        assert(result.is_some(), format!("Should have a result for {}", target.to_string()));
+        assert(result.unwrap().is_err(), format!("Result for {} should be an error", target.to_string()));
+    }
+    
+    println("✅ test_basic_compilation passed (all operations fail as expected in RED phase)");
+}
+
+// Test target-specific compilation options
+fn test_target_options() {
+    // Create compiler
+    let mut compiler = MultiTargetCompiler::new();
+    
+    // Create compilation options
+    let mut options = CompilationOptions::new();
+    
+    // Set general options
+    options.optimization_level = 2;
+    options.debug_info = true;
+    options.source_maps = true;
+    
+    // Set target-specific options
+    let mut wasm_options = TargetOptions::new();
+    wasm_options.set("memory-size".to_string(), "1024".to_string());
+    wasm_options.set("enable-threads".to_string(), "true".to_string());
+    options.set_target_options(CompilationTarget::WebAssembly, wasm_options);
+    
+    let mut ts_options = TargetOptions::new();
+    ts_options.set("module".to_string(), "commonjs".to_string());
+    ts_options.set("target".to_string(), "es2020".to_string());
+    options.set_target_options(CompilationTarget::TypeScript, ts_options);
+    
+    let mut rust_options = TargetOptions::new();
+    rust_options.set("edition".to_string(), "2021".to_string());
+    rust_options.set("crate-type".to_string(), "lib".to_string());
+    options.set_target_options(CompilationTarget::Rust, rust_options);
+    
+    // Set options in compiler
+    let result = compiler.set_options(options);
+    assert(result.is_ok(), "Setting options should succeed");
+    
+    // Try to use the options in compilation (should fail as we're in RED phase)
+    let compile_result = compiler.compile();
+    assert(compile_result.is_err(), "Compilation should fail in RED phase");
+    
+    println("✅ test_target_options passed (options can be set but compilation still fails in RED phase)");
+}
+
+// Test closure compilation across targets
+fn test_closure_compilation() {
+    // Create compiler
+    let mut compiler = MultiTargetCompiler::new();
+    
+    // Ruchy program with closures
+    let source = "
+    fun make_counter() {
+        let mut count = 0;
+        return () => {
+            count = count + 1;
+            count
+        };
+    }
+    
+    fun make_adder(x: i32) {
+        return (y: i32) => x + y;
+    }
+    
+    fun main() {
+        let counter = make_counter();
+        let add5 = make_adder(5);
+        
+        println(counter()); // 1
+        println(counter()); // 2
+        println(add5(10));  // 15
+    }
+    ";
+    
+    // Parse source - this should fail in RED phase
+    let ast_result = compiler.parse(source.to_string());
+    assert(ast_result.is_err(), "Parsing should fail in RED phase");
+    
+    // Try compiling to all targets - this should return errors for all targets
+    let all_results = compiler.compile_all();
+    
+    // All results should be errors
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target);
+        assert(result.unwrap().is_err(), format!("Result for {} should be an error", target.to_string()));
+    }
+    
+    println("✅ test_closure_compilation passed (compilation fails as expected in RED phase)");
+}
+
+// Test type system across targets
+fn test_type_system() {
+    // Create compiler
+    let mut compiler = MultiTargetCompiler::new();
+    
+    // Ruchy program with various type features
+    let source = "
+    struct Point {
+        x: f64,
+        y: f64,
+    }
+    
+    enum Shape {
+        Circle { center: Point, radius: f64 },
+        Rectangle { top_left: Point, bottom_right: Point },
+        Triangle { a: Point, b: Point, c: Point },
+    }
+    
+    fun calculate_area(shape: Shape) -> f64 {
+        match shape {
+            Shape::Circle { center, radius } => 3.14159 * radius * radius,
+            Shape::Rectangle { top_left, bottom_right } => {
+                let width = bottom_right.x - top_left.x;
+                let height = bottom_right.y - top_left.y;
+                width * height
+            },
+            Shape::Triangle { a, b, c } => {
+                // Heron's formula
+                let ab = ((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)).sqrt();
+                let bc = ((c.x - b.x) * (c.x - b.x) + (c.y - b.y) * (c.y - b.y)).sqrt();
+                let ca = ((a.x - c.x) * (a.x - c.x) + (a.y - c.y) * (a.y - c.y)).sqrt();
+                
+                let s = (ab + bc + ca) / 2.0;
+                (s * (s - ab) * (s - bc) * (s - ca)).sqrt()
+            },
+        }
+    }
+    ";
+    
+    // Parse source - this should fail in RED phase
+    let ast_result = compiler.parse(source.to_string());
+    assert(ast_result.is_err(), "Parsing should fail in RED phase");
+    
+    // Try compiling to all targets - this should return errors for all targets
+    let all_results = compiler.compile_all();
+    
+    // All results should be errors
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target);
+        assert(result.unwrap().is_err(), format!("Result for {} should be an error", target.to_string()));
+    }
+    
+    println("✅ test_type_system passed (compilation fails as expected in RED phase)");
+}
+
+// Test target-specific features
+fn test_target_specific_features() {
+    // Create compiler
+    let mut compiler = MultiTargetCompiler::new();
+    
+    // Ruchy program with target-specific annotations
+    let source = "
+    #[target(wasm)]
+    import wasm_bindgen::prelude::*;
+    
+    #[target(typescript)]
+    import { useState } from 'react';
+    
+    #[target(rust)]
+    use std::collections::HashMap;
+    
+    #[target(wasm)]
+    #[wasm_bindgen]
+    pub fun greet(name: String) -> String {
+        format(\"Hello, {}!\", name)
+    }
+    
+    #[target(typescript)]
+    export fun createCounter() {
+        const [count, setCount] = useState(0);
+        return () => {
+            setCount(count + 1);
+            return count;
+        };
+    }
+    
+    #[target(rust)]
+    pub fun create_map() -> HashMap<String, i32> {
+        let mut map = HashMap::new();
+        map.insert(\"one\".to_string(), 1);
+        map.insert(\"two\".to_string(), 2);
+        map
+    }
+    ";
+    
+    // Parse source - this should fail in RED phase
+    let ast_result = compiler.parse(source.to_string());
+    assert(ast_result.is_err(), "Parsing should fail in RED phase");
+    
+    // Try compiling to all targets - this should return errors for all targets
+    let all_results = compiler.compile_all();
+    
+    // All results should be errors
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target);
+        assert(result.unwrap().is_err(), format!("Result for {} should be an error", target.to_string()));
+    }
+    
+    println("✅ test_target_specific_features passed (compilation fails as expected in RED phase)");
+}
+
+// Test error handling across targets
+fn test_error_handling() {
+    // Create compiler
+    let mut compiler = MultiTargetCompiler::new();
+    
+    // Ruchy program with error handling
+    let source = "
+    enum Result<T, E> {
+        Ok(T),
+        Err(E),
+    }
+    
+    fun divide(a: f64, b: f64) -> Result<f64, String> {
+        if b == 0.0 {
+            return Result::Err(\"Division by zero\".to_string());
+        }
+        return Result::Ok(a / b);
+    }
+    
+    fun main() {
+        match divide(10.0, 2.0) {
+            Result::Ok(result) => println(\"Result: {}\", result),
+            Result::Err(error) => println(\"Error: {}\", error),
+        }
+        
+        match divide(10.0, 0.0) {
+            Result::Ok(result) => println(\"Result: {}\", result),
+            Result::Err(error) => println(\"Error: {}\", error),
+        }
+    }
+    ";
+    
+    // Parse source - this should fail in RED phase
+    let ast_result = compiler.parse(source.to_string());
+    assert(ast_result.is_err(), "Parsing should fail in RED phase");
+    
+    // Try compiling to all targets - this should return errors for all targets
+    let all_results = compiler.compile_all();
+    
+    // All results should be errors
+    for target in CompilationTarget::all_targets() {
+        let result = all_results.get(&target);
+        assert(result.unwrap().is_err(), format!("Result for {} should be an error", target.to_string()));
+    }
+    
+    println("✅ test_error_handling passed (compilation fails as expected in RED phase)");
+}
+
+// Main function to run all tests
+fn main() {
+    println("Running WASM-003: Multi-Target Integration RED phase tests");
+    println("These tests are expected to fail until the implementation is created");
+    
+    // Run all tests
+    test_basic_compilation();
+    test_target_options();
+    test_closure_compilation();
+    test_type_system();
+    test_target_specific_features();
+    test_error_handling();
+    
+    println("✅ All RED phase tests passed (failures occurred as expected)");
+}

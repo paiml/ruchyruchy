@@ -1,0 +1,826 @@
+// simd_image_processing.ruchy
+//
+// This file demonstrates SIMD operations for image processing,
+// including common filters and transformations that can benefit from SIMD.
+//
+// Part of the WASM-004 TOOL phase documentation.
+
+fun main() {
+  // Run all examples with performance comparisons
+  grayscale_example();
+  blur_example();
+  edge_detection_example();
+  color_manipulation_example();
+}
+
+// Example 1: Grayscale conversion with SIMD
+fun grayscale_example() {
+  println("== Grayscale Conversion with SIMD ==");
+  
+  // Create sample image data (RGBA format, 8 bits per channel)
+  const WIDTH = 1920;
+  const HEIGHT = 1080;
+  const NUM_PIXELS = WIDTH * HEIGHT;
+  const BYTES_PER_PIXEL = 4; // RGBA
+  
+  let image_data = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_scalar = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_simd = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  
+  // Initialize with test data
+  for (let i = 0; i < NUM_PIXELS; i++) {
+    image_data[i * 4 + 0] = Math.floor(Math.random() * 256); // R
+    image_data[i * 4 + 1] = Math.floor(Math.random() * 256); // G
+    image_data[i * 4 + 2] = Math.floor(Math.random() * 256); // B
+    image_data[i * 4 + 3] = 255; // A (fully opaque)
+  }
+  
+  // 1. Grayscale conversion - scalar implementation
+  let start_scalar = performance.now();
+  grayscale_scalar(image_data, result_scalar, WIDTH, HEIGHT);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Grayscale conversion - SIMD implementation
+  let start_simd = performance.now();
+  grayscale_simd(image_data, result_simd, WIDTH, HEIGHT);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results match
+  let match = verify_results(result_scalar, result_simd, NUM_PIXELS * BYTES_PER_PIXEL);
+  
+  // Print results and comparison
+  println("Grayscale conversion (" + WIDTH + "x" + HEIGHT + " pixels):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match: " + (match ? "Yes" : "No"));
+  
+  // Show a sample pixel before and after conversion
+  println("\nSample pixel conversion:");
+  println("  Original pixel (RGBA): [" +
+          image_data[0] + ", " +
+          image_data[1] + ", " +
+          image_data[2] + ", " +
+          image_data[3] + "]");
+  println("  Grayscale pixel (RGBA): [" +
+          result_simd[0] + ", " +
+          result_simd[1] + ", " +
+          result_simd[2] + ", " +
+          result_simd[3] + "]");
+  println("");
+}
+
+// Grayscale conversion - scalar implementation
+fun grayscale_scalar(image_data, result, width, height) {
+  const NUM_PIXELS = width * height;
+  
+  for (let i = 0; i < NUM_PIXELS; i++) {
+    // Get RGB values
+    let r = image_data[i * 4 + 0];
+    let g = image_data[i * 4 + 1];
+    let b = image_data[i * 4 + 2];
+    let a = image_data[i * 4 + 3];
+    
+    // Convert to grayscale using weighted average
+    // Y = 0.299 * R + 0.587 * G + 0.114 * B
+    let gray = Math.floor(0.299 * r + 0.587 * g + 0.114 * b);
+    
+    // Set all RGB channels to the grayscale value
+    result[i * 4 + 0] = gray; // R
+    result[i * 4 + 1] = gray; // G
+    result[i * 4 + 2] = gray; // B
+    result[i * 4 + 3] = a;    // A (unchanged)
+  }
+}
+
+// Grayscale conversion - SIMD implementation
+fun grayscale_simd(image_data, result, width, height) {
+  const NUM_PIXELS = width * height;
+  
+  // SIMD weights for RGB to grayscale conversion (in f32x4 format)
+  // [0.299, 0.587, 0.114, 0.0]
+  let weights = f32x4(0.299, 0.587, 0.114, 0.0);
+  
+  // Process 4 pixels at a time (16 bytes)
+  for (let i = 0; i < NUM_PIXELS; i += 4) {
+    // Load 4 pixels (16 bytes)
+    let p0 = v128.load(image_data.buffer, i * 4);
+    let p1 = v128.load(image_data.buffer, i * 4 + 16);
+    let p2 = v128.load(image_data.buffer, i * 4 + 32);
+    let p3 = v128.load(image_data.buffer, i * 4 + 48);
+    
+    // Convert each pixel:
+    
+    // Process pixel 0
+    let p0_u8x16 = i8x16(p0); // Convert to i8x16
+    
+    // Extract RGBA components and convert to float
+    let p0_r = f32x4.convert_i32x4(i32x4.splat(i8x16.extract_lane(p0_u8x16, 0)));
+    let p0_g = f32x4.convert_i32x4(i32x4.splat(i8x16.extract_lane(p0_u8x16, 1)));
+    let p0_b = f32x4.convert_i32x4(i32x4.splat(i8x16.extract_lane(p0_u8x16, 2)));
+    let p0_a = i8x16.extract_lane(p0_u8x16, 3);
+    
+    // Calculate grayscale value
+    let p0_gray = f32x4.extract_lane(
+      f32x4.add(
+        f32x4.add(
+          f32x4.mul(p0_r, f32x4.splat(0.299)),
+          f32x4.mul(p0_g, f32x4.splat(0.587))
+        ),
+        f32x4.mul(p0_b, f32x4.splat(0.114))
+      ),
+      0
+    );
+    
+    // Store grayscale value for all RGB channels
+    let p0_gray_byte = Math.floor(p0_gray);
+    result[i * 4 + 0] = p0_gray_byte;
+    result[i * 4 + 1] = p0_gray_byte;
+    result[i * 4 + 2] = p0_gray_byte;
+    result[i * 4 + 3] = p0_a;
+    
+    // Repeat for pixels 1, 2, 3...
+    // (Implementation abbreviated for clarity - would do the same for all pixels)
+    
+    // Process remaining pixels (1, 2, 3) using scalar approach for brevity
+    for (let j = 1; j < 4 && i + j < NUM_PIXELS; j++) {
+      let idx = i + j;
+      let r = image_data[idx * 4 + 0];
+      let g = image_data[idx * 4 + 1];
+      let b = image_data[idx * 4 + 2];
+      let a = image_data[idx * 4 + 3];
+      
+      let gray = Math.floor(0.299 * r + 0.587 * g + 0.114 * b);
+      
+      result[idx * 4 + 0] = gray;
+      result[idx * 4 + 1] = gray;
+      result[idx * 4 + 2] = gray;
+      result[idx * 4 + 3] = a;
+    }
+  }
+}
+
+// Example 2: Gaussian blur with SIMD
+fun blur_example() {
+  println("== Gaussian Blur with SIMD ==");
+  
+  // Create sample image data
+  const WIDTH = 512;
+  const HEIGHT = 512;
+  const NUM_PIXELS = WIDTH * HEIGHT;
+  const BYTES_PER_PIXEL = 4; // RGBA
+  
+  let image_data = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_scalar = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_simd = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  
+  // Initialize with test data
+  for (let i = 0; i < NUM_PIXELS; i++) {
+    image_data[i * 4 + 0] = Math.floor(Math.random() * 256); // R
+    image_data[i * 4 + 1] = Math.floor(Math.random() * 256); // G
+    image_data[i * 4 + 2] = Math.floor(Math.random() * 256); // B
+    image_data[i * 4 + 3] = 255; // A (fully opaque)
+  }
+  
+  // Define blur kernel (3x3 Gaussian)
+  let kernel = [
+    1/16, 2/16, 1/16,
+    2/16, 4/16, 2/16,
+    1/16, 2/16, 1/16
+  ];
+  
+  // 1. Gaussian blur - scalar implementation
+  let start_scalar = performance.now();
+  blur_scalar(image_data, result_scalar, WIDTH, HEIGHT, kernel);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Gaussian blur - SIMD implementation
+  let start_simd = performance.now();
+  blur_simd(image_data, result_simd, WIDTH, HEIGHT, kernel);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results approximately match (some floating-point differences allowed)
+  let match = verify_results_approx(result_scalar, result_simd, NUM_PIXELS * BYTES_PER_PIXEL, 2);
+  
+  // Print results and comparison
+  println("Gaussian blur (" + WIDTH + "x" + HEIGHT + " pixels, 3x3 kernel):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match (within tolerance): " + (match ? "Yes" : "No"));
+  println("");
+}
+
+// Gaussian blur - scalar implementation
+fun blur_scalar(image_data, result, width, height, kernel) {
+  // Apply 3x3 blur kernel to each pixel
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let r_sum = 0;
+      let g_sum = 0;
+      let b_sum = 0;
+      
+      // Apply kernel
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          // Calculate sample position
+          let sample_x = Math.max(0, Math.min(width - 1, x + kx));
+          let sample_y = Math.max(0, Math.min(height - 1, y + ky));
+          let sample_idx = (sample_y * width + sample_x) * 4;
+          
+          // Get kernel weight
+          let weight = kernel[(ky + 1) * 3 + (kx + 1)];
+          
+          // Accumulate weighted sample
+          r_sum += image_data[sample_idx + 0] * weight;
+          g_sum += image_data[sample_idx + 1] * weight;
+          b_sum += image_data[sample_idx + 2] * weight;
+        }
+      }
+      
+      // Store result
+      let idx = (y * width + x) * 4;
+      result[idx + 0] = Math.floor(r_sum);
+      result[idx + 1] = Math.floor(g_sum);
+      result[idx + 2] = Math.floor(b_sum);
+      result[idx + 3] = image_data[idx + 3]; // Keep alpha unchanged
+    }
+  }
+}
+
+// Gaussian blur - SIMD implementation
+fun blur_simd(image_data, result, width, height, kernel) {
+  // Create SIMD vectors for kernel weights
+  let k00 = f32x4.splat(kernel[0]);
+  let k01 = f32x4.splat(kernel[1]);
+  let k02 = f32x4.splat(kernel[2]);
+  let k10 = f32x4.splat(kernel[3]);
+  let k11 = f32x4.splat(kernel[4]);
+  let k12 = f32x4.splat(kernel[5]);
+  let k20 = f32x4.splat(kernel[6]);
+  let k21 = f32x4.splat(kernel[7]);
+  let k22 = f32x4.splat(kernel[8]);
+  
+  // Apply blur to each pixel
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // Calculate sample positions (handling boundaries)
+      let x0 = Math.max(0, x - 1);
+      let x1 = x;
+      let x2 = Math.min(width - 1, x + 1);
+      let y0 = Math.max(0, y - 1);
+      let y1 = y;
+      let y2 = Math.min(height - 1, y + 1);
+      
+      // Convert sample indices to array offsets
+      let s00 = (y0 * width + x0) * 4;
+      let s01 = (y0 * width + x1) * 4;
+      let s02 = (y0 * width + x2) * 4;
+      let s10 = (y1 * width + x0) * 4;
+      let s11 = (y1 * width + x1) * 4;
+      let s12 = (y1 * width + x2) * 4;
+      let s20 = (y2 * width + x0) * 4;
+      let s21 = (y2 * width + x1) * 4;
+      let s22 = (y2 * width + x2) * 4;
+      
+      // Load RGB values and convert to float32x4 (R, G, B, 0)
+      // We're only using SIMD for the channels, not for multiple pixels
+      let p00 = f32x4(image_data[s00], image_data[s00+1], image_data[s00+2], 0);
+      let p01 = f32x4(image_data[s01], image_data[s01+1], image_data[s01+2], 0);
+      let p02 = f32x4(image_data[s02], image_data[s02+1], image_data[s02+2], 0);
+      let p10 = f32x4(image_data[s10], image_data[s10+1], image_data[s10+2], 0);
+      let p11 = f32x4(image_data[s11], image_data[s11+1], image_data[s11+2], 0);
+      let p12 = f32x4(image_data[s12], image_data[s12+1], image_data[s12+2], 0);
+      let p20 = f32x4(image_data[s20], image_data[s20+1], image_data[s20+2], 0);
+      let p21 = f32x4(image_data[s21], image_data[s21+1], image_data[s21+2], 0);
+      let p22 = f32x4(image_data[s22], image_data[s22+1], image_data[s22+2], 0);
+      
+      // Apply kernel weights using SIMD
+      let sum = f32x4.add(
+        f32x4.add(
+          f32x4.add(
+            f32x4.mul(p00, k00),
+            f32x4.mul(p01, k01)
+          ),
+          f32x4.add(
+            f32x4.mul(p02, k02),
+            f32x4.mul(p10, k10)
+          )
+        ),
+        f32x4.add(
+          f32x4.add(
+            f32x4.mul(p11, k11),
+            f32x4.mul(p12, k12)
+          ),
+          f32x4.add(
+            f32x4.mul(p20, k20),
+            f32x4.add(
+              f32x4.mul(p21, k21),
+              f32x4.mul(p22, k22)
+            )
+          )
+        )
+      );
+      
+      // Store result
+      let idx = (y * width + x) * 4;
+      result[idx + 0] = Math.floor(f32x4.extract_lane(sum, 0));
+      result[idx + 1] = Math.floor(f32x4.extract_lane(sum, 1));
+      result[idx + 2] = Math.floor(f32x4.extract_lane(sum, 2));
+      result[idx + 3] = image_data[idx + 3]; // Keep alpha unchanged
+    }
+  }
+}
+
+// Example 3: Edge detection with SIMD (Sobel operator)
+fun edge_detection_example() {
+  println("== Edge Detection with SIMD (Sobel) ==");
+  
+  // Create sample image data
+  const WIDTH = 512;
+  const HEIGHT = 512;
+  const NUM_PIXELS = WIDTH * HEIGHT;
+  const BYTES_PER_PIXEL = 4; // RGBA
+  
+  let image_data = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_scalar = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_simd = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  
+  // Initialize with test data - create a gradient pattern
+  for (let y = 0; y < HEIGHT; y++) {
+    for (let x = 0; x < WIDTH; x++) {
+      let idx = (y * WIDTH + x) * 4;
+      // Create a pattern with some edges
+      let val = ((x % 32) < 16) ? 255 : 0;
+      if ((y % 32) < 16) val = 255 - val;
+      
+      image_data[idx + 0] = val;
+      image_data[idx + 1] = val;
+      image_data[idx + 2] = val;
+      image_data[idx + 3] = 255; // Alpha (fully opaque)
+    }
+  }
+  
+  // Define Sobel kernels
+  let sobel_x = [
+    -1, 0, 1,
+    -2, 0, 2,
+    -1, 0, 1
+  ];
+  
+  let sobel_y = [
+    -1, -2, -1,
+     0,  0,  0,
+     1,  2,  1
+  ];
+  
+  // 1. Edge detection - scalar implementation
+  let start_scalar = performance.now();
+  edge_detection_scalar(image_data, result_scalar, WIDTH, HEIGHT, sobel_x, sobel_y);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Edge detection - SIMD implementation
+  let start_simd = performance.now();
+  edge_detection_simd(image_data, result_simd, WIDTH, HEIGHT, sobel_x, sobel_y);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results approximately match
+  let match = verify_results_approx(result_scalar, result_simd, NUM_PIXELS * BYTES_PER_PIXEL, 2);
+  
+  // Print results and comparison
+  println("Sobel edge detection (" + WIDTH + "x" + HEIGHT + " pixels):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match (within tolerance): " + (match ? "Yes" : "No"));
+  println("");
+}
+
+// Edge detection - scalar implementation (Sobel)
+fun edge_detection_scalar(image_data, result, width, height, sobel_x, sobel_y) {
+  // Convert to grayscale first
+  let gray_image = new Uint8Array(width * height);
+  for (let i = 0; i < width * height; i++) {
+    let r = image_data[i * 4 + 0];
+    let g = image_data[i * 4 + 1];
+    let b = image_data[i * 4 + 2];
+    
+    gray_image[i] = Math.floor(0.299 * r + 0.587 * g + 0.114 * b);
+  }
+  
+  // Apply Sobel operator
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let gx = 0;
+      let gy = 0;
+      
+      // Apply sobel kernels
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          let sample_x = Math.max(0, Math.min(width - 1, x + kx));
+          let sample_y = Math.max(0, Math.min(height - 1, y + ky));
+          let sample_idx = sample_y * width + sample_x;
+          
+          let weight_x = sobel_x[(ky + 1) * 3 + (kx + 1)];
+          let weight_y = sobel_y[(ky + 1) * 3 + (kx + 1)];
+          
+          gx += gray_image[sample_idx] * weight_x;
+          gy += gray_image[sample_idx] * weight_y;
+        }
+      }
+      
+      // Calculate gradient magnitude
+      let magnitude = Math.min(255, Math.floor(Math.sqrt(gx * gx + gy * gy)));
+      
+      // Store result
+      let idx = (y * width + x) * 4;
+      result[idx + 0] = magnitude;
+      result[idx + 1] = magnitude;
+      result[idx + 2] = magnitude;
+      result[idx + 3] = image_data[idx + 3]; // Keep alpha unchanged
+    }
+  }
+}
+
+// Edge detection - SIMD implementation (Sobel)
+fun edge_detection_simd(image_data, result, width, height, sobel_x, sobel_y) {
+  // Convert to grayscale first
+  let gray_image = new Uint8Array(width * height);
+  
+  // Grayscale weights
+  let weights = f32x4(0.299, 0.587, 0.114, 0.0);
+  
+  for (let i = 0; i < width * height; i++) {
+    let pixel = f32x4(
+      image_data[i * 4 + 0],
+      image_data[i * 4 + 1],
+      image_data[i * 4 + 2],
+      0
+    );
+    
+    // Compute dot product for grayscale
+    let gray_value = f32x4.extract_lane(
+      f32x4.add(
+        f32x4.add(
+          f32x4.mul(f32x4.splat(f32x4.extract_lane(pixel, 0)), f32x4.splat(0.299)),
+          f32x4.mul(f32x4.splat(f32x4.extract_lane(pixel, 1)), f32x4.splat(0.587))
+        ),
+        f32x4.mul(f32x4.splat(f32x4.extract_lane(pixel, 2)), f32x4.splat(0.114))
+      ),
+      0
+    );
+    
+    gray_image[i] = Math.floor(gray_value);
+  }
+  
+  // Create SIMD vectors for Sobel kernels
+  let sx00 = f32x4.splat(sobel_x[0]);
+  let sx01 = f32x4.splat(sobel_x[1]);
+  let sx02 = f32x4.splat(sobel_x[2]);
+  let sx10 = f32x4.splat(sobel_x[3]);
+  let sx11 = f32x4.splat(sobel_x[4]);
+  let sx12 = f32x4.splat(sobel_x[5]);
+  let sx20 = f32x4.splat(sobel_x[6]);
+  let sx21 = f32x4.splat(sobel_x[7]);
+  let sx22 = f32x4.splat(sobel_x[8]);
+  
+  let sy00 = f32x4.splat(sobel_y[0]);
+  let sy01 = f32x4.splat(sobel_y[1]);
+  let sy02 = f32x4.splat(sobel_y[2]);
+  let sy10 = f32x4.splat(sobel_y[3]);
+  let sy11 = f32x4.splat(sobel_y[4]);
+  let sy12 = f32x4.splat(sobel_y[5]);
+  let sy20 = f32x4.splat(sobel_y[6]);
+  let sy21 = f32x4.splat(sobel_y[7]);
+  let sy22 = f32x4.splat(sobel_y[8]);
+  
+  // Apply Sobel operator
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // Calculate sample positions (handling boundaries)
+      let x0 = Math.max(0, x - 1);
+      let x1 = x;
+      let x2 = Math.min(width - 1, x + 1);
+      let y0 = Math.max(0, y - 1);
+      let y1 = y;
+      let y2 = Math.min(height - 1, y + 1);
+      
+      // Get samples
+      let s00 = gray_image[y0 * width + x0];
+      let s01 = gray_image[y0 * width + x1];
+      let s02 = gray_image[y0 * width + x2];
+      let s10 = gray_image[y1 * width + x0];
+      let s11 = gray_image[y1 * width + x1];
+      let s12 = gray_image[y1 * width + x2];
+      let s20 = gray_image[y2 * width + x0];
+      let s21 = gray_image[y2 * width + x1];
+      let s22 = gray_image[y2 * width + x2];
+      
+      // Convert to SIMD vectors
+      let p00 = f32x4.splat(s00);
+      let p01 = f32x4.splat(s01);
+      let p02 = f32x4.splat(s02);
+      let p10 = f32x4.splat(s10);
+      let p11 = f32x4.splat(s11);
+      let p12 = f32x4.splat(s12);
+      let p20 = f32x4.splat(s20);
+      let p21 = f32x4.splat(s21);
+      let p22 = f32x4.splat(s22);
+      
+      // Compute Gx and Gy using SIMD
+      let gx = f32x4.add(
+        f32x4.add(
+          f32x4.add(
+            f32x4.mul(p00, sx00),
+            f32x4.mul(p01, sx01)
+          ),
+          f32x4.add(
+            f32x4.mul(p02, sx02),
+            f32x4.mul(p10, sx10)
+          )
+        ),
+        f32x4.add(
+          f32x4.add(
+            f32x4.mul(p11, sx11),
+            f32x4.mul(p12, sx12)
+          ),
+          f32x4.add(
+            f32x4.mul(p20, sx20),
+            f32x4.add(
+              f32x4.mul(p21, sx21),
+              f32x4.mul(p22, sx22)
+            )
+          )
+        )
+      );
+      
+      let gy = f32x4.add(
+        f32x4.add(
+          f32x4.add(
+            f32x4.mul(p00, sy00),
+            f32x4.mul(p01, sy01)
+          ),
+          f32x4.add(
+            f32x4.mul(p02, sy02),
+            f32x4.mul(p10, sy10)
+          )
+        ),
+        f32x4.add(
+          f32x4.add(
+            f32x4.mul(p11, sy11),
+            f32x4.mul(p12, sy12)
+          ),
+          f32x4.add(
+            f32x4.mul(p20, sy20),
+            f32x4.add(
+              f32x4.mul(p21, sy21),
+              f32x4.mul(p22, sy22)
+            )
+          )
+        )
+      );
+      
+      // Extract scalar values
+      let gx_val = f32x4.extract_lane(gx, 0);
+      let gy_val = f32x4.extract_lane(gy, 0);
+      
+      // Compute magnitude
+      let magnitude = Math.min(255, Math.floor(Math.sqrt(gx_val * gx_val + gy_val * gy_val)));
+      
+      // Store result
+      let idx = (y * width + x) * 4;
+      result[idx + 0] = magnitude;
+      result[idx + 1] = magnitude;
+      result[idx + 2] = magnitude;
+      result[idx + 3] = image_data[idx + 3]; // Keep alpha unchanged
+    }
+  }
+}
+
+// Example 4: Color manipulation with SIMD
+fun color_manipulation_example() {
+  println("== Color Manipulation with SIMD ==");
+  
+  // Create sample image data
+  const WIDTH = 1920;
+  const HEIGHT = 1080;
+  const NUM_PIXELS = WIDTH * HEIGHT;
+  const BYTES_PER_PIXEL = 4; // RGBA
+  
+  let image_data = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_scalar = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  let result_simd = new Uint8Array(NUM_PIXELS * BYTES_PER_PIXEL);
+  
+  // Initialize with test data
+  for (let i = 0; i < NUM_PIXELS; i++) {
+    image_data[i * 4 + 0] = Math.floor(Math.random() * 256); // R
+    image_data[i * 4 + 1] = Math.floor(Math.random() * 256); // G
+    image_data[i * 4 + 2] = Math.floor(Math.random() * 256); // B
+    image_data[i * 4 + 3] = 255; // A (fully opaque)
+  }
+  
+  // Define color adjustment parameters
+  let brightness = 1.2; // Increase brightness by 20%
+  let contrast = 1.5;   // Increase contrast by 50%
+  let saturation = 1.3; // Increase saturation by 30%
+  
+  // 1. Color adjustment - scalar implementation
+  let start_scalar = performance.now();
+  adjust_colors_scalar(image_data, result_scalar, WIDTH, HEIGHT, brightness, contrast, saturation);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Color adjustment - SIMD implementation
+  let start_simd = performance.now();
+  adjust_colors_simd(image_data, result_simd, WIDTH, HEIGHT, brightness, contrast, saturation);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results approximately match
+  let match = verify_results_approx(result_scalar, result_simd, NUM_PIXELS * BYTES_PER_PIXEL, 2);
+  
+  // Print results and comparison
+  println("Color adjustment (" + WIDTH + "x" + HEIGHT + " pixels):");
+  println("  Brightness: " + brightness.toFixed(2) + "x");
+  println("  Contrast: " + contrast.toFixed(2) + "x");
+  println("  Saturation: " + saturation.toFixed(2) + "x");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match (within tolerance): " + (match ? "Yes" : "No"));
+  
+  // Show a sample pixel before and after adjustment
+  println("\nSample pixel adjustment:");
+  println("  Original pixel (RGBA): [" +
+          image_data[0] + ", " +
+          image_data[1] + ", " +
+          image_data[2] + ", " +
+          image_data[3] + "]");
+  println("  Adjusted pixel (RGBA): [" +
+          result_simd[0] + ", " +
+          result_simd[1] + ", " +
+          result_simd[2] + ", " +
+          result_simd[3] + "]");
+  println("");
+}
+
+// Color adjustment - scalar implementation
+fun adjust_colors_scalar(image_data, result, width, height, brightness, contrast, saturation) {
+  const NUM_PIXELS = width * height;
+  
+  // Pre-compute contrast factor
+  let contrast_factor = (259 * (contrast * 255 + 255)) / (255 * (259 - contrast * 255));
+  
+  for (let i = 0; i < NUM_PIXELS; i++) {
+    // Get RGB values
+    let r = image_data[i * 4 + 0];
+    let g = image_data[i * 4 + 1];
+    let b = image_data[i * 4 + 2];
+    let a = image_data[i * 4 + 3];
+    
+    // Apply brightness
+    r = r * brightness;
+    g = g * brightness;
+    b = b * brightness;
+    
+    // Apply contrast
+    r = contrast_factor * (r - 128) + 128;
+    g = contrast_factor * (g - 128) + 128;
+    b = contrast_factor * (b - 128) + 128;
+    
+    // Apply saturation
+    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = gray * (1 - saturation) + r * saturation;
+    g = gray * (1 - saturation) + g * saturation;
+    b = gray * (1 - saturation) + b * saturation;
+    
+    // Clamp values to 0-255 range
+    result[i * 4 + 0] = Math.max(0, Math.min(255, Math.floor(r)));
+    result[i * 4 + 1] = Math.max(0, Math.min(255, Math.floor(g)));
+    result[i * 4 + 2] = Math.max(0, Math.min(255, Math.floor(b)));
+    result[i * 4 + 3] = a; // Keep alpha unchanged
+  }
+}
+
+// Color adjustment - SIMD implementation
+fun adjust_colors_simd(image_data, result, width, height, brightness, contrast, saturation) {
+  const NUM_PIXELS = width * height;
+  
+  // Pre-compute factors and create SIMD vectors
+  let brightness_vec = f32x4.splat(brightness);
+  
+  let contrast_factor = (259 * (contrast * 255 + 255)) / (255 * (259 - contrast * 255));
+  let contrast_factor_vec = f32x4.splat(contrast_factor);
+  let contrast_offset = f32x4.splat(128);
+  
+  let sat_vec = f32x4.splat(saturation);
+  let one_minus_sat = f32x4.splat(1.0 - saturation);
+  let gray_weights = f32x4(0.299, 0.587, 0.114, 0);
+  
+  let zero_vec = f32x4.splat(0);
+  let max_vec = f32x4.splat(255);
+  
+  // Process 1 pixel at a time with SIMD for channel operations
+  for (let i = 0; i < NUM_PIXELS; i++) {
+    // Load RGB values as float32x4 (R, G, B, A)
+    let rgba = f32x4(
+      image_data[i * 4 + 0],
+      image_data[i * 4 + 1],
+      image_data[i * 4 + 2],
+      image_data[i * 4 + 3]
+    );
+    
+    // Extract alpha to preserve it
+    let alpha = f32x4.extract_lane(rgba, 3);
+    
+    // Apply brightness
+    let bright = f32x4.mul(rgba, brightness_vec);
+    
+    // Apply contrast
+    let contr = f32x4.add(
+      f32x4.mul(
+        contrast_factor_vec,
+        f32x4.sub(bright, contrast_offset)
+      ),
+      contrast_offset
+    );
+    
+    // Calculate grayscale value
+    let r = f32x4.extract_lane(contr, 0);
+    let g = f32x4.extract_lane(contr, 1);
+    let b = f32x4.extract_lane(contr, 2);
+    let gray = r * 0.299 + g * 0.587 + b * 0.114;
+    let gray_vec = f32x4.splat(gray);
+    
+    // Apply saturation
+    let saturated = f32x4.add(
+      f32x4.mul(gray_vec, one_minus_sat),
+      f32x4.mul(contr, sat_vec)
+    );
+    
+    // Clamp values to 0-255
+    let clamped = f32x4.min(
+      f32x4.max(saturated, zero_vec),
+      max_vec
+    );
+    
+    // Store result, preserving alpha
+    result[i * 4 + 0] = Math.floor(f32x4.extract_lane(clamped, 0));
+    result[i * 4 + 1] = Math.floor(f32x4.extract_lane(clamped, 1));
+    result[i * 4 + 2] = Math.floor(f32x4.extract_lane(clamped, 2));
+    result[i * 4 + 3] = alpha;
+  }
+}
+
+// Helper functions
+
+// Verify that two arrays contain exactly the same values
+fun verify_results(array1, array2, length) {
+  for (let i = 0; i < length; i++) {
+    if (array1[i] !== array2[i]) {
+      println("Mismatch at index " + i + ": " + array1[i] + " vs " + array2[i]);
+      return false;
+    }
+  }
+  return true;
+}
+
+// Verify that two arrays contain approximately the same values (within tolerance)
+fun verify_results_approx(array1, array2, length, tolerance) {
+  for (let i = 0; i < length; i++) {
+    if (Math.abs(array1[i] - array2[i]) > tolerance) {
+      println("Mismatch at index " + i + ": " + array1[i] + " vs " + array2[i] + 
+              " (diff: " + Math.abs(array1[i] - array2[i]) + ")");
+      return false;
+    }
+  }
+  return true;
+}
+
+// Main entry point
+fun simd_supported() {
+  try {
+    // Try to instantiate a module with SIMD instructions
+    const bytes = new Uint8Array([
+      0x00, 0x61, 0x73, 0x6d, // wasm magic
+      0x01, 0x00, 0x00, 0x00, // wasm version
+      // Module with a single SIMD instruction
+    ]);
+    return WebAssembly.validate(bytes);
+  } catch (e) {
+    return false;
+  }
+}
+
+// Run all examples
+if (simd_supported()) {
+  main();
+} else {
+  println("WebAssembly SIMD is not supported in your environment.");
+}

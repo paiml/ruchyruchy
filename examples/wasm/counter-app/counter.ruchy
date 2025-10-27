@@ -1,0 +1,94 @@
+// Counter example for WebAssembly compilation
+// This example demonstrates a simple counter implementation
+// with closures and JavaScript interop
+
+// Import JavaScript functions
+@js_import("document.getElementById")
+external fun js_get_element_by_id(id: string) -> i32;
+
+@js_import("Element.prototype.innerText")
+external fun js_set_inner_text(element: i32, text: string);
+
+@js_import("console.log")
+external fun js_console_log(message: string);
+
+// Global state
+static mut COUNTER_VALUE: i32 = 0;
+
+// Initialize the counter
+fun init_counter(initial_value: i32) {
+    unsafe {
+        COUNTER_VALUE = initial_value;
+    }
+    update_display();
+}
+
+// Increment the counter
+fun increment() {
+    unsafe {
+        COUNTER_VALUE += 1;
+    }
+    update_display();
+}
+
+// Decrement the counter
+fun decrement() {
+    unsafe {
+        COUNTER_VALUE -= 1;
+    }
+    update_display();
+}
+
+// Reset the counter
+fun reset() {
+    unsafe {
+        COUNTER_VALUE = 0;
+    }
+    update_display();
+}
+
+// Get the current counter value
+fun get_value() -> i32 {
+    unsafe {
+        return COUNTER_VALUE;
+    }
+}
+
+// Update the display with the current counter value
+fun update_display() {
+    let counter_element = js_get_element_by_id("counter-value");
+    let counter_value = get_value();
+    js_set_inner_text(counter_element, counter_value.to_string());
+    js_console_log("Counter updated: " + counter_value.to_string());
+}
+
+// Create a counter with a specific starting value
+fun create_counter(start: i32) -> fun() -> i32 {
+    let mut count = start;
+    
+    // Return a closure that captures count
+    return || {
+        let current = count;
+        count += 1;
+        return current;
+    };
+}
+
+// Example of using a closure counter
+fun demo_closure_counter() -> Vec<i32> {
+    let counter = create_counter(10);
+    let mut results = Vec::new();
+    
+    // Call the closure multiple times
+    for _ in 0..5 {
+        results.push(counter());
+    }
+    
+    return results;
+}
+
+// Main function - this is called when the WebAssembly module is instantiated
+fun main() {
+    js_console_log("Counter WebAssembly module initialized");
+    init_counter(0);
+}

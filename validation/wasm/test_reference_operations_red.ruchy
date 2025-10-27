@@ -1,0 +1,983 @@
+// File: validation/wasm/test_reference_operations_red.ruchy
+//
+// RED Phase tests for reference type operations in WebAssembly GC module
+// implementation. These tests verify type checking operations, casting,
+// reference equality, method dispatch, lifecycle events, and more.
+//
+// TICKET: WASM-005
+// STATUS: RED Phase (expected to fail)
+// TEST MODULE: WebAssembly GC Reference Type Operations
+
+// Import the test framework
+import { test, assert, assertFail, benchmark } from "ruchy/testing";
+import { wasmCompile, wasmRun, wasmValidate } from "ruchy/wasm";
+import { typeCheck, typeInfer } from "ruchy/types";
+
+// -----------------------------------------------------------------
+// Test Suite: Reference Type Operations in WebAssembly GC
+// -----------------------------------------------------------------
+
+test("WASM-005: Reference Types - Basic Reference Operations", () => {
+    // Define a simple class with properties and methods
+    const personClass = `
+        class Person {
+            name: string;
+            age: number;
+            
+            constructor(name: string, age: number) {
+                this.name = name;
+                this.age = age;
+            }
+            
+            greet(): string {
+                return "Hello, my name is " + this.name;
+            }
+            
+            isAdult(): boolean {
+                return this.age >= 18;
+            }
+        }
+        
+        fun main(): string {
+            let person = new Person("Alice", 30);
+            
+            // Test property access
+            let name = person.name;
+            
+            // Test method invocation
+            let greeting = person.greet();
+            
+            // Test reference passing
+            let adult = checkAdult(person);
+            
+            return greeting + " and I am " + (adult ? "an adult" : "not an adult");
+        }
+        
+        fun checkAdult(p: Person): boolean {
+            return p.isAdult();
+        }
+    `;
+    
+    // This should compile to WASM with GC extensions
+    assertFail(() => {
+        wasmCompile(personClass);
+    }, "Reference type operations not implemented yet: class Person");
+    
+    // Validate that the type checker recognizes the types
+    assert(() => {
+        return typeCheck(personClass);
+    }, "Type checking for reference types should work even if code generation doesn't");
+});
+
+test("WASM-005: Reference Types - Type Checking Operations", () => {
+    const typeCheckCode = `
+        interface Drawable {
+            draw(): void;
+        }
+        
+        class Shape implements Drawable {
+            draw(): void {
+                // Base implementation
+            }
+        }
+        
+        class Circle extends Shape {
+            radius: number;
+            
+            constructor(radius: number) {
+                super();
+                this.radius = radius;
+            }
+            
+            draw(): void {
+                // Circle-specific drawing
+            }
+            
+            getArea(): number {
+                return 3.14 * this.radius * this.radius;
+            }
+        }
+        
+        fun main(): boolean {
+            let shape: Shape = new Circle(5);
+            
+            // Test instanceof operator
+            let isCircle = shape instanceof Circle;
+            
+            // Test is operator (type predicate)
+            let isShape = shape is Shape;
+            
+            // Test interface check
+            let isDrawable = shape instanceof Drawable;
+            
+            return isCircle && isShape && isDrawable;
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(typeCheckCode);
+    }, "Type checking operations (is, instanceof) not implemented yet");
+});
+
+test("WASM-005: Reference Types - Type Casting Operations", () => {
+    const castingCode = `
+        class Base {
+            baseValue: number;
+            
+            constructor(value: number) {
+                this.baseValue = value;
+            }
+            
+            getValue(): number {
+                return this.baseValue;
+            }
+        }
+        
+        class Derived extends Base {
+            extraValue: number;
+            
+            constructor(baseVal: number, extraVal: number) {
+                super(baseVal);
+                this.extraValue = extraVal;
+            }
+            
+            getTotal(): number {
+                return this.baseValue + this.extraValue;
+            }
+        }
+        
+        fun main(): number {
+            // Upcasting (implicit)
+            let base: Base = new Derived(10, 20);
+            
+            // Downcasting (explicit)
+            let derived = base as Derived;
+            
+            // Alternative casting syntax
+            let alsoBase = <Base>derived;
+            
+            // Safe casting with runtime check
+            if (base instanceof Derived) {
+                let safeTotal = (base as Derived).getTotal();
+                return safeTotal;
+            }
+            
+            return -1; // Should never reach here
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(castingCode);
+    }, "Type casting operations (as, <Type>) not implemented yet");
+});
+
+test("WASM-005: Reference Types - Reference Equality and Comparison", () => {
+    const equalityCode = `
+        class Item {
+            id: number;
+            
+            constructor(id: number) {
+                this.id = id;
+            }
+            
+            equals(other: Item): boolean {
+                // Value equality
+                return this.id === other.id;
+            }
+        }
+        
+        fun main(): boolean[] {
+            let item1 = new Item(1);
+            let item2 = new Item(1);
+            let item3 = item1;
+            
+            // Test reference equality (same object)
+            let refEqual1 = item1 === item3;
+            
+            // Test reference inequality (different objects with same values)
+            let refEqual2 = item1 === item2;
+            
+            // Test value equality using equals method
+            let valueEqual = item1.equals(item2);
+            
+            // Test null equality
+            let nullItem: Item = null;
+            let nullCheck1 = nullItem === null;
+            let nullCheck2 = item1 === null;
+            
+            return [refEqual1, refEqual2, valueEqual, nullCheck1, nullCheck2];
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(equalityCode);
+    }, "Reference equality operations not implemented yet");
+});
+
+test("WASM-005: Reference Types - Reference Passing Semantics", () => {
+    const passingCode = `
+        class Counter {
+            value: number;
+            
+            constructor(startValue: number) {
+                this.value = startValue;
+            }
+            
+            increment(): void {
+                this.value += 1;
+            }
+            
+            getValue(): number {
+                return this.value;
+            }
+        }
+        
+        fun incrementTwice(counter: Counter): void {
+            counter.increment();
+            counter.increment();
+        }
+        
+        fun createAndIncrement(): Counter {
+            let c = new Counter(0);
+            c.increment();
+            return c;
+        }
+        
+        fun main(): number[] {
+            let counter1 = new Counter(10);
+            
+            // Pass by reference
+            incrementTwice(counter1);
+            let value1 = counter1.getValue(); // Should be 12
+            
+            // Return reference
+            let counter2 = createAndIncrement();
+            let value2 = counter2.getValue(); // Should be 1
+            
+            // Test that counter1 and counter2 are different references
+            counter1.increment();
+            let value3 = counter1.getValue(); // Should be 13
+            let value4 = counter2.getValue(); // Should still be 1
+            
+            return [value1, value2, value3, value4];
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(passingCode);
+    }, "Reference passing semantics not implemented yet");
+});
+
+test("WASM-005: Reference Types - Virtual Method Dispatch", () => {
+    const virtualDispatchCode = `
+        class Animal {
+            makeSound(): string {
+                return "Generic animal sound";
+            }
+            
+            identify(): string {
+                return "I am an animal";
+            }
+        }
+        
+        class Dog extends Animal {
+            makeSound(): string {
+                return "Woof";
+            }
+            
+            identify(): string {
+                return "I am a dog";
+            }
+            
+            fetch(): string {
+                return "Fetching stick";
+            }
+        }
+        
+        class Cat extends Animal {
+            makeSound(): string {
+                return "Meow";
+            }
+            
+            identify(): string {
+                return "I am a cat";
+            }
+            
+            purr(): string {
+                return "Purring";
+            }
+        }
+        
+        fun getAnimalSound(animal: Animal): string {
+            // Virtual dispatch based on runtime type
+            return animal.makeSound();
+        }
+        
+        fun main(): string[] {
+            let dog: Animal = new Dog();
+            let cat: Animal = new Cat();
+            
+            // Virtual method dispatch
+            let dogSound = getAnimalSound(dog);
+            let catSound = getAnimalSound(cat);
+            
+            // Direct call on reference with static type Animal
+            let dogIdentity = dog.identify();
+            let catIdentity = cat.identify();
+            
+            // This would not compile - method not on Animal interface
+            // let dogFetch = dog.fetch();
+            
+            return [dogSound, catSound, dogIdentity, catIdentity];
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(virtualDispatchCode);
+    }, "Virtual method dispatch not implemented yet");
+});
+
+test("WASM-005: Reference Types - Interface Method Invocation", () => {
+    const interfaceCode = `
+        interface Readable {
+            read(): string;
+        }
+        
+        interface Writable {
+            write(data: string): void;
+        }
+        
+        class Document implements Readable, Writable {
+            content: string;
+            
+            constructor() {
+                this.content = "";
+            }
+            
+            read(): string {
+                return this.content;
+            }
+            
+            write(data: string): void {
+                this.content = data;
+            }
+            
+            getSize(): number {
+                return this.content.length;
+            }
+        }
+        
+        class ReadOnlyDoc implements Readable {
+            content: string;
+            
+            constructor(initialContent: string) {
+                this.content = initialContent;
+            }
+            
+            read(): string {
+                return this.content;
+            }
+        }
+        
+        fun processReadable(readable: Readable): string {
+            // Interface method call
+            return "Read: " + readable.read();
+        }
+        
+        fun processWritable(writable: Writable, data: string): void {
+            // Interface method call
+            writable.write(data);
+        }
+        
+        fun main(): string[] {
+            let document = new Document();
+            let readOnly = new ReadOnlyDoc("Initial content");
+            
+            // Interface method calls
+            processWritable(document, "Hello, interfaces!");
+            let docContent = processReadable(document);
+            let readOnlyContent = processReadable(readOnly);
+            
+            // This won't compile - ReadOnlyDoc doesn't implement Writable
+            // processWritable(readOnly, "Can't write this");
+            
+            return [docContent, readOnlyContent];
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(interfaceCode);
+    }, "Interface method invocation not implemented yet");
+});
+
+test("WASM-005: Reference Types - Reference Lifecycle Events", () => {
+    const lifecycleCode = `
+        class Resource {
+            isAllocated: boolean;
+            
+            constructor() {
+                this.isAllocated = true;
+                this.initialize();
+            }
+            
+            initialize(): void {
+                // Resource initialization logic
+                console.log("Resource initialized");
+            }
+            
+            use(): string {
+                if (!this.isAllocated) {
+                    return "Error: Attempt to use freed resource";
+                }
+                return "Resource used successfully";
+            }
+            
+            free(): void {
+                if (this.isAllocated) {
+                    this.isAllocated = false;
+                    // Resource cleanup logic
+                    console.log("Resource freed");
+                }
+            }
+        }
+        
+        class ManagedResource {
+            resource: Resource;
+            
+            constructor() {
+                this.resource = new Resource();
+            }
+            
+            // Finalizer called when GC collects this object
+            finalize(): void {
+                if (this.resource != null) {
+                    this.resource.free();
+                    this.resource = null;
+                }
+            }
+        }
+        
+        fun createAndUseResources(): string[] {
+            let results: string[] = [];
+            
+            // Create resource and use it
+            let resource = new Resource();
+            results.push(resource.use());
+            
+            // Explicitly free the resource
+            resource.free();
+            results.push(resource.use()); // Should report "freed" error
+            
+            // Create managed resource that handles cleanup
+            let managed = new ManagedResource();
+            results.push(managed.resource.use());
+            
+            // When managed goes out of scope, GC should eventually call finalize()
+            
+            return results;
+        }
+        
+        fun main(): string[] {
+            return createAndUseResources();
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(lifecycleCode);
+    }, "Reference lifecycle events not implemented yet");
+});
+
+test("WASM-005: Reference Types - Reference Binding and Rebinding", () => {
+    const bindingCode = `
+        class Box<T> {
+            value: T;
+            
+            constructor(value: T) {
+                this.value = value;
+            }
+            
+            get(): T {
+                return this.value;
+            }
+            
+            set(value: T): void {
+                this.value = value;
+            }
+        }
+        
+        fun main(): boolean[] {
+            let stringBox = new Box<string>("Hello");
+            let numberBox = new Box<number>(42);
+            
+            // Get initial values
+            let string1 = stringBox.get();
+            let number1 = numberBox.get();
+            
+            // Rebind references
+            stringBox.set("World");
+            numberBox.set(100);
+            
+            // Get new values
+            let string2 = stringBox.get();
+            let number2 = numberBox.get();
+            
+            // Cross-reference testing
+            let refBox = new Box<Box<number>>(numberBox);
+            let extractedBox = refBox.get();
+            let extractedValue = extractedBox.get();
+            
+            // Test equality
+            let sameReference = extractedBox === numberBox;
+            let differentValue = number1 !== extractedValue;
+            
+            return [sameReference, differentValue];
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(bindingCode);
+    }, "Reference binding and rebinding not implemented yet");
+});
+
+test("WASM-005: Reference Types - Null Handling and Optional References", () => {
+    const nullCode = `
+        class Optional<T> {
+            value: T;
+            hasValue: boolean;
+            
+            constructor(value: T) {
+                this.value = value;
+                this.hasValue = value != null;
+            }
+            
+            get(): T {
+                if (!this.hasValue) {
+                    throw new Error("Attempt to get value from empty Optional");
+                }
+                return this.value;
+            }
+            
+            getOrDefault(defaultValue: T): T {
+                return this.hasValue ? this.value : defaultValue;
+            }
+            
+            isPresent(): boolean {
+                return this.hasValue;
+            }
+        }
+        
+        class User {
+            name: string;
+            email: string;
+            
+            constructor(name: string, email: string) {
+                this.name = name;
+                this.email = email;
+            }
+        }
+        
+        fun processUser(user: User): string {
+            // Null check
+            if (user == null) {
+                return "No user provided";
+            }
+            
+            return "User: " + user.name + ", Email: " + user.email;
+        }
+        
+        fun main(): string[] {
+            let user1: User = new User("Alice", "alice@example.com");
+            let user2: User = null;
+            
+            // Process with null check
+            let result1 = processUser(user1);
+            let result2 = processUser(user2);
+            
+            // Using Optional wrapper
+            let opt1 = new Optional<User>(user1);
+            let opt2 = new Optional<User>(null);
+            
+            let result3 = opt1.isPresent() ? "Has value" : "No value";
+            let result4 = opt2.isPresent() ? "Has value" : "No value";
+            
+            // Using getOrDefault
+            let defaultUser = new User("Default", "default@example.com");
+            let user3 = opt1.getOrDefault(defaultUser).name;
+            let user4 = opt2.getOrDefault(defaultUser).name;
+            
+            return [result1, result2, result3, result4, user3, user4];
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(nullCode);
+    }, "Null handling and optional references not implemented yet");
+});
+
+test("WASM-005: Reference Types - Reference Subtyping and Covariance", () => {
+    const subtypingCode = `
+        class Animal {
+            name: string;
+            
+            constructor(name: string) {
+                this.name = name;
+            }
+            
+            makeSound(): string {
+                return "Generic animal sound";
+            }
+        }
+        
+        class Dog extends Animal {
+            breed: string;
+            
+            constructor(name: string, breed: string) {
+                super(name);
+                this.breed = breed;
+            }
+            
+            makeSound(): string {
+                return "Woof";
+            }
+            
+            fetch(): string {
+                return "Fetching stick";
+            }
+        }
+        
+        class Cat extends Animal {
+            constructor(name: string) {
+                super(name);
+            }
+            
+            makeSound(): string {
+                return "Meow";
+            }
+            
+            purr(): string {
+                return "Purring";
+            }
+        }
+        
+        // Array covariance test
+        fun processAnimals(animals: Animal[]): string[] {
+            return animals.map(animal => animal.makeSound());
+        }
+        
+        fun main(): string[] {
+            // Subtype assignment
+            let animal: Animal = new Dog("Rover", "Labrador");
+            
+            // Array covariance
+            let dogs: Dog[] = [
+                new Dog("Buddy", "Golden Retriever"),
+                new Dog("Max", "German Shepherd")
+            ];
+            
+            let cats: Cat[] = [
+                new Cat("Whiskers"),
+                new Cat("Mittens")
+            ];
+            
+            // Passing more specific array to function expecting Animal[]
+            let dogSounds = processAnimals(dogs);
+            let catSounds = processAnimals(cats);
+            
+            // Test access to subtype-specific methods
+            let specificDog = new Dog("Rex", "Bulldog");
+            let fetchResult = specificDog.fetch();
+            
+            // This would cause compile error - animal reference doesn't have fetch
+            // let cantFetch = animal.fetch();
+            
+            return [...dogSounds, ...catSounds, fetchResult];
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(subtypingCode);
+    }, "Reference subtyping and covariance not implemented yet");
+});
+
+test("WASM-005: Reference Types - Complex Inheritance and Polymorphism", () => {
+    const complexInheritanceCode = `
+        interface Identifiable {
+            getId(): string;
+        }
+        
+        interface Describable {
+            getDescription(): string;
+        }
+        
+        class BaseEntity implements Identifiable {
+            id: string;
+            
+            constructor(id: string) {
+                this.id = id;
+            }
+            
+            getId(): string {
+                return this.id;
+            }
+        }
+        
+        abstract class NamedEntity extends BaseEntity implements Describable {
+            name: string;
+            
+            constructor(id: string, name: string) {
+                super(id);
+                this.name = name;
+            }
+            
+            abstract getDescription(): string;
+            
+            display(): string {
+                return this.getId() + ": " + this.name + " - " + this.getDescription();
+            }
+        }
+        
+        class Product extends NamedEntity {
+            price: number;
+            
+            constructor(id: string, name: string, price: number) {
+                super(id, name);
+                this.price = price;
+            }
+            
+            getDescription(): string {
+                return "Product priced at $" + this.price;
+            }
+            
+            calculateDiscountedPrice(discountPercent: number): number {
+                return this.price * (1 - discountPercent / 100);
+            }
+        }
+        
+        class Service extends NamedEntity {
+            hourlyRate: number;
+            
+            constructor(id: string, name: string, hourlyRate: number) {
+                super(id, name);
+                this.hourlyRate = hourlyRate;
+            }
+            
+            getDescription(): string {
+                return "Service at $" + this.hourlyRate + "/hour";
+            }
+            
+            calculateCost(hours: number): number {
+                return this.hourlyRate * hours;
+            }
+        }
+        
+        fun processEntity(entity: BaseEntity): string {
+            let result = "Processing entity with ID: " + entity.getId();
+            
+            // Type checking
+            if (entity instanceof NamedEntity) {
+                result += "\\nNamed entity: " + entity.name;
+                
+                // Polymorphic call
+                result += "\\nDescription: " + entity.getDescription();
+                
+                // Further refinement
+                if (entity instanceof Product) {
+                    result += "\\nDiscounted price: $" + entity.calculateDiscountedPrice(10);
+                } else if (entity instanceof Service) {
+                    result += "\\nCost for 5 hours: $" + entity.calculateCost(5);
+                }
+            }
+            
+            return result;
+        }
+        
+        fun main(): string[] {
+            let product = new Product("p1", "Laptop", 999.99);
+            let service = new Service("s1", "Consulting", 150);
+            
+            let results: string[] = [];
+            
+            // Polymorphic calls through different reference types
+            let baseProduct: BaseEntity = product;
+            let namedProduct: NamedEntity = product;
+            let identifiableProduct: Identifiable = product;
+            let describableProduct: Describable = product;
+            
+            results.push(baseProduct.getId());
+            results.push(namedProduct.display());
+            results.push(identifiableProduct.getId());
+            results.push(describableProduct.getDescription());
+            
+            // Process through common interface
+            results.push(processEntity(product));
+            results.push(processEntity(service));
+            
+            return results;
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(complexInheritanceCode);
+    }, "Complex inheritance and polymorphism not implemented yet");
+});
+
+test("WASM-005: Reference Types - Performance Considerations", () => {
+    const performanceCode = `
+        // Create a class with various reference fields
+        class Node {
+            value: number;
+            left: Node;
+            right: Node;
+            parent: Node;
+            
+            constructor(value: number) {
+                this.value = value;
+                this.left = null;
+                this.right = null;
+                this.parent = null;
+            }
+            
+            insert(value: number): void {
+                if (value < this.value) {
+                    if (this.left === null) {
+                        this.left = new Node(value);
+                        this.left.parent = this;
+                    } else {
+                        this.left.insert(value);
+                    }
+                } else {
+                    if (this.right === null) {
+                        this.right = new Node(value);
+                        this.right.parent = this;
+                    } else {
+                        this.right.insert(value);
+                    }
+                }
+            }
+            
+            find(value: number): Node {
+                if (value === this.value) {
+                    return this;
+                } else if (value < this.value && this.left !== null) {
+                    return this.left.find(value);
+                } else if (value > this.value && this.right !== null) {
+                    return this.right.find(value);
+                }
+                return null;
+            }
+            
+            inOrderTraversal(): number[] {
+                let result: number[] = [];
+                
+                if (this.left !== null) {
+                    result = [...result, ...this.left.inOrderTraversal()];
+                }
+                
+                result.push(this.value);
+                
+                if (this.right !== null) {
+                    result = [...result, ...this.right.inOrderTraversal()];
+                }
+                
+                return result;
+            }
+        }
+        
+        fun buildBalancedTree(size: number): Node {
+            // Function to build a balanced tree for performance testing
+            
+            // Helper to build balanced tree recursively
+            fun buildTreeRecursive(values: number[], start: number, end: number): Node {
+                if (start > end) {
+                    return null;
+                }
+                
+                let mid = Math.floor((start + end) / 2);
+                let node = new Node(values[mid]);
+                
+                node.left = buildTreeRecursive(values, start, mid - 1);
+                if (node.left !== null) {
+                    node.left.parent = node;
+                }
+                
+                node.right = buildTreeRecursive(values, mid + 1, end);
+                if (node.right !== null) {
+                    node.right.parent = node;
+                }
+                
+                return node;
+            }
+            
+            // Create sorted array of values
+            let values: number[] = [];
+            for (let i = 0; i < size; i++) {
+                values.push(i);
+            }
+            
+            return buildTreeRecursive(values, 0, size - 1);
+        }
+        
+        fun benchmarkTreeOperations(): number[] {
+            // Create a reasonably sized tree (not too big for testing)
+            let tree = buildBalancedTree(100);
+            
+            // Record performance metrics
+            let metrics: number[] = [];
+            
+            // Measure insertion time (average of multiple operations)
+            let insertStart = performance.now();
+            for (let i = 0; i < 1000; i++) {
+                let tempTree = new Node(50);
+                for (let j = 0; j < 100; j++) {
+                    tempTree.insert(Math.random() * 100);
+                }
+            }
+            let insertEnd = performance.now();
+            metrics.push(insertEnd - insertStart);
+            
+            // Measure search time (average of multiple operations)
+            let searchStart = performance.now();
+            for (let i = 0; i < 10000; i++) {
+                tree.find(Math.floor(Math.random() * 100));
+            }
+            let searchEnd = performance.now();
+            metrics.push(searchEnd - searchStart);
+            
+            // Measure traversal time
+            let traverseStart = performance.now();
+            for (let i = 0; i < 1000; i++) {
+                tree.inOrderTraversal();
+            }
+            let traverseEnd = performance.now();
+            metrics.push(traverseEnd - traverseStart);
+            
+            return metrics;
+        }
+        
+        fun main(): number[] {
+            return benchmarkTreeOperations();
+        }
+    `;
+    
+    assertFail(() => {
+        wasmCompile(performanceCode);
+    }, "Reference type performance considerations not implemented yet");
+});
+
+// Run tests in sequence
+fun main(): void {
+    // Reference Types Tests
+    test("WASM-005: Reference Types - Basic Reference Operations", () => {});
+    test("WASM-005: Reference Types - Type Checking Operations", () => {});
+    test("WASM-005: Reference Types - Type Casting Operations", () => {});
+    test("WASM-005: Reference Types - Reference Equality and Comparison", () => {});
+    test("WASM-005: Reference Types - Reference Passing Semantics", () => {});
+    test("WASM-005: Reference Types - Virtual Method Dispatch", () => {});
+    test("WASM-005: Reference Types - Interface Method Invocation", () => {});
+    test("WASM-005: Reference Types - Reference Lifecycle Events", () => {});
+    test("WASM-005: Reference Types - Reference Binding and Rebinding", () => {});
+    test("WASM-005: Reference Types - Null Handling and Optional References", () => {});
+    test("WASM-005: Reference Types - Reference Subtyping and Covariance", () => {});
+    test("WASM-005: Reference Types - Complex Inheritance and Polymorphism", () => {});
+    test("WASM-005: Reference Types - Performance Considerations", () => {});
+}

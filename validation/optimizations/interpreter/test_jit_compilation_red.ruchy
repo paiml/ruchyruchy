@@ -1,0 +1,554 @@
+// OPT-INTERP-003: JIT Compilation (Hot Paths) - RED Phase
+// This file implements the RED phase of the JIT Compilation optimization
+// Author: Claude (via Claude Code)
+// Date: 2025-10-23
+//
+// Ruchy JIT Compilation for Hot Execution Paths
+// Based on research by:
+// - Gal, A., et al. (2009). "Trace-based Just-in-Time Type Specialization for Dynamic Languages"
+// - Bebenita, M., et al. (2010). "SPUR: A Trace-Based JIT Compiler for CIL"
+// - Bolz, C.F., et al. (2011). "Tracing the Meta-Level: PyPy's Tracing JIT Compiler"
+// - Pall, M. (2014). "LuaJIT 2.0: Tracing JIT Compiler Architecture"
+//
+// RED phase identifies hot functions and demonstrates performance limitations of interpreter
+
+// Import benchmark framework
+import { BenchmarkConfig, ExecutionMode, run_benchmark, compare_benchmarks } 
+    from "benchmark_framework.ruchy";
+
+// Import bytecode VM (dependency from OPT-INTERP-001)
+import { BytecodeVM, Instruction, BytecodeOp } from "test_bytecode_vm_refactor.ruchy";
+
+// Import inline caching (dependency from OPT-INTERP-002)
+import { InlineCache, AdvancedCacheManager, PropertyAccessMode } 
+    from "test_inline_caching_refactor.ruchy";
+
+///////////////////////////////////////////////////////////////////////////////
+// OPT-INTERP-003 Objective: Implement a Just-In-Time compiler for hot code paths
+// to achieve near-native performance for frequently executed code.
+///////////////////////////////////////////////////////////////////////////////
+
+// Execution modes for benchmarking
+enum ExecutionTier {
+    // Interpreter execution (baseline)
+    Interpreted,
+    // Bytecode VM execution (faster than AST)
+    Bytecode,
+    // JIT compiled execution (fastest)
+    JitCompiled,
+}
+
+// Different compilation strategies
+enum JitStrategy {
+    // Method-based JIT (compiles whole functions)
+    MethodJit,
+    // Trace-based JIT (compiles execution traces)
+    TraceJit,
+    // Region-based JIT (compiles hot regions)
+    RegionJit,
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Sample code to JIT compile - Benchmark functions
+///////////////////////////////////////////////////////////////////////////////
+
+// Fibonacci - compute-intensive recursive function
+fun fibonacci(n: i32) -> i32 {
+    if n <= 1 {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+// Mandelbrot set calculation - compute-intensive loop with complex math
+fun mandelbrot(max_iterations: i32, x0: f64, y0: f64) -> i32 {
+    let x = 0.0;
+    let y = 0.0;
+    let iteration = 0;
+    
+    while x*x + y*y <= 4.0 && iteration < max_iterations {
+        let xtemp = x*x - y*y + x0;
+        y = 2.0*x*y + y0;
+        x = xtemp;
+        iteration += 1;
+    }
+    
+    return iteration;
+}
+
+// Array manipulation - memory-intensive operations
+fun array_sum(arr: &[i32], multiplier: i32) -> i32 {
+    let sum = 0;
+    
+    for i in 0..arr.len() {
+        // Read, modify, write pattern - common in real code
+        sum += arr[i] * multiplier;
+    }
+    
+    return sum;
+}
+
+// String processing - mix of memory and compute
+fun count_words(text: &str) -> i32 {
+    let count = 0;
+    let in_word = false;
+    
+    for i in 0..text.len() {
+        let c = text.chars()[i];
+        
+        if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+            if in_word {
+                in_word = false;
+            }
+        } else {
+            if !in_word {
+                count += 1;
+                in_word = true;
+            }
+        }
+    }
+    
+    return count;
+}
+
+// Tree traversal - pointer-chasing workload
+struct TreeNode {
+    value: i32,
+    left: Option<Box<TreeNode>>,
+    right: Option<Box<TreeNode>>,
+    
+    fun new(value: i32) -> TreeNode {
+        TreeNode {
+            value: value,
+            left: None,
+            right: None,
+        }
+    }
+    
+    fun insert(self, value: i32) {
+        if value < self.value {
+            match self.left {
+                Some(node) => {
+                    node.insert(value);
+                },
+                None => {
+                    self.left = Some(Box::new(TreeNode::new(value)));
+                }
+            }
+        } else {
+            match self.right {
+                Some(node) => {
+                    node.insert(value);
+                },
+                None => {
+                    self.right = Some(Box::new(TreeNode::new(value)));
+                }
+            }
+        }
+    }
+}
+
+fun sum_tree(node: &TreeNode) -> i32 {
+    let mut sum = node.value;
+    
+    if let Some(left) = &node.left {
+        sum += sum_tree(left);
+    }
+    
+    if let Some(right) = &node.right {
+        sum += sum_tree(right);
+    }
+    
+    return sum;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Profiling and Hot Spot Detection
+///////////////////////////////////////////////////////////////////////////////
+
+// Execution counter for a specific function or trace
+struct ExecutionCounter {
+    function_name: str,
+    call_count: u32,
+    total_time_ns: u64,
+    is_hot: bool,
+    
+    fun new(function_name: str) -> ExecutionCounter {
+        ExecutionCounter {
+            function_name: function_name,
+            call_count: 0,
+            total_time_ns: 0,
+            is_hot: false,
+        }
+    }
+    
+    fun record_execution(self, time_ns: u64) {
+        self.call_count += 1;
+        self.total_time_ns += time_ns;
+        
+        // Mark as hot if called frequently
+        // Real implementations would use more sophisticated heuristics
+        if self.call_count > 10000 || self.total_time_ns > 1_000_000_000 { // 1 second
+            self.is_hot = true;
+        }
+    }
+    
+    fun average_time_ns(self) -> u64 {
+        if self.call_count == 0 {
+            return 0;
+        }
+        return self.total_time_ns / self.call_count as u64;
+    }
+}
+
+// Global profiling data
+struct ProfilingData {
+    counters: HashMap<str, ExecutionCounter>,
+    
+    fun new() -> ProfilingData {
+        ProfilingData {
+            counters: HashMap::new(),
+        }
+    }
+    
+    fun record_execution(self, function_name: str, time_ns: u64) {
+        if !self.counters.contains_key(function_name) {
+            self.counters.insert(function_name, ExecutionCounter::new(function_name));
+        }
+        
+        self.counters.get_mut(function_name).record_execution(time_ns);
+    }
+    
+    fun is_hot(self, function_name: str) -> bool {
+        if self.counters.contains_key(function_name) {
+            return self.counters.get(function_name).is_hot;
+        }
+        return false;
+    }
+    
+    fun get_hot_functions(self) -> Vec<str> {
+        let hot_functions = Vec::new();
+        
+        for (name, counter) in self.counters {
+            if counter.is_hot {
+                hot_functions.push(name);
+            }
+        }
+        
+        return hot_functions;
+    }
+    
+    fun print_stats(self) {
+        println("Profiling Statistics:");
+        println("---------------------");
+        println("| Function Name | Call Count | Total Time (ms) | Avg Time (μs) | Hot? |");
+        println("|---------------|------------|-----------------|---------------|------|");
+        
+        for (name, counter) in self.counters {
+            println("| {:<13} | {:<10} | {:<15.2} | {:<13.2} | {:<4} |",
+                name, counter.call_count, 
+                counter.total_time_ns as f64 / 1_000_000.0,  // Convert to ms
+                counter.average_time_ns() as f64 / 1_000.0,  // Convert to μs
+                if counter.is_hot { "Yes" } else { "No" });
+        }
+    }
+}
+
+// Global profiling instance
+static PROFILING_DATA: ProfilingData = ProfilingData::new();
+
+///////////////////////////////////////////////////////////////////////////////
+// JIT Compilation Stub (for RED phase - not implemented)
+///////////////////////////////////////////////////////////////////////////////
+
+// JIT compiler interface (RED phase stub)
+struct JitCompiler {
+    enabled: bool,
+    strategy: JitStrategy,
+    
+    fun new(strategy: JitStrategy) -> JitCompiler {
+        JitCompiler {
+            enabled: false,  // Disabled in RED phase
+            strategy: strategy,
+        }
+    }
+    
+    // Try to JIT compile a function (RED phase stub)
+    fun try_compile(self, function_name: str, bytecode: &[Instruction]) -> bool {
+        // In RED phase, we always fail to compile
+        println("Attempting to JIT compile {} (RED phase - not implemented)", function_name);
+        return false;
+    }
+    
+    // Check if a function is compiled
+    fun is_compiled(self, function_name: str) -> bool {
+        return false;  // Always false in RED phase
+    }
+    
+    // Execute compiled code (RED phase stub)
+    fun execute(self, function_name: str, args: &[any]) -> any {
+        panic("JIT execution not implemented in RED phase");
+        return 0;  // Unreachable
+    }
+}
+
+// Global JIT compiler instance
+static JIT_COMPILER: JitCompiler = JitCompiler::new(JitStrategy::MethodJit);
+
+///////////////////////////////////////////////////////////////////////////////
+// Benchmark Implementation with different execution tiers
+///////////////////////////////////////////////////////////////////////////////
+
+// JIT-aware interpreter that can switch execution tiers
+struct TieredInterpreter {
+    profiling_enabled: bool,
+    jit_enabled: bool,
+    
+    fun new(profiling_enabled: bool, jit_enabled: bool) -> TieredInterpreter {
+        TieredInterpreter {
+            profiling_enabled: profiling_enabled,
+            jit_enabled: jit_enabled,
+        }
+    }
+    
+    // Execute a function with the appropriate tier
+    fun execute(self, function_name: str, tier: ExecutionTier, args: &[any]) -> any {
+        // Start timing
+        let start_time = current_time_ns();
+        let result: any;
+        
+        match tier {
+            ExecutionTier::Interpreted => {
+                // Simulating AST interpreter execution
+                // In a real implementation, this would interpret AST nodes
+                if function_name == "fibonacci" {
+                    result = fibonacci(args[0] as i32);
+                } else if function_name == "mandelbrot" {
+                    result = mandelbrot(args[0] as i32, args[1] as f64, args[2] as f64);
+                } else if function_name == "array_sum" {
+                    result = array_sum(args[0] as &[i32], args[1] as i32);
+                } else if function_name == "count_words" {
+                    result = count_words(args[0] as &str);
+                } else if function_name == "sum_tree" {
+                    result = sum_tree(args[0] as &TreeNode);
+                } else {
+                    panic("Unknown function: {}", function_name);
+                }
+            },
+            
+            ExecutionTier::Bytecode => {
+                // Simulating bytecode VM execution
+                // In a real implementation, this would execute bytecode
+                // This is typically 2-5x faster than AST interpretation
+                if function_name == "fibonacci" {
+                    // Simulate faster execution
+                    result = fibonacci(args[0] as i32);
+                } else if function_name == "mandelbrot" {
+                    result = mandelbrot(args[0] as i32, args[1] as f64, args[2] as f64);
+                } else if function_name == "array_sum" {
+                    result = array_sum(args[0] as &[i32], args[1] as i32);
+                } else if function_name == "count_words" {
+                    result = count_words(args[0] as &str);
+                } else if function_name == "sum_tree" {
+                    result = sum_tree(args[0] as &TreeNode);
+                } else {
+                    panic("Unknown function: {}", function_name);
+                }
+            },
+            
+            ExecutionTier::JitCompiled => {
+                // Try to use JIT compiled code
+                if self.jit_enabled && JIT_COMPILER.is_compiled(function_name) {
+                    result = JIT_COMPILER.execute(function_name, args);
+                } else {
+                    // Fall back to bytecode if not compiled
+                    if function_name == "fibonacci" {
+                        result = fibonacci(args[0] as i32);
+                    } else if function_name == "mandelbrot" {
+                        result = mandelbrot(args[0] as i32, args[1] as f64, args[2] as f64);
+                    } else if function_name == "array_sum" {
+                        result = array_sum(args[0] as &[i32], args[1] as i32);
+                    } else if function_name == "count_words" {
+                        result = count_words(args[0] as &str);
+                    } else if function_name == "sum_tree" {
+                        result = sum_tree(args[0] as &TreeNode);
+                    } else {
+                        panic("Unknown function: {}", function_name);
+                    }
+                }
+            }
+        }
+        
+        // End timing and record statistics
+        let end_time = current_time_ns();
+        let elapsed = end_time - start_time;
+        
+        if self.profiling_enabled {
+            PROFILING_DATA.record_execution(function_name, elapsed);
+            
+            // Check if function is hot, and try to compile if not already compiled
+            if self.jit_enabled && 
+               PROFILING_DATA.is_hot(function_name) && 
+               !JIT_COMPILER.is_compiled(function_name) {
+                // Try to compile the function
+                // In a real implementation, this would extract bytecode
+                // For RED phase, this just prints a message
+                JIT_COMPILER.try_compile(function_name, &[]);
+            }
+        }
+        
+        return result;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Benchmark Functions
+///////////////////////////////////////////////////////////////////////////////
+
+// Run a benchmark comparing different execution tiers
+fun run_execution_tier_benchmark(function_name: str, iterations: u32, args: &[any]) -> void {
+    println("Benchmark: {} (iterations: {})", function_name, iterations);
+    println("-----------------------------------------------");
+    
+    // Create interpreters for different tiers
+    let interp_interpreter = TieredInterpreter::new(true, false);
+    let bytecode_interpreter = TieredInterpreter::new(true, false);
+    let jit_interpreter = TieredInterpreter::new(true, true);
+    
+    // Warm up
+    println("Warming up...");
+    for _ in 0..5 {
+        interp_interpreter.execute(function_name, ExecutionTier::Interpreted, args);
+        bytecode_interpreter.execute(function_name, ExecutionTier::Bytecode, args);
+        jit_interpreter.execute(function_name, ExecutionTier::JitCompiled, args);
+    }
+    
+    // Run benchmark
+    println("Running benchmark...");
+    
+    let interp_start = current_time_ns();
+    for _ in 0..iterations {
+        interp_interpreter.execute(function_name, ExecutionTier::Interpreted, args);
+    }
+    let interp_end = current_time_ns();
+    let interp_time = (interp_end - interp_start) as f64 / 1_000_000.0; // ms
+    
+    let bytecode_start = current_time_ns();
+    for _ in 0..iterations {
+        bytecode_interpreter.execute(function_name, ExecutionTier::Bytecode, args);
+    }
+    let bytecode_end = current_time_ns();
+    let bytecode_time = (bytecode_end - bytecode_start) as f64 / 1_000_000.0; // ms
+    
+    let jit_start = current_time_ns();
+    for _ in 0..iterations {
+        jit_interpreter.execute(function_name, ExecutionTier::JitCompiled, args);
+    }
+    let jit_end = current_time_ns();
+    let jit_time = (jit_end - jit_start) as f64 / 1_000_000.0; // ms
+    
+    // Print results
+    println("Interpreted:  {:.2} ms", interp_time);
+    println("Bytecode VM:  {:.2} ms", bytecode_time);
+    println("JIT Compiled: {:.2} ms", jit_time);
+    
+    // Calculate improvements
+    let bytecode_speedup = interp_time / bytecode_time;
+    let jit_speedup_over_interp = interp_time / jit_time;
+    let jit_speedup_over_bytecode = bytecode_time / jit_time;
+    
+    println("Bytecode speedup: {:.2}x over interpreted", bytecode_speedup);
+    println("JIT speedup: {:.2}x over interpreted, {:.2}x over bytecode", 
+             jit_speedup_over_interp, jit_speedup_over_bytecode);
+             
+    // Print expected results
+    println("Expected JIT speedup: 10-50x over interpreted, 5-20x over bytecode");
+}
+
+// Generate a balanced binary search tree for benchmarking
+fun generate_bst(size: i32) -> TreeNode {
+    let root = TreeNode::new(size / 2);
+    
+    // Use a simple but effective approach to generate a balanced tree
+    fun build_tree(start: i32, end: i32, root: &TreeNode) {
+        if start >= end {
+            return;
+        }
+        
+        let mid = start + (end - start) / 2;
+        root.insert(mid);
+        
+        build_tree(start, mid, root);
+        build_tree(mid + 1, end, root);
+    }
+    
+    build_tree(0, size, &root);
+    return root;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Main Function
+///////////////////////////////////////////////////////////////////////////////
+
+fun main() -> i32 {
+    println("OPT-INTERP-003: JIT Compilation (Hot Paths) - RED Phase");
+    println("------------------------------------------------------");
+    println("Demonstrating need for JIT compilation of hot code paths");
+    
+    // Run Fibonacci benchmark
+    let fib_args: [any] = [20 as i32];
+    run_execution_tier_benchmark("fibonacci", 100, &fib_args);
+    
+    // Run Mandelbrot benchmark
+    let mandelbrot_args: [any] = [100 as i32, -0.5 as f64, 0.0 as f64];
+    run_execution_tier_benchmark("mandelbrot", 1000, &mandelbrot_args);
+    
+    // Run array sum benchmark
+    let mut array = [i32; 1000];
+    for i in 0..1000 {
+        array[i] = i as i32;
+    }
+    let array_args: [any] = [&array as &[i32], 2 as i32];
+    run_execution_tier_benchmark("array_sum", 10000, &array_args);
+    
+    // Run string processing benchmark
+    let text = "This is a sample text for benchmarking string processing performance. The quick brown fox jumps over the lazy dog. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
+    let text_args: [any] = [&text as &str];
+    run_execution_tier_benchmark("count_words", 10000, &text_args);
+    
+    // Run tree traversal benchmark
+    let tree = generate_bst(1000);
+    let tree_args: [any] = [&tree as &TreeNode];
+    run_execution_tier_benchmark("sum_tree", 1000, &tree_args);
+    
+    // Print profiling information
+    println("\nProfiling Data:");
+    PROFILING_DATA.print_stats();
+    
+    // Print hot functions
+    println("\nHot Functions:");
+    let hot_functions = PROFILING_DATA.get_hot_functions();
+    if hot_functions.is_empty() {
+        println("No hot functions detected");
+    } else {
+        for func in hot_functions {
+            println("- {}", func);
+        }
+    }
+    
+    // Test if JIT compilation is implemented
+    if has_jit_compilation() {
+        println("\n✅ JIT compilation is implemented");
+    } else {
+        println("\n❌ JIT compilation is NOT implemented (expected in RED phase)");
+        println("The GREEN phase will implement basic JIT compilation for hot paths");
+    }
+    
+    return 0;
+}
+
+// Function to test if JIT compilation is implemented
+fun has_jit_compilation() -> bool {
+    // RED phase: JIT compilation is not implemented yet
+    return false;
+}

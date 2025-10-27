@@ -1,0 +1,488 @@
+// simd_linear_algebra.ruchy
+//
+// This file demonstrates SIMD operations for linear algebra computations,
+// including vector operations, matrix operations, and common transformations.
+//
+// Part of the WASM-004 TOOL phase documentation.
+
+fun main() {
+  // Run all examples with performance comparisons
+  vector_operations_example();
+  matrix_multiplication_example();
+  matrix_vector_multiplication_example();
+  matrix_transformation_example();
+}
+
+// Example 1: Basic vector operations with SIMD
+fun vector_operations_example() {
+  println("== Vector Operations with SIMD ==");
+  
+  // Create sample vectors for demonstration
+  const VECTOR_SIZE = 1000000; // 1 million elements
+  let vec_a = new Float32Array(VECTOR_SIZE);
+  let vec_b = new Float32Array(VECTOR_SIZE);
+  
+  // Initialize with test data
+  for (let i = 0; i < VECTOR_SIZE; i++) {
+    vec_a[i] = i * 0.01;
+    vec_b[i] = i * 0.02;
+  }
+  
+  // 1. Vector dot product - scalar implementation
+  let start_scalar = performance.now();
+  let dot_product_scalar = vector_dot_product_scalar(vec_a, vec_b, VECTOR_SIZE);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Vector dot product - SIMD implementation
+  let start_simd = performance.now();
+  let dot_product_simd = vector_dot_product_simd(vec_a, vec_b, VECTOR_SIZE);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Print results and comparison
+  println("Vector dot product:");
+  println("  Scalar result: " + dot_product_scalar.toFixed(4));
+  println("  SIMD result: " + dot_product_simd.toFixed(4));
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("");
+  
+  // 3. Vector normalization
+  let small_vec = new Float32Array([3.0, 4.0, 0.0, 0.0]);
+  println("Vector normalization example:");
+  println("  Original vector: " + array_to_string(small_vec, 4));
+  
+  // Normalize using SIMD
+  let normalized = normalize_vector_simd(small_vec);
+  println("  Normalized vector: " + array_to_string(normalized, 4));
+  
+  // Verify the length is 1
+  let length = vector_length_simd(normalized);
+  println("  Length after normalization: " + length.toFixed(8) + " (should be 1.0)");
+  println("");
+}
+
+// Vector dot product - scalar implementation
+fun vector_dot_product_scalar(a, b, length) {
+  let sum = 0.0;
+  for (let i = 0; i < length; i++) {
+    sum += a[i] * b[i];
+  }
+  return sum;
+}
+
+// Vector dot product - SIMD implementation
+fun vector_dot_product_simd(a, b, length) {
+  let sum_vec = f32x4.splat(0.0);
+  
+  // Process 4 elements at a time
+  for (let i = 0; i < length; i += 4) {
+    let va = v128.load(a.buffer, i * 4);
+    let vb = v128.load(b.buffer, i * 4);
+    
+    // Multiply and add
+    let product = f32x4.mul(va, vb);
+    sum_vec = f32x4.add(sum_vec, product);
+  }
+  
+  // Horizontal sum of the vector elements
+  let sum = f32x4.extract_lane(sum_vec, 0) +
+            f32x4.extract_lane(sum_vec, 1) +
+            f32x4.extract_lane(sum_vec, 2) +
+            f32x4.extract_lane(sum_vec, 3);
+  
+  // Handle remaining elements
+  let rem = length % 4;
+  let start = length - rem;
+  for (let i = start; i < length; i++) {
+    sum += a[i] * b[i];
+  }
+  
+  return sum;
+}
+
+// Calculate vector length using SIMD
+fun vector_length_simd(vec) {
+  // Load vector into SIMD register
+  let v = v128.load(vec.buffer, 0);
+  
+  // Square each component
+  let squared = f32x4.mul(v, v);
+  
+  // Sum the squares
+  let sum = f32x4.extract_lane(squared, 0) +
+            f32x4.extract_lane(squared, 1) +
+            f32x4.extract_lane(squared, 2) +
+            f32x4.extract_lane(squared, 3);
+  
+  // Return the square root
+  return Math.sqrt(sum);
+}
+
+// Normalize a vector using SIMD
+fun normalize_vector_simd(vec) {
+  // Calculate the vector length
+  let length = vector_length_simd(vec);
+  
+  // Load vector into SIMD register
+  let v = v128.load(vec.buffer, 0);
+  
+  // Create a vector with length in all lanes
+  let length_vec = f32x4.splat(length);
+  
+  // Divide each component by the length
+  let normalized = f32x4.div(v, length_vec);
+  
+  // Create result array
+  let result = new Float32Array(4);
+  v128.store(result.buffer, 0, normalized);
+  
+  return result;
+}
+
+// Example 2: Matrix multiplication with SIMD
+fun matrix_multiplication_example() {
+  println("== Matrix Multiplication with SIMD ==");
+  
+  // Create sample matrices for demonstration
+  const MATRIX_SIZE = 128; // 128x128 matrix
+  let matrix_a = new Float32Array(MATRIX_SIZE * MATRIX_SIZE);
+  let matrix_b = new Float32Array(MATRIX_SIZE * MATRIX_SIZE);
+  let result_scalar = new Float32Array(MATRIX_SIZE * MATRIX_SIZE);
+  let result_simd = new Float32Array(MATRIX_SIZE * MATRIX_SIZE);
+  
+  // Initialize with test data
+  for (let i = 0; i < MATRIX_SIZE; i++) {
+    for (let j = 0; j < MATRIX_SIZE; j++) {
+      matrix_a[i * MATRIX_SIZE + j] = (i + j) * 0.01;
+      matrix_b[i * MATRIX_SIZE + j] = (i - j) * 0.02;
+    }
+  }
+  
+  // 1. Matrix multiplication - scalar implementation
+  let start_scalar = performance.now();
+  matrix_multiply_scalar(matrix_a, matrix_b, result_scalar, MATRIX_SIZE);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Matrix multiplication - SIMD implementation
+  let start_simd = performance.now();
+  matrix_multiply_simd(matrix_a, matrix_b, result_simd, MATRIX_SIZE);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results match
+  let match = verify_results(result_scalar, result_simd, MATRIX_SIZE * MATRIX_SIZE);
+  
+  // Print results and comparison
+  println("Matrix multiplication (" + MATRIX_SIZE + "x" + MATRIX_SIZE + "):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match: " + (match ? "Yes" : "No"));
+  println("");
+}
+
+// Matrix multiplication - scalar implementation
+fun matrix_multiply_scalar(a, b, c, n) {
+  // c[i,j] = sum(a[i,k] * b[k,j]) for all k
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let sum = 0.0;
+      for (let k = 0; k < n; k++) {
+        sum += a[i * n + k] * b[k * n + j];
+      }
+      c[i * n + j] = sum;
+    }
+  }
+}
+
+// Matrix multiplication - SIMD implementation
+fun matrix_multiply_simd(a, b, c, n) {
+  // Assumes square matrices of size n×n
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j += 4) {
+      // For each block of 4 elements in the output row
+      
+      // Initialize accumulator for this row segment to zeros
+      let row_sum = f32x4.splat(0.0);
+      
+      for (let k = 0; k < n; k++) {
+        // a[i,k] is a scalar that we broadcast to all SIMD lanes
+        let a_element = f32x4.splat(a[i * n + k]);
+        
+        // Load 4 elements from matrix B's row
+        let b_elements = v128.load(b.buffer, (k * n + j) * 4);
+        
+        // Multiply and accumulate
+        let product = f32x4.mul(a_element, b_elements);
+        row_sum = f32x4.add(row_sum, product);
+      }
+      
+      // Store 4 elements of the result row
+      v128.store(c.buffer, (i * n + j) * 4, row_sum);
+    }
+  }
+}
+
+// Example 3: Matrix-vector multiplication
+fun matrix_vector_multiplication_example() {
+  println("== Matrix-Vector Multiplication with SIMD ==");
+  
+  // Create sample matrix and vector
+  const MATRIX_ROWS = 1024;
+  const MATRIX_COLS = 1024;
+  let matrix = new Float32Array(MATRIX_ROWS * MATRIX_COLS);
+  let vector = new Float32Array(MATRIX_COLS);
+  let result_scalar = new Float32Array(MATRIX_ROWS);
+  let result_simd = new Float32Array(MATRIX_ROWS);
+  
+  // Initialize with test data
+  for (let i = 0; i < MATRIX_ROWS; i++) {
+    for (let j = 0; j < MATRIX_COLS; j++) {
+      matrix[i * MATRIX_COLS + j] = (i + j) * 0.01;
+    }
+  }
+  
+  for (let j = 0; j < MATRIX_COLS; j++) {
+    vector[j] = j * 0.1;
+  }
+  
+  // 1. Matrix-vector multiplication - scalar implementation
+  let start_scalar = performance.now();
+  matrix_vector_multiply_scalar(matrix, vector, result_scalar, MATRIX_ROWS, MATRIX_COLS);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Matrix-vector multiplication - SIMD implementation
+  let start_simd = performance.now();
+  matrix_vector_multiply_simd(matrix, vector, result_simd, MATRIX_ROWS, MATRIX_COLS);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results match
+  let match = verify_results(result_scalar, result_simd, MATRIX_ROWS);
+  
+  // Print results and comparison
+  println("Matrix-vector multiplication (" + MATRIX_ROWS + "x" + MATRIX_COLS + "):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match: " + (match ? "Yes" : "No"));
+  println("");
+}
+
+// Matrix-vector multiplication - scalar implementation
+fun matrix_vector_multiply_scalar(matrix, vector, result, rows, cols) {
+  for (let i = 0; i < rows; i++) {
+    let sum = 0.0;
+    for (let j = 0; j < cols; j++) {
+      sum += matrix[i * cols + j] * vector[j];
+    }
+    result[i] = sum;
+  }
+}
+
+// Matrix-vector multiplication - SIMD implementation
+fun matrix_vector_multiply_simd(matrix, vector, result, rows, cols) {
+  for (let i = 0; i < rows; i++) {
+    // Initialize sum vector to zero
+    let sum_vec = f32x4.splat(0.0);
+    
+    // Process 4 elements at a time
+    for (let j = 0; j < cols; j += 4) {
+      // Load 4 elements from the matrix row
+      let m_elements = v128.load(matrix.buffer, (i * cols + j) * 4);
+      
+      // Load 4 elements from the vector
+      let v_elements = v128.load(vector.buffer, j * 4);
+      
+      // Multiply and accumulate
+      let product = f32x4.mul(m_elements, v_elements);
+      sum_vec = f32x4.add(sum_vec, product);
+    }
+    
+    // Horizontal sum to get the final result
+    let sum = f32x4.extract_lane(sum_vec, 0) +
+              f32x4.extract_lane(sum_vec, 1) +
+              f32x4.extract_lane(sum_vec, 2) +
+              f32x4.extract_lane(sum_vec, 3);
+    
+    // Handle any remaining columns
+    let remaining = cols % 4;
+    for (let j = cols - remaining; j < cols; j++) {
+      sum += matrix[i * cols + j] * vector[j];
+    }
+    
+    result[i] = sum;
+  }
+}
+
+// Example 4: Matrix transformations for 3D graphics
+fun matrix_transformation_example() {
+  println("== Matrix Transformations for 3D Graphics ==");
+  
+  // Create a 4x4 transformation matrix (identity initially)
+  let transform_matrix = new Float32Array([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1
+  ]);
+  
+  // Create a set of vertices to transform
+  const NUM_VERTICES = 100000;
+  let vertices = new Float32Array(NUM_VERTICES * 4); // x,y,z,w coordinates
+  
+  // Initialize vertices with test data
+  for (let i = 0; i < NUM_VERTICES; i++) {
+    vertices[i * 4 + 0] = Math.sin(i * 0.01); // x
+    vertices[i * 4 + 1] = Math.cos(i * 0.01); // y
+    vertices[i * 4 + 2] = Math.sin(i * 0.02) * Math.cos(i * 0.03); // z
+    vertices[i * 4 + 3] = 1.0; // w (homogeneous coordinate)
+  }
+  
+  // Create result buffers
+  let result_scalar = new Float32Array(NUM_VERTICES * 4);
+  let result_simd = new Float32Array(NUM_VERTICES * 4);
+  
+  // Apply rotation around Y axis
+  let angle = Math.PI / 4; // 45 degrees
+  let cos_angle = Math.cos(angle);
+  let sin_angle = Math.sin(angle);
+  
+  // Create rotation matrix (around Y axis)
+  let rotation_matrix = new Float32Array([
+    cos_angle, 0, sin_angle, 0,
+    0, 1, 0, 0,
+    -sin_angle, 0, cos_angle, 0,
+    0, 0, 0, 1
+  ]);
+  
+  // 1. Transform vertices - scalar implementation
+  let start_scalar = performance.now();
+  transform_vertices_scalar(vertices, rotation_matrix, result_scalar, NUM_VERTICES);
+  let end_scalar = performance.now();
+  let scalar_time = end_scalar - start_scalar;
+  
+  // 2. Transform vertices - SIMD implementation
+  let start_simd = performance.now();
+  transform_vertices_simd(vertices, rotation_matrix, result_simd, NUM_VERTICES);
+  let end_simd = performance.now();
+  let simd_time = end_simd - start_simd;
+  
+  // Verify results match
+  let match = verify_results(result_scalar, result_simd, NUM_VERTICES * 4);
+  
+  // Print results and comparison
+  println("Vertex transformation (" + NUM_VERTICES + " vertices):");
+  println("  Scalar time: " + scalar_time.toFixed(2) + " ms");
+  println("  SIMD time: " + simd_time.toFixed(2) + " ms");
+  println("  Speedup: " + (scalar_time / simd_time).toFixed(2) + "x");
+  println("  Results match: " + (match ? "Yes" : "No"));
+  
+  // Print a sample transformed vertex
+  println("\nSample vertex transformation:");
+  println("  Original: " + array_to_string(vertices.slice(0, 4), 4));
+  println("  Transformed: " + array_to_string(result_simd.slice(0, 4), 4));
+  println("");
+}
+
+// Transform vertices using a 4x4 matrix - scalar implementation
+fun transform_vertices_scalar(vertices, matrix, result, num_vertices) {
+  for (let i = 0; i < num_vertices; i++) {
+    let x = vertices[i * 4 + 0];
+    let y = vertices[i * 4 + 1];
+    let z = vertices[i * 4 + 2];
+    let w = vertices[i * 4 + 3];
+    
+    result[i * 4 + 0] = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12] * w;
+    result[i * 4 + 1] = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13] * w;
+    result[i * 4 + 2] = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14] * w;
+    result[i * 4 + 3] = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15] * w;
+  }
+}
+
+// Transform vertices using a 4x4 matrix - SIMD implementation
+fun transform_vertices_simd(vertices, matrix, result, num_vertices) {
+  // Load the matrix rows into SIMD registers
+  let row0 = v128.load(matrix.buffer, 0);
+  let row1 = v128.load(matrix.buffer, 16);
+  let row2 = v128.load(matrix.buffer, 32);
+  let row3 = v128.load(matrix.buffer, 48);
+  
+  for (let i = 0; i < num_vertices; i++) {
+    // Load vertex
+    let vertex = v128.load(vertices.buffer, i * 16);
+    
+    // Extract the components for broadcasting
+    let x = f32x4.splat(f32x4.extract_lane(vertex, 0));
+    let y = f32x4.splat(f32x4.extract_lane(vertex, 1));
+    let z = f32x4.splat(f32x4.extract_lane(vertex, 2));
+    let w = f32x4.splat(f32x4.extract_lane(vertex, 3));
+    
+    // Multiply components by rows and sum
+    let result_vertex = f32x4.add(
+      f32x4.add(
+        f32x4.mul(row0, x),
+        f32x4.mul(row1, y)
+      ),
+      f32x4.add(
+        f32x4.mul(row2, z),
+        f32x4.mul(row3, w)
+      )
+    );
+    
+    // Store the result
+    v128.store(result.buffer, i * 16, result_vertex);
+  }
+}
+
+// Helper functions
+
+// Verify that two arrays contain approximately the same values
+fun verify_results(array1, array2, length) {
+  const EPSILON = 0.0001;
+  for (let i = 0; i < length; i++) {
+    if (Math.abs(array1[i] - array2[i]) > EPSILON) {
+      println("Mismatch at index " + i + ": " + array1[i] + " vs " + array2[i]);
+      return false;
+    }
+  }
+  return true;
+}
+
+// Format an array as a string
+fun array_to_string(array, length) {
+  let result = "[";
+  for (let i = 0; i < length; i++) {
+    result += array[i].toFixed(4);
+    if (i < length - 1) result += ", ";
+  }
+  result += "]";
+  return result;
+}
+
+// Main entry point
+fun simd_supported() {
+  try {
+    // Try to instantiate a module with SIMD instructions
+    const bytes = new Uint8Array([
+      0x00, 0x61, 0x73, 0x6d, // wasm magic
+      0x01, 0x00, 0x00, 0x00, // wasm version
+      // Module with a single SIMD instruction
+    ]);
+    return WebAssembly.validate(bytes);
+  } catch (e) {
+    return false;
+  }
+}
+
+// Run all examples
+if (simd_supported()) {
+  main();
+} else {
+  println("WebAssembly SIMD is not supported in your environment.");
+}

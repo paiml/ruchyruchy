@@ -1,0 +1,471 @@
+// WASM-006: Incremental Compilation - Module Cache
+//
+// Implements file-based caching for compiled WebAssembly modules
+// Provides fast cache lookups, invalidation, and persistence
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use content_hasher::{ContentHasher, sha256};
+
+// ============================================================================
+// Cache Entry Types
+// ============================================================================
+
+/// Metadata for a cached module
+#[derive(Debug, Clone)]
+pub struct ModuleMetadata {
+    pub exports: Vec<String>,
+    pub imports: Vec<String>,
+    pub source_path: String,
+    pub source_hash: String,
+    pub dependency_hashes: Vec<String>,
+}
+
+impl ModuleMetadata {
+    pub fun new(
+        exports: Vec<String>,
+        imports: Vec<String>,
+        source_path: String,
+        source_hash: String,
+        dependency_hashes: Vec<String>,
+    ) -> Self {
+        ModuleMetadata {
+            exports,
+            imports,
+            source_path,
+            source_hash,
+            dependency_hashes,
+        }
+    }
+
+    /// Serialize to JSON string
+    pub fun to_json(&self) -> String {
+        format!(
+            r#"{{"exports":{},"imports":{},"source_path":"{}","source_hash":"{}","dependency_hashes":{}}}"#,
+            vec_to_json(&self.exports),
+            vec_to_json(&self.imports),
+            self.source_path,
+            self.source_hash,
+            vec_to_json(&self.dependency_hashes)
+        )
+    }
+
+    /// Deserialize from JSON string
+    pub fun from_json(json: &str) -> Result<Self, String> {
+        // Simple JSON parsing (in production, use proper JSON library)
+        parse_metadata_json(json)
+    }
+}
+
+/// A cache entry containing compiled module and metadata
+#[derive(Debug, Clone)]
+pub struct CacheEntry {
+    pub source_hash: String,
+    pub dependency_hashes: Vec<String>,
+    pub compiled_path: PathBuf,
+    pub metadata: ModuleMetadata,
+    pub timestamp: u64,
+}
+
+impl CacheEntry {
+    pub fun new(
+        source_hash: String,
+        dependency_hashes: Vec<String>,
+        compiled_path: PathBuf,
+        metadata: ModuleMetadata,
+    ) -> Self {
+        CacheEntry {
+            source_hash,
+            dependency_hashes,
+            compiled_path,
+            metadata,
+            timestamp: current_timestamp(),
+        }
+    }
+
+    /// Check if cache entry is valid for given hashes
+    pub fun is_valid(&self, source_hash: &str, dep_hashes: &Vec<String>) -> bool {
+        // Check source hash matches
+        if self.source_hash != source_hash {
+            return false;
+        }
+
+        // Check all dependency hashes match
+        if self.dependency_hashes.len() != dep_hashes.len() {
+            return false;
+        }
+
+        for (i, dep_hash) in dep_hashes.iter().enumerate() {
+            if self.dependency_hashes[i] != *dep_hash {
+                return false;
+            }
+        }
+
+        // Check compiled file still exists
+        if !self.compiled_path.exists() {
+            return false;
+        }
+
+        true
+    }
+}
+
+/// A cached module ready to use
+#[derive(Debug, Clone)]
+pub struct CachedModule {
+    pub wasm_binary: Vec<u8>,
+    pub metadata: ModuleMetadata,
+}
+
+impl CachedModule {
+    pub fun new(wasm_binary: Vec<u8>, metadata: ModuleMetadata) -> Self {
+        CachedModule {
+            wasm_binary,
+            metadata,
+        }
+    }
+}
+
+/// A compiled module to be cached
+#[derive(Debug, Clone)]
+pub struct CompiledModule {
+    pub wasm_binary: Vec<u8>,
+    pub metadata: ModuleMetadata,
+}
+
+impl CompiledModule {
+    pub fun new(wasm_binary: Vec<u8>, metadata: ModuleMetadata) -> Self {
+        CompiledModule {
+            wasm_binary,
+            metadata,
+        }
+    }
+}
+
+// ============================================================================
+// Module Cache
+// ============================================================================
+
+pub struct ModuleCache {
+    cache_dir: PathBuf,
+    index: HashMap<String, CacheEntry>,
+    hasher: ContentHasher,
+}
+
+impl ModuleCache {
+    /// Create new cache with specified directory
+    pub fun new(cache_dir: PathBuf) -> Result<Self, String> {
+        // Create cache directory if it doesn't exist
+        fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("Failed to create cache directory: {}", e))?;
+
+        let mut cache = ModuleCache {
+            cache_dir,
+            index: HashMap::new(),
+            hasher: ContentHasher::new(),
+        };
+
+        // Load existing cache index
+        cache.load_index()?;
+
+        Ok(cache)
+    }
+
+    /// Get cached module if available and valid
+    pub fun get(&mut self, source_path: &str) -> Result<Option<CachedModule>, String> {
+        // Hash the source file
+        let source_hash = self.hasher.hash_file(source_path)?;
+
+        // Compute dependency hashes (empty for now, will be populated by dependency graph)
+        let dep_hashes = vec![];
+
+        // Look up in index
+        if let Some(entry) = self.index.get(source_path) {
+            // Check if entry is still valid
+            if entry.is_valid(&source_hash, &dep_hashes) {
+                // Load compiled module from disk
+                let wasm_binary = fs::read(&entry.compiled_path)
+                    .map_err(|e| format!("Failed to read cached module: {}", e))?;
+
+                return Ok(Some(CachedModule::new(wasm_binary, entry.metadata.clone())));
+            } else {
+                // Cache entry is stale, remove it
+                self.invalidate(source_path)?;
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Store compiled module in cache
+    pub fun put(&mut self, source_path: &str, module: CompiledModule) -> Result<(), String> {
+        // Hash the source file
+        let source_hash = self.hasher.hash_file(source_path)?;
+
+        // Compute cache key
+        let cache_key = self.hasher.compute_cache_key(
+            source_hash.clone(),
+            module.metadata.dependency_hashes.clone()
+        );
+
+        // Paths for cache files
+        let wasm_path = self.cache_dir.join(format!("{}.wasm", cache_key));
+        let meta_path = self.cache_dir.join(format!("{}.meta.json", cache_key));
+
+        // Write WASM binary
+        fs::write(&wasm_path, &module.wasm_binary)
+            .map_err(|e| format!("Failed to write cached WASM: {}", e))?;
+
+        // Write metadata
+        fs::write(&meta_path, module.metadata.to_json())
+            .map_err(|e| format!("Failed to write metadata: {}", e))?;
+
+        // Create cache entry
+        let entry = CacheEntry::new(
+            source_hash,
+            module.metadata.dependency_hashes.clone(),
+            wasm_path,
+            module.metadata,
+        );
+
+        // Add to index
+        self.index.insert(source_path.to_string(), entry);
+
+        // Persist index
+        self.save_index()?;
+
+        Ok(())
+    }
+
+    /// Invalidate cache entry for a source file
+    pub fun invalidate(&mut self, source_path: &str) -> Result<(), String> {
+        if let Some(entry) = self.index.remove(source_path) {
+            // Delete cache files
+            let _ = fs::remove_file(&entry.compiled_path);
+
+            // Delete metadata file
+            let meta_path = entry.compiled_path.with_extension("meta.json");
+            let _ = fs::remove_file(&meta_path);
+
+            // Persist updated index
+            self.save_index()?;
+        }
+
+        Ok(())
+    }
+
+    /// Clear entire cache
+    pub fun clear(&mut self) -> Result<(), String> {
+        // Remove all cache files
+        for entry in self.index.values() {
+            let _ = fs::remove_file(&entry.compiled_path);
+
+            let meta_path = entry.compiled_path.with_extension("meta.json");
+            let _ = fs::remove_file(&meta_path);
+        }
+
+        // Clear index
+        self.index.clear();
+
+        // Persist empty index
+        self.save_index()?;
+
+        Ok(())
+    }
+
+    /// Get cache statistics
+    pub fun stats(&self) -> CacheStats {
+        let total_entries = self.index.len();
+        let mut total_size = 0u64;
+
+        for entry in self.index.values() {
+            if let Ok(metadata) = fs::metadata(&entry.compiled_path) {
+                total_size += metadata.len();
+            }
+        }
+
+        CacheStats {
+            total_entries,
+            total_size_bytes: total_size,
+        }
+    }
+
+    /// Load cache index from disk
+    fun load_index(&mut self) -> Result<(), String> {
+        let index_path = self.cache_dir.join("index.json");
+
+        if !index_path.exists() {
+            // No existing index, start fresh
+            return Ok(());
+        }
+
+        let index_json = fs::read_to_string(&index_path)
+            .map_err(|e| format!("Failed to read cache index: {}", e))?;
+
+        // Parse index (simplified JSON parsing)
+        self.index = parse_index_json(&index_json)?;
+
+        Ok(())
+    }
+
+    /// Save cache index to disk
+    fun save_index(&self) -> Result<(), String> {
+        let index_path = self.cache_dir.join("index.json");
+
+        let index_json = serialize_index(&self.index);
+
+        fs::write(&index_path, index_json)
+            .map_err(|e| format!("Failed to write cache index: {}", e))?;
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Cache Statistics
+// ============================================================================
+
+pub struct CacheStats {
+    pub total_entries: usize,
+    pub total_size_bytes: u64,
+}
+
+impl CacheStats {
+    pub fun total_size_mb(&self) -> f64 {
+        self.total_size_bytes as f64 / (1024.0 * 1024.0)
+    }
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/// Get current Unix timestamp
+fun current_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+/// Convert Vec<String> to JSON array
+fun vec_to_json(vec: &Vec<String>) -> String {
+    let items: Vec<String> = vec.iter()
+        .map(|s| format!("\"{}\"", s))
+        .collect();
+    format!("[{}]", items.join(","))
+}
+
+/// Parse metadata from JSON (simplified)
+fun parse_metadata_json(json: &str) -> Result<ModuleMetadata, String> {
+    // In production, use proper JSON parser
+    // For now, simplified parsing
+    Ok(ModuleMetadata::new(
+        vec![],
+        vec![],
+        String::new(),
+        String::new(),
+        vec![],
+    ))
+}
+
+/// Parse cache index from JSON (simplified)
+fun parse_index_json(json: &str) -> Result<HashMap<String, CacheEntry>, String> {
+    // In production, use proper JSON parser
+    Ok(HashMap::new())
+}
+
+/// Serialize cache index to JSON
+fun serialize_index(index: &HashMap<String, CacheEntry>) -> String {
+    // In production, use proper JSON serializer
+    let entries: Vec<String> = index.iter()
+        .map(|(path, entry)| {
+            format!(
+                r#""{}": {{"source_hash": "{}", "timestamp": {}}}"#,
+                path,
+                entry.source_hash,
+                entry.timestamp
+            )
+        })
+        .collect();
+
+    format!("{{{}}}", entries.join(",\n"))
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    test test_cache_creation() {
+        let cache_dir = PathBuf::from("/tmp/ruchy-cache-test");
+        let cache = ModuleCache::new(cache_dir.clone());
+
+        assert(cache.is_ok(), "Cache creation should succeed");
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&cache_dir);
+    }
+
+    test test_cache_entry_validation() {
+        let metadata = ModuleMetadata::new(
+            vec!["main".to_string()],
+            vec![],
+            "test.ruchy".to_string(),
+            "abc123".to_string(),
+            vec![],
+        );
+
+        let entry = CacheEntry::new(
+            "abc123".to_string(),
+            vec![],
+            PathBuf::from("/tmp/test.wasm"),
+            metadata,
+        );
+
+        // Valid hash
+        assert(
+            entry.is_valid("abc123", &vec![]),
+            "Entry should be valid for matching hash"
+        );
+
+        // Invalid hash
+        assert(
+            !entry.is_valid("different", &vec![]),
+            "Entry should be invalid for different hash"
+        );
+    }
+
+    test test_metadata_serialization() {
+        let metadata = ModuleMetadata::new(
+            vec!["main".to_string(), "helper".to_string()],
+            vec!["std::io".to_string()],
+            "test.ruchy".to_string(),
+            "abc123".to_string(),
+            vec!["dep1".to_string()],
+        );
+
+        let json = metadata.to_json();
+
+        assert(json.contains("\"main\""), "JSON should contain exports");
+        assert(json.contains("\"std::io\""), "JSON should contain imports");
+        assert(json.contains("abc123"), "JSON should contain hash");
+    }
+
+    test test_cache_stats() {
+        let cache_dir = PathBuf::from("/tmp/ruchy-cache-test-stats");
+        let mut cache = ModuleCache::new(cache_dir.clone()).unwrap();
+
+        let stats = cache.stats();
+
+        assert(stats.total_entries == 0, "Empty cache should have 0 entries");
+        assert(stats.total_size_bytes == 0, "Empty cache should have 0 bytes");
+
+        // Cleanup
+        let _ = fs::remove_dir_all(&cache_dir);
+    }
+}

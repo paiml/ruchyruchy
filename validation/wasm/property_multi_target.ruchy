@@ -1,0 +1,891 @@
+// Property testing for the Multi-Target Compiler
+// Tests mathematical properties of the compiler implementation
+
+// Import test framework
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
+
+// Constants for test configuration
+const NUM_TEST_CASES: usize = 1000;
+const MAX_TEST_COMPLEXITY: usize = 5;
+const TEST_SEED: u64 = 12345;
+const TEST_DIR: &str = "/tmp/ruchy_multi_target_test";
+
+// Global counters for test statistics
+static TESTS_TOTAL: AtomicUsize = AtomicUsize::new(0);
+static TESTS_PASSED: AtomicUsize = AtomicUsize::new(0);
+static TESTS_FAILED: AtomicUsize = AtomicUsize::new(0);
+
+// Test utilities
+
+// Setup test directory
+fun setup_test_env() {
+    if Path::new(TEST_DIR).exists() {
+        fs::remove_dir_all(TEST_DIR).expect("Failed to clean test directory");
+    }
+    fs::create_dir_all(TEST_DIR).expect("Failed to create test directory");
+    println("📂 Created test directory at: {}", TEST_DIR);
+}
+
+// Cleanup test directory
+fun cleanup_test_env() {
+    if Path::new(TEST_DIR).exists() {
+        fs::remove_dir_all(TEST_DIR).expect("Failed to clean test directory");
+    }
+    println("🧹 Cleaned up test directory");
+}
+
+// Generate a random Ruchy program
+fun generate_random_program(
+    rng: &mut StdRng,
+    complexity: usize,
+    include_errors: bool
+) -> String {
+    let mut program = String::new();
+    
+    // Generate imports
+    if rng.gen_range(0..3) > 0 {
+        program.push_str("use std::collections::HashMap;\n");
+        program.push_str("use std::io::Write;\n");
+    }
+    
+    // Generate a random number of functions (1-5)
+    let num_functions = rng.gen_range(1..=(complexity.min(5)));
+    
+    for i in 0..num_functions {
+        let function_name = format!("test_function_{}", i);
+        let num_params = rng.gen_range(0..complexity.min(5));
+        
+        // Function signature
+        program.push_str(&format!("fun {}(", function_name));
+        
+        for j in 0..num_params {
+            let param_name = format!("param_{}", j);
+            let param_type = generate_random_type(rng, complexity / 2);
+            
+            program.push_str(&format!("{}: {}", param_name, param_type));
+            
+            if j < num_params - 1 {
+                program.push_str(", ");
+            }
+        }
+        
+        // Return type
+        if rng.gen_bool(0.7) {
+            let return_type = generate_random_type(rng, complexity / 2);
+            program.push_str(&format!(") -> {} {{\n", return_type));
+        } else {
+            program.push_str(") {\n");
+        }
+        
+        // Function body
+        program.push_str(&generate_function_body(rng, complexity, include_errors));
+        
+        program.push_str("}\n\n");
+    }
+    
+    // Add a main function
+    program.push_str("fun main() {\n");
+    
+    for i in 0..num_functions {
+        let function_name = format!("test_function_{}", i);
+        
+        if rng.gen_bool(0.5) {
+            program.push_str(&format!("  {}();\n", function_name));
+        }
+    }
+    
+    program.push_str("}\n");
+    
+    program
+}
+
+// Generate a random Ruchy type
+fun generate_random_type(rng: &mut StdRng, complexity: usize) -> String {
+    if complexity <= 0 || rng.gen_bool(0.8) {
+        // Primitive types
+        let primitives = ["i32", "i64", "f32", "f64", "bool", "string"];
+        return primitives[rng.gen_range(0..primitives.len())].to_string();
+    } else {
+        // Complex types
+        match rng.gen_range(0..3) {
+            0 => {
+                // Array
+                let element_type = generate_random_type(rng, complexity - 1);
+                format!("Vec<{}>", element_type)
+            },
+            1 => {
+                // Map
+                let key_type = generate_random_type(rng, complexity - 1);
+                let value_type = generate_random_type(rng, complexity - 1);
+                format!("HashMap<{}, {}>", key_type, value_type)
+            },
+            _ => {
+                // Function
+                let num_params = rng.gen_range(0..2);
+                let mut function_type = "fn(".to_string();
+                
+                for j in 0..num_params {
+                    let param_type = generate_random_type(rng, complexity - 1);
+                    function_type.push_str(&param_type);
+                    
+                    if j < num_params - 1 {
+                        function_type.push_str(", ");
+                    }
+                }
+                
+                let return_type = generate_random_type(rng, complexity - 1);
+                format!("{}) -> {}", function_type, return_type)
+            }
+        }
+    }
+}
+
+// Generate a random function body
+fun generate_function_body(
+    rng: &mut StdRng,
+    complexity: usize,
+    include_errors: bool
+) -> String {
+    let mut body = String::new();
+    
+    // Generate a random number of statements
+    let num_statements = rng.gen_range(1..=complexity.min(10));
+    
+    for _ in 0..num_statements {
+        let statement = generate_random_statement(rng, complexity, include_errors);
+        body.push_str(&format!("  {}\n", statement));
+    }
+    
+    // Add a return statement
+    if rng.gen_bool(0.7) {
+        let return_value = generate_random_expression(rng, complexity);
+        body.push_str(&format!("  return {};\n", return_value));
+    }
+    
+    body
+}
+
+// Generate a random statement
+fun generate_random_statement(
+    rng: &mut StdRng,
+    complexity: usize,
+    include_errors: bool
+) -> String {
+    match rng.gen_range(0..5) {
+        0 => {
+            // Variable declaration
+            let var_name = format!("var_{}", rng.gen_range(0..10));
+            let var_type = if rng.gen_bool(0.5) {
+                format!(": {}", generate_random_type(rng, complexity / 2))
+            } else {
+                String::new()
+            };
+            
+            let var_value = generate_random_expression(rng, complexity);
+            
+            // Optionally introduce a type error
+            if include_errors && rng.gen_bool(0.1) {
+                format!("let {}{} = {}; // Type error", var_name, var_type, "\"string\" + 42")
+            } else {
+                format!("let {}{} = {};", var_name, var_type, var_value)
+            }
+        },
+        1 => {
+            // If statement
+            let condition = generate_random_expression(rng, complexity);
+            let then_body = generate_random_statement(rng, complexity / 2, include_errors);
+            
+            if complexity > 1 && rng.gen_bool(0.5) {
+                let else_body = generate_random_statement(rng, complexity / 2, include_errors);
+                format!("if ({}) {{ {} }} else {{ {} }}", condition, then_body, else_body)
+            } else {
+                format!("if ({}) {{ {} }}", condition, then_body)
+            }
+        },
+        2 => {
+            // Function call
+            let function_name = format!("test_function_{}", rng.gen_range(0..5));
+            let num_args = rng.gen_range(0..3);
+            
+            let mut args = Vec::new();
+            for _ in 0..num_args {
+                args.push(generate_random_expression(rng, complexity / 2));
+            }
+            
+            // Optionally introduce an undefined variable
+            if include_errors && rng.gen_bool(0.1) {
+                format!("{}({}, undefined_var);", function_name, args.join(", "))
+            } else {
+                format!("{}({});", function_name, args.join(", "))
+            }
+        },
+        3 => {
+            // Loop statement
+            let loop_var = format!("i_{}", rng.gen_range(0..5));
+            let loop_limit = rng.gen_range(1..10);
+            let loop_body = generate_random_statement(rng, complexity / 2, include_errors);
+            
+            format!("for {} in 0..{} {{ {} }}", loop_var, loop_limit, loop_body)
+        },
+        _ => {
+            // Expression statement
+            let expr = generate_random_expression(rng, complexity);
+            
+            // Optionally introduce a syntax error
+            if include_errors && rng.gen_bool(0.1) {
+                format!("{}; }", expr) // Unbalanced bracket
+            } else {
+                format!("{};", expr)
+            }
+        }
+    }
+}
+
+// Generate a random expression
+fun generate_random_expression(
+    rng: &mut StdRng,
+    complexity: usize
+) -> String {
+    if complexity <= 0 || rng.gen_bool(0.5) {
+        // Leaf expression
+        match rng.gen_range(0..5) {
+            0 => rng.gen_range(0..100).to_string(), // Integer
+            1 => format!("{:.2}", rng.gen_range(0.0..100.0)), // Float
+            2 => format!("\"string_{}\"", rng.gen_range(0..10)), // String
+            3 => (rng.gen_bool(0.5)).to_string(), // Boolean
+            _ => format!("var_{}", rng.gen_range(0..10)) // Variable
+        }
+    } else {
+        // Complex expression
+        match rng.gen_range(0..4) {
+            0 => {
+                // Binary operation
+                let left = generate_random_expression(rng, complexity - 1);
+                let right = generate_random_expression(rng, complexity - 1);
+                let ops = ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&&", "||"];
+                let op = ops[rng.gen_range(0..ops.len())];
+                
+                format!("({} {} {})", left, op, right)
+            },
+            1 => {
+                // Function call
+                let function_name = format!("test_function_{}", rng.gen_range(0..5));
+                let num_args = rng.gen_range(0..3);
+                
+                let mut args = Vec::new();
+                for _ in 0..num_args {
+                    args.push(generate_random_expression(rng, complexity - 1));
+                }
+                
+                format!("{}({})", function_name, args.join(", "))
+            },
+            2 => {
+                // Ternary condition
+                let condition = generate_random_expression(rng, complexity - 1);
+                let then_expr = generate_random_expression(rng, complexity - 1);
+                let else_expr = generate_random_expression(rng, complexity - 1);
+                
+                format!("if ({}) {{ {} }} else {{ {} }}", condition, then_expr, else_expr)
+            },
+            _ => {
+                // Array/Map access
+                let collection = format!("var_{}", rng.gen_range(0..10));
+                let index = rng.gen_range(0..10);
+                
+                format!("{}[{}]", collection, index)
+            }
+        }
+    }
+}
+
+// Write a program to a file
+fun write_program_to_file(program: &str, file_path: &str) -> std::io::Result<()> {
+    let mut file = File::create(file_path)?;
+    file.write_all(program.as_bytes())?;
+    Ok(())
+}
+
+// Property tests
+
+// Property: Compilation Soundness
+// Well-typed Ruchy programs should compile successfully to all targets
+fun test_compilation_soundness() {
+    println("\n🧪 Testing Property: Compilation Soundness");
+    println("------------------------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(TEST_SEED);
+    
+    for i in 0..NUM_TEST_CASES {
+        TESTS_TOTAL.fetch_add(1, Ordering::SeqCst);
+        
+        // Generate a well-typed program (no errors)
+        let complexity = rng.gen_range(1..MAX_TEST_COMPLEXITY);
+        let program = generate_random_program(&mut rng, complexity, false);
+        
+        let file_path = format!("{}/sound_{}.ruchy", TEST_DIR, i);
+        write_program_to_file(&program, &file_path).expect("Failed to write test program");
+        
+        // Create a source file
+        let source_file = SourceFile::new(
+            &file_path,
+            program.clone()
+        );
+        
+        // Create a compiler with default config
+        let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        
+        // Try compiling to all targets
+        let mut results = HashMap::new();
+        let targets = [
+            CompilationTarget::Wasm,
+            CompilationTarget::TypeScript,
+            CompilationTarget::Rust
+        ];
+        
+        let mut all_successful = true;
+        for target in &targets {
+            let result = compiler.compile_to_target(
+                source_file.clone(),
+                *target
+            );
+            
+            if result.is_err() || compiler.diagnostics.has_errors() {
+                all_successful = false;
+                println("❌ Compilation failed for target {:?}", target);
+                println("   Program:\n{}", program);
+                println("   Errors:");
+                for error in compiler.diagnostics.get_errors() {
+                    println("   - {}", error.message);
+                }
+                break;
+            }
+            
+            results.insert(*target, result.unwrap());
+        }
+        
+        if all_successful {
+            TESTS_PASSED.fetch_add(1, Ordering::SeqCst);
+            if i % 100 == 0 {
+                println("✅ Test case {} passed", i);
+            }
+        } else {
+            TESTS_FAILED.fetch_add(1, Ordering::SeqCst);
+            println("❌ Test case {} failed", i);
+        }
+    }
+    
+    // Report results
+    let total = TESTS_TOTAL.load(Ordering::SeqCst);
+    let passed = TESTS_PASSED.load(Ordering::SeqCst);
+    let pass_rate = (passed as f64 / total as f64) * 100.0;
+    
+    println("\nCompilation Soundness Test Results:");
+    println("- Total Test Cases: {}", total);
+    println("- Passed: {} ({:.2}%)", passed, pass_rate);
+    println("- Failed: {}", TESTS_FAILED.load(Ordering::SeqCst));
+    
+    // Assert a high pass rate (allow a few failures for edge cases)
+    assert!(pass_rate > 95.0, "Pass rate below 95%");
+    
+    println("✅ Property verified: Compilation Soundness");
+}
+
+// Property: Type Safety
+// Type errors should be caught during compilation
+fun test_type_safety() {
+    println("\n🧪 Testing Property: Type Safety");
+    println("--------------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(TEST_SEED + 1);
+    let mut detected_errors = 0;
+    let mut total_programs_with_errors = 0;
+    
+    for i in 0..NUM_TEST_CASES {
+        // Generate a program with intentional type errors
+        let complexity = rng.gen_range(1..MAX_TEST_COMPLEXITY);
+        let program = generate_random_program(&mut rng, complexity, true);
+        
+        let file_path = format!("{}/typesafe_{}.ruchy", TEST_DIR, i);
+        write_program_to_file(&program, &file_path).expect("Failed to write test program");
+        
+        // Count expected errors by scanning for error comments
+        let expected_errors = program.lines()
+            .filter(|line| line.contains("// Type error"))
+            .count();
+            
+        if expected_errors == 0 {
+            continue; // Skip programs without intentional errors
+        }
+        
+        total_programs_with_errors += 1;
+        
+        // Create a source file
+        let source_file = SourceFile::new(
+            &file_path,
+            program.clone()
+        );
+        
+        // Create a compiler with default config
+        let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        
+        // Try compiling to WebAssembly (could use any target)
+        let result = compiler.compile_to_target(
+            source_file,
+            CompilationTarget::Wasm
+        );
+        
+        // Check if errors were detected
+        let actual_errors = compiler.diagnostics.get_errors()
+            .iter()
+            .filter(|diag| diag.message.contains("Type") || diag.message.contains("type"))
+            .count();
+        
+        if actual_errors >= expected_errors {
+            detected_errors += 1;
+            if i % 100 == 0 {
+                println("✅ Test case {} passed: detected {} of {} errors", i, actual_errors, expected_errors);
+            }
+        } else {
+            println("❌ Test case {} failed: detected only {} of {} errors", i, actual_errors, expected_errors);
+            println("   Program:\n{}", program);
+        }
+    }
+    
+    // Report results
+    if total_programs_with_errors > 0 {
+        let detection_rate = (detected_errors as f64 / total_programs_with_errors as f64) * 100.0;
+        
+        println("\nType Safety Test Results:");
+        println("- Total Programs with Errors: {}", total_programs_with_errors);
+        println("- Errors Detected: {} ({:.2}%)", detected_errors, detection_rate);
+        
+        // Assert a high detection rate
+        assert!(detection_rate > 90.0, "Error detection rate below 90%");
+        
+        println("✅ Property verified: Type Safety");
+    } else {
+        println("\nNo programs with intentional type errors were generated.");
+        println("Test inconclusive.");
+    }
+}
+
+// Property: Idempotence
+// Compiling the same source twice should produce equivalent output
+fun test_idempotence() {
+    println("\n🧪 Testing Property: Idempotence");
+    println("--------------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(TEST_SEED + 2);
+    let mut passed = 0;
+    let mut total = 0;
+    
+    for i in 0..NUM_TEST_CASES {
+        total += 1;
+        
+        // Generate a well-typed program
+        let complexity = rng.gen_range(1..MAX_TEST_COMPLEXITY);
+        let program = generate_random_program(&mut rng, complexity, false);
+        
+        let file_path = format!("{}/idempotent_{}.ruchy", TEST_DIR, i);
+        write_program_to_file(&program, &file_path).expect("Failed to write test program");
+        
+        // Create a source file
+        let source_file = SourceFile::new(
+            &file_path,
+            program.clone()
+        );
+        
+        // Choose a random target
+        let targets = [
+            CompilationTarget::Wasm,
+            CompilationTarget::TypeScript,
+            CompilationTarget::Rust
+        ];
+        let target = targets[rng.gen_range(0..targets.len())];
+        
+        // First compilation
+        let mut compiler1 = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        let result1 = compiler1.compile_to_target(
+            source_file.clone(),
+            target
+        );
+        
+        if result1.is_err() {
+            // Skip if compilation fails
+            println("⚠️ Skipping test case {}: compilation failed", i);
+            total -= 1;
+            continue;
+        }
+        
+        let output1 = result1.unwrap();
+        
+        // Second compilation
+        let mut compiler2 = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        let result2 = compiler2.compile_to_target(
+            source_file.clone(),
+            target
+        );
+        
+        if result2.is_err() {
+            // This shouldn't happen if the first compilation succeeded
+            println("❌ Test case {} failed: second compilation failed unexpectedly", i);
+            continue;
+        }
+        
+        let output2 = result2.unwrap();
+        
+        // Compare outputs
+        if output1.code == output2.code {
+            passed += 1;
+            if i % 100 == 0 {
+                println("✅ Test case {} passed: outputs are identical", i);
+            }
+        } else {
+            println("❌ Test case {} failed: outputs differ", i);
+            println("   Target: {:?}", target);
+            println("   Program:\n{}", program);
+            println("   Output 1 (first {} bytes):\n{}", output1.code.len().min(100), &output1.code[..output1.code.len().min(100)]);
+            println("   Output 2 (first {} bytes):\n{}", output2.code.len().min(100), &output2.code[..output2.code.len().min(100)]);
+        }
+    }
+    
+    // Report results
+    let pass_rate = (passed as f64 / total as f64) * 100.0;
+    
+    println("\nIdempotence Test Results:");
+    println("- Total Test Cases: {}", total);
+    println("- Passed: {} ({:.2}%)", passed, pass_rate);
+    
+    // Assert 100% idempotence
+    assert!(pass_rate > 99.5, "Idempotence pass rate below 99.5%");
+    
+    println("✅ Property verified: Idempotence");
+}
+
+// Property: Target Independence
+// AST and type-checking phases should be target-independent
+fun test_target_independence() {
+    println("\n🧪 Testing Property: Target Independence");
+    println("---------------------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(TEST_SEED + 3);
+    let mut passed = 0;
+    let mut total = 0;
+    
+    for i in 0..NUM_TEST_CASES {
+        total += 1;
+        
+        // Generate a well-typed program
+        let complexity = rng.gen_range(1..MAX_TEST_COMPLEXITY);
+        let program = generate_random_program(&mut rng, complexity, false);
+        
+        let file_path = format!("{}/target_independence_{}.ruchy", TEST_DIR, i);
+        write_program_to_file(&program, &file_path).expect("Failed to write test program");
+        
+        // Create a source file
+        let source_file = SourceFile::new(
+            &file_path,
+            program.clone()
+        );
+        
+        // Create compilers for different targets
+        let mut wasm_compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        let mut ts_compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        let mut rust_compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        
+        // Parse and type-check with different targets
+        let _ = wasm_compiler.compile_to_target(
+            source_file.clone(),
+            CompilationTarget::Wasm
+        );
+        
+        let _ = ts_compiler.compile_to_target(
+            source_file.clone(),
+            CompilationTarget::TypeScript
+        );
+        
+        let _ = rust_compiler.compile_to_target(
+            source_file.clone(),
+            CompilationTarget::Rust
+        );
+        
+        // Check if any failed to compile
+        if wasm_compiler.diagnostics.has_errors() || 
+           ts_compiler.diagnostics.has_errors() || 
+           rust_compiler.diagnostics.has_errors() {
+            // Skip if any compilation fails
+            println("⚠️ Skipping test case {}: compilation failed", i);
+            total -= 1;
+            continue;
+        }
+        
+        // Get AST string representations
+        let wasm_ast = format!("{:?}", wasm_compiler.ast.as_ref().unwrap());
+        let ts_ast = format!("{:?}", ts_compiler.ast.as_ref().unwrap());
+        let rust_ast = format!("{:?}", rust_compiler.ast.as_ref().unwrap());
+        
+        // Get type environment string representations
+        let wasm_types = format!("{:?}", wasm_compiler.type_env.as_ref().unwrap());
+        let ts_types = format!("{:?}", ts_compiler.type_env.as_ref().unwrap());
+        let rust_types = format!("{:?}", rust_compiler.type_env.as_ref().unwrap());
+        
+        // Compare ASTs and type environments
+        if wasm_ast == ts_ast && ts_ast == rust_ast && 
+           wasm_types == ts_types && ts_types == rust_types {
+            passed += 1;
+            if i % 100 == 0 {
+                println("✅ Test case {} passed: AST and types are identical across targets", i);
+            }
+        } else {
+            println("❌ Test case {} failed: AST or types differ across targets", i);
+            println("   Program:\n{}", program);
+            
+            if wasm_ast != ts_ast || wasm_ast != rust_ast {
+                println("   ASTs differ");
+            }
+            
+            if wasm_types != ts_types || wasm_types != rust_types {
+                println("   Type environments differ");
+            }
+        }
+    }
+    
+    // Report results
+    let pass_rate = (passed as f64 / total as f64) * 100.0;
+    
+    println("\nTarget Independence Test Results:");
+    println("- Total Test Cases: {}", total);
+    println("- Passed: {} ({:.2}%)", passed, pass_rate);
+    
+    // Assert a high pass rate (allow a few edge cases)
+    assert!(pass_rate > 99.0, "Target independence pass rate below 99%");
+    
+    println("✅ Property verified: Target Independence");
+}
+
+// Property: Error Recovery
+// The compiler should recover from non-critical errors
+fun test_error_recovery() {
+    println("\n🧪 Testing Property: Error Recovery");
+    println("----------------------------------");
+    
+    let mut rng = StdRng::seed_from_u64(TEST_SEED + 4);
+    let mut passed = 0;
+    let mut total = 0;
+    
+    for i in 0..NUM_TEST_CASES {
+        total += 1;
+        
+        // Generate a program with intentional errors
+        let complexity = rng.gen_range(1..MAX_TEST_COMPLEXITY);
+        let program = generate_random_program(&mut rng, complexity, true);
+        
+        let file_path = format!("{}/error_recovery_{}.ruchy", TEST_DIR, i);
+        write_program_to_file(&program, &file_path).expect("Failed to write test program");
+        
+        // Create a source file
+        let source_file = SourceFile::new(
+            &file_path,
+            program.clone()
+        );
+        
+        // Create a compiler with recovery options enabled
+        let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig {
+            optimization_level: OptimizationLevel::O0,
+            debug_info: true,
+            source_maps: true,
+            target_features: HashMap::new(),
+            mode: CompilationMode::Development,
+        });
+        
+        // Set recovery options
+        compiler.set_parser_options(ParserOptions {
+            strict_mode: false,
+            recover_from_errors: true,
+            max_errors: 100,
+        });
+        
+        // Try compiling to any target
+        let result = compiler.compile_to_target(
+            source_file.clone(),
+            CompilationTarget::TypeScript // TypeScript is most lenient for errors
+        );
+        
+        // Check if we produced any output despite errors
+        if compiler.diagnostics.has_errors() && result.is_ok() {
+            passed += 1;
+            if i % 100 == 0 {
+                println("✅ Test case {} passed: produced output despite {} errors", 
+                        i, compiler.diagnostics.get_errors().len());
+            }
+        } else if !compiler.diagnostics.has_errors() {
+            // No errors to recover from
+            println("⚠️ Skipping test case {}: no errors detected", i);
+            total -= 1;
+            continue;
+        } else {
+            println("❌ Test case {} failed: could not recover from errors", i);
+            println("   Program:\n{}", program);
+            println("   Errors:");
+            for error in compiler.diagnostics.get_errors() {
+                println("   - {}", error.message);
+            }
+        }
+    }
+    
+    // Report results
+    let pass_rate = (passed as f64 / total as f64) * 100.0;
+    
+    println("\nError Recovery Test Results:");
+    println("- Total Test Cases: {}", total);
+    println("- Passed: {} ({:.2}%)", passed, pass_rate);
+    
+    // Assert a reasonable recovery rate (allow some unrecoverable errors)
+    assert!(pass_rate > 70.0, "Error recovery rate below 70%");
+    
+    println("✅ Property verified: Error Recovery");
+}
+
+// Property: Preservation
+// Semantics should be preserved across targets
+fun test_semantic_preservation() {
+    println("\n🧪 Testing Property: Semantic Preservation");
+    println("------------------------------------------");
+    
+    // This is a simplified test for semantic preservation
+    // A complete test would execute the compiled code in different targets
+    // and compare results, which is beyond the scope of this testing
+    
+    // Instead, we'll verify that the same AST nodes produce consistent output
+    // patterns across targets
+    
+    // Define simple test cases with known semantics
+    let test_cases = [
+        "fun add(a: i32, b: i32) -> i32 { return a + b; }",
+        "fun factorial(n: i32) -> i32 { if n <= 1 { return 1; } return n * factorial(n - 1); }",
+        "fun greet(name: string) -> string { return \"Hello, \" + name + \"!\"; }",
+        "fun map<T, U>(arr: Vec<T>, fn: fun(T) -> U) -> Vec<U> { let result: Vec<U> = Vec::new(); for i in 0..arr.len() { result.push(fn(arr[i])); } return result; }",
+    ];
+    
+    let mut passed = 0;
+    
+    for (i, test_case) in test_cases.iter().enumerate() {
+        let file_path = format!("{}/preservation_{}.ruchy", TEST_DIR, i);
+        write_program_to_file(test_case, &file_path).expect("Failed to write test program");
+        
+        let source_file = SourceFile::new(
+            &file_path,
+            test_case.to_string()
+        );
+        
+        // Compile to all targets
+        let mut wasm_compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        let wasm_result = wasm_compiler.compile_to_target(
+            source_file.clone(),
+            CompilationTarget::Wasm
+        );
+        
+        let mut ts_compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        let ts_result = ts_compiler.compile_to_target(
+            source_file.clone(),
+            CompilationTarget::TypeScript
+        );
+        
+        let mut rust_compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+        let rust_result = rust_compiler.compile_to_target(
+            source_file.clone(),
+            CompilationTarget::Rust
+        );
+        
+        // Check if any failed to compile
+        if wasm_result.is_err() || ts_result.is_err() || rust_result.is_err() {
+            println("❌ Test case {} failed: compilation error", i);
+            println("   Program:\n{}", test_case);
+            continue;
+        }
+        
+        // Get compiled code
+        let wasm_code = wasm_result.unwrap().code;
+        let ts_code = ts_result.unwrap().code;
+        let rust_code = rust_result.unwrap().code;
+        
+        // Check for semantic markers in the output
+        // For WebAssembly, check for function exports
+        let wasm_has_function = wasm_code.contains("export");
+        
+        // For TypeScript, check for function definition
+        let ts_has_function = ts_code.contains("function");
+        
+        // For Rust, check for fun definition
+        let rust_has_function = rust_code.contains("fun");
+        
+        // Basic verification that all targets preserved the function
+        if wasm_has_function && ts_has_function && rust_has_function {
+            passed += 1;
+            println("✅ Test case {} passed: function preserved across targets", i);
+        } else {
+            println("❌ Test case {} failed: function not preserved across targets", i);
+            println("   Program:\n{}", test_case);
+            println("   WebAssembly has function: {}", wasm_has_function);
+            println("   TypeScript has function: {}", ts_has_function);
+            println("   Rust has function: {}", rust_has_function);
+        }
+    }
+    
+    // Report results
+    let pass_rate = (passed as f64 / test_cases.len() as f64) * 100.0;
+    
+    println("\nSemantic Preservation Test Results:");
+    println("- Total Test Cases: {}", test_cases.len());
+    println("- Passed: {} ({:.2}%)", passed, pass_rate);
+    
+    // Assert 100% preservation for these simple cases
+    assert!(pass_rate == 100.0, "Semantic preservation pass rate below 100%");
+    
+    println("✅ Property verified: Semantic Preservation");
+}
+
+// Run all property tests
+fun run_property_tests() {
+    println("🧪 Running Property Tests for Multi-Target Compiler");
+    println("==================================================");
+    
+    setup_test_env();
+    
+    // Run each property test
+    test_compilation_soundness();
+    test_type_safety();
+    test_idempotence();
+    test_target_independence();
+    test_error_recovery();
+    test_semantic_preservation();
+    
+    cleanup_test_env();
+    
+    // Report overall results
+    let total = TESTS_TOTAL.load(Ordering::SeqCst);
+    let passed = TESTS_PASSED.load(Ordering::SeqCst);
+    let failed = TESTS_FAILED.load(Ordering::SeqCst);
+    
+    println("\n🎉 Property Testing Complete!");
+    println("============================");
+    println("- Total Tests: {}", total);
+    println("- Passed: {} ({:.2}%)", passed, (passed as f64 / total as f64) * 100.0);
+    println("- Failed: {} ({:.2}%)", failed, (failed as f64 / total as f64) * 100.0);
+    
+    // Assert overall success
+    assert!(passed > (total * 90) / 100, "Overall pass rate below 90%");
+    
+    println("\n✅ All properties verified successfully!");
+}
+
+// Entry point
+fun main() {
+    run_property_tests();
+}

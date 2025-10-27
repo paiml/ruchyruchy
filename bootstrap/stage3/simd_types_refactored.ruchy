@@ -1,0 +1,990 @@
+//
+// WASM-004: WebAssembly SIMD Support - Refactored Type Definitions
+//
+// This file contains the refactored type definitions for SIMD vector types and operations.
+// The refactoring focuses on better type system integration, more efficient type checking,
+// and improved error handling.
+//
+
+import { Type, TypeEnvironment } from "../../bootstrap/stage2/type_environment";
+import { WasmType, TypeMapping } from "./wasm_types";
+import { DiagnosticError, Diagnostic, DiagnosticSeverity, SourceLocation } from "../../bootstrap/stage0/diagnostics";
+
+// -----------------------------------------------------------------------------
+// SIMD Vector Types
+// -----------------------------------------------------------------------------
+
+// Core vector type - 128-bit vector that can be interpreted in different ways
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VectorType {
+    // Base 128-bit vector
+    V128,
+    
+    // Type-specific interpretations
+    I8x16,  // 16 lanes of 8-bit integers
+    I16x8,  // 8 lanes of 16-bit integers
+    I32x4,  // 4 lanes of 32-bit integers
+    I64x2,  // 2 lanes of 64-bit integers
+    F32x4,  // 4 lanes of 32-bit floats
+    F64x2,  // 2 lanes of 64-bit floats
+}
+
+// Lane count for each vector type (optimized lookup)
+const LANE_COUNTS: [usize; 7] = [
+    4,   // V128 (default to 4 lanes)
+    16,  // I8x16
+    8,   // I16x8
+    4,   // I32x4
+    2,   // I64x2
+    4,   // F32x4
+    2,   // F64x2
+];
+
+// Lane widths in bits for each vector type
+const LANE_WIDTHS: [usize; 7] = [
+    32,  // V128 (default to 32 bits per lane)
+    8,   // I8x16
+    16,  // I16x8
+    32,  // I32x4
+    64,  // I64x2
+    32,  // F32x4
+    64,  // F64x2
+];
+
+// Corresponding scalar types for each vector type
+const LANE_TYPES: [u8; 7] = [
+    0,  // V128 (default to Type::I32)
+    1,  // I8x16 -> Type::I8
+    2,  // I16x8 -> Type::I16
+    3,  // I32x4 -> Type::I32
+    4,  // I64x2 -> Type::I64
+    5,  // F32x4 -> Type::F32
+    6,  // F64x2 -> Type::F64
+];
+
+// Convert VectorType to index for lookup tables
+#[inline]
+fun vector_type_to_index(vec_type: &VectorType) -> usize {
+    match vec_type {
+        VectorType::V128 => 0,
+        VectorType::I8x16 => 1,
+        VectorType::I16x8 => 2,
+        VectorType::I32x4 => 3,
+        VectorType::I64x2 => 4,
+        VectorType::F32x4 => 5,
+        VectorType::F64x2 => 6,
+    }
+}
+
+// Convert lane type index to Type
+#[inline]
+fun lane_type_index_to_type(index: u8) -> Type {
+    match index {
+        1 => Type::I8,
+        2 => Type::I16,
+        3 => Type::I32,
+        4 => Type::I64,
+        5 => Type::F32,
+        6 => Type::F64,
+        _ => Type::I32,  // Default
+    }
+}
+
+// Implement type checking for vector types with optimized lookups
+impl VectorType {
+    // Get the lane type for a vector type (optimized)
+    #[inline]
+    pub fun lane_type(&self) -> Type {
+        let index = vector_type_to_index(self);
+        let lane_type_index = LANE_TYPES[index];
+        lane_type_index_to_type(lane_type_index)
+    }
+    
+    // Get the number of lanes for a vector type (optimized)
+    #[inline]
+    pub fun lane_count(&self) -> usize {
+        let index = vector_type_to_index(self);
+        LANE_COUNTS[index]
+    }
+    
+    // Get the lane width in bits (optimized)
+    #[inline]
+    pub fun lane_width(&self) -> usize {
+        let index = vector_type_to_index(self);
+        LANE_WIDTHS[index]
+    }
+    
+    // Check if this is an integer vector type
+    #[inline]
+    pub fun is_integer(&self) -> bool {
+        matches!(self, VectorType::I8x16 | VectorType::I16x8 | 
+                     VectorType::I32x4 | VectorType::I64x2)
+    }
+    
+    // Check if this is a floating-point vector type
+    #[inline]
+    pub fun is_float(&self) -> bool {
+        matches!(self, VectorType::F32x4 | VectorType::F64x2)
+    }
+    
+    // Check if this vector type can be converted to another vector type
+    pub fun can_convert_to(&self, target: &VectorType) -> bool {
+        // All conversions between integer and float vector types of the same bit width are allowed
+        if self.is_integer() && target.is_float() && self.lane_width() == target.lane_width() {
+            return true;
+        }
+        
+        if self.is_float() && target.is_integer() && self.lane_width() == target.lane_width() {
+            return true;
+        }
+        
+        // Widening conversions from smaller to larger integer types are allowed
+        if self.is_integer() && target.is_integer() && self.lane_width() < target.lane_width() {
+            return true;
+        }
+        
+        // Narrowing conversions from larger to smaller integer types are allowed
+        // but may lose precision (will generate runtime checks or saturate)
+        if self.is_integer() && target.is_integer() && self.lane_width() > target.lane_width() {
+            return true;
+        }
+        
+        // Other conversions between vector types of the same total bit width (128 bits)
+        // are generally possible but may require special handling
+        if self != target {
+            return true;  // Enable all conversions for maximum flexibility
+        }
+        
+        // Same type is always convertible
+        true
+    }
+    
+    // Get the WebAssembly type for this vector type
+    #[inline]
+    pub fun to_wasm_type(&self) -> WasmType {
+        WasmType::V128  // All vector types map to the same WebAssembly type
+    }
+    
+    // Create a vector type from a scalar type and lane count
+    pub fun from_scalar_type(scalar_type: &Type, lane_count: usize) -> Option<VectorType> {
+        match (scalar_type, lane_count) {
+            (Type::I8, 16) => Some(VectorType::I8x16),
+            (Type::I16, 8) => Some(VectorType::I16x8),
+            (Type::I32, 4) => Some(VectorType::I32x4),
+            (Type::I64, 2) => Some(VectorType::I64x2),
+            (Type::F32, 4) => Some(VectorType::F32x4),
+            (Type::F64, 2) => Some(VectorType::F64x2),
+            _ => None,
+        }
+    }
+    
+    // Check if a vector type can perform an operation
+    pub fun supports_operation(&self, op: &str) -> bool {
+        match op {
+            "add" | "sub" => true,  // All vector types support addition and subtraction
+            "mul" => !matches!(self, VectorType::I8x16),  // All except i8x16 support multiplication
+            "div" => self.is_float(),  // Only floating-point vectors support division
+            "min" | "max" => true,  // All vector types support min/max
+            "neg" => true,  // All vector types support negation
+            "abs" => true,  // All vector types support absolute value
+            "sqrt" => self.is_float(),  // Only floating-point vectors support square root
+            "shl" | "shr" => self.is_integer(),  // Only integer vectors support shifts
+            "and" | "or" | "xor" | "not" => true,  // All vector types support bitwise operations
+            "eq" | "ne" | "lt" | "le" | "gt" | "ge" => true,  // All vector types support comparisons
+            _ => false,
+        }
+    }
+    
+    // Get a human-readable name for the vector type
+    pub fun name(&self) -> String {
+        match self {
+            VectorType::V128 => "v128".to_string(),
+            VectorType::I8x16 => "i8x16".to_string(),
+            VectorType::I16x8 => "i16x8".to_string(),
+            VectorType::I32x4 => "i32x4".to_string(),
+            VectorType::I64x2 => "i64x2".to_string(),
+            VectorType::F32x4 => "f32x4".to_string(),
+            VectorType::F64x2 => "f64x2".to_string(),
+        }
+    }
+}
+
+// Add Display implementation for VectorType
+impl std::fmt::Display for VectorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+// Extend the Type enum to include vector types
+impl Type {
+    #[inline]
+    pub fun is_vector_type(&self) -> bool {
+        match self {
+            Type::Vector(_) => true,
+            _ => false,
+        }
+    }
+    
+    #[inline]
+    pub fun as_vector_type(&self) -> Option<VectorType> {
+        match self {
+            Type::Vector(v) => Some(v.clone()),
+            _ => None,
+        }
+    }
+    
+    #[inline]
+    pub fun vector_lane_type(&self) -> Option<Type> {
+        match self {
+            Type::Vector(v) => Some(v.lane_type()),
+            _ => None,
+        }
+    }
+    
+    #[inline]
+    pub fun vector_lane_count(&self) -> Option<usize> {
+        match self {
+            Type::Vector(v) => Some(v.lane_count()),
+            _ => None,
+        }
+    }
+    
+    // Create a vector type from this scalar type and a lane count
+    pub fun to_vector_type(&self, lane_count: usize) -> Option<Type> {
+        VectorType::from_scalar_type(self, lane_count).map(Type::Vector)
+    }
+    
+    // Check if this type can be used in a specific vector operation
+    pub fun supports_vector_operation(&self, op: &str) -> bool {
+        match self {
+            Type::Vector(v) => v.supports_operation(op),
+            _ => false,
+        }
+    }
+}
+
+// Update TypeMapping to handle vector types
+impl TypeMapping {
+    #[inline]
+    pub fun map_vector_type(vector_type: &VectorType) -> WasmType {
+        WasmType::V128
+    }
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Operation Types
+// -----------------------------------------------------------------------------
+
+// Vector binary operations with documentation and operator symbols
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VectorBinaryOp {
+    // Arithmetic operations
+    Add,      // +
+    Sub,      // -
+    Mul,      // *
+    Div,      // /
+    
+    // Bitwise operations
+    And,      // &
+    Or,       // |
+    Xor,      // ^
+    AndNot,   // &~
+    
+    // Comparison operations
+    Eq,       // ==
+    Ne,       // !=
+    Lt,       // <
+    Le,       // <=
+    Gt,       // >
+    Ge,       // >=
+    
+    // Min/max operations
+    Min,      // min()
+    Max,      // max()
+    
+    // Other operations
+    Dot,      // dot product
+    Shuffle,  // shuffle lanes
+}
+
+// Vector unary operations with documentation
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VectorUnaryOp {
+    // Bitwise operations
+    Not,      // ~
+    
+    // Arithmetic operations
+    Neg,      // -
+    Abs,      // abs()
+    Sqrt,     // sqrt()
+    
+    // Lane operations
+    AllTrue,  // all_true()
+    AnyTrue,  // any_true()
+    
+    // Conversion operations
+    ConvertToF32x4,  // convert to f32x4
+    ConvertToI32x4,  // convert to i32x4
+    ConvertToF64x2,  // convert to f64x2
+    ConvertToI64x2,  // convert to i64x2
+    
+    // Bitwise shifts
+    Shl,      // <<
+    ShrS,     // >> (signed)
+    ShrU,     // >> (unsigned)
+}
+
+// Vector lane operations
+#[derive(Debug, Clone, PartialEq)]
+pub enum VectorLaneOp {
+    ExtractLane(usize),     // Extract a single lane
+    ReplaceLane(usize),     // Replace a single lane
+    Shuffle(Vec<usize>),    // Shuffle lanes from two vectors
+    Swizzle(Vec<usize>),    // Swizzle lanes within a single vector
+}
+
+// Vector memory operations
+#[derive(Debug, Clone, PartialEq)]
+pub enum VectorMemoryOp {
+    Load,              // Load a vector
+    Store,             // Store a vector
+    Load8x8S,          // Load 8 lanes of 8-bit signed integers and widen to 16-bit
+    Load8x8U,          // Load 8 lanes of 8-bit unsigned integers and widen to 16-bit
+    Load16x4S,         // Load 4 lanes of 16-bit signed integers and widen to 32-bit
+    Load16x4U,         // Load 4 lanes of 16-bit unsigned integers and widen to 32-bit
+    Load32x2S,         // Load 2 lanes of 32-bit signed integers and widen to 64-bit
+    Load32x2U,         // Load 2 lanes of 32-bit unsigned integers and widen to 64-bit
+    Load8Splat,        // Load a single 8-bit value and splat to all lanes
+    Load16Splat,       // Load a single 16-bit value and splat to all lanes
+    Load32Splat,       // Load a single 32-bit value and splat to all lanes
+    Load64Splat,       // Load a single 64-bit value and splat to all lanes
+    Load8Lane(usize),  // Load a single 8-bit value into a specific lane
+    Load16Lane(usize), // Load a single 16-bit value into a specific lane
+    Load32Lane(usize), // Load a single 32-bit value into a specific lane
+    Load64Lane(usize), // Load a single 64-bit value into a specific lane
+    Store8Lane(usize), // Store a single 8-bit lane to memory
+    Store16Lane(usize),// Store a single 16-bit lane to memory
+    Store32Lane(usize),// Store a single 32-bit lane to memory
+    Store64Lane(usize),// Store a single 64-bit lane to memory
+}
+
+// Add Display implementation for VectorBinaryOp
+impl std::fmt::Display for VectorBinaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let op_str = match self {
+            VectorBinaryOp::Add => "+",
+            VectorBinaryOp::Sub => "-",
+            VectorBinaryOp::Mul => "*",
+            VectorBinaryOp::Div => "/",
+            VectorBinaryOp::And => "&",
+            VectorBinaryOp::Or => "|",
+            VectorBinaryOp::Xor => "^",
+            VectorBinaryOp::AndNot => "&~",
+            VectorBinaryOp::Eq => "==",
+            VectorBinaryOp::Ne => "!=",
+            VectorBinaryOp::Lt => "<",
+            VectorBinaryOp::Le => "<=",
+            VectorBinaryOp::Gt => ">",
+            VectorBinaryOp::Ge => ">=",
+            VectorBinaryOp::Min => "min",
+            VectorBinaryOp::Max => "max",
+            VectorBinaryOp::Dot => "dot",
+            VectorBinaryOp::Shuffle => "shuffle",
+        };
+        write!(f, "{}", op_str)
+    }
+}
+
+// Add Display implementation for VectorUnaryOp
+impl std::fmt::Display for VectorUnaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let op_str = match self {
+            VectorUnaryOp::Not => "~",
+            VectorUnaryOp::Neg => "-",
+            VectorUnaryOp::Abs => "abs",
+            VectorUnaryOp::Sqrt => "sqrt",
+            VectorUnaryOp::AllTrue => "all_true",
+            VectorUnaryOp::AnyTrue => "any_true",
+            VectorUnaryOp::ConvertToF32x4 => "as f32x4",
+            VectorUnaryOp::ConvertToI32x4 => "as i32x4",
+            VectorUnaryOp::ConvertToF64x2 => "as f64x2",
+            VectorUnaryOp::ConvertToI64x2 => "as i64x2",
+            VectorUnaryOp::Shl => "<<",
+            VectorUnaryOp::ShrS => ">> (signed)",
+            VectorUnaryOp::ShrU => ">> (unsigned)",
+        };
+        write!(f, "{}", op_str)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Type Checking for Vector Operations with Improved Error Handling
+// -----------------------------------------------------------------------------
+
+// Type error for vector operations
+pub struct VectorTypeError {
+    pub message: String,
+    pub op: String,
+    pub left_type: Option<Type>,
+    pub right_type: Option<Type>,
+    pub location: Option<SourceLocation>,
+}
+
+impl VectorTypeError {
+    pub fun to_diagnostic(&self) -> Diagnostic {
+        let mut message = self.message.clone();
+        
+        if let Some(left) = &self.left_type {
+            if let Some(right) = &self.right_type {
+                message = format!("{}: Cannot apply '{}' to types '{}' and '{}'", 
+                               message, self.op, left, right);
+            } else {
+                message = format!("{}: Cannot apply '{}' to type '{}'", 
+                               message, self.op, left);
+            }
+        }
+        
+        Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            code: "E0001".to_string(),
+            message,
+            location: self.location.clone(),
+            related_information: Vec::new(),
+        }
+    }
+}
+
+// Type checking for vector binary operations with improved error handling
+pub fun type_check_vector_binary_op(
+    op: &VectorBinaryOp,
+    left: &Type,
+    right: &Type,
+    env: &mut TypeEnvironment,
+    location: Option<SourceLocation>,
+) -> Result<Type, VectorTypeError> {
+    // Get vector types
+    let left_vec = match left {
+        Type::Vector(v) => v,
+        _ => return Err(VectorTypeError {
+            message: "Expected vector type for left operand".to_string(),
+            op: op.to_string(),
+            left_type: Some(left.clone()),
+            right_type: Some(right.clone()),
+            location: location.clone(),
+        }),
+    };
+    
+    let right_vec = match right {
+        Type::Vector(v) => v,
+        _ => return Err(VectorTypeError {
+            message: "Expected vector type for right operand".to_string(),
+            op: op.to_string(),
+            left_type: Some(left.clone()),
+            right_type: Some(right.clone()),
+            location: location.clone(),
+        }),
+    };
+    
+    // Check operation compatibility using a match expression for better performance
+    // and more specific error messages
+    match op {
+        // Arithmetic operations
+        VectorBinaryOp::Add | VectorBinaryOp::Sub | VectorBinaryOp::Mul => {
+            if left_vec == right_vec {
+                Ok(left.clone())
+            } else {
+                Err(VectorTypeError {
+                    message: "Vector types must match for arithmetic operations".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(left.clone()),
+                    right_type: Some(right.clone()),
+                    location,
+                })
+            }
+        },
+        
+        VectorBinaryOp::Div => {
+            if !left_vec.is_float() {
+                return Err(VectorTypeError {
+                    message: "Division operation requires floating point vectors".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(left.clone()),
+                    right_type: None,
+                    location: location.clone(),
+                });
+            }
+            
+            if left_vec == right_vec {
+                Ok(left.clone())
+            } else {
+                Err(VectorTypeError {
+                    message: "Vector types must match for division operation".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(left.clone()),
+                    right_type: Some(right.clone()),
+                    location,
+                })
+            }
+        },
+        
+        // Bitwise operations work on any vector types
+        VectorBinaryOp::And | VectorBinaryOp::Or | VectorBinaryOp::Xor | VectorBinaryOp::AndNot => {
+            Ok(Type::Vector(VectorType::V128))
+        },
+        
+        // Comparison operations
+        VectorBinaryOp::Eq | VectorBinaryOp::Ne | 
+        VectorBinaryOp::Lt | VectorBinaryOp::Le | 
+        VectorBinaryOp::Gt | VectorBinaryOp::Ge => {
+            if left_vec == right_vec {
+                Ok(Type::Vector(left_vec.clone()))
+            } else {
+                Err(VectorTypeError {
+                    message: "Vector types must match for comparison operations".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(left.clone()),
+                    right_type: Some(right.clone()),
+                    location,
+                })
+            }
+        },
+        
+        // Min/max operations
+        VectorBinaryOp::Min | VectorBinaryOp::Max => {
+            if left_vec == right_vec {
+                Ok(left.clone())
+            } else {
+                Err(VectorTypeError {
+                    message: "Vector types must match for min/max operations".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(left.clone()),
+                    right_type: Some(right.clone()),
+                    location,
+                })
+            }
+        },
+        
+        // Dot product
+        VectorBinaryOp::Dot => {
+            // Dot product requires numeric vectors of the same type
+            match (left_vec, right_vec) {
+                (VectorType::I32x4, VectorType::I32x4) => Ok(Type::I32),
+                (VectorType::F32x4, VectorType::F32x4) => Ok(Type::F32),
+                (VectorType::F64x2, VectorType::F64x2) => Ok(Type::F64),
+                _ => Err(VectorTypeError {
+                    message: "Dot product requires compatible vector types".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(left.clone()),
+                    right_type: Some(right.clone()),
+                    location,
+                }),
+            }
+        },
+        
+        // Shuffle operation
+        VectorBinaryOp::Shuffle => {
+            Ok(Type::Vector(VectorType::V128))
+        },
+    }
+}
+
+// Type checking for vector unary operations with improved error handling
+pub fun type_check_vector_unary_op(
+    op: &VectorUnaryOp,
+    operand: &Type,
+    env: &mut TypeEnvironment,
+    location: Option<SourceLocation>,
+) -> Result<Type, VectorTypeError> {
+    // Get vector type
+    let vec_type = match operand {
+        Type::Vector(v) => v,
+        _ => return Err(VectorTypeError {
+            message: "Expected vector type for operand".to_string(),
+            op: op.to_string(),
+            left_type: Some(operand.clone()),
+            right_type: None,
+            location: location.clone(),
+        }),
+    };
+    
+    // Check operation compatibility
+    match op {
+        // Bitwise operations
+        VectorUnaryOp::Not => {
+            Ok(operand.clone())
+        },
+        
+        // Arithmetic operations
+        VectorUnaryOp::Neg => {
+            Ok(operand.clone())
+        },
+        
+        VectorUnaryOp::Abs => {
+            Ok(operand.clone())
+        },
+        
+        VectorUnaryOp::Sqrt => {
+            if vec_type.is_float() {
+                Ok(operand.clone())
+            } else {
+                Err(VectorTypeError {
+                    message: "Sqrt operation requires floating point vectors".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                })
+            }
+        },
+        
+        // Lane operations
+        VectorUnaryOp::AllTrue | VectorUnaryOp::AnyTrue => {
+            Ok(Type::Bool)
+        },
+        
+        // Conversion operations
+        VectorUnaryOp::ConvertToF32x4 => {
+            match vec_type {
+                VectorType::I32x4 => Ok(Type::Vector(VectorType::F32x4)),
+                _ => Err(VectorTypeError {
+                    message: "Cannot convert to f32x4".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                }),
+            }
+        },
+        
+        VectorUnaryOp::ConvertToI32x4 => {
+            match vec_type {
+                VectorType::F32x4 => Ok(Type::Vector(VectorType::I32x4)),
+                _ => Err(VectorTypeError {
+                    message: "Cannot convert to i32x4".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                }),
+            }
+        },
+        
+        VectorUnaryOp::ConvertToF64x2 => {
+            match vec_type {
+                VectorType::I64x2 => Ok(Type::Vector(VectorType::F64x2)),
+                _ => Err(VectorTypeError {
+                    message: "Cannot convert to f64x2".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                }),
+            }
+        },
+        
+        VectorUnaryOp::ConvertToI64x2 => {
+            match vec_type {
+                VectorType::F64x2 => Ok(Type::Vector(VectorType::I64x2)),
+                _ => Err(VectorTypeError {
+                    message: "Cannot convert to i64x2".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                }),
+            }
+        },
+        
+        // Bitwise shifts
+        VectorUnaryOp::Shl | VectorUnaryOp::ShrS | VectorUnaryOp::ShrU => {
+            if vec_type.is_integer() {
+                Ok(operand.clone())
+            } else {
+                Err(VectorTypeError {
+                    message: "Shift operations require integer vectors".to_string(),
+                    op: op.to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                })
+            }
+        },
+    }
+}
+
+// Type checking for vector lane operations with improved error handling
+pub fun type_check_vector_lane_op(
+    op: &VectorLaneOp,
+    operand: &Type,
+    env: &mut TypeEnvironment,
+    location: Option<SourceLocation>,
+) -> Result<Type, VectorTypeError> {
+    // Get vector type
+    let vec_type = match operand {
+        Type::Vector(v) => v,
+        _ => return Err(VectorTypeError {
+            message: "Expected vector type for operand".to_string(),
+            op: match op {
+                VectorLaneOp::ExtractLane(_) => "extract_lane",
+                VectorLaneOp::ReplaceLane(_) => "replace_lane",
+                VectorLaneOp::Shuffle(_) => "shuffle",
+                VectorLaneOp::Swizzle(_) => "swizzle",
+            }.to_string(),
+            left_type: Some(operand.clone()),
+            right_type: None,
+            location: location.clone(),
+        }),
+    };
+    
+    // Check operation compatibility
+    match op {
+        VectorLaneOp::ExtractLane(lane) => {
+            // Extract a single lane
+            let lane_count = vec_type.lane_count();
+            if *lane >= lane_count {
+                return Err(VectorTypeError {
+                    message: format!("Lane index {} out of bounds for vector with {} lanes", 
+                                  lane, lane_count),
+                    op: "extract_lane".to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            Ok(vec_type.lane_type())
+        },
+        
+        VectorLaneOp::ReplaceLane(lane) => {
+            // Replace a single lane
+            let lane_count = vec_type.lane_count();
+            if *lane >= lane_count {
+                return Err(VectorTypeError {
+                    message: format!("Lane index {} out of bounds for vector with {} lanes", 
+                                  lane, lane_count),
+                    op: "replace_lane".to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            Ok(operand.clone())
+        },
+        
+        VectorLaneOp::Shuffle(lanes) => {
+            // Shuffle lanes from two vectors
+            if lanes.len() != vec_type.lane_count() {
+                return Err(VectorTypeError {
+                    message: format!("Shuffle requires {} indices for {:?}, got {}", 
+                                  vec_type.lane_count(), vec_type, lanes.len()),
+                    op: "shuffle".to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            for &lane in lanes {
+                if lane >= 2 * vec_type.lane_count() {
+                    return Err(VectorTypeError {
+                        message: format!("Shuffle index {} out of bounds for two vectors with {} lanes each", 
+                                      lane, vec_type.lane_count()),
+                        op: "shuffle".to_string(),
+                        left_type: Some(operand.clone()),
+                        right_type: None,
+                        location,
+                    });
+                }
+            }
+            
+            Ok(operand.clone())
+        },
+        
+        VectorLaneOp::Swizzle(lanes) => {
+            // Swizzle (shuffle within a single vector)
+            if lanes.len() != vec_type.lane_count() {
+                return Err(VectorTypeError {
+                    message: format!("Swizzle requires {} indices for {:?}, got {}", 
+                                  vec_type.lane_count(), vec_type, lanes.len()),
+                    op: "swizzle".to_string(),
+                    left_type: Some(operand.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            for &lane in lanes {
+                if lane >= vec_type.lane_count() {
+                    return Err(VectorTypeError {
+                        message: format!("Swizzle index {} out of bounds for vector with {} lanes", 
+                                      lane, vec_type.lane_count()),
+                        op: "swizzle".to_string(),
+                        left_type: Some(operand.clone()),
+                        right_type: None,
+                        location,
+                    });
+                }
+            }
+            
+            Ok(operand.clone())
+        },
+    }
+}
+
+// Type checking for vector memory operations with improved error handling
+pub fun type_check_vector_memory_op(
+    op: &VectorMemoryOp,
+    ptr_type: &Type,
+    env: &mut TypeEnvironment,
+    location: Option<SourceLocation>,
+) -> Result<Type, VectorTypeError> {
+    // Check that ptr_type is a pointer
+    match ptr_type {
+        Type::Pointer(_) => {},
+        _ => return Err(VectorTypeError {
+            message: "Expected pointer type".to_string(),
+            op: match op {
+                VectorMemoryOp::Load => "load",
+                VectorMemoryOp::Store => "store",
+                VectorMemoryOp::Load8x8S => "load8x8_s",
+                VectorMemoryOp::Load8x8U => "load8x8_u",
+                VectorMemoryOp::Load16x4S => "load16x4_s",
+                VectorMemoryOp::Load16x4U => "load16x4_u",
+                VectorMemoryOp::Load32x2S => "load32x2_s",
+                VectorMemoryOp::Load32x2U => "load32x2_u",
+                VectorMemoryOp::Load8Splat => "load8_splat",
+                VectorMemoryOp::Load16Splat => "load16_splat",
+                VectorMemoryOp::Load32Splat => "load32_splat",
+                VectorMemoryOp::Load64Splat => "load64_splat",
+                VectorMemoryOp::Load8Lane(_) => "load8_lane",
+                VectorMemoryOp::Load16Lane(_) => "load16_lane",
+                VectorMemoryOp::Load32Lane(_) => "load32_lane",
+                VectorMemoryOp::Load64Lane(_) => "load64_lane",
+                VectorMemoryOp::Store8Lane(_) => "store8_lane",
+                VectorMemoryOp::Store16Lane(_) => "store16_lane",
+                VectorMemoryOp::Store32Lane(_) => "store32_lane",
+                VectorMemoryOp::Store64Lane(_) => "store64_lane",
+            }.to_string(),
+            left_type: Some(ptr_type.clone()),
+            right_type: None,
+            location: location.clone(),
+        }),
+    };
+    
+    // Check operation compatibility
+    match op {
+        VectorMemoryOp::Load => {
+            Ok(Type::Vector(VectorType::V128))
+        },
+        
+        VectorMemoryOp::Store => {
+            Ok(Type::Void)
+        },
+        
+        VectorMemoryOp::Load8x8S | VectorMemoryOp::Load8x8U => {
+            Ok(Type::Vector(VectorType::I16x8))
+        },
+        
+        VectorMemoryOp::Load16x4S | VectorMemoryOp::Load16x4U => {
+            Ok(Type::Vector(VectorType::I32x4))
+        },
+        
+        VectorMemoryOp::Load32x2S | VectorMemoryOp::Load32x2U => {
+            Ok(Type::Vector(VectorType::I64x2))
+        },
+        
+        VectorMemoryOp::Load8Splat => {
+            Ok(Type::Vector(VectorType::I8x16))
+        },
+        
+        VectorMemoryOp::Load16Splat => {
+            Ok(Type::Vector(VectorType::I16x8))
+        },
+        
+        VectorMemoryOp::Load32Splat => {
+            Ok(Type::Vector(VectorType::I32x4))
+        },
+        
+        VectorMemoryOp::Load64Splat => {
+            Ok(Type::Vector(VectorType::I64x2))
+        },
+        
+        VectorMemoryOp::Load8Lane(lane) | 
+        VectorMemoryOp::Store8Lane(lane) => {
+            if *lane >= 16 {
+                return Err(VectorTypeError {
+                    message: format!("Lane index {} out of bounds for i8x16 vector", lane),
+                    op: if matches!(op, VectorMemoryOp::Load8Lane(_)) { "load8_lane" } else { "store8_lane" }.to_string(),
+                    left_type: Some(ptr_type.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            if matches!(op, &VectorMemoryOp::Load8Lane(_)) {
+                Ok(Type::Vector(VectorType::I8x16))
+            } else {
+                Ok(Type::Void)
+            }
+        },
+        
+        VectorMemoryOp::Load16Lane(lane) | 
+        VectorMemoryOp::Store16Lane(lane) => {
+            if *lane >= 8 {
+                return Err(VectorTypeError {
+                    message: format!("Lane index {} out of bounds for i16x8 vector", lane),
+                    op: if matches!(op, VectorMemoryOp::Load16Lane(_)) { "load16_lane" } else { "store16_lane" }.to_string(),
+                    left_type: Some(ptr_type.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            if matches!(op, &VectorMemoryOp::Load16Lane(_)) {
+                Ok(Type::Vector(VectorType::I16x8))
+            } else {
+                Ok(Type::Void)
+            }
+        },
+        
+        VectorMemoryOp::Load32Lane(lane) | 
+        VectorMemoryOp::Store32Lane(lane) => {
+            if *lane >= 4 {
+                return Err(VectorTypeError {
+                    message: format!("Lane index {} out of bounds for i32x4 vector", lane),
+                    op: if matches!(op, VectorMemoryOp::Load32Lane(_)) { "load32_lane" } else { "store32_lane" }.to_string(),
+                    left_type: Some(ptr_type.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            if matches!(op, &VectorMemoryOp::Load32Lane(_)) {
+                Ok(Type::Vector(VectorType::I32x4))
+            } else {
+                Ok(Type::Void)
+            }
+        },
+        
+        VectorMemoryOp::Load64Lane(lane) | 
+        VectorMemoryOp::Store64Lane(lane) => {
+            if *lane >= 2 {
+                return Err(VectorTypeError {
+                    message: format!("Lane index {} out of bounds for i64x2 vector", lane),
+                    op: if matches!(op, VectorMemoryOp::Load64Lane(_)) { "load64_lane" } else { "store64_lane" }.to_string(),
+                    left_type: Some(ptr_type.clone()),
+                    right_type: None,
+                    location,
+                });
+            }
+            
+            if matches!(op, &VectorMemoryOp::Load64Lane(_)) {
+                Ok(Type::Vector(VectorType::I64x2))
+            } else {
+                Ok(Type::Void)
+            }
+        },
+    }
+}

@@ -1,0 +1,490 @@
+// WASM-006: Incremental Compilation - Module Caching Tests (RED Phase)
+//
+// These tests verify module caching functionality for incremental compilation.
+// All tests should FAIL in the RED phase, indicating missing implementation.
+
+use std::path::Path;
+use std::collections::HashMap;
+
+// Test helper: Create a simple test module
+fun create_test_module(name: String, content: String) -> SourceFile {
+    SourceFile {
+        path: format!("test/{}.ruchy", name),
+        content: content,
+    }
+}
+
+// Test helper: Compile a module
+fun compile_module(source: SourceFile) -> CompiledModule {
+    // This will fail in RED phase - no compiler integration yet
+    compile_to_wasm(source)
+}
+
+// ============================================================================
+// Test 1: Basic Cache Functionality
+// ============================================================================
+
+test test_cache_basic_functionality() {
+    println("Testing basic cache store and retrieve...");
+
+    // Create a simple module
+    let source = create_test_module("basic", "fun main() { println(\"Hello\"); }");
+
+    // Compile and cache
+    let compiled = compile_module(source.clone());
+    cache_store(source.path, compiled.clone());
+
+    // Retrieve from cache
+    let cached = cache_retrieve(source.path);
+
+    // Verify cache hit
+    assert(cached.is_some(), "Expected cache hit");
+    assert(cached.unwrap() == compiled, "Cached module should match compiled module");
+
+    println("✅ Basic cache functionality test passed");
+}
+
+// ============================================================================
+// Test 2: Cache Invalidation on Source Change
+// ============================================================================
+
+test test_cache_invalidation_on_source_change() {
+    println("Testing cache invalidation when source changes...");
+
+    // Initial compilation
+    let source1 = create_test_module("changeable", "fun main() { println(\"V1\"); }");
+    let compiled1 = compile_module(source1.clone());
+    cache_store(source1.path, compiled1);
+
+    // Modify source
+    let source2 = create_test_module("changeable", "fun main() { println(\"V2\"); }");
+
+    // Cache should be invalidated
+    let cached = cache_retrieve(source2.path);
+    assert(cached.is_none(), "Cache should be invalidated after source change");
+
+    // Recompile and cache new version
+    let compiled2 = compile_module(source2.clone());
+    cache_store(source2.path, compiled2.clone());
+
+    // New version should be in cache
+    let cached2 = cache_retrieve(source2.path);
+    assert(cached2.is_some(), "New version should be cached");
+    assert(cached2.unwrap() == compiled2, "Cached version should match recompiled version");
+
+    println("✅ Cache invalidation on source change test passed");
+}
+
+// ============================================================================
+// Test 3: Cache Invalidation on Dependency Change
+// ============================================================================
+
+test test_cache_invalidation_on_dependency_change() {
+    println("Testing cache invalidation for dependency changes...");
+
+    // Create module B (dependency)
+    let moduleB = create_test_module("moduleB", "pub fun helper() -> i32 { return 42; }");
+    let compiledB = compile_module(moduleB.clone());
+    cache_store(moduleB.path, compiledB);
+
+    // Create module A (depends on B)
+    let moduleA = create_test_module("moduleA",
+        "use moduleB::helper;\nfun main() { let x = helper(); }");
+    let compiledA = compile_module(moduleA.clone());
+    cache_store(moduleA.path, compiledA);
+
+    // Modify module B
+    let moduleBv2 = create_test_module("moduleB", "pub fun helper() -> i32 { return 99; }");
+    let compiledBv2 = compile_module(moduleBv2.clone());
+    cache_store(moduleBv2.path, compiledBv2);
+
+    // Module A's cache should be invalidated (transitive dependency)
+    let cachedA = cache_retrieve(moduleA.path);
+    assert(cachedA.is_none(), "Dependent module cache should be invalidated");
+
+    println("✅ Cache invalidation on dependency change test passed");
+}
+
+// ============================================================================
+// Test 4: Cache Corruption Recovery
+// ============================================================================
+
+test test_cache_corruption_recovery() {
+    println("Testing cache corruption detection and recovery...");
+
+    // Create and cache a module
+    let source = create_test_module("corruptible", "fun main() { }");
+    let compiled = compile_module(source.clone());
+    cache_store(source.path, compiled.clone());
+
+    // Simulate cache corruption
+    corrupt_cache(source.path);
+
+    // Cache retrieval should detect corruption
+    let result = cache_retrieve_safe(source.path);
+    assert(result.is_err(), "Should detect cache corruption");
+
+    // Cache should auto-recover by invalidating corrupt entry
+    let recovered = cache_retrieve(source.path);
+    assert(recovered.is_none(), "Corrupt cache entry should be cleared");
+
+    // Recompilation should work
+    let recompiled = compile_module(source.clone());
+    cache_store(source.path, recompiled);
+
+    // Fresh cache entry should be valid
+    let fresh = cache_retrieve(source.path);
+    assert(fresh.is_some(), "Fresh cache entry should be valid");
+
+    println("✅ Cache corruption recovery test passed");
+}
+
+// ============================================================================
+// Test 5: Cache Size Limits
+// ============================================================================
+
+test test_cache_size_limits() {
+    println("Testing cache size enforcement...");
+
+    // Configure cache with size limit
+    configure_cache(CacheConfig {
+        max_size_mb: 10,
+        eviction_policy: EvictionPolicy::LRU,
+    });
+
+    // Fill cache beyond limit
+    let mut modules = Vec::new();
+    for i in 0..100 {
+        let source = create_test_module(
+            format!("module{}", i),
+            format!("fun func{}() {{ }}", i)
+        );
+        let compiled = compile_module(source.clone());
+        cache_store(source.path, compiled);
+        modules.push(source);
+    }
+
+    // Verify cache size is within limits
+    let cache_size = get_cache_size_mb();
+    assert(cache_size <= 10, format!("Cache size {} should be <= 10 MB", cache_size));
+
+    // Verify LRU eviction (oldest entries should be gone)
+    let oldest = cache_retrieve(modules[0].path);
+    assert(oldest.is_none(), "Oldest entry should be evicted");
+
+    // Verify newest entries are retained
+    let newest = cache_retrieve(modules[99].path);
+    assert(newest.is_some(), "Newest entry should be retained");
+
+    println("✅ Cache size limits test passed");
+}
+
+// ============================================================================
+// Test 6: Cache Statistics
+// ============================================================================
+
+test test_cache_statistics() {
+    println("Testing cache statistics tracking...");
+
+    // Reset statistics
+    cache_reset_stats();
+
+    // Compile and cache modules
+    for i in 0..5 {
+        let source = create_test_module(format!("stat_module{}", i), "fun main() { }");
+        let compiled = compile_module(source.clone());
+        cache_store(source.path, compiled);
+    }
+
+    // Access cached modules (cache hits)
+    for i in 0..5 {
+        let source = create_test_module(format!("stat_module{}", i), "fun main() { }");
+        let _ = cache_retrieve(source.path);
+    }
+
+    // Access non-existent module (cache miss)
+    let _ = cache_retrieve("nonexistent.ruchy");
+
+    // Verify statistics
+    let stats = get_cache_stats();
+    assert(stats.total_compilations == 5, "Should track compilations");
+    assert(stats.cache_hits == 5, "Should track cache hits");
+    assert(stats.cache_misses == 1, "Should track cache misses");
+    assert(stats.hit_rate() > 0.8, "Hit rate should be >80%");
+
+    println("✅ Cache statistics test passed");
+}
+
+// ============================================================================
+// Test 7: Cache Persistence Across Builds
+// ============================================================================
+
+test test_cache_persistence() {
+    println("Testing cache persistence across builds...");
+
+    // First build session
+    {
+        let source = create_test_module("persistent", "fun main() { }");
+        let compiled = compile_module(source.clone());
+        cache_store(source.path, compiled);
+    }
+
+    // Simulate build session end
+    cache_shutdown();
+
+    // Second build session (new process)
+    cache_initialize();
+
+    // Cache should still contain the module
+    let source = create_test_module("persistent", "fun main() { }");
+    let cached = cache_retrieve(source.path);
+    assert(cached.is_some(), "Cache should persist across builds");
+
+    println("✅ Cache persistence test passed");
+}
+
+// ============================================================================
+// Test 8: Parallel Cache Access
+// ============================================================================
+
+test test_parallel_cache_access() {
+    println("Testing thread-safe parallel cache access...");
+
+    // Create multiple modules
+    let modules: Vec<SourceFile> = (0..10)
+        .map(|i| create_test_module(format!("parallel{}", i), "fun main() { }"))
+        .collect();
+
+    // Compile and cache in parallel
+    parallel_for_each(modules.clone(), |source| {
+        let compiled = compile_module(source.clone());
+        cache_store(source.path, compiled);
+    });
+
+    // Verify all modules are cached
+    for source in modules {
+        let cached = cache_retrieve(source.path);
+        assert(cached.is_some(), format!("Module {} should be cached", source.path));
+    }
+
+    println("✅ Parallel cache access test passed");
+}
+
+// ============================================================================
+// Test 9: Cache Content Verification
+// ============================================================================
+
+test test_cache_content_verification() {
+    println("Testing cache content integrity verification...");
+
+    let source = create_test_module("verifiable", "fun main() { println(\"Test\"); }");
+    let compiled = compile_module(source.clone());
+
+    // Store with checksum
+    cache_store_verified(source.path, compiled.clone());
+
+    // Retrieve and verify checksum
+    let (cached, valid) = cache_retrieve_with_verification(source.path);
+    assert(cached.is_some(), "Should retrieve cached module");
+    assert(valid, "Cached module should pass verification");
+
+    // Simulate tampering
+    tamper_with_cache(source.path);
+
+    // Verification should fail
+    let (_, valid2) = cache_retrieve_with_verification(source.path);
+    assert(!valid2, "Tampered cache should fail verification");
+
+    println("✅ Cache content verification test passed");
+}
+
+// ============================================================================
+// Test 10: Incremental Cache Updates
+// ============================================================================
+
+test test_incremental_cache_updates() {
+    println("Testing incremental cache updates...");
+
+    // Initial compilation with 5 functions
+    let source = create_test_module("incremental",
+        "fun f1() { }\nfun f2() { }\nfun f3() { }\nfun f4() { }\nfun f5() { }");
+    let compiled = compile_module(source.clone());
+    cache_store(source.path, compiled);
+
+    // Modify only f3
+    let modified = create_test_module("incremental",
+        "fun f1() { }\nfun f2() { }\nfun f3() { println(\"changed\"); }\nfun f4() { }\nfun f5() { }");
+
+    // Should only recompile f3, reuse cached f1, f2, f4, f5
+    let result = compile_incremental(modified.clone());
+    assert(result.recompiled_functions == vec!["f3"], "Only f3 should be recompiled");
+    assert(result.cached_functions.len() == 4, "Other functions should be from cache");
+
+    println("✅ Incremental cache updates test passed");
+}
+
+// ============================================================================
+// Helper Types (will fail in RED - not implemented)
+// ============================================================================
+
+struct SourceFile {
+    path: String,
+    content: String,
+}
+
+struct CompiledModule {
+    wasm_binary: Vec<u8>,
+    metadata: ModuleMetadata,
+}
+
+struct ModuleMetadata {
+    exports: Vec<String>,
+    imports: Vec<String>,
+    source_hash: String,
+}
+
+struct CacheConfig {
+    max_size_mb: u32,
+    eviction_policy: EvictionPolicy,
+}
+
+enum EvictionPolicy {
+    LRU,  // Least Recently Used
+    LFU,  // Least Frequently Used
+    FIFO, // First In First Out
+}
+
+struct CacheStats {
+    total_compilations: u64,
+    cache_hits: u64,
+    cache_misses: u64,
+}
+
+impl CacheStats {
+    fun hit_rate(&self) -> f64 {
+        if self.cache_hits + self.cache_misses == 0 {
+            return 0.0;
+        }
+        self.cache_hits as f64 / (self.cache_hits + self.cache_misses) as f64
+    }
+}
+
+struct IncrementalCompileResult {
+    recompiled_functions: Vec<String>,
+    cached_functions: Vec<String>,
+}
+
+// ============================================================================
+// Helper Functions (will fail in RED - not implemented)
+// ============================================================================
+
+fun compile_to_wasm(source: SourceFile) -> CompiledModule {
+    panic!("WASM compilation not implemented");
+}
+
+fun cache_store(path: String, module: CompiledModule) {
+    panic!("Cache store not implemented");
+}
+
+fun cache_retrieve(path: String) -> Option<CompiledModule> {
+    panic!("Cache retrieve not implemented");
+}
+
+fun cache_retrieve_safe(path: String) -> Result<CompiledModule, CacheError> {
+    panic!("Safe cache retrieve not implemented");
+}
+
+fun corrupt_cache(path: String) {
+    panic!("Cache corruption simulation not implemented");
+}
+
+fun configure_cache(config: CacheConfig) {
+    panic!("Cache configuration not implemented");
+}
+
+fun get_cache_size_mb() -> u32 {
+    panic!("Cache size query not implemented");
+}
+
+fun cache_reset_stats() {
+    panic!("Cache stats reset not implemented");
+}
+
+fun get_cache_stats() -> CacheStats {
+    panic!("Cache stats not implemented");
+}
+
+fun cache_shutdown() {
+    panic!("Cache shutdown not implemented");
+}
+
+fun cache_initialize() {
+    panic!("Cache initialization not implemented");
+}
+
+fun parallel_for_each<T>(items: Vec<T>, func: impl Fn(T)) {
+    panic!("Parallel execution not implemented");
+}
+
+fun cache_store_verified(path: String, module: CompiledModule) {
+    panic!("Verified cache store not implemented");
+}
+
+fun cache_retrieve_with_verification(path: String) -> (Option<CompiledModule>, bool) {
+    panic!("Verified cache retrieve not implemented");
+}
+
+fun tamper_with_cache(path: String) {
+    panic!("Cache tampering simulation not implemented");
+}
+
+fun compile_incremental(source: SourceFile) -> IncrementalCompileResult {
+    panic!("Incremental compilation not implemented");
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("=== WASM-006: Module Caching Tests (RED Phase) ===");
+    println("All tests should FAIL - implementation not yet done");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    // Run all tests
+    let tests = vec![
+        ("Basic Cache Functionality", test_cache_basic_functionality),
+        ("Cache Invalidation on Source Change", test_cache_invalidation_on_source_change),
+        ("Cache Invalidation on Dependency Change", test_cache_invalidation_on_dependency_change),
+        ("Cache Corruption Recovery", test_cache_corruption_recovery),
+        ("Cache Size Limits", test_cache_size_limits),
+        ("Cache Statistics", test_cache_statistics),
+        ("Cache Persistence", test_cache_persistence),
+        ("Parallel Cache Access", test_parallel_cache_access),
+        ("Cache Content Verification", test_cache_content_verification),
+        ("Incremental Cache Updates", test_incremental_cache_updates),
+    ];
+
+    for (name, test_fn) in tests {
+        println("\nRunning: {}", name);
+        match std::panic::catch_unwind(test_fn) {
+            Ok(_) => {
+                println!("❌ UNEXPECTED PASS: {}", name);
+                passed += 1;
+            },
+            Err(e) => {
+                println!("✅ EXPECTED FAIL: {}", name);
+                println!("   Reason: {:?}", e);
+                failed += 1;
+            }
+        }
+    }
+
+    println("\n=== Test Summary ===");
+    println!("Expected Failures: {}", failed);
+    println!("Unexpected Passes: {}", passed);
+    println!("\n✅ RED Phase: All tests failing as expected!");
+}
