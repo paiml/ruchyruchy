@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Upgraded to Ruchy v3.138.0 (from v3.136.0)
+- QUALITY-001: Unblocked REFACTOR phase - Issue #64 resolved (ruchy fmt now produces valid output)
+- QUALITY-002: Unblocked by parser fixes - Issue #65 resolved (brace tracking corrected)
+
 ### Added
+- validation/quality/dead_code_simple_test.ruchy: Simplified dead code detection test (90 LOC)
+  - 3 test functions (unused functions, unused variables, coverage tracking)
+  - 3 stub implementations
+  - 3 supporting struct types
+  - ✅ Passes ruchy check and ruchy run with v3.138.0
 - EDUCATION-001: Interactive Tokenization Tutorial (Phase 1 - Educational Platform)
 - education/interactive/web/tokenization/: Web-based tokenization tutorial
   - index.html: Interactive tutorial with editor and token visualization
