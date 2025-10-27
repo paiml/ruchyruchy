@@ -31,6 +31,8 @@ pub mod bootstrap_showcase;
 pub mod performance_benchmark;
 /// Stage 3 code generation (real Rust codegen)
 pub mod stage3_real_codegen;
+/// Language Server Protocol (LSP) implementation
+pub mod lsp;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

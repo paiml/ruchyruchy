@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- IDE-001: LSP Base Protocol Implementation (CYCLE 5 - IDE Integration Start!)
+- src/lsp/: Language Server Protocol implementation modules
+  - protocol.rs: LSP protocol types (Position, Range, Diagnostic, etc.)
+  - text_sync.rs: Text document synchronization (open/change/close)
+  - diagnostics.rs: Diagnostics provider integrating with ruchy check
+  - server.rs: Main LSP server implementation
+- validation/ide/lsp_base_test.ruchy: Pure Ruchy demo of LSP functionality
+- scripts/validate-ide-001.sh: LSP base protocol validation script
+- Dependencies: Added serde and serde_json for JSON-RPC serialization
 - BENCHMARK-001: Performance Benchmark Suite - 100+ benchmarks (CYCLE 4 - FINAL TICKET!)
 - validation/benchmarks/performance_benchmark_suite.ruchy: Comprehensive performance benchmarking
 - scripts/validate-benchmark-001.sh: Performance benchmark validation script
@@ -879,6 +888,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Analyze results and file GitHub issues for critical bugs
 - Implement optimizations identified by benchmarks
 - Continue with bootstrap development (self-compilation)
+
+---
+
+## CYCLE 5: IDE Integration & Developer Tools (v1.1.0)
+
+**Status**: ✅ 1/5 tickets complete (IDE-001 complete)
+**Focus**: Build comprehensive developer tooling to enhance IDE experience
+**Duration**: 6-8 weeks (estimated)
+
+### IDE-001: LSP Base Protocol Implementation ✅ COMPLETE
+
+**Purpose**: Provide Language Server Protocol support for Ruchy to enable IDE integration with real-time error checking.
+
+**Implementation Components**:
+- `src/lsp/mod.rs` - Module exports and public API
+- `src/lsp/protocol.rs` - LSP protocol types (Position, Range, Diagnostic, DiagnosticSeverity)
+- `src/lsp/text_sync.rs` - Text document synchronization (TextDocumentManager)
+- `src/lsp/diagnostics.rs` - Diagnostics provider (integrates with `ruchy check`)
+- `src/lsp/server.rs` - Main LSP server implementation (LspServer)
+
+**Protocol Types Implemented**:
+- Position (line, character) - zero-based indexing
+- Range (start, end) - text span representation
+- Diagnostic (error, warning, info, hint)
+- DiagnosticSeverity (Error, Warning, Information, Hint)
+- TextDocumentIdentifier, VersionedTextDocumentIdentifier, TextDocumentItem
+- All types JSON-RPC compatible via serde serialization
+
+**Text Synchronization Operations**:
+- `textDocument/didOpen` - Open document notification
+- `textDocument/didChange` - Document change notification
+- `textDocument/didClose` - Close document notification
+- Thread-safe document management using Arc<Mutex<_>>
+- Version tracking for consistency
+
+**Diagnostics Integration**:
+- Integrates with `ruchy check` command for validation
+- Parses error output to LSP diagnostics format
+- Line/column position mapping (1-based → 0-based conversion)
+- Handles various error message formats gracefully
+- Default fallback for unparseable errors
+
+**Test Coverage**:
+- **Total Rust tests**: 19 passing
+- **Protocol Types**: 4 tests
+  - Position creation
+  - Range creation
+  - Diagnostic error creation
+  - Diagnostic warning creation
+- **Text Synchronization**: 5 tests
+  - Open document
+  - Change document
+  - Close document
+  - Get text
+  - Change nonexistent document
+- **Diagnostics Provider**: 4 tests
+  - Parse error line with position
+  - Parse error line without position
+  - Parse diagnostics empty output
+  - Parse diagnostics with error
+- **LSP Server**: 6 tests
+  - Initialize server
+  - Text document open
+  - Text document change
+  - Text document close
+  - Operations before initialize
+  - Shutdown
+
+**Quality Gates**:
+- ✅ Rust tests: 19/19 passing (0.01s)
+- ✅ ruchy check: Syntax validation passed
+- ✅ ruchy fmt: Format validation passed (auto-applied)
+- ✅ ruchy run: Execution successful
+
+**Dependencies Added**:
+- `serde = { version = "1.0", features = ["derive"] }` - Serialization framework
+- `serde_json = "1.0"` - JSON serialization for LSP protocol
+
+**Validation**:
+- Rust implementation: `cargo test --lib lsp` (19 tests, all passing)
+- Ruchy demo: `validation/ide/lsp_base_test.ruchy` (execution successful)
+- Validation script: `scripts/validate-ide-001.sh` (all gates passing)
+
+**Next Tickets** (CYCLE 5):
+- IDE-002: VS Code extension base
+- IDE-003: Code completion
+- IDE-004: Go-to-definition & references
+- IDE-005: Integrated debugging (DAP + LSP)
+
+---
 
 ### Validation Results (VALIDATION-002)
 - **Property-based testing**: 1000+ properties with QuickCheck-style testing
