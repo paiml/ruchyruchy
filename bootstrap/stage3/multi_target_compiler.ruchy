@@ -1,0 +1,652 @@
+// multi_target_compiler.ruchy
+// WASM-003: Multi-Target Integration
+// RED PHASE: Interface definition for multi-target compilation
+
+// Import necessary modules
+// In a real implementation, these would be imported from the actual Ruchy compiler
+// import bootstrap::stage1::ast::Ast;
+// import bootstrap::stage2::type_environment::TypeEnvironment;
+// import bootstrap::stage3::wasm_emitter::WasmEmitter;
+// import bootstrap::stage3::typescript_emitter::TypeScriptEmitter;
+// import bootstrap::stage3::rust_emitter::RustEmitter;
+
+/// Error type for compilation operations
+enum CompilationError {
+    /// Parse error
+    ParseError(String),
+    
+    /// Type error
+    TypeError(String),
+    
+    /// Code generation error
+    CodeGenError(String),
+    
+    /// Target-specific error
+    TargetError(String),
+    
+    /// Configuration error
+    ConfigError(String),
+}
+
+impl CompilationError {
+    /// Create a new parse error
+    fn new_parse_error(message: String) -> CompilationError {
+        CompilationError::ParseError(message)
+    }
+    
+    /// Create a new type error
+    fn new_type_error(message: String) -> CompilationError {
+        CompilationError::TypeError(message)
+    }
+    
+    /// Create a new code generation error
+    fn new_code_gen_error(message: String) -> CompilationError {
+        CompilationError::CodeGenError(message)
+    }
+    
+    /// Create a new target error
+    fn new_target_error(message: String) -> CompilationError {
+        CompilationError::TargetError(message)
+    }
+    
+    /// Create a new configuration error
+    fn new_config_error(message: String) -> CompilationError {
+        CompilationError::ConfigError(message)
+    }
+    
+    /// Get the error message
+    fn message(&self) -> String {
+        match self {
+            CompilationError::ParseError(msg) => format!("Parse error: {}", msg),
+            CompilationError::TypeError(msg) => format!("Type error: {}", msg),
+            CompilationError::CodeGenError(msg) => format!("Code generation error: {}", msg),
+            CompilationError::TargetError(msg) => format!("Target error: {}", msg),
+            CompilationError::ConfigError(msg) => format!("Configuration error: {}", msg),
+        }
+    }
+}
+
+/// Result type for compilation operations
+type CompilationResult<T> = Result<T, CompilationError>;
+
+/// Supported compilation targets
+enum CompilationTarget {
+    /// WebAssembly target
+    WebAssembly,
+    
+    /// TypeScript target
+    TypeScript,
+    
+    /// Rust target
+    Rust,
+}
+
+impl CompilationTarget {
+    /// Convert to string representation
+    fn to_string(&self) -> String {
+        match self {
+            CompilationTarget::WebAssembly => "WebAssembly".to_string(),
+            CompilationTarget::TypeScript => "TypeScript".to_string(),
+            CompilationTarget::Rust => "Rust".to_string(),
+        }
+    }
+    
+    /// Get from string representation
+    fn from_string(s: &str) -> Option<CompilationTarget> {
+        match s.to_lowercase().as_str() {
+            "webassembly" | "wasm" => Some(CompilationTarget::WebAssembly),
+            "typescript" | "ts" => Some(CompilationTarget::TypeScript),
+            "rust" | "rs" => Some(CompilationTarget::Rust),
+            _ => None,
+        }
+    }
+    
+    /// Get all available targets
+    fn all_targets() -> Vec<CompilationTarget> {
+        vec![
+            CompilationTarget::WebAssembly,
+            CompilationTarget::TypeScript,
+            CompilationTarget::Rust,
+        ]
+    }
+}
+
+/// Compiler output for a specific target
+struct CompiledOutput {
+    /// Target this output was compiled for
+    target: CompilationTarget,
+    
+    /// Main output content (code)
+    content: String,
+    
+    /// Additional files (e.g. header files, type definitions)
+    additional_files: HashMap<String, String>,
+    
+    /// Warnings generated during compilation
+    warnings: Vec<String>,
+    
+    /// Compilation metadata
+    metadata: CompilationMetadata,
+}
+
+impl CompiledOutput {
+    /// Create a new compiled output
+    fn new(target: CompilationTarget, content: String) -> CompiledOutput {
+        CompiledOutput {
+            target: target,
+            content: content,
+            additional_files: HashMap::new(),
+            warnings: vec![],
+            metadata: CompilationMetadata::new(),
+        }
+    }
+    
+    /// Add an additional file
+    fn add_file(&mut self, filename: String, content: String) {
+        self.additional_files.insert(filename, content);
+    }
+    
+    /// Add a warning
+    fn add_warning(&mut self, warning: String) {
+        self.warnings.push(warning);
+    }
+    
+    /// Set metadata
+    fn set_metadata(&mut self, metadata: CompilationMetadata) {
+        self.metadata = metadata;
+    }
+}
+
+/// Metadata for compiled output
+struct CompilationMetadata {
+    /// Time taken to compile
+    compilation_time_ms: f64,
+    
+    /// Size of generated code in bytes
+    code_size_bytes: usize,
+    
+    /// Number of functions in the output
+    function_count: usize,
+    
+    /// Additional target-specific metadata
+    target_metadata: HashMap<String, String>,
+}
+
+impl CompilationMetadata {
+    /// Create new empty metadata
+    fn new() -> CompilationMetadata {
+        CompilationMetadata {
+            compilation_time_ms: 0.0,
+            code_size_bytes: 0,
+            function_count: 0,
+            target_metadata: HashMap::new(),
+        }
+    }
+    
+    /// Add target-specific metadata
+    fn add_target_metadata(&mut self, key: String, value: String) {
+        self.target_metadata.insert(key, value);
+    }
+}
+
+/// Options for compilation
+struct CompilationOptions {
+    /// Optimization level (0-3)
+    optimization_level: usize,
+    
+    /// Whether to generate debug info
+    debug_info: bool,
+    
+    /// Whether to generate source maps
+    source_maps: bool,
+    
+    /// Target-specific options
+    target_options: HashMap<CompilationTarget, TargetOptions>,
+}
+
+impl CompilationOptions {
+    /// Create new options with defaults
+    fn new() -> CompilationOptions {
+        CompilationOptions {
+            optimization_level: 1,
+            debug_info: false,
+            source_maps: false,
+            target_options: HashMap::new(),
+        }
+    }
+    
+    /// Create options optimized for development
+    fn development() -> CompilationOptions {
+        CompilationOptions {
+            optimization_level: 0,
+            debug_info: true,
+            source_maps: true,
+            target_options: HashMap::new(),
+        }
+    }
+    
+    /// Create options optimized for production
+    fn production() -> CompilationOptions {
+        CompilationOptions {
+            optimization_level: 3,
+            debug_info: false,
+            source_maps: true, // Usually kept for production debugging
+            target_options: HashMap::new(),
+        }
+    }
+    
+    /// Set options for a specific target
+    fn set_target_options(&mut self, target: CompilationTarget, options: TargetOptions) {
+        self.target_options.insert(target, options);
+    }
+    
+    /// Get options for a specific target
+    fn get_target_options(&self, target: &CompilationTarget) -> Option<&TargetOptions> {
+        self.target_options.get(target)
+    }
+}
+
+/// Target-specific compilation options
+struct TargetOptions {
+    /// Custom options as key-value pairs
+    options: HashMap<String, String>,
+}
+
+impl TargetOptions {
+    /// Create empty target options
+    fn new() -> TargetOptions {
+        TargetOptions {
+            options: HashMap::new(),
+        }
+    }
+    
+    /// Set an option
+    fn set(&mut self, key: String, value: String) {
+        self.options.insert(key, value);
+    }
+    
+    /// Get an option
+    fn get(&self, key: &String) -> Option<&String> {
+        self.options.get(key)
+    }
+}
+
+/// Simple hash map implementation for the mock
+struct HashMap<K, V> {
+    keys: Vec<K>,
+    values: Vec<V>,
+}
+
+impl<K: PartialEq + Clone, V: Clone> HashMap<K, V> {
+    fn new() -> HashMap<K, V> {
+        HashMap {
+            keys: vec![],
+            values: vec![],
+        }
+    }
+    
+    fn insert(&mut self, key: K, value: V) -> Option<V> {
+        for i in 0..self.keys.len() {
+            if self.keys[i] == key {
+                let old_value = self.values[i].clone();
+                self.values[i] = value;
+                return Some(old_value);
+            }
+        }
+        
+        self.keys.push(key);
+        self.values.push(value);
+        None
+    }
+    
+    fn get(&self, key: &K) -> Option<&V> {
+        for i in 0..self.keys.len() {
+            if self.keys[i] == *key {
+                return Some(&self.values[i]);
+            }
+        }
+        
+        None
+    }
+    
+    fn contains_key(&self, key: &K) -> bool {
+        for i in 0..self.keys.len() {
+            if self.keys[i] == *key {
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    fn len(&self) -> usize {
+        self.keys.len()
+    }
+}
+
+/// Mock representation of AST
+struct Ast {
+    /// Root node of the AST
+    root: AstNode,
+}
+
+/// Mock representation of an AST node
+enum AstNode {
+    /// Module node
+    Module { name: String, children: Vec<AstNode> },
+    
+    /// Function node
+    Function { name: String, params: Vec<AstNode>, body: Vec<AstNode>, return_type: String },
+    
+    /// Other node type
+    Other { kind: String },
+}
+
+/// Mock representation of type environment
+struct TypeEnvironment {
+    /// Type definitions
+    types: HashMap<String, TypeDefinition>,
+}
+
+impl TypeEnvironment {
+    /// Create a new empty type environment
+    fn new() -> TypeEnvironment {
+        TypeEnvironment {
+            types: HashMap::new(),
+        }
+    }
+}
+
+/// Mock representation of type definition
+struct TypeDefinition {
+    /// Name of the type
+    name: String,
+    
+    /// Kind of the type
+    kind: TypeKind,
+}
+
+/// Different kinds of types
+enum TypeKind {
+    /// Primitive type
+    Primitive,
+    
+    /// Struct type
+    Struct { fields: Vec<(String, String)> },
+    
+    /// Enum type
+    Enum { variants: Vec<(String, Vec<String>)> },
+    
+    /// Function type
+    Function { params: Vec<String>, return_type: String },
+}
+
+/// Interface for target emitters
+trait TargetEmitter {
+    /// Initialize the emitter with options
+    fn initialize(&mut self, options: &CompilationOptions) -> CompilationResult<()>;
+    
+    /// Compile AST to target code
+    fn compile(&mut self, ast: &Ast, type_env: &TypeEnvironment) -> CompilationResult<CompiledOutput>;
+    
+    /// Get the target this emitter compiles to
+    fn target(&self) -> CompilationTarget;
+}
+
+/// WebAssembly emitter (mock implementation)
+struct WasmEmitter {
+    /// Compilation options
+    options: CompilationOptions,
+}
+
+impl WasmEmitter {
+    /// Create a new WebAssembly emitter
+    fn new() -> WasmEmitter {
+        WasmEmitter {
+            options: CompilationOptions::new(),
+        }
+    }
+}
+
+impl TargetEmitter for WasmEmitter {
+    /// Initialize the WebAssembly emitter
+    fn initialize(&mut self, options: &CompilationOptions) -> CompilationResult<()> {
+        self.options = options.clone();
+        Ok(())
+    }
+    
+    /// Compile AST to WebAssembly code
+    fn compile(&mut self, ast: &Ast, type_env: &TypeEnvironment) -> CompilationResult<CompiledOutput> {
+        // In a real implementation, this would generate WebAssembly code
+        // For now, just return a placeholder
+        Err(CompilationError::new_code_gen_error("WebAssembly emitter not implemented yet".to_string()))
+    }
+    
+    /// Get the target this emitter compiles to
+    fn target(&self) -> CompilationTarget {
+        CompilationTarget::WebAssembly
+    }
+}
+
+/// TypeScript emitter (mock implementation)
+struct TypeScriptEmitter {
+    /// Compilation options
+    options: CompilationOptions,
+}
+
+impl TypeScriptEmitter {
+    /// Create a new TypeScript emitter
+    fn new() -> TypeScriptEmitter {
+        TypeScriptEmitter {
+            options: CompilationOptions::new(),
+        }
+    }
+}
+
+impl TargetEmitter for TypeScriptEmitter {
+    /// Initialize the TypeScript emitter
+    fn initialize(&mut self, options: &CompilationOptions) -> CompilationResult<()> {
+        self.options = options.clone();
+        Ok(())
+    }
+    
+    /// Compile AST to TypeScript code
+    fn compile(&mut self, ast: &Ast, type_env: &TypeEnvironment) -> CompilationResult<CompiledOutput> {
+        // In a real implementation, this would generate TypeScript code
+        // For now, just return a placeholder
+        Err(CompilationError::new_code_gen_error("TypeScript emitter not implemented yet".to_string()))
+    }
+    
+    /// Get the target this emitter compiles to
+    fn target(&self) -> CompilationTarget {
+        CompilationTarget::TypeScript
+    }
+}
+
+/// Rust emitter (mock implementation)
+struct RustEmitter {
+    /// Compilation options
+    options: CompilationOptions,
+}
+
+impl RustEmitter {
+    /// Create a new Rust emitter
+    fn new() -> RustEmitter {
+        RustEmitter {
+            options: CompilationOptions::new(),
+        }
+    }
+}
+
+impl TargetEmitter for RustEmitter {
+    /// Initialize the Rust emitter
+    fn initialize(&mut self, options: &CompilationOptions) -> CompilationResult<()> {
+        self.options = options.clone();
+        Ok(())
+    }
+    
+    /// Compile AST to Rust code
+    fn compile(&mut self, ast: &Ast, type_env: &TypeEnvironment) -> CompilationResult<CompiledOutput> {
+        // In a real implementation, this would generate Rust code
+        // For now, just return a placeholder
+        Err(CompilationError::new_code_gen_error("Rust emitter not implemented yet".to_string()))
+    }
+    
+    /// Get the target this emitter compiles to
+    fn target(&self) -> CompilationTarget {
+        CompilationTarget::Rust
+    }
+}
+
+/// Multi-target compiler interface
+struct MultiTargetCompiler {
+    /// Available compilation targets
+    emitters: HashMap<CompilationTarget, Box<dyn TargetEmitter>>,
+    
+    /// Current active target
+    active_target: Option<CompilationTarget>,
+    
+    /// Shared AST representation
+    ast: Option<Box<Ast>>,
+    
+    /// Shared type environment
+    type_env: TypeEnvironment,
+    
+    /// Compilation options
+    options: CompilationOptions,
+}
+
+impl MultiTargetCompiler {
+    /// Create a new multi-target compiler
+    fn new() -> MultiTargetCompiler {
+        let mut compiler = MultiTargetCompiler {
+            emitters: HashMap::new(),
+            active_target: None,
+            ast: None,
+            type_env: TypeEnvironment::new(),
+            options: CompilationOptions::new(),
+        };
+        
+        // This would register emitters in a real implementation
+        // but our mock HashMap doesn't support trait objects
+        // We'll handle this in the GREEN phase
+        
+        compiler
+    }
+    
+    /// Set the active compilation target
+    fn set_target(&mut self, target: CompilationTarget) -> CompilationResult<()> {
+        if !self.emitters.contains_key(&target) {
+            return Err(CompilationError::new_config_error(
+                format!("Target {} not available", target.to_string())
+            ));
+        }
+        
+        self.active_target = Some(target);
+        Ok(())
+    }
+    
+    /// Set compilation options
+    fn set_options(&mut self, options: CompilationOptions) -> CompilationResult<()> {
+        self.options = options;
+        
+        // Initialize all emitters with new options
+        /*
+        for (_, emitter) in &mut self.emitters {
+            emitter.initialize(&self.options)?;
+        }
+        */
+        
+        Ok(())
+    }
+    
+    /// Parse source code to shared AST
+    fn parse(&mut self, source: String) -> CompilationResult<Box<Ast>> {
+        // In a real implementation, this would parse the source code
+        // For now, just return a placeholder
+        Err(CompilationError::new_parse_error("Parser not implemented yet".to_string()))
+    }
+    
+    /// Type check the AST
+    fn type_check(&mut self) -> CompilationResult<()> {
+        if self.ast.is_none() {
+            return Err(CompilationError::new_config_error(
+                "Cannot type check without AST. Parse source code first.".to_string()
+            ));
+        }
+        
+        // In a real implementation, this would type check the AST
+        // For now, just return a placeholder
+        Err(CompilationError::new_type_error("Type checker not implemented yet".to_string()))
+    }
+    
+    /// Compile to the active target
+    fn compile(&mut self) -> CompilationResult<CompiledOutput> {
+        // Check we have an active target
+        let target = match self.active_target {
+            Some(t) => t,
+            None => return Err(CompilationError::new_config_error(
+                "No active target set. Call set_target() first.".to_string()
+            )),
+        };
+        
+        // Check we have an AST
+        let ast = match &self.ast {
+            Some(a) => a,
+            None => return Err(CompilationError::new_config_error(
+                "No AST available. Parse source code first.".to_string()
+            )),
+        };
+        
+        // In a real implementation, this would get the emitter for the active target
+        // and call its compile method
+        Err(CompilationError::new_code_gen_error("Emitters not implemented yet".to_string()))
+    }
+    
+    /// Compile to all targets
+    fn compile_all(&mut self) -> HashMap<CompilationTarget, CompilationResult<CompiledOutput>> {
+        let mut results = HashMap::new();
+        
+        // Check we have an AST
+        if self.ast.is_none() {
+            let error = CompilationError::new_config_error(
+                "No AST available. Parse source code first.".to_string()
+            );
+            
+            // Add the same error for all targets
+            for target in CompilationTarget::all_targets() {
+                results.insert(target, Err(error.clone()));
+            }
+            
+            return results;
+        }
+        
+        // In a real implementation, this would compile to all available targets
+        // For now, just return placeholder errors
+        for target in CompilationTarget::all_targets() {
+            results.insert(
+                target.clone(),
+                Err(CompilationError::new_code_gen_error(
+                    format!("{} emitter not implemented yet", target.to_string())
+                ))
+            );
+        }
+        
+        results
+    }
+}
+
+// Public API
+
+/// Create a new multi-target compiler
+pub fn create_multi_target_compiler() -> MultiTargetCompiler {
+    MultiTargetCompiler::new()
+}
+
+// Export types
+pub use self::CompilationError as CompilationError;
+pub use self::CompilationTarget as CompilationTarget;
+pub use self::CompiledOutput as CompiledOutput;
+pub use self::CompilationOptions as CompilationOptions;
+pub use self::TargetOptions as TargetOptions;
+pub use self::MultiTargetCompiler as MultiTargetCompiler;

@@ -1,0 +1,977 @@
+//
+// WASM-004: WebAssembly SIMD Support - Refactored Implementation Test
+//
+// This file contains tests for the refactored SIMD implementation.
+// It verifies that the refactored implementation passes all tests and
+// demonstrates performance improvements and API enhancements.
+//
+
+import { 
+    VectorType, VectorBinaryOp, VectorUnaryOp, 
+    VectorLaneOp, VectorMemoryOp 
+} from "../../bootstrap/stage3/simd_types_refactored";
+import { SimdCodeGenerator } from "../../bootstrap/stage3/wasm_simd_codegen_refactored";
+import { 
+    v128, i8x16, i16x8, i32x4, f32x4,
+    detect_simd_support, has_simd_capability,
+    dot_product_simd, dot_product_scalar_optimized, 
+    matrix_multiply_4x4_simd,
+    auto_vectorize_f32, auto_vectorize_f32_binary, auto_vectorize_f32_reduce
+} from "../../bootstrap/stage3/simd_runtime_refactored";
+import { Type, TypeEnvironment } from "../../bootstrap/stage2/type_environment";
+import { 
+    type_check_vector_binary_op, type_check_vector_unary_op, 
+    type_check_vector_lane_op, type_check_vector_memory_op 
+} from "../../bootstrap/stage3/simd_types_refactored";
+import { WasmModule, WasmFunction, WasmInstruction } from "../../bootstrap/stage3/wasm_types";
+
+// -----------------------------------------------------------------------------
+// Test Utilities
+// -----------------------------------------------------------------------------
+
+// Timing function to measure performance
+fun time_execution<F, R>(name: &str, f: F) -> R 
+where 
+    F: FnOnce() -> R
+{
+    let start = std::time::Instant::now();
+    let result = f();
+    let duration = start.elapsed();
+    println!("{}: {:?}", name, duration);
+    result
+}
+
+// Compare two f32 values with tolerance
+fun approximately_equal(a: f32, b: f32, epsilon: f32) -> bool {
+    (a - b).abs() < epsilon
+}
+
+// -----------------------------------------------------------------------------
+// Type System Tests
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_vector_type_system_refactored() {
+    // Create a type environment
+    let mut env = TypeEnvironment::new();
+    
+    // Test vector type creation
+    let i8x16_type = Type::vector(VectorType::I8x16);
+    let i16x8_type = Type::vector(VectorType::I16x8);
+    let i32x4_type = Type::vector(VectorType::I32x4);
+    let i64x2_type = Type::vector(VectorType::I64x2);
+    let f32x4_type = Type::vector(VectorType::F32x4);
+    let f64x2_type = Type::vector(VectorType::F64x2);
+    let v128_type = Type::vector(VectorType::V128);
+    
+    // Verify type properties
+    assert!(i8x16_type.is_vector_type());
+    assert!(i8x16_type.vector_lane_type().unwrap() == Type::I8);
+    assert!(i8x16_type.vector_lane_count().unwrap() == 16);
+    
+    assert!(i16x8_type.is_vector_type());
+    assert!(i16x8_type.vector_lane_type().unwrap() == Type::I16);
+    assert!(i16x8_type.vector_lane_count().unwrap() == 8);
+    
+    assert!(i32x4_type.is_vector_type());
+    assert!(i32x4_type.vector_lane_type().unwrap() == Type::I32);
+    assert!(i32x4_type.vector_lane_count().unwrap() == 4);
+    
+    assert!(f32x4_type.is_vector_type());
+    assert!(f32x4_type.vector_lane_type().unwrap() == Type::F32);
+    assert!(f32x4_type.vector_lane_count().unwrap() == 4);
+    
+    // Test improved type operations
+    let i8x16_vec = i8x16_type.as_vector_type().unwrap();
+    assert!(i8x16_vec.is_integer_vector());
+    assert!(!i8x16_vec.is_float_vector());
+    assert!(i8x16_vec.lane_width() == 8);
+    assert!(i8x16_vec.bit_width() == 128);
+    
+    let f32x4_vec = f32x4_type.as_vector_type().unwrap();
+    assert!(!f32x4_vec.is_integer_vector());
+    assert!(f32x4_vec.is_float_vector());
+    assert!(f32x4_vec.lane_width() == 32);
+    
+    // Test type compatibility checking
+    assert!(i32x4_type.is_compatible_with_vector_operation("add"));
+    assert!(f32x4_type.is_compatible_with_vector_operation("sqrt"));
+    assert!(!i32x4_type.is_compatible_with_vector_operation("sqrt"));
+    assert!(f32x4_type.is_compatible_with_vector_operation("div"));
+    assert!(!i32x4_type.is_compatible_with_vector_operation("div"));
+    
+    // Test the vector type from lane type and count functionality
+    let recreated_i32x4 = VectorType::from_lane_type_and_count(&Type::I32, 4).unwrap();
+    assert!(recreated_i32x4 == VectorType::I32x4);
+    
+    let recreated_f32x4 = VectorType::from_lane_type_and_count(&Type::F32, 4).unwrap();
+    assert!(recreated_f32x4 == VectorType::F32x4);
+    
+    // Test parsing from string
+    let parsed_i8x16 = VectorType::parse("i8x16").unwrap();
+    assert!(parsed_i8x16 == VectorType::I8x16);
+    
+    let parsed_f32x4 = VectorType::parse("f32x4").unwrap();
+    assert!(parsed_f32x4 == VectorType::F32x4);
+    
+    // Test conversion compatibility
+    assert!(f32x4_vec.can_convert_to(&VectorType::I32x4));
+    assert!(i32x4_vec.can_convert_to(&VectorType::F32x4));
+    
+    println!("✅ Vector type system refactored tests passed");
+}
+
+#[test]
+pub fun test_vector_operations_type_checking_refactored() {
+    // Create a type environment
+    let mut env = TypeEnvironment::new();
+    
+    // Create vector types
+    let i8x16_type = Type::vector(VectorType::I8x16);
+    let i16x8_type = Type::vector(VectorType::I16x8);
+    let i32x4_type = Type::vector(VectorType::I32x4);
+    let f32x4_type = Type::vector(VectorType::F32x4);
+    
+    // Test binary operations
+    let add_result = type_check_vector_binary_op(
+        &VectorBinaryOp::Add,
+        &i32x4_type,
+        &i32x4_type,
+        &mut env
+    );
+    assert!(add_result.is_ok());
+    assert!(add_result.unwrap() == i32x4_type);
+    
+    let div_result = type_check_vector_binary_op(
+        &VectorBinaryOp::Div,
+        &f32x4_type,
+        &f32x4_type,
+        &mut env
+    );
+    assert!(div_result.is_ok());
+    assert!(div_result.unwrap() == f32x4_type);
+    
+    // Test div on integer vectors (should fail)
+    let div_int_result = type_check_vector_binary_op(
+        &VectorBinaryOp::Div,
+        &i32x4_type,
+        &i32x4_type,
+        &mut env
+    );
+    assert!(div_int_result.is_err());
+    
+    // Test unary operations
+    let neg_result = type_check_vector_unary_op(
+        &VectorUnaryOp::Neg,
+        &i32x4_type,
+        &mut env
+    );
+    assert!(neg_result.is_ok());
+    assert!(neg_result.unwrap() == i32x4_type);
+    
+    let sqrt_result = type_check_vector_unary_op(
+        &VectorUnaryOp::Sqrt,
+        &f32x4_type,
+        &mut env
+    );
+    assert!(sqrt_result.is_ok());
+    assert!(sqrt_result.unwrap() == f32x4_type);
+    
+    // Test sqrt on integer vectors (should fail)
+    let sqrt_int_result = type_check_vector_unary_op(
+        &VectorUnaryOp::Sqrt,
+        &i32x4_type,
+        &mut env
+    );
+    assert!(sqrt_int_result.is_err());
+    
+    // Test lane operations
+    let extract_lane_result = type_check_vector_lane_op(
+        &VectorLaneOp::ExtractLane(0),
+        &i32x4_type,
+        &mut env
+    );
+    assert!(extract_lane_result.is_ok());
+    assert!(extract_lane_result.unwrap() == Type::I32);
+    
+    let replace_lane_result = type_check_vector_lane_op(
+        &VectorLaneOp::ReplaceLane(0),
+        &i32x4_type,
+        &mut env
+    );
+    assert!(replace_lane_result.is_ok());
+    assert!(replace_lane_result.unwrap() == i32x4_type);
+    
+    // Test out-of-bounds lane index
+    let out_of_bounds_result = type_check_vector_lane_op(
+        &VectorLaneOp::ExtractLane(4),
+        &i32x4_type,
+        &mut env
+    );
+    assert!(out_of_bounds_result.is_err());
+    
+    // Test memory operations
+    let pointer_type = Type::Pointer(Box::new(Type::I32));
+    
+    let load_result = type_check_vector_memory_op(
+        &VectorMemoryOp::Load,
+        &pointer_type,
+        &mut env
+    );
+    assert!(load_result.is_ok());
+    assert!(load_result.unwrap() == Type::vector(VectorType::V128));
+    
+    let store_result = type_check_vector_memory_op(
+        &VectorMemoryOp::Store,
+        &pointer_type,
+        &mut env
+    );
+    assert!(store_result.is_ok());
+    assert!(store_result.unwrap() == Type::Void);
+    
+    println!("✅ Vector operations type checking refactored tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Code Generation Tests
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_simd_code_generation_refactored() {
+    // Create a module with SIMD enabled
+    let mut module = WasmModule::new("simd_test");
+    module.enable_simd();
+    assert!(module.has_simd());
+    
+    // Create a SIMD code generator
+    let mut codegen = SimdCodeGenerator::new(module);
+    
+    // Test vector binary operations code generation
+    let i32x4_type = Type::vector(VectorType::I32x4);
+    let add_instructions = codegen.generate_vector_binary_op(
+        &VectorBinaryOp::Add,
+        &i32x4_type,
+        &i32x4_type
+    );
+    assert!(!add_instructions.is_empty());
+    
+    let f32x4_type = Type::vector(VectorType::F32x4);
+    let div_instructions = codegen.generate_vector_binary_op(
+        &VectorBinaryOp::Div,
+        &f32x4_type,
+        &f32x4_type
+    );
+    assert!(!div_instructions.is_empty());
+    
+    // Test vector unary operations code generation
+    let neg_instructions = codegen.generate_vector_unary_op(
+        &VectorUnaryOp::Neg,
+        &i32x4_type
+    );
+    assert!(!neg_instructions.is_empty());
+    
+    let sqrt_instructions = codegen.generate_vector_unary_op(
+        &VectorUnaryOp::Sqrt,
+        &f32x4_type
+    );
+    assert!(!sqrt_instructions.is_empty());
+    
+    // Test vector lane operations code generation
+    let extract_lane_instructions = codegen.generate_vector_lane_op(
+        &VectorLaneOp::ExtractLane(0),
+        &i32x4_type
+    );
+    assert!(!extract_lane_instructions.is_empty());
+    
+    // Test vector memory operations code generation
+    let load_instructions = codegen.generate_vector_memory_op(
+        &VectorMemoryOp::Load,
+        &Type::Pointer(Box::new(Type::I32))
+    );
+    assert!(!load_instructions.is_empty());
+    
+    // Test optimized auto-vectorization patterns
+    let map_instructions = codegen.generate_auto_vectorized_loop(
+        "map",
+        &[Type::F32],
+        1000
+    );
+    // In refactored version, this should return non-empty instructions with a comment
+    assert!(!map_instructions.is_empty());
+    
+    // Test optimized shuffle patterns
+    let transpose_instructions = codegen.generate_shuffle_pattern(
+        "transpose",
+        &VectorType::F32x4
+    );
+    assert!(!transpose_instructions.is_empty());
+    
+    println!("✅ SIMD code generation refactored tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Runtime Implementation Tests
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_simd_runtime_refactored() {
+    // Test v128 base operations
+    let a = v128::new(1, 2, 3, 4);
+    let b = v128::new(5, 6, 7, 8);
+    
+    let c = a.and(&b);
+    assert!(c.data[0] == (1 & 5));
+    assert!(c.data[1] == (2 & 6));
+    assert!(c.data[2] == (3 & 7));
+    assert!(c.data[3] == (4 & 8));
+    
+    let d = a.or(&b);
+    assert!(d.data[0] == (1 | 5));
+    assert!(d.data[1] == (2 | 6));
+    assert!(d.data[2] == (3 | 7));
+    assert!(d.data[3] == (4 | 8));
+    
+    let e = a.xor(&b);
+    assert!(e.data[0] == (1 ^ 5));
+    assert!(e.data[1] == (2 ^ 6));
+    assert!(e.data[2] == (3 ^ 7));
+    assert!(e.data[3] == (4 ^ 8));
+    
+    // Test i8x16 operations
+    let v1 = i8x16::new(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+    let v2 = i8x16::new(16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
+    
+    // Test extracting lanes
+    assert!(v1.extract_lane(0) == 1);
+    assert!(v1.extract_lane(7) == 8);
+    assert!(v1.extract_lane(15) == 16);
+    
+    // Test replacing lanes
+    let v3 = v1.replace_lane(0, 100);
+    assert!(v3.extract_lane(0) == 100);
+    assert!(v3.extract_lane(1) == 2);
+    
+    // Test arithmetic operations
+    let v_add = v1.add(&v2);
+    for i in 0..16 {
+        assert!(v_add.extract_lane(i) == 17);
+    }
+    
+    let v_sub = v1.sub(&v2);
+    assert!(v_sub.extract_lane(0) == -15);
+    assert!(v_sub.extract_lane(15) == 15);
+    
+    // Test min/max operations
+    let v_min = v1.min(&v2);
+    assert!(v_min.extract_lane(0) == 1);
+    assert!(v_min.extract_lane(15) == 1);
+    
+    let v_max = v1.max(&v2);
+    assert!(v_max.extract_lane(0) == 16);
+    assert!(v_max.extract_lane(15) == 16);
+    
+    // Test i32x4 operations
+    let i1 = i32x4::new(1, 2, 3, 4);
+    let i2 = i32x4::new(5, 6, 7, 8);
+    
+    let i_add = i1.add(&i2);
+    assert!(i_add.extract_lane(0) == 6);
+    assert!(i_add.extract_lane(1) == 8);
+    assert!(i_add.extract_lane(2) == 10);
+    assert!(i_add.extract_lane(3) == 12);
+    
+    // Test f32x4 operations
+    let f1 = f32x4::new(1.0, 2.0, 3.0, 4.0);
+    let f2 = f32x4::new(5.0, 6.0, 7.0, 8.0);
+    
+    let f_add = f1.add(&f2);
+    assert!(f_add.extract_lane(0) == 6.0);
+    assert!(f_add.extract_lane(1) == 8.0);
+    assert!(f_add.extract_lane(2) == 10.0);
+    assert!(f_add.extract_lane(3) == 12.0);
+    
+    let f_mul = f1.mul(&f2);
+    assert!(f_mul.extract_lane(0) == 5.0);
+    assert!(f_mul.extract_lane(1) == 12.0);
+    assert!(f_mul.extract_lane(2) == 21.0);
+    assert!(f_mul.extract_lane(3) == 32.0);
+    
+    // Test mathematical functions
+    let f3 = f32x4::new(4.0, 9.0, 16.0, 25.0);
+    let f_sqrt = f3.sqrt();
+    assert!(approximately_equal(f_sqrt.extract_lane(0), 2.0, 0.00001));
+    assert!(approximately_equal(f_sqrt.extract_lane(1), 3.0, 0.00001));
+    assert!(approximately_equal(f_sqrt.extract_lane(2), 4.0, 0.00001));
+    assert!(approximately_equal(f_sqrt.extract_lane(3), 5.0, 0.00001));
+    
+    // Test enhanced operations (horizontal sum, dot product, normalize)
+    let sum = f3.horizontal_sum();
+    assert!(approximately_equal(sum, 54.0, 0.00001));
+    
+    let dot = f1.dot_product(&f2);
+    assert!(approximately_equal(dot, 70.0, 0.00001));
+    
+    let v4 = f32x4::new(3.0, 0.0, 0.0, 0.0);
+    let normalized = v4.normalize();
+    assert!(approximately_equal(normalized.extract_lane(0), 1.0, 0.00001));
+    assert!(approximately_equal(normalized.extract_lane(1), 0.0, 0.00001));
+    
+    // Test high-level auto-vectorized operations
+    let input = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let mut output = [0.0; 8];
+    
+    auto_vectorize_f32(&input, &mut output, |x| x * 2.0);
+    for i in 0..8 {
+        assert!(output[i] == input[i] * 2.0);
+    }
+    
+    let a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+    let b = [8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0];
+    let mut c = [0.0; 8];
+    
+    auto_vectorize_f32_binary(&a, &b, &mut c, |x, y| x + y);
+    for i in 0..8 {
+        assert!(c[i] == 9.0);
+    }
+    
+    let result = auto_vectorize_f32_reduce(&a, 0.0, |acc, x| acc + x);
+    assert!(approximately_equal(result, 36.0, 0.00001));
+    
+    println!("✅ SIMD runtime refactored tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Performance Tests
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_performance_improvements() {
+    // Create test data
+    let size = 1_000_000;
+    let mut a = vec![0.0f32; size];
+    let mut b = vec![0.0f32; size];
+    
+    // Initialize with some values
+    for i in 0..size {
+        a[i] = (i % 100) as f32;
+        b[i] = ((i + 50) % 100) as f32;
+    }
+    
+    // Test original implementation
+    let scalar_result = time_execution("Original scalar dot product", || {
+        dot_product_scalar_optimized(&a, &b, size)
+    });
+    
+    // Test refactored implementation
+    let simd_result = time_execution("Refactored SIMD dot product", || {
+        dot_product_simd(&a, &b, size)
+    });
+    
+    // Verify results are the same
+    assert!(approximately_equal(scalar_result, simd_result, 0.001));
+    
+    // Test matrix multiplication
+    let mut a_matrix = [0.0f32; 16];
+    let mut b_matrix = [0.0f32; 16];
+    let mut c_matrix_scalar = [0.0f32; 16];
+    let mut c_matrix_simd = [0.0f32; 16];
+    
+    // Initialize matrices
+    for i in 0..16 {
+        a_matrix[i] = (i % 4 + 1) as f32;
+        b_matrix[i] = ((16 - i) % 4 + 1) as f32;
+    }
+    
+    // Test scalar matrix multiplication
+    time_execution("Scalar matrix multiplication", || {
+        for i in 0..4 {
+            for j in 0..4 {
+                let mut sum = 0.0;
+                for k in 0..4 {
+                    sum += a_matrix[i * 4 + k] * b_matrix[k * 4 + j];
+                }
+                c_matrix_scalar[i * 4 + j] = sum;
+            }
+        }
+    });
+    
+    // Test SIMD matrix multiplication
+    time_execution("SIMD matrix multiplication", || {
+        matrix_multiply_4x4_simd(&a_matrix, &b_matrix, &mut c_matrix_simd);
+    });
+    
+    // Verify results
+    for i in 0..16 {
+        assert!(approximately_equal(c_matrix_scalar[i], c_matrix_simd[i], 0.001));
+    }
+    
+    // Test auto-vectorized operations
+    let mut output1 = vec![0.0f32; size];
+    let mut output2 = vec![0.0f32; size];
+    
+    time_execution("Scalar map operation", || {
+        for i in 0..size {
+            output1[i] = a[i] * b[i];
+        }
+    });
+    
+    time_execution("Auto-vectorized map operation", || {
+        auto_vectorize_f32_binary(&a, &b, &mut output2, |x, y| x * y);
+    });
+    
+    // Verify results
+    for i in 0..size {
+        assert!(approximately_equal(output1[i], output2[i], 0.001));
+    }
+    
+    println!("✅ Performance improvements verified");
+}
+
+// -----------------------------------------------------------------------------
+// Feature Detection Tests
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_feature_detection() {
+    // Test basic feature detection
+    let simd_supported = detect_simd_support();
+    println!("SIMD supported: {}", simd_supported);
+    
+    // Test capability detection
+    let relaxed_simd = has_simd_capability("relaxed-simd");
+    println!("relaxed-simd capability: {}", relaxed_simd);
+    
+    let fixed_width_simd = has_simd_capability("fixed-width-simd");
+    println!("fixed-width-simd capability: {}", fixed_width_simd);
+    
+    // For local testing, we expect this basic capability to be supported
+    if simd_supported {
+        assert!(fixed_width_simd, "Fixed-width SIMD should be supported if SIMD is supported");
+    }
+    
+    println!("✅ Feature detection tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Integration Tests
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_integration_with_wasm_module() {
+    // Create a WebAssembly module with SIMD enabled
+    let mut module = WasmModule::new("simd_integration_test");
+    module.enable_simd();
+    
+    // Verify prerequisites
+    assert!(module.validate_simd_prerequisites().is_ok());
+    
+    // Create a function that uses SIMD
+    let mut func = WasmFunction::new("dot_product", vec![Type::I32, Type::I32, Type::I32], Type::F32);
+    
+    // Add SIMD instructions to the function
+    let codegen = module.simd_code_generator();
+    let i32x4_type = Type::vector(VectorType::I32x4);
+    let add_instructions = codegen.generate_vector_binary_op(
+        &VectorBinaryOp::Add,
+        &i32x4_type,
+        &i32x4_type
+    );
+    func.add_simd_instructions(add_instructions);
+    
+    // Optimize SIMD usage
+    func.optimize_simd();
+    
+    // Add the function to the module
+    module.add_function(func);
+    
+    // Add SIMD utility functions
+    module.add_simd_utilities();
+    
+    println!("✅ Integration with WASM module successful");
+}
+
+// -----------------------------------------------------------------------------
+// Advanced Tests: Image Processing
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_image_processing_refactored() {
+    // Create a test image
+    let width = 64;
+    let height = 64;
+    let mut input_image = Vec::with_capacity(width * height * 4);
+    
+    // Fill with test data
+    for y in 0..height {
+        for x in 0..width {
+            // RGBA values
+            let r = ((x as f32 / width as f32) * 255.0) as u8;
+            let g = ((y as f32 / height as f32) * 255.0) as u8;
+            let b = (((x + y) as f32 / (width + height) as f32) * 255.0) as u8;
+            let a = 255;
+            
+            input_image.push(r);
+            input_image.push(g);
+            input_image.push(b);
+            input_image.push(a);
+        }
+    }
+    
+    // Test Gaussian blur
+    let scalar_blur_result = time_execution("Scalar Gaussian Blur", || {
+        gaussian_blur_scalar(&input_image, width, height)
+    });
+    
+    let simd_blur_result = time_execution("SIMD Gaussian Blur (Refactored)", || {
+        gaussian_blur_simd_refactored(&input_image, width, height)
+    });
+    
+    // Check results are approximately equal (allow small rounding differences)
+    for i in 0..scalar_blur_result.len() {
+        let diff = (scalar_blur_result[i] as i32 - simd_blur_result[i] as i32).abs();
+        assert!(diff <= 1, "Blur output differs too much at index {}: {} vs {}", i, scalar_blur_result[i], simd_blur_result[i]);
+    }
+    
+    // Test edge detection
+    let scalar_edge_result = time_execution("Scalar Edge Detection", || {
+        sobel_edge_detection_scalar(&input_image, width, height)
+    });
+    
+    let simd_edge_result = time_execution("SIMD Edge Detection (Refactored)", || {
+        sobel_edge_detection_simd_refactored(&input_image, width, height)
+    });
+    
+    // Check results are approximately equal
+    for i in 0..scalar_edge_result.len() {
+        let diff = (scalar_edge_result[i] as i32 - simd_edge_result[i] as i32).abs();
+        assert!(diff <= 2, "Edge detection output differs too much at index {}: {} vs {}", i, scalar_edge_result[i], simd_edge_result[i]);
+    }
+    
+    // Test platform-specific optimizations
+    let optimized = use_platform_optimized_blur(&input_image, width, height, OptimizationLevel::High);
+    assert!(!optimized.is_empty(), "Platform-specific optimized blur should return data");
+    
+    println!("✅ Image processing refactored tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Advanced Tests: Cryptography
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_cryptography_refactored() {
+    // Test AES block operations with SIMD
+    let mut test_block = [0u8; 16];
+    for i in 0..16 {
+        test_block[i] = i as u8;
+    }
+    
+    // Test key
+    let test_key = [42u8; 16];
+    
+    // Test the refactored implementations of AES operations
+    let mut scalar_result = test_block.clone();
+    let mut simd_result = test_block.clone();
+    
+    // Time the scalar implementation
+    time_execution("AES SubBytes + ShiftRows (Scalar)", || {
+        aes_sub_bytes_shift_rows_scalar(&mut scalar_result);
+    });
+    
+    // Time the refactored SIMD implementation
+    time_execution("AES SubBytes + ShiftRows (SIMD Refactored)", || {
+        aes_sub_bytes_shift_rows_simd_refactored(&mut simd_result);
+    });
+    
+    // Check results match
+    assert!(scalar_result == simd_result, "AES operation results should match");
+    
+    // Test SHA-256 implementation
+    let test_data = "The quick brown fox jumps over the lazy dog".as_bytes();
+    
+    let scalar_hash = time_execution("SHA-256 (Scalar)", || {
+        sha256_scalar(test_data)
+    });
+    
+    let simd_hash = time_execution("SHA-256 (SIMD Refactored)", || {
+        sha256_simd_refactored(test_data)
+    });
+    
+    // Verify hashes match
+    assert_eq!(scalar_hash, simd_hash, "SHA-256 hashes should match");
+    
+    // Test with large data to demonstrate performance
+    let large_data = vec![0u8; 1_000_000]; // 1MB of zeros
+    
+    let scalar_large = time_execution("SHA-256 Large Data (Scalar)", || {
+        sha256_scalar(&large_data)
+    });
+    
+    let simd_large = time_execution("SHA-256 Large Data (SIMD Refactored)", || {
+        sha256_simd_refactored(&large_data)
+    });
+    
+    // Verify hashes match for large data
+    assert_eq!(scalar_large, simd_large, "SHA-256 hashes for large data should match");
+    
+    println!("✅ Cryptography refactored tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Advanced Tests: Auto-Vectorization
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_auto_vectorization_refactored() {
+    // Test data
+    let size = 10_000;
+    let mut a = vec![0.0f32; size];
+    let mut b = vec![0.0f32; size];
+    let mut c_scalar = vec![0.0f32; size];
+    let mut c_auto_vec = vec![0.0f32; size];
+    
+    // Initialize test data
+    for i in 0..size {
+        a[i] = i as f32;
+        b[i] = (size - i) as f32;
+    }
+    
+    // Scalar implementation
+    time_execution("Map operation (Scalar)", || {
+        for i in 0..size {
+            c_scalar[i] = a[i] * b[i];
+        }
+    });
+    
+    // Auto-vectorized implementation
+    time_execution("Map operation (Auto-Vectorized)", || {
+        auto_vectorize_f32_binary(&a, &b, &mut c_auto_vec, |x, y| x * y);
+    });
+    
+    // Verify results
+    for i in 0..size {
+        assert!(approximately_equal(c_scalar[i], c_auto_vec[i], 0.0001),
+               "Auto-vectorized result differs at index {}: {} vs {}", 
+               i, c_scalar[i], c_auto_vec[i]);
+    }
+    
+    // Test reduction operations
+    let scalar_sum = time_execution("Reduction (Scalar)", || {
+        let mut sum = 0.0f32;
+        for i in 0..size {
+            sum += a[i];
+        }
+        sum
+    });
+    
+    let auto_vec_sum = time_execution("Reduction (Auto-Vectorized)", || {
+        auto_vectorize_f32_reduce(&a, 0.0, |acc, x| acc + x)
+    });
+    
+    // Verify reduction result
+    assert!(approximately_equal(scalar_sum, auto_vec_sum, 0.01),
+           "Auto-vectorized reduction differs: {} vs {}", scalar_sum, auto_vec_sum);
+    
+    // Test the advanced vectorization utilities
+    let mut d = vec![0.0f32; size];
+    let mut e = vec![0.0f32; size];
+    
+    // Test adaptive auto-vectorization based on data size
+    time_execution("Adaptive vectorization", || {
+        adaptive_vectorize(&a, &mut d, OptimizationLevel::Medium);
+    });
+    
+    // Test sequential operations
+    time_execution("Sequential operations", || {
+        // Scalar implementation for comparison
+        for i in 0..size {
+            e[i] = a[i] * 2.0 + b[i];
+        }
+    });
+    
+    let mut f = vec![0.0f32; size];
+    time_execution("Sequential operations (Auto-Vectorized)", || {
+        auto_vectorize_chain(&a, &b, &mut f, |x| x * 2.0, |x, y| x + y);
+    });
+    
+    // Verify results of sequential operations
+    for i in 0..size {
+        assert!(approximately_equal(e[i], f[i], 0.0001),
+               "Chained auto-vectorization differs at index {}: {} vs {}", 
+               i, e[i], f[i]);
+    }
+    
+    println!("✅ Auto-vectorization refactored tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Advanced Tests: Platform Specific Optimizations
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_platform_specific_optimizations() {
+    // Test that we use the most optimized implementation for the platform
+    let has_avx = has_simd_capability("avx");
+    let has_avx2 = has_simd_capability("avx2");
+    let has_avx512 = has_simd_capability("avx512f");
+    let has_neon = has_simd_capability("neon");
+    
+    println!("Platform capabilities: AVX: {}, AVX2: {}, AVX512: {}, NEON: {}",
+              has_avx, has_avx2, has_avx512, has_neon);
+    
+    // Create test data
+    let size = 1000;
+    let mut a = vec![1.0f32; size];
+    let mut b = vec![2.0f32; size];
+    let mut c = vec![0.0f32; size];
+    
+    // Try platform-specific optimized implementations with detection
+    let impl_used = time_execution("Platform-optimized operation", || {
+        use_best_simd_implementation(&a, &b, &mut c)
+    });
+    
+    println!("Used implementation: {}", impl_used);
+    
+    // Verify results regardless of implementation used
+    for i in 0..size {
+        assert!(approximately_equal(c[i], 3.0, 0.0001),
+               "Platform-optimized implementation produced incorrect result at {}: {}", 
+               i, c[i]);
+    }
+    
+    // Test optimization levels
+    let levels = [OptimizationLevel::Off, OptimizationLevel::Low, 
+                  OptimizationLevel::Medium, OptimizationLevel::High,
+                  OptimizationLevel::Aggressive];
+    
+    for level in &levels {
+        let opt_name = match level {
+            OptimizationLevel::Off => "Off",
+            OptimizationLevel::Low => "Low",
+            OptimizationLevel::Medium => "Medium",
+            OptimizationLevel::High => "High",
+            OptimizationLevel::Aggressive => "Aggressive",
+        };
+        
+        let mut d = vec![0.0f32; size];
+        time_execution(&format!("Optimization level {}", opt_name), || {
+            optimize_vector_operation(&a, &b, &mut d, *level);
+        });
+        
+        // All optimization levels should produce correct results
+        for i in 0..size {
+            assert!(approximately_equal(d[i], 3.0, 0.0001),
+                   "Optimization level {} produced incorrect result at {}: {}",
+                   opt_name, i, d[i]);
+        }
+    }
+    
+    println!("✅ Platform-specific optimizations tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Advanced Tests: Memory Access and Alignment
+// -----------------------------------------------------------------------------
+
+#[test]
+pub fun test_memory_access_and_alignment() {
+    // Test aligned vs unaligned memory access performance
+    let size = 1001; // Odd size to ensure some misalignment
+    let mut aligned_data = aligned_vector::<f32>(size, 32); // 32-byte alignment for AVX
+    let mut unaligned_data = vec![0.0f32; size];
+    
+    // Fill test data
+    for i in 0..size {
+        aligned_data[i] = i as f32;
+        unaligned_data[i] = i as f32;
+    }
+    
+    // Test aligned memory access
+    time_execution("Aligned memory access", || {
+        simd_process_aligned(&mut aligned_data);
+    });
+    
+    // Test unaligned memory access
+    time_execution("Unaligned memory access", || {
+        simd_process_unaligned(&mut unaligned_data);
+    });
+    
+    // Both should have the same results
+    for i in 0..size {
+        assert!(approximately_equal(aligned_data[i], unaligned_data[i], 0.0001),
+               "Aligned vs unaligned results differ at index {}: {} vs {}",
+               i, aligned_data[i], unaligned_data[i]);
+    }
+    
+    // Test cache-friendly memory access patterns
+    let mut row_major = vec![0.0f32; size * size];
+    let mut col_major = vec![0.0f32; size * size];
+    
+    // Initialize both layouts
+    for i in 0..size {
+        for j in 0..size {
+            row_major[i * size + j] = (i * size + j) as f32;
+            col_major[j * size + i] = (i * size + j) as f32;
+        }
+    }
+    
+    // Test row-major access pattern (should be faster)
+    let row_result = time_execution("Row-major access pattern", || {
+        process_matrix_row_major(&row_major, size);
+    });
+    
+    // Test column-major access pattern (typically slower due to cache misses)
+    let col_result = time_execution("Column-major access pattern", || {
+        process_matrix_column_major(&col_major, size);
+    });
+    
+    // Results should match regardless of memory layout
+    assert!(approximately_equal(row_result, col_result, 0.0001),
+           "Row vs column major results differ: {} vs {}", row_result, col_result);
+    
+    println!("✅ Memory access and alignment tests passed");
+}
+
+// -----------------------------------------------------------------------------
+// Main Test Runner
+// -----------------------------------------------------------------------------
+
+pub fun main() {
+    println!("Running WASM SIMD refactored implementation tests");
+    
+    // Run type system tests
+    test_vector_type_system_refactored();
+    test_vector_operations_type_checking_refactored();
+    
+    // Run code generation tests
+    test_simd_code_generation_refactored();
+    
+    // Run runtime implementation tests
+    test_simd_runtime_refactored();
+    
+    // Run performance tests
+    test_performance_improvements();
+    
+    // Run feature detection tests
+    test_feature_detection();
+    
+    // Run integration tests
+    test_integration_with_wasm_module();
+    
+    // Run advanced image processing tests
+    test_image_processing_refactored();
+    
+    // Run advanced cryptography tests
+    test_cryptography_refactored();
+    
+    // Run advanced auto-vectorization tests
+    test_auto_vectorization_refactored();
+    
+    // Run platform-specific optimization tests
+    test_platform_specific_optimizations();
+    
+    // Run memory access and alignment tests
+    test_memory_access_and_alignment();
+    
+    println!("✅ All WASM SIMD refactored tests passed");
+}

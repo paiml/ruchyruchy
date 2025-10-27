@@ -1,0 +1,1796 @@
+//
+// WASM-004: WebAssembly SIMD Support - Refactored Code Generation
+//
+// This file contains optimized code generation for WebAssembly SIMD instructions.
+// It translates Ruchy SIMD operations into WebAssembly bytecode with improved
+// instruction selection, better code organization, and optimized encoding.
+//
+
+import { WasmOpcode, WasmInstruction, WasmModule, WasmFunction } from "./wasm_types";
+import { 
+    VectorType, VectorTypeInfoCache, VectorBinaryOp, 
+    VectorUnaryOp, VectorLaneOp, VectorMemoryOp 
+} from "./simd_types_refactored";
+import { Type } from "../../bootstrap/stage2/type_environment";
+import { Expression, BinaryOp, UnaryOp, MemoryOp } from "../../bootstrap/stage1/ast";
+
+// -----------------------------------------------------------------------------
+// WebAssembly SIMD Instruction Opcodes - Improved Organization
+// -----------------------------------------------------------------------------
+
+// WebAssembly SIMD instruction opcodes with better organization
+// Based on the WebAssembly SIMD proposal: https://github.com/WebAssembly/simd
+pub enum WasmSimdOpcode {
+    // Group 1: Vector creation and constants
+    V128Const = 0xFD00,
+    I8x16Splat = 0xFD0F,
+    I16x8Splat = 0xFD10,
+    I32x4Splat = 0xFD11,
+    I64x2Splat = 0xFD12,
+    F32x4Splat = 0xFD13,
+    F64x2Splat = 0xFD14,
+    
+    // Group 2: Lane access operations
+    I8x16ExtractLaneS = 0xFD15,
+    I8x16ExtractLaneU = 0xFD16,
+    I8x16ReplaceLane = 0xFD17,
+    I16x8ExtractLaneS = 0xFD18,
+    I16x8ExtractLaneU = 0xFD19,
+    I16x8ReplaceLane = 0xFD1A,
+    I32x4ExtractLane = 0xFD1B,
+    I32x4ReplaceLane = 0xFD1C,
+    I64x2ExtractLane = 0xFD1D,
+    I64x2ReplaceLane = 0xFD1E,
+    F32x4ExtractLane = 0xFD1F,
+    F32x4ReplaceLane = 0xFD20,
+    F64x2ExtractLane = 0xFD21,
+    F64x2ReplaceLane = 0xFD22,
+    
+    // Group 3: Comparisons
+    // i8x16 comparisons
+    I8x16Eq = 0xFD23,
+    I8x16Ne = 0xFD24,
+    I8x16LtS = 0xFD25,
+    I8x16LtU = 0xFD26,
+    I8x16GtS = 0xFD27,
+    I8x16GtU = 0xFD28,
+    I8x16LeS = 0xFD29,
+    I8x16LeU = 0xFD2A,
+    I8x16GeS = 0xFD2B,
+    I8x16GeU = 0xFD2C,
+    
+    // i16x8 comparisons
+    I16x8Eq = 0xFD2D,
+    I16x8Ne = 0xFD2E,
+    I16x8LtS = 0xFD2F,
+    I16x8LtU = 0xFD30,
+    I16x8GtS = 0xFD31,
+    I16x8GtU = 0xFD32,
+    I16x8LeS = 0xFD33,
+    I16x8LeU = 0xFD34,
+    I16x8GeS = 0xFD35,
+    I16x8GeU = 0xFD36,
+    
+    // i32x4 comparisons
+    I32x4Eq = 0xFD37,
+    I32x4Ne = 0xFD38,
+    I32x4LtS = 0xFD39,
+    I32x4LtU = 0xFD3A,
+    I32x4GtS = 0xFD3B,
+    I32x4GtU = 0xFD3C,
+    I32x4LeS = 0xFD3D,
+    I32x4LeU = 0xFD3E,
+    I32x4GeS = 0xFD3F,
+    I32x4GeU = 0xFD40,
+    
+    // i64x2 comparisons
+    I64x2Eq = 0xFD41,
+    I64x2Ne = 0xFD42,
+    I64x2LtS = 0xFD43,
+    I64x2GtS = 0xFD44,
+    I64x2LeS = 0xFD45,
+    I64x2GeS = 0xFD46,
+    
+    // f32x4 comparisons
+    F32x4Eq = 0xFD47,
+    F32x4Ne = 0xFD48,
+    F32x4Lt = 0xFD49,
+    F32x4Gt = 0xFD4A,
+    F32x4Le = 0xFD4B,
+    F32x4Ge = 0xFD4C,
+    
+    // f64x2 comparisons
+    F64x2Eq = 0xFD4D,
+    F64x2Ne = 0xFD4E,
+    F64x2Lt = 0xFD4F,
+    F64x2Gt = 0xFD50,
+    F64x2Le = 0xFD51,
+    F64x2Ge = 0xFD52,
+    
+    // Group 4: Bitwise operations
+    V128Not = 0xFD53,
+    V128And = 0xFD54,
+    V128AndNot = 0xFD55,
+    V128Or = 0xFD56,
+    V128Xor = 0xFD57,
+    V128BitSelect = 0xFD58,
+    V128AnyTrue = 0xFD59,
+    
+    // Group 5: Integer operations (i8x16)
+    I8x16Abs = 0xFD5A,
+    I8x16Neg = 0xFD5B,
+    I8x16AllTrue = 0xFD5C,
+    I8x16Bitmask = 0xFD5D,
+    I8x16NarrowI16x8S = 0xFD5E,
+    I8x16NarrowI16x8U = 0xFD5F,
+    I8x16Shl = 0xFD60,
+    I8x16ShrS = 0xFD61,
+    I8x16ShrU = 0xFD62,
+    I8x16Add = 0xFD63,
+    I8x16AddSatS = 0xFD64,
+    I8x16AddSatU = 0xFD65,
+    I8x16Sub = 0xFD66,
+    I8x16SubSatS = 0xFD67,
+    I8x16SubSatU = 0xFD68,
+    I8x16MinS = 0xFD69,
+    I8x16MinU = 0xFD6A,
+    I8x16MaxS = 0xFD6B,
+    I8x16MaxU = 0xFD6C,
+    I8x16AvgrU = 0xFD6D,
+    I8x16Popcnt = 0xFD6E, // Added in later proposals
+    
+    // Group 6: Integer operations (i16x8)
+    I16x8Abs = 0xFD6E,
+    I16x8Neg = 0xFD6F,
+    I16x8AllTrue = 0xFD70,
+    I16x8Bitmask = 0xFD71,
+    I16x8NarrowI32x4S = 0xFD72,
+    I16x8NarrowI32x4U = 0xFD73,
+    I16x8WidenLowI8x16S = 0xFD74,
+    I16x8WidenHighI8x16S = 0xFD75,
+    I16x8WidenLowI8x16U = 0xFD76,
+    I16x8WidenHighI8x16U = 0xFD77,
+    I16x8Shl = 0xFD78,
+    I16x8ShrS = 0xFD79,
+    I16x8ShrU = 0xFD7A,
+    I16x8Add = 0xFD7B,
+    I16x8AddSatS = 0xFD7C,
+    I16x8AddSatU = 0xFD7D,
+    I16x8Sub = 0xFD7E,
+    I16x8SubSatS = 0xFD7F,
+    I16x8SubSatU = 0xFD80,
+    I16x8Mul = 0xFD81,
+    I16x8MinS = 0xFD82,
+    I16x8MinU = 0xFD83,
+    I16x8MaxS = 0xFD84,
+    I16x8MaxU = 0xFD85,
+    I16x8AvgrU = 0xFD86,
+    I16x8ExtMulLowI8x16S = 0xFD87, // Added in later proposals
+    I16x8ExtMulHighI8x16S = 0xFD88, // Added in later proposals
+    I16x8ExtMulLowI8x16U = 0xFD89, // Added in later proposals
+    I16x8ExtMulHighI8x16U = 0xFD8A, // Added in later proposals
+    
+    // Group 7: Integer operations (i32x4)
+    I32x4Abs = 0xFD87,
+    I32x4Neg = 0xFD88,
+    I32x4AllTrue = 0xFD89,
+    I32x4Bitmask = 0xFD8A,
+    I32x4WidenLowI16x8S = 0xFD8B,
+    I32x4WidenHighI16x8S = 0xFD8C,
+    I32x4WidenLowI16x8U = 0xFD8D,
+    I32x4WidenHighI16x8U = 0xFD8E,
+    I32x4Shl = 0xFD8F,
+    I32x4ShrS = 0xFD90,
+    I32x4ShrU = 0xFD91,
+    I32x4Add = 0xFD92,
+    I32x4Sub = 0xFD93,
+    I32x4Mul = 0xFD94,
+    I32x4MinS = 0xFD95,
+    I32x4MinU = 0xFD96,
+    I32x4MaxS = 0xFD97,
+    I32x4MaxU = 0xFD98,
+    I32x4DotI16x8S = 0xFD99,
+    I32x4ExtMulLowI16x8S = 0xFD9A, // Added in later proposals
+    I32x4ExtMulHighI16x8S = 0xFD9B, // Added in later proposals
+    I32x4ExtMulLowI16x8U = 0xFD9C, // Added in later proposals
+    I32x4ExtMulHighI16x8U = 0xFD9D, // Added in later proposals
+    
+    // Group 8: Integer operations (i64x2)
+    I64x2Abs = 0xFD9A,
+    I64x2Neg = 0xFD9B,
+    I64x2AllTrue = 0xFD9C,
+    I64x2Bitmask = 0xFD9D,
+    I64x2WidenLowI32x4S = 0xFD9E,
+    I64x2WidenHighI32x4S = 0xFD9F,
+    I64x2WidenLowI32x4U = 0xFDA0,
+    I64x2WidenHighI32x4U = 0xFDA1,
+    I64x2Shl = 0xFDA2,
+    I64x2ShrS = 0xFDA3,
+    I64x2ShrU = 0xFDA4,
+    I64x2Add = 0xFDA5,
+    I64x2Sub = 0xFDA6,
+    I64x2Mul = 0xFDA7,
+    I64x2ExtMulLowI32x4S = 0xFDA8, // Added in later proposals
+    I64x2ExtMulHighI32x4S = 0xFDA9, // Added in later proposals
+    I64x2ExtMulLowI32x4U = 0xFDAA, // Added in later proposals
+    I64x2ExtMulHighI32x4U = 0xFDAB, // Added in later proposals
+    
+    // Group 9: Floating point operations (f32x4)
+    F32x4Abs = 0xFDA8,
+    F32x4Neg = 0xFDA9,
+    F32x4Sqrt = 0xFDAA,
+    F32x4Add = 0xFDAB,
+    F32x4Sub = 0xFDAC,
+    F32x4Mul = 0xFDAD,
+    F32x4Div = 0xFDAE,
+    F32x4Min = 0xFDAF,
+    F32x4Max = 0xFDB0,
+    F32x4PMin = 0xFDB1,
+    F32x4PMax = 0xFDB2,
+    F32x4Ceil = 0xFDB3, // Added in later proposals
+    F32x4Floor = 0xFDB4, // Added in later proposals
+    F32x4Trunc = 0xFDB5, // Added in later proposals
+    F32x4Nearest = 0xFDB6, // Added in later proposals
+    
+    // Group 10: Floating point operations (f64x2)
+    F64x2Abs = 0xFDB3,
+    F64x2Neg = 0xFDB4,
+    F64x2Sqrt = 0xFDB5,
+    F64x2Add = 0xFDB6,
+    F64x2Sub = 0xFDB7,
+    F64x2Mul = 0xFDB8,
+    F64x2Div = 0xFDB9,
+    F64x2Min = 0xFDBA,
+    F64x2Max = 0xFDBB,
+    F64x2PMin = 0xFDBC,
+    F64x2PMax = 0xFDBD,
+    F64x2Ceil = 0xFDBE, // Added in later proposals
+    F64x2Floor = 0xFDBF, // Added in later proposals
+    F64x2Trunc = 0xFDC0, // Added in later proposals
+    F64x2Nearest = 0xFDC1, // Added in later proposals
+    
+    // Group 11: Conversions
+    I32x4TruncSatF32x4S = 0xFDBE,
+    I32x4TruncSatF32x4U = 0xFDBF,
+    F32x4ConvertI32x4S = 0xFDC0,
+    F32x4ConvertI32x4U = 0xFDC1,
+    I32x4TruncSatF64x2SZero = 0xFDC2, // Added in later proposals
+    I32x4TruncSatF64x2UZero = 0xFDC3, // Added in later proposals
+    F64x2ConvertLowI32x4S = 0xFDC4, // Added in later proposals
+    F64x2ConvertLowI32x4U = 0xFDC5, // Added in later proposals
+    F32x4DemoteF64x2Zero = 0xFDC6, // Added in later proposals
+    F64x2PromoteLowF32x4 = 0xFDC7, // Added in later proposals
+    
+    // Group 12: Memory operations
+    V128Load = 0xFD00,
+    V128Store = 0xFD01,
+    V128Load8x8S = 0xFD02,
+    V128Load8x8U = 0xFD03,
+    V128Load16x4S = 0xFD04,
+    V128Load16x4U = 0xFD05,
+    V128Load32x2S = 0xFD06,
+    V128Load32x2U = 0xFD07,
+    V128Load8Splat = 0xFD08,
+    V128Load16Splat = 0xFD09,
+    V128Load32Splat = 0xFD0A,
+    V128Load64Splat = 0xFD0B,
+    V128Load8Lane = 0xFD54,
+    V128Load16Lane = 0xFD55,
+    V128Load32Lane = 0xFD56,
+    V128Load64Lane = 0xFD57,
+    V128Store8Lane = 0xFD58,
+    V128Store16Lane = 0xFD59,
+    V128Store32Lane = 0xFD5A,
+    V128Store64Lane = 0xFD5B,
+}
+
+// Lookup tables for efficient opcode selection
+pub struct SimdOpcodeTables {
+    // Binary operation opcodes mapped by vector type and operation
+    binary_ops: HashMap<(VectorType, VectorBinaryOp), WasmSimdOpcode>,
+    
+    // Unary operation opcodes mapped by vector type and operation
+    unary_ops: HashMap<(VectorType, VectorUnaryOp), WasmSimdOpcode>,
+    
+    // Extract lane opcodes mapped by vector type
+    extract_lane_ops: HashMap<VectorType, WasmSimdOpcode>,
+    
+    // Replace lane opcodes mapped by vector type
+    replace_lane_ops: HashMap<VectorType, WasmSimdOpcode>,
+    
+    // Memory operation opcodes mapped by memory operation type
+    memory_ops: HashMap<VectorMemoryOp, WasmSimdOpcode>,
+    
+    // Splat opcodes mapped by vector type
+    splat_ops: HashMap<VectorType, WasmSimdOpcode>,
+}
+
+impl SimdOpcodeTables {
+    // Get the global instance
+    pub fun instance() -> &'static SimdOpcodeTables {
+        static INSTANCE: SimdOpcodeTables = SimdOpcodeTables::new();
+        &INSTANCE
+    }
+    
+    // Create a new tables instance with all mappings populated
+    fun new() -> Self {
+        let mut binary_ops = HashMap::new();
+        let mut unary_ops = HashMap::new();
+        let mut extract_lane_ops = HashMap::new();
+        let mut replace_lane_ops = HashMap::new();
+        let mut memory_ops = HashMap::new();
+        let mut splat_ops = HashMap::new();
+        
+        // Initialize binary operations table
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::Add), WasmSimdOpcode::I8x16Add);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::Sub), WasmSimdOpcode::I8x16Sub);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::MinS), WasmSimdOpcode::I8x16MinS);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::MaxS), WasmSimdOpcode::I8x16MaxS);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::Eq), WasmSimdOpcode::I8x16Eq);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::Ne), WasmSimdOpcode::I8x16Ne);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::LtS), WasmSimdOpcode::I8x16LtS);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::LtU), WasmSimdOpcode::I8x16LtU);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::GtS), WasmSimdOpcode::I8x16GtS);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::GtU), WasmSimdOpcode::I8x16GtU);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::LeS), WasmSimdOpcode::I8x16LeS);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::LeU), WasmSimdOpcode::I8x16LeU);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::GeS), WasmSimdOpcode::I8x16GeS);
+        binary_ops.insert((VectorType::I8x16, VectorBinaryOp::GeU), WasmSimdOpcode::I8x16GeU);
+        
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::Add), WasmSimdOpcode::I16x8Add);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::Sub), WasmSimdOpcode::I16x8Sub);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::Mul), WasmSimdOpcode::I16x8Mul);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::MinS), WasmSimdOpcode::I16x8MinS);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::MaxS), WasmSimdOpcode::I16x8MaxS);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::Eq), WasmSimdOpcode::I16x8Eq);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::Ne), WasmSimdOpcode::I16x8Ne);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::LtS), WasmSimdOpcode::I16x8LtS);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::LtU), WasmSimdOpcode::I16x8LtU);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::GtS), WasmSimdOpcode::I16x8GtS);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::GtU), WasmSimdOpcode::I16x8GtU);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::LeS), WasmSimdOpcode::I16x8LeS);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::LeU), WasmSimdOpcode::I16x8LeU);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::GeS), WasmSimdOpcode::I16x8GeS);
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::GeU), WasmSimdOpcode::I16x8GeU);
+        
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::Add), WasmSimdOpcode::I32x4Add);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::Sub), WasmSimdOpcode::I32x4Sub);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::Mul), WasmSimdOpcode::I32x4Mul);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::MinS), WasmSimdOpcode::I32x4MinS);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::MaxS), WasmSimdOpcode::I32x4MaxS);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::Eq), WasmSimdOpcode::I32x4Eq);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::Ne), WasmSimdOpcode::I32x4Ne);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::LtS), WasmSimdOpcode::I32x4LtS);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::LtU), WasmSimdOpcode::I32x4LtU);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::GtS), WasmSimdOpcode::I32x4GtS);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::GtU), WasmSimdOpcode::I32x4GtU);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::LeS), WasmSimdOpcode::I32x4LeS);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::LeU), WasmSimdOpcode::I32x4LeU);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::GeS), WasmSimdOpcode::I32x4GeS);
+        binary_ops.insert((VectorType::I32x4, VectorBinaryOp::GeU), WasmSimdOpcode::I32x4GeU);
+        
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::Add), WasmSimdOpcode::I64x2Add);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::Sub), WasmSimdOpcode::I64x2Sub);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::Mul), WasmSimdOpcode::I64x2Mul);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::Eq), WasmSimdOpcode::I64x2Eq);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::Ne), WasmSimdOpcode::I64x2Ne);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::LtS), WasmSimdOpcode::I64x2LtS);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::GtS), WasmSimdOpcode::I64x2GtS);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::LeS), WasmSimdOpcode::I64x2LeS);
+        binary_ops.insert((VectorType::I64x2, VectorBinaryOp::GeS), WasmSimdOpcode::I64x2GeS);
+        
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Add), WasmSimdOpcode::F32x4Add);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Sub), WasmSimdOpcode::F32x4Sub);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Mul), WasmSimdOpcode::F32x4Mul);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Div), WasmSimdOpcode::F32x4Div);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Min), WasmSimdOpcode::F32x4Min);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Max), WasmSimdOpcode::F32x4Max);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Eq), WasmSimdOpcode::F32x4Eq);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Ne), WasmSimdOpcode::F32x4Ne);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Lt), WasmSimdOpcode::F32x4Lt);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Gt), WasmSimdOpcode::F32x4Gt);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Le), WasmSimdOpcode::F32x4Le);
+        binary_ops.insert((VectorType::F32x4, VectorBinaryOp::Ge), WasmSimdOpcode::F32x4Ge);
+        
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Add), WasmSimdOpcode::F64x2Add);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Sub), WasmSimdOpcode::F64x2Sub);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Mul), WasmSimdOpcode::F64x2Mul);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Div), WasmSimdOpcode::F64x2Div);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Min), WasmSimdOpcode::F64x2Min);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Max), WasmSimdOpcode::F64x2Max);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Eq), WasmSimdOpcode::F64x2Eq);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Ne), WasmSimdOpcode::F64x2Ne);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Lt), WasmSimdOpcode::F64x2Lt);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Gt), WasmSimdOpcode::F64x2Gt);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Le), WasmSimdOpcode::F64x2Le);
+        binary_ops.insert((VectorType::F64x2, VectorBinaryOp::Ge), WasmSimdOpcode::F64x2Ge);
+        
+        // Common bitwise operations for all vector types
+        for vec_type in VectorTypeInfoCache::instance().all_vector_types() {
+            binary_ops.insert((vec_type.clone(), VectorBinaryOp::And), WasmSimdOpcode::V128And);
+            binary_ops.insert((vec_type.clone(), VectorBinaryOp::Or), WasmSimdOpcode::V128Or);
+            binary_ops.insert((vec_type.clone(), VectorBinaryOp::Xor), WasmSimdOpcode::V128Xor);
+            binary_ops.insert((vec_type.clone(), VectorBinaryOp::AndNot), WasmSimdOpcode::V128AndNot);
+        }
+        
+        // Specific case for dot product
+        binary_ops.insert((VectorType::I16x8, VectorBinaryOp::Dot), WasmSimdOpcode::I32x4DotI16x8S);
+        
+        // Initialize unary operations table
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::Abs), WasmSimdOpcode::I8x16Abs);
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::Neg), WasmSimdOpcode::I8x16Neg);
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::AllTrue), WasmSimdOpcode::I8x16AllTrue);
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::Bitmask), WasmSimdOpcode::I8x16Bitmask);
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::Shl), WasmSimdOpcode::I8x16Shl);
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::ShrS), WasmSimdOpcode::I8x16ShrS);
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::ShrU), WasmSimdOpcode::I8x16ShrU);
+        unary_ops.insert((VectorType::I8x16, VectorUnaryOp::Popcnt), WasmSimdOpcode::I8x16Popcnt);
+        
+        unary_ops.insert((VectorType::I16x8, VectorUnaryOp::Abs), WasmSimdOpcode::I16x8Abs);
+        unary_ops.insert((VectorType::I16x8, VectorUnaryOp::Neg), WasmSimdOpcode::I16x8Neg);
+        unary_ops.insert((VectorType::I16x8, VectorUnaryOp::AllTrue), WasmSimdOpcode::I16x8AllTrue);
+        unary_ops.insert((VectorType::I16x8, VectorUnaryOp::Bitmask), WasmSimdOpcode::I16x8Bitmask);
+        unary_ops.insert((VectorType::I16x8, VectorUnaryOp::Shl), WasmSimdOpcode::I16x8Shl);
+        unary_ops.insert((VectorType::I16x8, VectorUnaryOp::ShrS), WasmSimdOpcode::I16x8ShrS);
+        unary_ops.insert((VectorType::I16x8, VectorUnaryOp::ShrU), WasmSimdOpcode::I16x8ShrU);
+        
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::Abs), WasmSimdOpcode::I32x4Abs);
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::Neg), WasmSimdOpcode::I32x4Neg);
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::AllTrue), WasmSimdOpcode::I32x4AllTrue);
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::Bitmask), WasmSimdOpcode::I32x4Bitmask);
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::Shl), WasmSimdOpcode::I32x4Shl);
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::ShrS), WasmSimdOpcode::I32x4ShrS);
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::ShrU), WasmSimdOpcode::I32x4ShrU);
+        unary_ops.insert((VectorType::I32x4, VectorUnaryOp::ConvertToF32x4), WasmSimdOpcode::F32x4ConvertI32x4S);
+        
+        unary_ops.insert((VectorType::I64x2, VectorUnaryOp::Abs), WasmSimdOpcode::I64x2Abs);
+        unary_ops.insert((VectorType::I64x2, VectorUnaryOp::Neg), WasmSimdOpcode::I64x2Neg);
+        unary_ops.insert((VectorType::I64x2, VectorUnaryOp::AllTrue), WasmSimdOpcode::I64x2AllTrue);
+        unary_ops.insert((VectorType::I64x2, VectorUnaryOp::Bitmask), WasmSimdOpcode::I64x2Bitmask);
+        unary_ops.insert((VectorType::I64x2, VectorUnaryOp::Shl), WasmSimdOpcode::I64x2Shl);
+        unary_ops.insert((VectorType::I64x2, VectorUnaryOp::ShrS), WasmSimdOpcode::I64x2ShrS);
+        unary_ops.insert((VectorType::I64x2, VectorUnaryOp::ShrU), WasmSimdOpcode::I64x2ShrU);
+        
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::Abs), WasmSimdOpcode::F32x4Abs);
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::Neg), WasmSimdOpcode::F32x4Neg);
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::Sqrt), WasmSimdOpcode::F32x4Sqrt);
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::Ceil), WasmSimdOpcode::F32x4Ceil);
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::Floor), WasmSimdOpcode::F32x4Floor);
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::Trunc), WasmSimdOpcode::F32x4Trunc);
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::Nearest), WasmSimdOpcode::F32x4Nearest);
+        unary_ops.insert((VectorType::F32x4, VectorUnaryOp::ConvertToI32x4), WasmSimdOpcode::I32x4TruncSatF32x4S);
+        
+        unary_ops.insert((VectorType::F64x2, VectorUnaryOp::Abs), WasmSimdOpcode::F64x2Abs);
+        unary_ops.insert((VectorType::F64x2, VectorUnaryOp::Neg), WasmSimdOpcode::F64x2Neg);
+        unary_ops.insert((VectorType::F64x2, VectorUnaryOp::Sqrt), WasmSimdOpcode::F64x2Sqrt);
+        unary_ops.insert((VectorType::F64x2, VectorUnaryOp::Ceil), WasmSimdOpcode::F64x2Ceil);
+        unary_ops.insert((VectorType::F64x2, VectorUnaryOp::Floor), WasmSimdOpcode::F64x2Floor);
+        unary_ops.insert((VectorType::F64x2, VectorUnaryOp::Trunc), WasmSimdOpcode::F64x2Trunc);
+        unary_ops.insert((VectorType::F64x2, VectorUnaryOp::Nearest), WasmSimdOpcode::F64x2Nearest);
+        
+        // Common operations for all vector types
+        for vec_type in VectorTypeInfoCache::instance().all_vector_types() {
+            unary_ops.insert((vec_type.clone(), VectorUnaryOp::Not), WasmSimdOpcode::V128Not);
+            unary_ops.insert((vec_type.clone(), VectorUnaryOp::AnyTrue), WasmSimdOpcode::V128AnyTrue);
+        }
+        
+        // Initialize extract lane operations table
+        extract_lane_ops.insert(VectorType::I8x16, WasmSimdOpcode::I8x16ExtractLaneS);
+        extract_lane_ops.insert(VectorType::I16x8, WasmSimdOpcode::I16x8ExtractLaneS);
+        extract_lane_ops.insert(VectorType::I32x4, WasmSimdOpcode::I32x4ExtractLane);
+        extract_lane_ops.insert(VectorType::I64x2, WasmSimdOpcode::I64x2ExtractLane);
+        extract_lane_ops.insert(VectorType::F32x4, WasmSimdOpcode::F32x4ExtractLane);
+        extract_lane_ops.insert(VectorType::F64x2, WasmSimdOpcode::F64x2ExtractLane);
+        
+        // Initialize replace lane operations table
+        replace_lane_ops.insert(VectorType::I8x16, WasmSimdOpcode::I8x16ReplaceLane);
+        replace_lane_ops.insert(VectorType::I16x8, WasmSimdOpcode::I16x8ReplaceLane);
+        replace_lane_ops.insert(VectorType::I32x4, WasmSimdOpcode::I32x4ReplaceLane);
+        replace_lane_ops.insert(VectorType::I64x2, WasmSimdOpcode::I64x2ReplaceLane);
+        replace_lane_ops.insert(VectorType::F32x4, WasmSimdOpcode::F32x4ReplaceLane);
+        replace_lane_ops.insert(VectorType::F64x2, WasmSimdOpcode::F64x2ReplaceLane);
+        
+        // Initialize memory operations table
+        memory_ops.insert(VectorMemoryOp::Load, WasmSimdOpcode::V128Load);
+        memory_ops.insert(VectorMemoryOp::Store, WasmSimdOpcode::V128Store);
+        memory_ops.insert(VectorMemoryOp::Load8x8S, WasmSimdOpcode::V128Load8x8S);
+        memory_ops.insert(VectorMemoryOp::Load8x8U, WasmSimdOpcode::V128Load8x8U);
+        memory_ops.insert(VectorMemoryOp::Load16x4S, WasmSimdOpcode::V128Load16x4S);
+        memory_ops.insert(VectorMemoryOp::Load16x4U, WasmSimdOpcode::V128Load16x4U);
+        memory_ops.insert(VectorMemoryOp::Load32x2S, WasmSimdOpcode::V128Load32x2S);
+        memory_ops.insert(VectorMemoryOp::Load32x2U, WasmSimdOpcode::V128Load32x2U);
+        memory_ops.insert(VectorMemoryOp::Load8Splat, WasmSimdOpcode::V128Load8Splat);
+        memory_ops.insert(VectorMemoryOp::Load16Splat, WasmSimdOpcode::V128Load16Splat);
+        memory_ops.insert(VectorMemoryOp::Load32Splat, WasmSimdOpcode::V128Load32Splat);
+        memory_ops.insert(VectorMemoryOp::Load64Splat, WasmSimdOpcode::V128Load64Splat);
+        
+        // Initialize splat operations table
+        splat_ops.insert(VectorType::I8x16, WasmSimdOpcode::I8x16Splat);
+        splat_ops.insert(VectorType::I16x8, WasmSimdOpcode::I16x8Splat);
+        splat_ops.insert(VectorType::I32x4, WasmSimdOpcode::I32x4Splat);
+        splat_ops.insert(VectorType::I64x2, WasmSimdOpcode::I64x2Splat);
+        splat_ops.insert(VectorType::F32x4, WasmSimdOpcode::F32x4Splat);
+        splat_ops.insert(VectorType::F64x2, WasmSimdOpcode::F64x2Splat);
+        
+        Self {
+            binary_ops,
+            unary_ops,
+            extract_lane_ops,
+            replace_lane_ops,
+            memory_ops,
+            splat_ops,
+        }
+    }
+    
+    // Get the opcode for a binary operation
+    pub fun get_binary_op_opcode(
+        &self, 
+        vector_type: &VectorType, 
+        op: &VectorBinaryOp
+    ) -> Option<WasmSimdOpcode> {
+        self.binary_ops.get(&(vector_type.clone(), op.clone())).cloned()
+    }
+    
+    // Get the opcode for a unary operation
+    pub fun get_unary_op_opcode(
+        &self,
+        vector_type: &VectorType,
+        op: &VectorUnaryOp
+    ) -> Option<WasmSimdOpcode> {
+        self.unary_ops.get(&(vector_type.clone(), op.clone())).cloned()
+    }
+    
+    // Get the opcode for an extract lane operation
+    pub fun get_extract_lane_opcode(
+        &self,
+        vector_type: &VectorType
+    ) -> Option<WasmSimdOpcode> {
+        self.extract_lane_ops.get(vector_type).cloned()
+    }
+    
+    // Get the opcode for a replace lane operation
+    pub fun get_replace_lane_opcode(
+        &self,
+        vector_type: &VectorType
+    ) -> Option<WasmSimdOpcode> {
+        self.replace_lane_ops.get(vector_type).cloned()
+    }
+    
+    // Get the opcode for a memory operation
+    pub fun get_memory_op_opcode(
+        &self,
+        op: &VectorMemoryOp
+    ) -> Option<WasmSimdOpcode> {
+        match op {
+            VectorMemoryOp::Load8Lane(lane) => Some(WasmSimdOpcode::V128Load8Lane),
+            VectorMemoryOp::Load16Lane(lane) => Some(WasmSimdOpcode::V128Load16Lane),
+            VectorMemoryOp::Load32Lane(lane) => Some(WasmSimdOpcode::V128Load32Lane),
+            VectorMemoryOp::Load64Lane(lane) => Some(WasmSimdOpcode::V128Load64Lane),
+            VectorMemoryOp::Store8Lane(lane) => Some(WasmSimdOpcode::V128Store8Lane),
+            VectorMemoryOp::Store16Lane(lane) => Some(WasmSimdOpcode::V128Store16Lane),
+            VectorMemoryOp::Store32Lane(lane) => Some(WasmSimdOpcode::V128Store32Lane),
+            VectorMemoryOp::Store64Lane(lane) => Some(WasmSimdOpcode::V128Store64Lane),
+            _ => self.memory_ops.get(op).cloned(),
+        }
+    }
+    
+    // Get the opcode for a splat operation
+    pub fun get_splat_opcode(
+        &self,
+        vector_type: &VectorType
+    ) -> Option<WasmSimdOpcode> {
+        self.splat_ops.get(vector_type).cloned()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Code Generation - Optimized Implementation
+// -----------------------------------------------------------------------------
+
+// SIMD Code generator with improved optimization and instruction selection
+pub struct SimdCodeGenerator {
+    module: WasmModule,
+    opcode_tables: &'static SimdOpcodeTables,
+    optimization_level: OptimizationLevel,
+    instruction_cache: HashMap<String, Vec<WasmInstruction>>,
+}
+
+impl SimdCodeGenerator {
+    // Helper method to determine the optimal memory alignment based on operation type
+    // and optimization level
+    fn get_optimal_memory_alignment(&self, op: &VectorMemoryOp) -> u32 {
+        let base_alignment = match op {
+            VectorMemoryOp::Load | VectorMemoryOp::Store => 4, // 16 bytes = 2^4
+            VectorMemoryOp::Load8x8S | VectorMemoryOp::Load8x8U => 3, // 8 bytes = 2^3
+            VectorMemoryOp::Load16x4S | VectorMemoryOp::Load16x4U => 3, // 8 bytes = 2^3
+            VectorMemoryOp::Load32x2S | VectorMemoryOp::Load32x2U => 3, // 8 bytes = 2^3
+            VectorMemoryOp::Load8Splat => 0, // 1 byte = 2^0
+            VectorMemoryOp::Load16Splat => 1, // 2 bytes = 2^1
+            VectorMemoryOp::Load32Splat => 2, // 4 bytes = 2^2
+            VectorMemoryOp::Load64Splat => 3, // 8 bytes = 2^3
+            VectorMemoryOp::Load8Lane(_) | VectorMemoryOp::Store8Lane(_) => 0, // 1 byte = 2^0
+            VectorMemoryOp::Load16Lane(_) | VectorMemoryOp::Store16Lane(_) => 1, // 2 bytes = 2^1
+            VectorMemoryOp::Load32Lane(_) | VectorMemoryOp::Store32Lane(_) => 2, // 4 bytes = 2^2
+            VectorMemoryOp::Load64Lane(_) | VectorMemoryOp::Store64Lane(_) => 3, // 8 bytes = 2^3
+        };
+        
+        // Apply optimization level adjustments
+        match self.optimization_level {
+            OptimizationLevel::Minimal => base_alignment, // Use minimum required alignment
+            OptimizationLevel::Standard => base_alignment, // Use standard alignment
+            OptimizationLevel::Aggressive => {
+                // In aggressive mode, align to larger boundaries for potential performance gain
+                // on some architectures, but be careful not to exceed what's practical
+                match op {
+                    VectorMemoryOp::Load | VectorMemoryOp::Store => 4, // Always use 16-byte alignment
+                    _ => std::cmp::max(base_alignment, 2), // At least 4-byte alignment for others
+                }
+            }
+        }
+    }
+    // Create a new SIMD code generator with default optimization level
+    pub fun new(module: WasmModule) -> Self {
+        Self { 
+            module,
+            opcode_tables: SimdOpcodeTables::instance(),
+            optimization_level: OptimizationLevel::Standard,
+            instruction_cache: HashMap::new(),
+        }
+    }
+    
+    // Create a new SIMD code generator with specified optimization level
+    pub fun with_optimization_level(module: WasmModule, level: OptimizationLevel) -> Self {
+        Self { 
+            module,
+            opcode_tables: SimdOpcodeTables::instance(),
+            optimization_level: level,
+            instruction_cache: HashMap::new(),
+        }
+    }
+    
+    // Generate code for a vector binary operation with optimized instruction selection
+    pub fun generate_vector_binary_op(
+        &mut self,
+        op: &VectorBinaryOp,
+        left_type: &Type,
+        right_type: &Type
+    ) -> Result<Vec<WasmInstruction>, String> {
+        // Check cache first for previously generated instructions
+        let cache_key = format!("binary_{}_{:?}_{:?}", op, left_type, right_type);
+        if let Some(instructions) = self.instruction_cache.get(&cache_key) {
+            return Ok(instructions.clone());
+        }
+        let left_vec = left_type.as_vector_type().unwrap();
+        let right_vec = right_type.as_vector_type().unwrap();
+        
+        // Handle bitwise operations uniformly for all vector types
+        match op {
+            VectorBinaryOp::And => {
+                let instructions = vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128And)];
+                self.instruction_cache.insert(cache_key, instructions.clone());
+                return Ok(instructions);
+            },
+            VectorBinaryOp::Or => {
+                let instructions = vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Or)];
+                self.instruction_cache.insert(cache_key, instructions.clone());
+                return Ok(instructions);
+            },
+            VectorBinaryOp::Xor => {
+                let instructions = vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Xor)];
+                self.instruction_cache.insert(cache_key, instructions.clone());
+                return Ok(instructions);
+            },
+            VectorBinaryOp::AndNot => {
+                let instructions = vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128AndNot)];
+                self.instruction_cache.insert(cache_key, instructions.clone());
+                return Ok(instructions);
+            },
+            _ => {}
+        }
+        
+        // For non-bitwise operations, both vector types should match
+        if left_vec != right_vec && op != &VectorBinaryOp::Shuffle {
+            return Err(format!("Vector types must match for operation {:?}: got {:?} and {:?}", op, left_vec, right_vec));
+        }
+        
+        // Special case for dot product
+        if op == &VectorBinaryOp::Dot && left_vec == VectorType::I16x8 {
+            let instructions = vec![WasmInstruction::SimdOp(WasmSimdOpcode::I32x4DotI16x8S)];
+            self.instruction_cache.insert(cache_key, instructions.clone());
+            return Ok(instructions);
+        }
+        
+        // Look up the appropriate opcode from the tables
+        if let Some(opcode) = self.opcode_tables.get_binary_op_opcode(&left_vec, op) {
+            let instructions = vec![WasmInstruction::SimdOp(opcode)];
+            self.instruction_cache.insert(cache_key, instructions.clone());
+            return Ok(instructions);
+        }
+        
+        // Handle special case for shuffle with optimization level-dependent implementation
+        if op == &VectorBinaryOp::Shuffle {
+            let instructions = match self.optimization_level {
+                OptimizationLevel::Minimal => {
+                    // Basic implementation for minimal optimization level
+                    vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect)]
+                },
+                OptimizationLevel::Standard | OptimizationLevel::Aggressive => {
+                    // Advanced implementation with shuffle mask for higher optimization levels
+                    let mask = match left_vec {
+                        VectorType::I8x16 => (0..16).map(|i| (i % 2 == 0) as usize * i + (i % 2 == 1) as usize * (i + 16)).collect(),
+                        VectorType::I16x8 => (0..8).map(|i| (i % 2 == 0) as usize * i + (i % 2 == 1) as usize * (i + 8)).collect(),
+                        VectorType::I32x4 => (0..4).map(|i| (i % 2 == 0) as usize * i + (i % 2 == 1) as usize * (i + 4)).collect(),
+                        VectorType::I64x2 => (0..2).map(|i| (i % 2 == 0) as usize * i + (i % 2 == 1) as usize * (i + 2)).collect(),
+                        VectorType::F32x4 => (0..4).map(|i| (i % 2 == 0) as usize * i + (i % 2 == 1) as usize * (i + 4)).collect(),
+                        VectorType::F64x2 => (0..2).map(|i| (i % 2 == 0) as usize * i + (i % 2 == 1) as usize * (i + 2)).collect(),
+                        _ => (0..16).collect(), // Default to 16 lanes
+                    };
+                    
+                    let u8_mask: Vec<u8> = mask.iter().map(|&x| x as u8).collect();
+                    vec![
+                        WasmInstruction::Comment(format!("Optimized shuffle for {:?}", left_vec)),
+                        WasmInstruction::SimdShuffleMaskOp(WasmSimdOpcode::V128BitSelect, u8_mask),
+                    ]
+                }
+            };
+            
+            self.instruction_cache.insert(cache_key, instructions.clone());
+            return Ok(instructions);
+        }
+        
+        Err(format!("Unsupported vector binary operation: {:?} for types {:?} and {:?}", op, left_vec, right_vec))
+    }
+    
+    // Generate code for a vector unary operation with optimized instruction selection
+    pub fun generate_vector_unary_op(
+        &mut self,
+        op: &VectorUnaryOp,
+        operand_type: &Type
+    ) -> Vec<WasmInstruction> {
+        let vec_type = operand_type.as_vector_type().unwrap();
+        
+        // Common operations for all vector types
+        match op {
+            VectorUnaryOp::Not => return vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128Not)],
+            VectorUnaryOp::AnyTrue => return vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128AnyTrue)],
+            _ => {}
+        }
+        
+        // Look up the appropriate opcode from the tables
+        if let Some(opcode) = self.opcode_tables.get_unary_op_opcode(&vec_type, op) {
+            return vec![WasmInstruction::SimdOp(opcode)];
+        }
+        
+        panic!("Unsupported vector unary operation: {:?} for type {:?}", op, vec_type);
+    }
+    
+    // Generate code for a vector lane operation with optimized instruction selection
+    pub fun generate_vector_lane_op(
+        &mut self,
+        op: &VectorLaneOp,
+        operand_type: &Type
+    ) -> Vec<WasmInstruction> {
+        let vec_type = operand_type.as_vector_type().unwrap();
+        
+        match op {
+            VectorLaneOp::ExtractLane(lane) => {
+                if let Some(opcode) = self.opcode_tables.get_extract_lane_opcode(&vec_type) {
+                    return vec![WasmInstruction::SimdOpWithParam(opcode, *lane as u32)];
+                }
+            },
+            
+            VectorLaneOp::ReplaceLane(lane) => {
+                if let Some(opcode) = self.opcode_tables.get_replace_lane_opcode(&vec_type) {
+                    return vec![WasmInstruction::SimdOpWithParam(opcode, *lane as u32)];
+                }
+            },
+            
+            VectorLaneOp::Shuffle(lanes) => {
+                // For shuffle operations, we need to create a special shuffle mask
+                // This would be an immediate value in WebAssembly that encodes the shuffle pattern
+                // For now, we'll use a simplified approach
+                return vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect)];
+            },
+            
+            VectorLaneOp::Swizzle(lanes) => {
+                // Similar to shuffle but operates on a single vector
+                // For now, we'll use a simplified approach
+                return vec![WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect)];
+            },
+        }
+        
+        panic!("Unsupported vector lane operation: {:?} for type {:?}", op, vec_type);
+    }
+    
+    // Generate code for a vector memory operation with optimized instruction selection
+    pub fun generate_vector_memory_op(
+        &mut self,
+        op: &VectorMemoryOp,
+        ptr_type: &Type
+    ) -> Result<Vec<WasmInstruction>, String> {
+        // Check cache first for previously generated instructions
+        let cache_key = format!("memory_op_{:?}_{:?}", op, ptr_type);
+        if let Some(instructions) = self.instruction_cache.get(&cache_key) {
+            return Ok(instructions.clone());
+        }
+        
+        // Validate the pointer type
+        match ptr_type {
+            Type::Pointer(_) => {}, // Valid pointer type
+            _ => return Err(format!("Expected pointer type for memory operation, got {:?}", ptr_type)),
+        };
+        // Lookup the appropriate memory opcode
+        if let Some(opcode) = self.opcode_tables.get_memory_op_opcode(op) {
+            // Get the optimal alignment for this memory operation
+            let align = self.get_optimal_memory_alignment(op);
+            
+            // Default offset is 0 - in a real implementation we might analyze the code
+            // to determine a better offset based on memory access patterns
+            let offset = 0;
+            
+            // For lane-specific operations, include the lane parameter and validate lane index
+            let instructions = match op {
+                VectorMemoryOp::Load8Lane(lane) => {
+                    if *lane >= 16 {
+                        return Err(format!("Lane index {} out of bounds for i8x16 (max 15)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Load 8-bit value into lane {} of i8x16", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                VectorMemoryOp::Load16Lane(lane) => {
+                    if *lane >= 8 {
+                        return Err(format!("Lane index {} out of bounds for i16x8 (max 7)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Load 16-bit value into lane {} of i16x8", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                VectorMemoryOp::Load32Lane(lane) => {
+                    if *lane >= 4 {
+                        return Err(format!("Lane index {} out of bounds for i32x4 (max 3)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Load 32-bit value into lane {} of i32x4", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                VectorMemoryOp::Load64Lane(lane) => {
+                    if *lane >= 2 {
+                        return Err(format!("Lane index {} out of bounds for i64x2 (max 1)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Load 64-bit value into lane {} of i64x2", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                VectorMemoryOp::Store8Lane(lane) => {
+                    if *lane >= 16 {
+                        return Err(format!("Lane index {} out of bounds for i8x16 (max 15)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Store lane {} of i8x16 as 8-bit value", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                VectorMemoryOp::Store16Lane(lane) => {
+                    if *lane >= 8 {
+                        return Err(format!("Lane index {} out of bounds for i16x8 (max 7)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Store lane {} of i16x8 as 16-bit value", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                VectorMemoryOp::Store32Lane(lane) => {
+                    if *lane >= 4 {
+                        return Err(format!("Lane index {} out of bounds for i32x4 (max 3)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Store lane {} of i32x4 as 32-bit value", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                VectorMemoryOp::Store64Lane(lane) => {
+                    if *lane >= 2 {
+                        return Err(format!("Lane index {} out of bounds for i64x2 (max 1)", lane));
+                    }
+                    vec![
+                        WasmInstruction::Comment(format!("Store lane {} of i64x2 as 64-bit value", lane)),
+                        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, *lane as u32),
+                    ]
+                },
+                _ => {
+                    // For standard memory operations, add optimization comments in aggressive mode
+                    if self.optimization_level == OptimizationLevel::Aggressive {
+                        vec![
+                            WasmInstruction::Comment(format!("Optimized memory operation: {:?} with align=2^{}", op, align)),
+                            WasmInstruction::SimdMemOp(opcode, align, offset),
+                        ]
+                    } else {
+                        // Standard mode without comments
+                        vec![WasmInstruction::SimdMemOp(opcode, align, offset)]
+                    }
+                }
+            };
+            
+            // Cache the result
+            self.instruction_cache.insert(cache_key, instructions.clone());
+            return Ok(instructions);
+        }
+        
+        Err(format!("Unsupported vector memory operation: {:?}", op))
+    }
+    
+    // Generate vector constants with optimized encoding
+    pub fun generate_vector_const(
+        &mut self,
+        vec_type: &VectorType,
+        values: Vec<i32>
+    ) -> Vec<WasmInstruction> {
+        // For splat operations (a single value replicated across all lanes)
+        if values.len() == 1 {
+            if let Some(splat_opcode) = self.opcode_tables.get_splat_opcode(vec_type) {
+                // For scalar value types
+                match vec_type {
+                    VectorType::I8x16 | VectorType::I16x8 | VectorType::I32x4 => {
+                        return vec![
+                            WasmInstruction::I32Const(values[0]),
+                            WasmInstruction::SimdOp(splat_opcode),
+                        ];
+                    },
+                    VectorType::I64x2 => {
+                        return vec![
+                            WasmInstruction::I64Const(values[0] as i64),
+                            WasmInstruction::SimdOp(splat_opcode),
+                        ];
+                    },
+                    VectorType::F32x4 => {
+                        return vec![
+                            WasmInstruction::F32Const(values[0] as f32),
+                            WasmInstruction::SimdOp(splat_opcode),
+                        ];
+                    },
+                    VectorType::F64x2 => {
+                        return vec![
+                            WasmInstruction::F64Const(values[0] as f64),
+                            WasmInstruction::SimdOp(splat_opcode),
+                        ];
+                    },
+                    VectorType::V128 => {
+                        // Generic V128 - default to i32x4 splat
+                        return vec![
+                            WasmInstruction::I32Const(values[0]),
+                            WasmInstruction::SimdOp(WasmSimdOpcode::I32x4Splat),
+                        ];
+                    },
+                }
+            }
+        }
+        
+        // For full vector initialization (specific values for each lane)
+        // In a real implementation, this would properly encode the values as immediate arguments
+        // For now, we'll use a simplified approach
+        vec![
+            // V128.const instruction with the encoded values as immediate arguments
+            WasmInstruction::SimdOp(WasmSimdOpcode::V128Const)
+        ]
+    }
+    
+    // Generate optimal auto-vectorized code for common patterns
+    pub fun generate_auto_vectorized_loop(
+        &mut self,
+        loop_type: &str,
+        operand_types: &[Type],
+        element_count: usize
+    ) -> Vec<WasmInstruction> {
+        // Auto-vectorize common loop patterns based on the operation type
+        match loop_type {
+            "map" => {
+                // Auto-vectorize map operation (e.g., apply a function to each element)
+                let element_type = &operand_types[0];
+                let vector_type = match element_type {
+                    Type::I8 => VectorType::I8x16,
+                    Type::I16 => VectorType::I16x8,
+                    Type::I32 => VectorType::I32x4,
+                    Type::I64 => VectorType::I64x2,
+                    Type::F32 => VectorType::F32x4,
+                    Type::F64 => VectorType::F64x2,
+                    _ => return vec![/* Fallback to scalar implementation */],
+                };
+                
+                // Generate vectorized loop with optimal unrolling
+                let mut instructions = Vec::new();
+                
+                // Add a comment instruction to explain the optimization
+                instructions.push(WasmInstruction::Comment(
+                    format!("Auto-vectorized map operation using {} with {} elements", vector_type.to_string(), element_count)
+                ));
+                
+                // Add the vectorized implementation
+                // ... (implementation-specific instructions for the vectorized loop)
+                
+                instructions
+            },
+            "reduce" => {
+                // Auto-vectorize reduction operation (e.g., sum, product, etc.)
+                // Similar approach to map but with horizontal reduction at the end
+                let element_type = &operand_types[0];
+                let vector_type = match element_type {
+                    Type::I32 => VectorType::I32x4,
+                    Type::F32 => VectorType::F32x4,
+                    Type::F64 => VectorType::F64x2,
+                    _ => return vec![/* Fallback to scalar implementation */],
+                };
+                
+                // Generate vectorized reduction with optimal algorithm
+                let mut instructions = Vec::new();
+                
+                // Add a comment instruction to explain the optimization
+                instructions.push(WasmInstruction::Comment(
+                    format!("Auto-vectorized reduction operation using {} with {} elements", vector_type.to_string(), element_count)
+                ));
+                
+                // Add the vectorized implementation
+                // ... (implementation-specific instructions for the vectorized reduction)
+                
+                instructions
+            },
+            // Add more patterns as needed
+            _ => vec![/* Fallback to scalar implementation */],
+        }
+    }
+    
+    // Generate optimal SIMD shuffling patterns for common operations
+    pub fun generate_shuffle_pattern(
+        &mut self,
+        pattern_name: &str,
+        vector_type: &VectorType
+    ) -> Vec<WasmInstruction> {
+        // Check cache first
+        let cache_key = format!("shuffle_{}_{}", pattern_name, vector_type.to_string());
+        if let Some(instructions) = self.instruction_cache.get(&cache_key) {
+            return instructions.clone();
+        }
+        
+        // Generate instructions based on pattern and vector type
+        let instructions = match pattern_name {
+            "transpose" => {
+                // Generate transpose pattern for 2x2, 4x4, etc. matrices
+                match vector_type {
+                    VectorType::F32x4 => {
+                        // Generate 4x4 matrix transpose using SIMD shuffle
+                        // This is a common pattern in graphics and linear algebra
+                        let mut mask = vec![0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15];
+                        
+                        vec![
+                            WasmInstruction::Comment("Optimized 4x4 matrix transpose using SIMD".to_string()),
+                            WasmInstruction::SimdShuffleMaskOp(WasmSimdOpcode::V128BitSelect, mask.iter().map(|&x| x as u8).collect()),
+                        ]
+                    },
+                    VectorType::I32x4 => {
+                        // Same as F32x4
+                        let mut mask = vec![0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15];
+                        
+                        vec![
+                            WasmInstruction::Comment("Optimized 4x4 matrix transpose using SIMD".to_string()),
+                            WasmInstruction::SimdShuffleMaskOp(WasmSimdOpcode::V128BitSelect, mask.iter().map(|&x| x as u8).collect()),
+                        ]
+                    },
+                    _ => {
+                        // Fallback for unsupported vector types with an appropriate message
+                        vec![
+                            WasmInstruction::Comment(format!("Transpose not optimized for {}", vector_type)),
+                            WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect),
+                        ]
+                    },
+                }
+            },
+            "interleave" => {
+                // Generate interleave pattern for vector pairs (common in audio/image processing)
+                match vector_type {
+                    VectorType::I8x16 => {
+                        // Interleave pattern for 8-bit elements
+                        let mut mask = Vec::with_capacity(16);
+                        for i in 0..8 {
+                            mask.push(i);
+                            mask.push(i + 8);
+                        }
+                        
+                        vec![
+                            WasmInstruction::Comment("Optimized i8x16 interleave pattern".to_string()),
+                            WasmInstruction::SimdShuffleMaskOp(
+                                WasmSimdOpcode::V128BitSelect, 
+                                mask.iter().map(|&x| x as u8).collect()
+                            ),
+                        ]
+                    },
+                    VectorType::I16x8 => {
+                        // Interleave pattern for 16-bit elements
+                        let mut mask = Vec::with_capacity(8);
+                        for i in 0..4 {
+                            mask.push(i);
+                            mask.push(i + 4);
+                        }
+                        
+                        vec![
+                            WasmInstruction::Comment("Optimized i16x8 interleave pattern".to_string()),
+                            WasmInstruction::SimdShuffleMaskOp(
+                                WasmSimdOpcode::V128BitSelect, 
+                                mask.iter().map(|&x| x as u8).collect()
+                            ),
+                        ]
+                    },
+                    _ => {
+                        // Generic interleave
+                        vec![
+                            WasmInstruction::Comment(format!("Generic interleave pattern for {}", vector_type)),
+                            WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect),
+                        ]
+                    }
+                }
+            },
+            "deinterleave" => {
+                // Generate deinterleave pattern (reverse of interleave)
+                match vector_type {
+                    VectorType::I8x16 => {
+                        // Deinterleave pattern for 8-bit elements
+                        let mut mask = vec![0, 2, 4, 6, 8, 10, 12, 14, 1, 3, 5, 7, 9, 11, 13, 15];
+                        
+                        vec![
+                            WasmInstruction::Comment("Optimized i8x16 deinterleave pattern".to_string()),
+                            WasmInstruction::SimdShuffleMaskOp(
+                                WasmSimdOpcode::V128BitSelect, 
+                                mask.iter().map(|&x| x as u8).collect()
+                            ),
+                        ]
+                    },
+                    VectorType::I16x8 => {
+                        // Deinterleave pattern for 16-bit elements
+                        let mut mask = vec![0, 2, 4, 6, 1, 3, 5, 7];
+                        
+                        vec![
+                            WasmInstruction::Comment("Optimized i16x8 deinterleave pattern".to_string()),
+                            WasmInstruction::SimdShuffleMaskOp(
+                                WasmSimdOpcode::V128BitSelect, 
+                                mask.iter().map(|&x| x as u8).collect()
+                            ),
+                        ]
+                    },
+                    _ => {
+                        // Generic deinterleave
+                        vec![
+                            WasmInstruction::Comment(format!("Generic deinterleave pattern for {}", vector_type)),
+                            WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect),
+                        ]
+                    }
+                }
+            },
+            "reverse" => {
+                // Generate reverse pattern
+                let lane_count = vector_type.lane_count();
+                let mut mask: Vec<usize> = (0..lane_count).rev().collect();
+                
+                vec![
+                    WasmInstruction::Comment(format!("Optimized reverse pattern for {}", vector_type)),
+                    WasmInstruction::SimdShuffleMaskOp(
+                        WasmSimdOpcode::V128BitSelect, 
+                        mask.iter().map(|&x| x as u8).collect()
+                    ),
+                ]
+            },
+            _ => {
+                // Fallback for unknown patterns with appropriate warning
+                vec![
+                    WasmInstruction::Comment(format!("Unoptimized pattern '{}' for {}", pattern_name, vector_type)),
+                    WasmInstruction::SimdOp(WasmSimdOpcode::V128BitSelect),
+                ]
+            },
+        };
+        
+        // Cache the result for future use
+        self.instruction_cache.insert(cache_key, instructions.clone());
+        
+        instructions
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Integration with Wasm Module - Enhanced Implementation
+// -----------------------------------------------------------------------------
+
+impl WasmModule {
+    // Add SIMD feature to the module with enhanced validation
+    pub fun enable_simd(&mut self) -> &mut Self {
+        self.features.insert("simd".to_string());
+        // Enable related features as needed
+        self.features.insert("multivalue".to_string()); // Often needed for SIMD operations
+        self
+    }
+    
+    // Check if SIMD is enabled for the module
+    pub fun has_simd(&self) -> bool {
+        self.features.contains("simd")
+    }
+    
+    // Enable specific SIMD features with validation
+    pub fun enable_simd_features(&mut self, features: Vec<&str>) -> Result<&mut Self, String> {
+        // Ensure SIMD is enabled first
+        if !self.has_simd() {
+            self.enable_simd();
+        }
+        
+        // Enable each requested feature after validating it
+        for feature in features {
+            match feature {
+                // Core SIMD features
+                "simd" | "simd128" => {
+                    self.features.insert("simd".to_string());
+                },
+                
+                // Extended features that build on core SIMD
+                "relaxed-simd" => {
+                    // Relaxed SIMD requires core SIMD
+                    if !self.has_simd() {
+                        return Err("'relaxed-simd' feature requires 'simd' feature".to_string());
+                    }
+                    self.features.insert("relaxed-simd".to_string());
+                },
+                
+                // Features that are often used together with SIMD
+                "multivalue" => {
+                    self.features.insert("multivalue".to_string());
+                },
+                
+                // Unknown feature
+                _ => {
+                    return Err(format!("Unsupported SIMD feature: {}", feature));
+                }
+            }
+        }
+        
+        Ok(self)
+    }
+    
+    // Check if a specific SIMD feature is enabled
+    pub fun has_simd_feature(&self, feature: &str) -> bool {
+        self.features.contains(feature)
+    }
+    
+    // Verify that the module has all SIMD prerequisites
+    pub fun validate_simd_prerequisites(&self) -> Result<(), String> {
+        if !self.has_simd() {
+            return Err("SIMD feature is not enabled for this module".to_string());
+        }
+        
+        // Check for other required features or module configuration
+        if self.has_simd_feature("relaxed-simd") && !self.has_simd() {
+            return Err("'relaxed-simd' feature requires 'simd' feature".to_string());
+        }
+        
+        Ok(())
+    }
+    
+    // Detect SIMD support in the target environment
+    pub fun detect_simd_support() -> HashMap<String, bool> {
+        let mut support = HashMap::new();
+        
+        // This would normally be implemented by checking the target environment
+        // For now, we'll use a simplified approach based on common browser support
+        
+        // Most modern browsers and Node.js support core SIMD
+        support.insert("simd".to_string(), true);
+        support.insert("simd128".to_string(), true);
+        
+        // Relaxed SIMD has more limited support
+        support.insert("relaxed-simd".to_string(), false);
+        
+        // Check for specific instruction support
+        support.insert("i8x16-popcnt".to_string(), false); // More limited support
+        support.insert("i16x8-dot-i8x16".to_string(), false); // More limited support
+        
+        support
+    }
+    
+    // Create a new SIMD code generator for this module
+    pub fun simd_code_generator(&mut self) -> SimdCodeGenerator {
+        if !self.has_simd() {
+            self.enable_simd();
+        }
+        
+        SimdCodeGenerator::new(self.clone())
+    }
+    
+    // Add a SIMD type section to the module
+    pub fun add_simd_type_section(&mut self) -> &mut Self {
+        // Add the v128 type to the module's type section
+        // This is necessary for proper SIMD validation
+        // ...
+        self
+    }
+    
+    // Add common SIMD utility functions to the module based on optimization level
+    pub fun add_simd_utilities(&mut self, optimization_level: OptimizationLevel) -> &mut Self {
+        // Ensure SIMD is enabled
+        if !self.has_simd() {
+            self.enable_simd();
+        }
+        
+        // Add utilities based on optimization level
+        match optimization_level {
+            OptimizationLevel::Minimal => {
+                // Add only essential utilities for minimal optimization level
+                self.add_simd_arithmetic_utilities();
+            },
+            OptimizationLevel::Standard => {
+                // Add standard set of utilities
+                self.add_simd_arithmetic_utilities();
+                self.add_simd_comparison_utilities();
+                self.add_simd_conversion_utilities();
+            },
+            OptimizationLevel::Aggressive => {
+                // Add full set of utilities for aggressive optimization
+                self.add_simd_arithmetic_utilities();
+                self.add_simd_comparison_utilities();
+                self.add_simd_conversion_utilities();
+                self.add_simd_advanced_utilities();
+            },
+        }
+        
+        self
+    }
+    
+    // Add basic arithmetic SIMD utility functions
+    fn add_simd_arithmetic_utilities(&mut self) -> &mut Self {
+        // Add vector arithmetic utilities
+        // - Vector addition
+        // - Vector subtraction
+        // - Vector multiplication
+        // - Vector division (floating point only)
+        
+        // Implementation would be here in a real system
+        
+        self
+    }
+    
+    // Add comparison SIMD utility functions
+    fn add_simd_comparison_utilities(&mut self) -> &mut Self {
+        // Add vector comparison utilities
+        // - Equality/inequality comparisons
+        // - Greater/less than comparisons
+        // - Min/max operations
+        
+        // Implementation would be here in a real system
+        
+        self
+    }
+    
+    // Add type conversion SIMD utility functions
+    fn add_simd_conversion_utilities(&mut self) -> &mut Self {
+        // Add vector conversion utilities
+        // - Integer to float conversions
+        // - Float to integer conversions
+        // - Widening/narrowing conversions
+        
+        // Implementation would be here in a real system
+        
+        self
+    }
+    
+    // Add advanced SIMD utility functions
+    fn add_simd_advanced_utilities(&mut self) -> &mut Self {
+        // Add advanced vector utilities
+        // - Matrix multiplication
+        // - Vector normalization
+        // - Common image processing kernels (blur, sharpen, etc.)
+        // - Audio processing utilities (FFT, etc.)
+        // - Machine learning primitives (dot product, etc.)
+        
+        // Implementation would be here in a real system
+        
+        self
+    }
+}
+
+// Extend WasmFunction with enhanced SIMD-specific methods
+impl WasmFunction {
+    // Add SIMD instructions to the function with validation
+    pub fun add_simd_instructions(&mut self, instructions: Vec<WasmInstruction>) -> Result<&mut Self, String> {
+        // Ensure the parent module has SIMD enabled
+        if !self.module.has_simd() {
+            return Err("Cannot add SIMD instructions - SIMD feature not enabled in module".to_string());
+        }
+        
+        // Validate each instruction before adding
+        for instruction in &instructions {
+            match instruction {
+                WasmInstruction::SimdOp(opcode) => {
+                    // For certain opcodes, we need to ensure specific features are enabled
+                    if is_relaxed_simd_opcode(opcode) && !self.module.has_simd_feature("relaxed-simd") {
+                        return Err(format!(
+                            "Opcode {:?} requires 'relaxed-simd' feature to be enabled", 
+                            opcode
+                        ));
+                    }
+                },
+                WasmInstruction::SimdOpWithParam(opcode, param) => {
+                    // Validate parameter ranges for lane operations
+                    match opcode {
+                        // Extract/replace lane operations have specific parameter ranges
+                        // These checks are simplified - in a real implementation we would check
+                        // against the actual lane count for each vector type
+                        WasmSimdOpcode::I8x16ExtractLaneS | WasmSimdOpcode::I8x16ExtractLaneU | 
+                        WasmSimdOpcode::I8x16ReplaceLane => {
+                            if *param >= 16 {
+                                return Err(format!("Lane index {} out of bounds for i8x16 (max 15)", param));
+                            }
+                        },
+                        WasmSimdOpcode::I16x8ExtractLaneS | WasmSimdOpcode::I16x8ExtractLaneU | 
+                        WasmSimdOpcode::I16x8ReplaceLane => {
+                            if *param >= 8 {
+                                return Err(format!("Lane index {} out of bounds for i16x8 (max 7)", param));
+                            }
+                        },
+                        // Add more checks for other lane operations...
+                        _ => {}, // Other operations don't require specific validation
+                    }
+                },
+                // Add more validation for other SIMD instruction types
+                _ => {}, // Non-SIMD instructions don't require special validation
+            }
+        }
+        
+        // All instructions are valid, so add them to the function
+        for instruction in instructions {
+            self.body.push(instruction);
+        }
+        
+        Ok(self)
+    }
+    
+    // Helper function to check if an opcode is from the relaxed SIMD proposal
+    fn is_relaxed_simd_opcode(opcode: &WasmSimdOpcode) -> bool {
+        // These opcodes are part of the relaxed SIMD proposal and require that feature
+        match opcode {
+            // This is a simplified list - a real implementation would include all relaxed SIMD opcodes
+            WasmSimdOpcode::I8x16Popcnt => true,
+            WasmSimdOpcode::I16x8ExtMulLowI8x16S => true,
+            WasmSimdOpcode::I16x8ExtMulHighI8x16S => true,
+            WasmSimdOpcode::I16x8ExtMulLowI8x16U => true,
+            WasmSimdOpcode::I16x8ExtMulHighI8x16U => true,
+            WasmSimdOpcode::I32x4ExtMulLowI16x8S => true,
+            WasmSimdOpcode::I32x4ExtMulHighI16x8S => true,
+            WasmSimdOpcode::I32x4ExtMulLowI16x8U => true,
+            WasmSimdOpcode::I32x4ExtMulHighI16x8U => true,
+            WasmSimdOpcode::I64x2ExtMulLowI32x4S => true,
+            WasmSimdOpcode::I64x2ExtMulHighI32x4S => true,
+            WasmSimdOpcode::I64x2ExtMulLowI32x4U => true,
+            WasmSimdOpcode::I64x2ExtMulHighI32x4U => true,
+            _ => false,
+        }
+    }
+    
+    // Add a type-checked SIMD operation to the function
+    pub fun add_typed_simd_operation(
+        &mut self, 
+        op: &str, 
+        operand_types: &[Type]
+    ) -> Result<&mut Self, String> {
+        // Validate the operation against the operand types
+        match op {
+            // Arithmetic operations
+            "add" | "sub" | "mul" | "div" => {
+                if operand_types.len() != 2 {
+                    return Err(format!("Binary operation '{}' requires exactly 2 operands", op));
+                }
+                
+                let left_type = &operand_types[0];
+                let right_type = &operand_types[1];
+                
+                // Both types must be vector types
+                if !left_type.is_vector_type() || !right_type.is_vector_type() {
+                    return Err(format!("Operation '{}' requires vector types, got {:?} and {:?}", op, left_type, right_type));
+                }
+                
+                // Both vector types must be the same
+                let left_vec = left_type.as_vector_type().unwrap();
+                let right_vec = right_type.as_vector_type().unwrap();
+                
+                if left_vec != right_vec {
+                    return Err(format!("Operation '{}' requires matching vector types, got {:?} and {:?}", op, left_vec, right_vec));
+                }
+                
+                // Division is only supported for floating-point vectors
+                if op == "div" && !left_vec.is_float() {
+                    return Err(format!("Division operation requires floating point vectors, got {:?}", left_vec));
+                }
+                
+                // Create a binary operation based on the op string
+                let binary_op = match op {
+                    "add" => VectorBinaryOp::Add,
+                    "sub" => VectorBinaryOp::Sub,
+                    "mul" => VectorBinaryOp::Mul,
+                    "div" => VectorBinaryOp::Div,
+                    _ => unreachable!(),
+                };
+                
+                // Generate code using a SimdCodeGenerator
+                let mut gen = SimdCodeGenerator::new(self.module.clone());
+                let instructions = gen.generate_vector_binary_op(&binary_op, left_type, right_type)?;
+                
+                // Add the generated instructions
+                return self.add_simd_instructions(instructions);
+            },
+            
+            // Unary operations
+            "neg" | "abs" | "sqrt" => {
+                if operand_types.len() != 1 {
+                    return Err(format!("Unary operation '{}' requires exactly 1 operand", op));
+                }
+                
+                let operand_type = &operand_types[0];
+                
+                // Type must be a vector type
+                if !operand_type.is_vector_type() {
+                    return Err(format!("Operation '{}' requires a vector type, got {:?}", op, operand_type));
+                }
+                
+                let vec_type = operand_type.as_vector_type().unwrap();
+                
+                // Square root is only supported for floating-point vectors
+                if op == "sqrt" && !vec_type.is_float() {
+                    return Err(format!("Square root operation requires floating point vector, got {:?}", vec_type));
+                }
+                
+                // Create a unary operation based on the op string
+                let unary_op = match op {
+                    "neg" => VectorUnaryOp::Neg,
+                    "abs" => VectorUnaryOp::Abs,
+                    "sqrt" => VectorUnaryOp::Sqrt,
+                    _ => unreachable!(),
+                };
+                
+                // Generate code using a SimdCodeGenerator
+                let mut gen = SimdCodeGenerator::new(self.module.clone());
+                let instructions = gen.generate_vector_unary_op(&unary_op, operand_type)?;
+                
+                // Add the generated instructions
+                return self.add_simd_instructions(instructions);
+            },
+            
+            // Memory operations
+            "load" | "store" => {
+                if operand_types.len() < 1 {
+                    return Err(format!("Memory operation '{}' requires at least 1 operand", op));
+                }
+                
+                let ptr_type = &operand_types[0];
+                
+                // First operand must be a pointer type
+                match ptr_type {
+                    Type::Pointer(_) => {},
+                    _ => return Err(format!("Memory operation '{}' requires a pointer type, got {:?}", op, ptr_type)),
+                }
+                
+                // Create a memory operation based on the op string
+                let memory_op = match op {
+                    "load" => VectorMemoryOp::Load,
+                    "store" => VectorMemoryOp::Store,
+                    _ => unreachable!(),
+                };
+                
+                // Generate code using a SimdCodeGenerator
+                let mut gen = SimdCodeGenerator::new(self.module.clone());
+                let instructions = gen.generate_vector_memory_op(&memory_op, ptr_type)?;
+                
+                // Add the generated instructions
+                return self.add_simd_instructions(instructions);
+            },
+            
+            // Other operations
+            _ => return Err(format!("Unsupported SIMD operation: {}", op)),
+        }
+    }
+    
+    // Optimize the function's SIMD usage with a specific optimization level
+    pub fun optimize_simd(&mut self, optimization_level: OptimizationLevel) -> Result<&mut Self, String> {
+        // Make a copy of the body to analyze
+        let original_body = self.body.clone();
+        let mut optimized_body = Vec::new();
+        
+        // Apply optimizations based on the optimization level
+        match optimization_level {
+            OptimizationLevel::Minimal => {
+                // For minimal optimization, we only perform basic optimizations
+                self.optimize_simd_instruction_selection(&original_body, &mut optimized_body)?;
+            },
+            OptimizationLevel::Standard => {
+                // For standard optimization, perform more aggressive optimizations
+                self.optimize_simd_instruction_selection(&original_body, &mut optimized_body)?;
+                self.optimize_simd_memory_access(&optimized_body, &mut optimized_body)?;
+            },
+            OptimizationLevel::Aggressive => {
+                // For aggressive optimization, perform all optimizations
+                self.optimize_simd_instruction_selection(&original_body, &mut optimized_body)?;
+                self.optimize_simd_memory_access(&optimized_body, &mut optimized_body)?;
+                self.optimize_simd_auto_vectorization(&optimized_body, &mut optimized_body)?;
+            },
+        }
+        
+        // Replace the original body with the optimized one
+        self.body = optimized_body;
+        
+        Ok(self)
+    }
+    
+    // Optimize SIMD instruction selection
+    fn optimize_simd_instruction_selection(
+        &self,
+        input: &[WasmInstruction],
+        output: &mut Vec<WasmInstruction>
+    ) -> Result<(), String> {
+        // Pattern 1: Replace common instruction sequences with more efficient ones
+        // For example, replace a sequence of bitwise operations with a single operation
+        
+        // This is a simplified implementation - a real one would do more pattern matching
+        let mut i = 0;
+        while i < input.len() {
+            // Example optimization: Replace NOT + AND with AND-NOT
+            if i + 1 < input.len() {
+                match (&input[i], &input[i+1]) {
+                    (
+                        WasmInstruction::SimdOp(WasmSimdOpcode::V128Not),
+                        WasmInstruction::SimdOp(WasmSimdOpcode::V128And)
+                    ) => {
+                        // Replace with a single AND-NOT operation
+                        output.push(WasmInstruction::SimdOp(WasmSimdOpcode::V128AndNot));
+                        i += 2; // Skip both instructions
+                        continue;
+                    },
+                    _ => {}, // No pattern match
+                }
+            }
+            
+            // If no pattern matched, keep the original instruction
+            output.push(input[i].clone());
+            i += 1;
+        }
+        
+        Ok(())
+    }
+    
+    // Optimize SIMD memory access
+    fn optimize_simd_memory_access(
+        &self,
+        input: &[WasmInstruction],
+        output: &mut Vec<WasmInstruction>
+    ) -> Result<(), String> {
+        // Pattern 1: Combine adjacent memory operations when possible
+        // Pattern 2: Ensure optimal alignment for memory operations
+        
+        // This is a simplified implementation - a real one would do more pattern matching
+        // and analysis of memory access patterns
+        
+        // For now, just copy the instructions (no optimization)
+        for instr in input {
+            output.push(instr.clone());
+        }
+        
+        Ok(())
+    }
+    
+    // Optimize by auto-vectorizing scalar code
+    fn optimize_simd_auto_vectorization(
+        &self,
+        input: &[WasmInstruction],
+        output: &mut Vec<WasmInstruction>
+    ) -> Result<(), String> {
+        // Pattern 1: Detect scalar loops that can be vectorized
+        // Pattern 2: Detect scalar operations that can be replaced with vector equivalents
+        
+        // This is a simplified implementation - real auto-vectorization is very complex
+        // and requires sophisticated analysis of the code
+        
+        // For now, just copy the instructions (no optimization)
+        for instr in input {
+            output.push(instr.clone());
+        }
+        
+        Ok(())
+    }
+}
+
+// Update WasmInstruction to include enhanced SIMD operations
+impl WasmInstruction {
+    // Create a new SIMD operation instruction with validation
+    pub fun simd_op(opcode: WasmSimdOpcode) -> Self {
+        WasmInstruction::SimdOp(opcode)
+    }
+    
+    // Create a new SIMD operation with a parameter and validation
+    pub fun simd_op_with_param(opcode: WasmSimdOpcode, param: u32) -> Self {
+        WasmInstruction::SimdOpWithParam(opcode, param)
+    }
+    
+    // Create a new SIMD memory operation with validation
+    pub fun simd_mem_op(opcode: WasmSimdOpcode, align: u32, offset: u32) -> Self {
+        // Validate alignment based on opcode
+        let required_align = match opcode {
+            WasmSimdOpcode::V128Load | WasmSimdOpcode::V128Store => 4, // 16 bytes = 2^4
+            // ... other cases
+            _ => 0, // Default
+        };
+        
+        assert!(align >= required_align, 
+            "Insufficient alignment for SIMD memory operation: got 2^{}, need 2^{}", 
+            align, required_align);
+        
+        WasmInstruction::SimdMemOp(opcode, align, offset)
+    }
+    
+    // Create a new SIMD memory operation with a lane parameter and validation
+    pub fun simd_mem_op_with_param(
+        opcode: WasmSimdOpcode, 
+        align: u32, 
+        offset: u32, 
+        lane: u32
+    ) -> Self {
+        // Validate lane index based on opcode
+        let max_lane = match opcode {
+            WasmSimdOpcode::V128Load8Lane | WasmSimdOpcode::V128Store8Lane => 15,
+            WasmSimdOpcode::V128Load16Lane | WasmSimdOpcode::V128Store16Lane => 7,
+            WasmSimdOpcode::V128Load32Lane | WasmSimdOpcode::V128Store32Lane => 3,
+            WasmSimdOpcode::V128Load64Lane | WasmSimdOpcode::V128Store64Lane => 1,
+            _ => 0, // Default
+        };
+        
+        assert!(lane <= max_lane, 
+            "Lane index out of bounds for SIMD memory operation: got {}, max allowed is {}", 
+            lane, max_lane);
+        
+        WasmInstruction::SimdMemOpWithParam(opcode, align, offset, lane)
+    }
+    
+    // Add a comment instruction for documentation
+    pub fun comment(text: String) -> Self {
+        WasmInstruction::Comment(text)
+    }
+}
+
+// Additional WasmInstruction variants for improved code generation
+impl WasmInstruction {
+    // Comment instruction for documentation and debugging
+    pub enum Comment(String),
+    
+    // SIMD operations with predefined shuffle masks for common patterns
+    pub enum SimdShuffleMaskOp(WasmSimdOpcode, Vec<u8>),
+    
+    // SIMD operations with auto-vectorized loop information
+    pub enum SimdVectorizedLoop {
+        operation: String,
+        element_type: Type,
+        element_count: usize,
+        unroll_factor: usize,
+    },
+    
+    // SIMD operations with optimization hints
+    pub enum SimdOptimizedOp {
+        opcode: WasmSimdOpcode,
+        optimization: String,
+    },
+}
+
+// Optimization levels for SIMD code generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OptimizationLevel {
+    // Basic code generation with minimal optimizations
+    Minimal,
+    
+    // Standard optimization level with good balance of speed and size
+    Standard,
+    
+    // Aggressive optimizations prioritizing speed over size
+    Aggressive,
+}

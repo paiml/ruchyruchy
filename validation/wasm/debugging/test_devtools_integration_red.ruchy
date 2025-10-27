@@ -1,0 +1,753 @@
+// WASM-007: Browser Debugging Integration - DevTools Integration Tests (RED Phase)
+//
+// These tests verify integration with Chrome DevTools and Firefox Developer Tools.
+// All tests should FAIL in the RED phase, indicating missing implementation.
+
+use std::path::Path;
+use std::collections::HashMap;
+
+// ============================================================================
+// Test 1: Load Source Map in DevTools
+// ============================================================================
+
+test test_devtools_load_source_map() {
+    println("Testing source map loading in DevTools...");
+
+    let source = r#"
+fun hello() -> i32 {
+    return 42;
+}
+"#;
+
+    // Compile with source map
+    let result = compile_for_devtools("hello.ruchy", source);
+
+    // Write WASM and source map files
+    write_wasm_file("hello.wasm", &result.wasm_binary);
+    write_source_map_file("hello.wasm.map", &result.source_map);
+
+    // Simulate loading in DevTools
+    let devtools = DevTools::new();
+    let loaded = devtools.load_wasm("hello.wasm");
+
+    assert(loaded.is_ok(), "Should load WASM in DevTools");
+
+    let module = loaded.unwrap();
+
+    // Verify source map was loaded
+    assert(module.has_source_map(), "Should detect source map");
+    assert(module.get_sources().contains(&"hello.ruchy"), "Should show original source");
+
+    // Verify source content is available
+    let source_content = module.get_source_content("hello.ruchy");
+    assert(source_content.is_some(), "Should have source content");
+    assert(source_content.unwrap().contains("fun hello"), "Should display Ruchy source");
+
+    println("✅ Source map loading test passed");
+}
+
+// ============================================================================
+// Test 2: Set Breakpoint in Ruchy Source
+// ============================================================================
+
+test test_devtools_set_breakpoint() {
+    println("Testing breakpoint setting in Ruchy source...");
+
+    let source = r#"
+fun add(x: i32, y: i32) -> i32 {
+    let sum = x + y;  // Line 3: breakpoint here
+    return sum;
+}
+"#;
+
+    let result = compile_for_devtools("breakpoint.ruchy", source);
+    write_wasm_file("breakpoint.wasm", &result.wasm_binary);
+    write_source_map_file("breakpoint.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("breakpoint.wasm").unwrap();
+
+    // Set breakpoint on line 3 (let sum = x + y)
+    let bp_result = module.set_breakpoint("breakpoint.ruchy", 3);
+    assert(bp_result.is_ok(), "Should set breakpoint successfully");
+
+    let breakpoint = bp_result.unwrap();
+    assert(breakpoint.is_resolved(), "Breakpoint should be resolved");
+    assert(breakpoint.source_line == 3, "Breakpoint should be at line 3");
+
+    // Run code and verify breakpoint hits
+    let exec_result = devtools.execute_function("add", vec![10, 20]);
+    assert(exec_result.paused_at_breakpoint(), "Should pause at breakpoint");
+
+    let pause_location = exec_result.get_pause_location().unwrap();
+    assert(pause_location.source_file == "breakpoint.ruchy", "Should pause in correct file");
+    assert(pause_location.line == 3, "Should pause at line 3");
+
+    println("✅ Breakpoint setting test passed");
+}
+
+// ============================================================================
+// Test 3: Step Through Ruchy Code
+// ============================================================================
+
+test test_devtools_step_through() {
+    println("Testing step-through debugging...");
+
+    let source = r#"
+fun calculate() -> i32 {
+    let a = 10;      // Line 3
+    let b = 20;      // Line 4
+    let c = a + b;   // Line 5
+    return c;        // Line 6
+}
+"#;
+
+    let result = compile_for_devtools("step.ruchy", source);
+    write_wasm_file("step.wasm", &result.wasm_binary);
+    write_source_map_file("step.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("step.wasm").unwrap();
+
+    // Set breakpoint at function entry
+    module.set_breakpoint("step.ruchy", 3).unwrap();
+
+    // Start execution
+    let mut exec = devtools.execute_function("calculate", vec![]);
+    assert(exec.paused_at_breakpoint(), "Should pause at entry");
+
+    // Step to next line (line 4)
+    exec.step_over();
+    assert(exec.get_pause_location().unwrap().line == 4, "Should step to line 4");
+
+    // Step to next line (line 5)
+    exec.step_over();
+    assert(exec.get_pause_location().unwrap().line == 5, "Should step to line 5");
+
+    // Step to next line (line 6)
+    exec.step_over();
+    assert(exec.get_pause_location().unwrap().line == 6, "Should step to line 6");
+
+    // Verify we stayed in Ruchy source (not jumped to WASM)
+    assert(exec.get_pause_location().unwrap().source_file == "step.ruchy", "Should stay in Ruchy source");
+
+    println("✅ Step-through test passed");
+}
+
+// ============================================================================
+// Test 4: Inspect Variables
+// ============================================================================
+
+test test_devtools_inspect_variables() {
+    println("Testing variable inspection...");
+
+    let source = r#"
+fun process(input: i32) -> i32 {
+    let doubled = input * 2;
+    let result = doubled + 10;
+    return result;  // Breakpoint here
+}
+"#;
+
+    let result = compile_for_devtools("inspect.ruchy", source);
+    write_wasm_file("inspect.wasm", &result.wasm_binary);
+    write_source_map_file("inspect.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("inspect.wasm").unwrap();
+
+    // Set breakpoint before return
+    module.set_breakpoint("inspect.ruchy", 5).unwrap();
+
+    // Execute with input = 15
+    let mut exec = devtools.execute_function("process", vec![15]);
+    assert(exec.paused_at_breakpoint(), "Should pause before return");
+
+    // Inspect variables
+    let scope = exec.get_local_scope().unwrap();
+
+    // Verify parameter
+    let input_var = scope.get_variable("input");
+    assert(input_var.is_some(), "Should see 'input' parameter");
+    assert(input_var.unwrap().value == 15, "input should be 15");
+
+    // Verify local variables
+    let doubled_var = scope.get_variable("doubled");
+    assert(doubled_var.is_some(), "Should see 'doubled' variable");
+    assert(doubled_var.unwrap().value == 30, "doubled should be 30 (15 * 2)");
+
+    let result_var = scope.get_variable("result");
+    assert(result_var.is_some(), "Should see 'result' variable");
+    assert(result_var.unwrap().value == 40, "result should be 40 (30 + 10)");
+
+    println("✅ Variable inspection test passed");
+}
+
+// ============================================================================
+// Test 5: Call Stack Display
+// ============================================================================
+
+test test_devtools_call_stack() {
+    println("Testing call stack display...");
+
+    let source = r#"
+fun inner() -> i32 {
+    return 42;  // Breakpoint here
+}
+
+fun middle() -> i32 {
+    return inner();
+}
+
+fun outer() -> i32 {
+    return middle();
+}
+"#;
+
+    let result = compile_for_devtools("stack.ruchy", source);
+    write_wasm_file("stack.wasm", &result.wasm_binary);
+    write_source_map_file("stack.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("stack.wasm").unwrap();
+
+    // Set breakpoint in inner function
+    module.set_breakpoint("stack.ruchy", 3).unwrap();
+
+    // Execute outer function
+    let mut exec = devtools.execute_function("outer", vec![]);
+    assert(exec.paused_at_breakpoint(), "Should pause in inner");
+
+    // Get call stack
+    let stack = exec.get_call_stack().unwrap();
+
+    // Verify stack depth
+    assert(stack.frames.len() == 3, "Should have 3 frames (inner, middle, outer)");
+
+    // Verify frame 0 (current: inner)
+    assert(stack.frames[0].function_name == "inner", "Top frame should be 'inner'");
+    assert(stack.frames[0].source_file == "stack.ruchy", "Should show Ruchy source");
+    assert(stack.frames[0].line == 3, "Should show line 3");
+
+    // Verify frame 1 (middle)
+    assert(stack.frames[1].function_name == "middle", "Second frame should be 'middle'");
+    assert(stack.frames[1].source_file == "stack.ruchy", "Should show Ruchy source");
+
+    // Verify frame 2 (outer)
+    assert(stack.frames[2].function_name == "outer", "Third frame should be 'outer'");
+    assert(stack.frames[2].source_file == "stack.ruchy", "Should show Ruchy source");
+
+    println("✅ Call stack test passed");
+}
+
+// ============================================================================
+// Test 6: Watch Expressions
+// ============================================================================
+
+test test_devtools_watch_expressions() {
+    println("Testing watch expressions...");
+
+    let source = r#"
+fun loop_sum(n: i32) -> i32 {
+    let sum = 0;
+    let i = 0;
+    while i < n {
+        sum = sum + i;  // Breakpoint here
+        i = i + 1;
+    }
+    return sum;
+}
+"#;
+
+    let result = compile_for_devtools("watch.ruchy", source);
+    write_wasm_file("watch.wasm", &result.wasm_binary);
+    write_source_map_file("watch.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("watch.wasm").unwrap();
+
+    // Set breakpoint inside loop
+    module.set_breakpoint("watch.ruchy", 6).unwrap();
+
+    // Add watch expressions
+    let watch_id_sum = devtools.add_watch_expression("sum");
+    let watch_id_i = devtools.add_watch_expression("i");
+
+    // Execute
+    let mut exec = devtools.execute_function("loop_sum", vec![5]);
+
+    // First iteration
+    assert(exec.paused_at_breakpoint(), "Should pause at breakpoint");
+    assert(devtools.get_watch_value(watch_id_i).unwrap() == 0, "i should be 0");
+    assert(devtools.get_watch_value(watch_id_sum).unwrap() == 0, "sum should be 0");
+
+    // Second iteration
+    exec.continue_execution();
+    assert(devtools.get_watch_value(watch_id_i).unwrap() == 1, "i should be 1");
+    assert(devtools.get_watch_value(watch_id_sum).unwrap() == 0, "sum should be 0");
+
+    // Third iteration
+    exec.continue_execution();
+    assert(devtools.get_watch_value(watch_id_i).unwrap() == 2, "i should be 2");
+    assert(devtools.get_watch_value(watch_id_sum).unwrap() == 1, "sum should be 1");
+
+    println("✅ Watch expressions test passed");
+}
+
+// ============================================================================
+// Test 7: Exception Handling
+// ============================================================================
+
+test test_devtools_exception_handling() {
+    println("Testing exception handling in DevTools...");
+
+    let source = r#"
+fun divide(x: i32, y: i32) -> i32 {
+    if y == 0 {
+        panic!("Division by zero");  // Line 4
+    }
+    return x / y;
+}
+"#;
+
+    let result = compile_for_devtools("exception.ruchy", source);
+    write_wasm_file("exception.wasm", &result.wasm_binary);
+    write_source_map_file("exception.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    devtools.set_pause_on_exceptions(true);
+    let module = devtools.load_wasm("exception.wasm").unwrap();
+
+    // Execute with division by zero
+    let mut exec = devtools.execute_function("divide", vec![10, 0]);
+
+    // Should pause on exception
+    assert(exec.paused_on_exception(), "Should pause on exception");
+
+    let exception = exec.get_exception().unwrap();
+    assert(exception.message == "Division by zero", "Should have correct error message");
+
+    // Verify source location
+    let location = exec.get_pause_location().unwrap();
+    assert(location.source_file == "exception.ruchy", "Should show exception in Ruchy source");
+    assert(location.line == 4, "Should show exception at line 4");
+
+    println("✅ Exception handling test passed");
+}
+
+// ============================================================================
+// Test 8: Async Debugging
+// ============================================================================
+
+test test_devtools_async_debugging() {
+    println("Testing async code debugging...");
+
+    let source = r#"
+async fun fetch_data() -> i32 {
+    let data = await async_operation();  // Breakpoint here
+    return data;
+}
+
+async fun async_operation() -> i32 {
+    return 123;
+}
+"#;
+
+    let result = compile_for_devtools("async.ruchy", source);
+    write_wasm_file("async.wasm", &result.wasm_binary);
+    write_source_map_file("async.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("async.wasm").unwrap();
+
+    // Set breakpoint after await
+    module.set_breakpoint("async.ruchy", 3).unwrap();
+
+    // Execute async function
+    let mut exec = devtools.execute_async_function("fetch_data", vec![]);
+
+    // Should pause at await point
+    assert(exec.paused_at_breakpoint(), "Should pause at await");
+
+    let location = exec.get_pause_location().unwrap();
+    assert(location.source_file == "async.ruchy", "Should show correct source");
+    assert(location.line == 3, "Should pause at line 3");
+
+    // Step through async boundary
+    exec.step_over();
+
+    // Should still be in Ruchy source (not lost across async boundary)
+    let new_location = exec.get_pause_location().unwrap();
+    assert(new_location.source_file == "async.ruchy", "Should stay in Ruchy source after async");
+
+    println("✅ Async debugging test passed");
+}
+
+// ============================================================================
+// Test 9: Hot Reload
+// ============================================================================
+
+test test_devtools_hot_reload() {
+    println("Testing hot reload with source map update...");
+
+    let source_v1 = r#"
+fun greet() -> String {
+    return "Hello";  // Line 3
+}
+"#;
+
+    let result_v1 = compile_for_devtools("greet.ruchy", source_v1);
+    write_wasm_file("greet.wasm", &result_v1.wasm_binary);
+    write_source_map_file("greet.wasm.map", &result_v1.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("greet.wasm").unwrap();
+
+    // Set breakpoint at line 3
+    let bp = module.set_breakpoint("greet.ruchy", 3).unwrap();
+
+    // Modify source
+    let source_v2 = r#"
+fun greet() -> String {
+    let message = "Hello, World!";  // Line 3 (modified)
+    return message;
+}
+"#;
+
+    // Recompile and reload
+    let result_v2 = compile_for_devtools("greet.ruchy", source_v2);
+    write_wasm_file("greet.wasm", &result_v2.wasm_binary);
+    write_source_map_file("greet.wasm.map", &result_v2.source_map);
+
+    let reload_result = devtools.hot_reload("greet.wasm");
+    assert(reload_result.is_ok(), "Should hot reload successfully");
+
+    // Verify breakpoint was preserved
+    let module_v2 = reload_result.unwrap();
+    assert(module_v2.has_breakpoint_at("greet.ruchy", 3), "Breakpoint should be preserved");
+
+    // Execute and verify new code runs
+    let mut exec = devtools.execute_function("greet", vec![]);
+    assert(exec.paused_at_breakpoint(), "Should pause at preserved breakpoint");
+
+    let scope = exec.get_local_scope().unwrap();
+    let message_var = scope.get_variable("message");
+    assert(message_var.is_some(), "Should see new 'message' variable");
+
+    println("✅ Hot reload test passed");
+}
+
+// ============================================================================
+// Test 10: Performance Profiling
+// ============================================================================
+
+test test_devtools_performance_profiling() {
+    println("Testing performance profiling...");
+
+    let source = r#"
+fun fibonacci(n: i32) -> i32 {
+    if n <= 1 {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+fun main() -> i32 {
+    return fibonacci(10);
+}
+"#;
+
+    let result = compile_for_devtools("profile.ruchy", source);
+    write_wasm_file("profile.wasm", &result.wasm_binary);
+    write_source_map_file("profile.wasm.map", &result.source_map);
+
+    let mut devtools = DevTools::new();
+    let module = devtools.load_wasm("profile.wasm").unwrap();
+
+    // Start profiling
+    devtools.start_profiler();
+
+    // Execute
+    devtools.execute_function("main", vec![]);
+
+    // Stop profiling
+    let profile = devtools.stop_profiler().unwrap();
+
+    // Verify profile shows Ruchy function names (not WASM function indices)
+    assert(profile.has_function("fibonacci"), "Profile should show 'fibonacci' function");
+    assert(profile.has_function("main"), "Profile should show 'main' function");
+
+    let fib_stats = profile.get_function_stats("fibonacci").unwrap();
+    assert(fib_stats.call_count > 1, "fibonacci should be called multiple times");
+    assert(fib_stats.total_time_ms > 0, "fibonacci should have measurable time");
+
+    // Verify source locations in profile
+    assert(fib_stats.source_file == "profile.ruchy", "Should show Ruchy source file in profile");
+
+    println("✅ Performance profiling test passed");
+}
+
+// ============================================================================
+// Helper Types (will fail in RED - not implemented)
+// ============================================================================
+
+struct CompileResult {
+    wasm_binary: Vec<u8>,
+    source_map: String,
+}
+
+struct DevTools {
+    loaded_modules: HashMap<String, LoadedModule>,
+    watches: HashMap<u32, String>,
+    profiler: Option<Profiler>,
+}
+
+impl DevTools {
+    fun new() -> Self {
+        panic!("DevTools integration not implemented");
+    }
+
+    fun load_wasm(&mut self, path: &str) -> Result<LoadedModule, String> {
+        panic!("WASM loading not implemented");
+    }
+
+    fun execute_function(&mut self, name: &str, args: Vec<i32>) -> ExecutionContext {
+        panic!("Function execution not implemented");
+    }
+
+    fun execute_async_function(&mut self, name: &str, args: Vec<i32>) -> ExecutionContext {
+        panic!("Async function execution not implemented");
+    }
+
+    fun add_watch_expression(&mut self, expr: &str) -> u32 {
+        panic!("Watch expressions not implemented");
+    }
+
+    fun get_watch_value(&self, id: u32) -> Option<i32> {
+        panic!("Watch value retrieval not implemented");
+    }
+
+    fun set_pause_on_exceptions(&mut self, enabled: bool) {
+        panic!("Exception handling not implemented");
+    }
+
+    fun hot_reload(&mut self, path: &str) -> Result<LoadedModule, String> {
+        panic!("Hot reload not implemented");
+    }
+
+    fun start_profiler(&mut self) {
+        panic!("Profiler not implemented");
+    }
+
+    fun stop_profiler(&mut self) -> Option<Profile> {
+        panic!("Profiler not implemented");
+    }
+}
+
+struct LoadedModule {
+    path: String,
+    source_map: Option<SourceMap>,
+    breakpoints: Vec<Breakpoint>,
+}
+
+impl LoadedModule {
+    fun has_source_map(&self) -> bool {
+        panic!("Source map detection not implemented");
+    }
+
+    fun get_sources(&self) -> Vec<String> {
+        panic!("Source listing not implemented");
+    }
+
+    fun get_source_content(&self, file: &str) -> Option<String> {
+        panic!("Source content retrieval not implemented");
+    }
+
+    fun set_breakpoint(&mut self, file: &str, line: u32) -> Result<Breakpoint, String> {
+        panic!("Breakpoint setting not implemented");
+    }
+
+    fun has_breakpoint_at(&self, file: &str, line: u32) -> bool {
+        panic!("Breakpoint query not implemented");
+    }
+}
+
+struct SourceMap {
+    // Placeholder
+}
+
+struct Breakpoint {
+    source_file: String,
+    source_line: u32,
+    resolved: bool,
+}
+
+impl Breakpoint {
+    fun is_resolved(&self) -> bool {
+        panic!("Breakpoint resolution not implemented");
+    }
+}
+
+struct ExecutionContext {
+    paused: bool,
+    pause_location: Option<Location>,
+    exception: Option<Exception>,
+}
+
+impl ExecutionContext {
+    fun paused_at_breakpoint(&self) -> bool {
+        panic!("Execution context not implemented");
+    }
+
+    fun paused_on_exception(&self) -> bool {
+        panic!("Exception detection not implemented");
+    }
+
+    fun get_pause_location(&self) -> Option<Location> {
+        panic!("Location retrieval not implemented");
+    }
+
+    fun get_exception(&self) -> Option<Exception> {
+        panic!("Exception retrieval not implemented");
+    }
+
+    fun get_local_scope(&self) -> Option<Scope> {
+        panic!("Scope retrieval not implemented");
+    }
+
+    fun get_call_stack(&self) -> Option<CallStack> {
+        panic!("Call stack retrieval not implemented");
+    }
+
+    fun step_over(&mut self) {
+        panic!("Step over not implemented");
+    }
+
+    fun continue_execution(&mut self) {
+        panic!("Continue execution not implemented");
+    }
+}
+
+struct Location {
+    source_file: String,
+    line: u32,
+    column: u32,
+}
+
+struct Exception {
+    message: String,
+    location: Location,
+}
+
+struct Scope {
+    variables: HashMap<String, Variable>,
+}
+
+impl Scope {
+    fun get_variable(&self, name: &str) -> Option<&Variable> {
+        panic!("Variable lookup not implemented");
+    }
+}
+
+struct Variable {
+    name: String,
+    value: i32,
+    type_name: String,
+}
+
+struct CallStack {
+    frames: Vec<StackFrame>,
+}
+
+struct StackFrame {
+    function_name: String,
+    source_file: String,
+    line: u32,
+}
+
+struct Profiler {
+    // Placeholder
+}
+
+struct Profile {
+    function_stats: HashMap<String, FunctionStats>,
+}
+
+impl Profile {
+    fun has_function(&self, name: &str) -> bool {
+        panic!("Profile query not implemented");
+    }
+
+    fun get_function_stats(&self, name: &str) -> Option<&FunctionStats> {
+        panic!("Stats retrieval not implemented");
+    }
+}
+
+struct FunctionStats {
+    function_name: String,
+    source_file: String,
+    call_count: u32,
+    total_time_ms: f64,
+}
+
+// ============================================================================
+// Helper Functions (will fail in RED - not implemented)
+// ============================================================================
+
+fun compile_for_devtools(path: &str, source: &str) -> CompileResult {
+    panic!("DevTools compilation not implemented");
+}
+
+fun write_wasm_file(path: &str, binary: &[u8]) {
+    panic!("File writing not implemented");
+}
+
+fun write_source_map_file(path: &str, source_map: &str) {
+    panic!("Source map writing not implemented");
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("=== WASM-007: DevTools Integration Tests (RED Phase) ===");
+    println("All tests should FAIL - implementation not yet done");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    let tests = vec![
+        ("Load Source Map", test_devtools_load_source_map),
+        ("Set Breakpoint", test_devtools_set_breakpoint),
+        ("Step Through", test_devtools_step_through),
+        ("Inspect Variables", test_devtools_inspect_variables),
+        ("Call Stack", test_devtools_call_stack),
+        ("Watch Expressions", test_devtools_watch_expressions),
+        ("Exception Handling", test_devtools_exception_handling),
+        ("Async Debugging", test_devtools_async_debugging),
+        ("Hot Reload", test_devtools_hot_reload),
+        ("Performance Profiling", test_devtools_performance_profiling),
+    ];
+
+    for (name, test_fn) in tests {
+        println("\\nRunning: {}", name);
+        match std::panic::catch_unwind(test_fn) {
+            Ok(_) => {
+                println("❌ UNEXPECTED PASS: {}", name);
+                passed += 1;
+            },
+            Err(e) => {
+                println("✅ EXPECTED FAIL: {}", name);
+                println("   Reason: {:?}", e);
+                failed += 1;
+            }
+        }
+    }
+
+    println("\\n=== Test Summary ===");
+    println("Expected Failures: {}", failed);
+    println("Unexpected Passes: {}", passed);
+    println("\\n✅ RED Phase: All tests failing as expected!");
+}

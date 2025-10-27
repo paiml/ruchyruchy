@@ -1,0 +1,408 @@
+// fuzz_closure_compilation.ruchy
+// TOOL phase fuzz tests for WASM-002: Closure Compilation
+// These tests use fuzzing to find edge cases in WebAssembly compilation for Ruchy closures
+
+// Import the closure compiler implementation
+import bootstrap::stage3::wasm_closure_refactored::ClosureCompiler;
+import bootstrap::stage3::wasm_closure_refactored::WasmEmitter;
+import bootstrap::stage3::wasm_closure_refactored::Type;
+
+// Import fuzzing framework
+// In a real implementation, these would be imported from the Ruchy fuzzing library
+struct FuzzTester {
+    name: String,
+    iterations: i32,
+    seed: i64,
+}
+
+impl FuzzTester {
+    fn new(name: String, iterations: i32, seed: i64) -> FuzzTester {
+        FuzzTester {
+            name: name,
+            iterations: iterations,
+            seed: seed,
+        }
+    }
+    
+    fn run<T>(&self, generator: fn(i64) -> T, test_function: fn(T) -> bool) -> bool {
+        println("Running fuzz test '{}' for {} iterations...", self.name, self.iterations);
+        
+        let mut seed = self.seed;
+        let mut failures = 0;
+        let mut success_count = 0;
+        
+        for i in 0..self.iterations {
+            // Generate input based on the current seed
+            let input = generator(seed);
+            
+            // Test the input
+            let result = do {
+                test_function(input)
+            } catch e {
+                println("  ❌ Failed on iteration {} with error: {}", i, e.to_string());
+                failures += 1;
+                false
+            };
+            
+            if result {
+                success_count += 1;
+            } else {
+                failures += 1;
+            }
+            
+            // Update seed for next iteration
+            seed = (seed * 48271) % 2147483647;
+            
+            // Progress indicator
+            if i % 1000 == 0 && i > 0 {
+                println("  ... {} iterations completed ({} successes, {} failures)",
+                       i, success_count, failures);
+            }
+        }
+        
+        let success_rate = success_count as f64 / self.iterations as f64 * 100.0;
+        
+        if failures == 0 {
+            println("✅ Fuzz test '{}' passed for all {} iterations (100% success rate)",
+                   self.name, self.iterations);
+            true
+        } else {
+            println("❌ Fuzz test '{}' failed for {} out of {} iterations ({:.2}% success rate)",
+                   self.name, failures, self.iterations, success_rate);
+            false
+        }
+    }
+}
+
+// Fuzzing generators
+
+// Generator for random closure expressions
+fn generate_random_closure_expr(seed: i64) -> String {
+    let mut rng = seed;
+    
+    // Choose a closure type
+    let closure_types = [
+        "basic",         // (x) => x + 1
+        "nested",        // (x) => (y) => x + y
+        "multi_param",   // (x, y, z) => x + y + z
+        "complex_body",  // (x) => { let y = x * 2; return y + 1; }
+        "conditional",   // (x) => x > 0 ? x : -x
+        "recursive"      // function fact(n) { return n <= 1 ? 1 : n * fact(n-1); }
+    ];
+    
+    rng = (rng * 48271) % 2147483647;
+    let closure_type = closure_types[(rng % closure_types.len() as i64) as usize];
+    
+    // Generate expressions based on the type
+    match closure_type {
+        "basic" => {
+            let operators = ["+", "-", "*", "/", "%"];
+            rng = (rng * 48271) % 2147483647;
+            let op = operators[(rng % operators.len() as i64) as usize];
+            
+            rng = (rng * 48271) % 2147483647;
+            let value = (rng % 100) + 1;
+            
+            format!("(x) => x {} {}", op, value)
+        },
+        "nested" => {
+            let operators = ["+", "*"];
+            rng = (rng * 48271) % 2147483647;
+            let op = operators[(rng % operators.len() as i64) as usize];
+            
+            format!("(x) => (y) => x {} y", op)
+        },
+        "multi_param" => {
+            let expressions = [
+                "(x, y) => x + y",
+                "(x, y, z) => x + y + z",
+                "(a, b, c, d) => a * b + c * d",
+                "(x, y) => x * y"
+            ];
+            
+            rng = (rng * 48271) % 2147483647;
+            expressions[(rng % expressions.len() as i64) as usize].to_string()
+        },
+        "complex_body" => {
+            let bodies = [
+                "(x) => { let y = x * 2; return y + 1; }",
+                "(x) => { let a = x + 1; let b = a * 2; return a + b; }",
+                "(x, y) => { let z = x + y; return z * z; }"
+            ];
+            
+            rng = (rng * 48271) % 2147483647;
+            bodies[(rng % bodies.len() as i64) as usize].to_string()
+        },
+        "conditional" => {
+            let conditions = [
+                "(x) => x > 0 ? x : -x",
+                "(x, y) => x > y ? x : y",
+                "(x) => x % 2 == 0 ? x / 2 : x * 3 + 1"
+            ];
+            
+            rng = (rng * 48271) % 2147483647;
+            conditions[(rng % conditions.len() as i64) as usize].to_string()
+        },
+        "recursive" => {
+            // Note: Recursion might not work in all WebAssembly implementations
+            // But we'll include it to test error handling
+            let recursives = [
+                "function fact(n) { return n <= 1 ? 1 : n * fact(n-1); }",
+                "function fib(n) { return n <= 1 ? n : fib(n-1) + fib(n-2); }"
+            ];
+            
+            rng = (rng * 48271) % 2147483647;
+            recursives[(rng % recursives.len() as i64) as usize].to_string()
+        },
+        _ => "(x) => x".to_string() // Default fallback
+    }
+}
+
+// Generator for random captures
+fn generate_random_captures(seed: i64, max_captures: i32) -> Vec<(String, String)> {
+    let mut rng = seed;
+    
+    // Choose number of captures
+    rng = (rng * 48271) % 2147483647;
+    let num_captures = (rng % max_captures as i64 + 1) as i32;
+    
+    let mut captures = Vec::new();
+    let type_names = ["i32", "i64", "f32", "f64", "bool"];
+    let var_names = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    
+    for i in 0..num_captures {
+        // Generate variable name
+        rng = (rng * 48271) % 2147483647;
+        let var_index = (rng % var_names.len() as i64) as usize;
+        let var_name = if var_index < var_names.len() {
+            var_names[var_index].to_string()
+        } else {
+            format!("var{}", i)
+        };
+        
+        // Generate type name
+        rng = (rng * 48271) % 2147483647;
+        let type_index = (rng % type_names.len() as i64) as usize;
+        let type_name = type_names[type_index].to_string();
+        
+        captures.push((var_name, type_name));
+    }
+    
+    captures
+}
+
+// Generator for complex closure scenarios
+fn generate_complex_closure_scenario(seed: i64) -> (String, Vec<(String, String)>, String) {
+    let mut rng = seed;
+    
+    // Generate closure expression
+    let closure_expr = generate_random_closure_expr(rng);
+    
+    // Generate captures
+    rng = (rng * 48271) % 2147483647;
+    let captures = generate_random_captures(rng, 5);
+    
+    // Generate a function name
+    rng = (rng * 48271) % 2147483647;
+    let function_names = [
+        "create_closure", 
+        "make_function", 
+        "generate_callback",
+        "build_handler",
+        "construct_processor"
+    ];
+    let function_name = function_names[(rng % function_names.len() as i64) as usize].to_string();
+    
+    (closure_expr, captures, function_name)
+}
+
+// Fuzz test for basic closure compilation
+fn fuzz_basic_closure_compilation(tester: &FuzzTester) -> bool {
+    tester.run(
+        generate_random_closure_expr,
+        |closure_expr: String| {
+            // Create emitter
+            let mut emitter = WasmEmitter::new();
+            
+            // Add function that creates and returns the closure
+            emitter.add_function(
+                "fuzz_test_closure".to_string(),
+                vec![],
+                "Function".to_string(),
+                closure_expr
+            );
+            
+            // Generate module
+            let module = emitter.generate_module();
+            
+            // Check that the module has the necessary functions
+            assert(module.has_function("fuzz_test_closure".to_string()), 
+                   "Module should have the test closure function");
+            
+            // Generate WAT - this should not crash
+            let wat = emitter.emit_wat();
+            
+            // Success
+            true
+        }
+    )
+}
+
+// Fuzz test for closures with captures
+fn fuzz_closure_with_captures(tester: &FuzzTester) -> bool {
+    tester.run(
+        |seed| generate_random_captures(seed, 10),
+        |captures: Vec<(String, String)>| {
+            // Skip empty captures (not a valid test case)
+            if captures.is_empty() {
+                return true;
+            }
+            
+            // Create emitter
+            let mut emitter = WasmEmitter::new();
+            
+            // Generate a simple closure expression that uses the captures
+            let mut closure_body = String::new();
+            
+            // Create a closure that uses all the captures
+            if captures.len() == 1 {
+                // Single capture case
+                let (var_name, _) = &captures[0];
+                closure_body = format!("(x) => x + {}", var_name);
+            } else {
+                // Multiple captures case
+                closure_body = "
+                return (x) => {
+                    let sum = x".to_string();
+                
+                for (var_name, _) in &captures {
+                    closure_body.push_str(&format!(" + {}", var_name));
+                }
+                
+                closure_body.push_str(";
+                    return sum;
+                };");
+            }
+            
+            // Add function
+            emitter.add_function(
+                "fuzz_test_captures".to_string(),
+                captures,
+                "Function<(i32) -> i32>".to_string(),
+                closure_body
+            );
+            
+            // Generate module
+            let module = emitter.generate_module();
+            
+            // Check that the module has the function
+            assert(module.has_function("fuzz_test_captures".to_string()), 
+                   "Module should have the test function");
+            
+            // Generate WAT - this should not crash
+            let wat = emitter.emit_wat();
+            
+            // Success
+            true
+        }
+    )
+}
+
+// Fuzz test for complex closure scenarios
+fn fuzz_complex_closure_scenarios(tester: &FuzzTester) -> bool {
+    tester.run(
+        generate_complex_closure_scenario,
+        |(closure_expr, captures, function_name)| {
+            // Create emitter
+            let mut emitter = WasmEmitter::new();
+            
+            // Add function
+            emitter.add_function(
+                function_name,
+                captures,
+                "Function".to_string(),
+                closure_expr
+            );
+            
+            // Generate module
+            let module = emitter.generate_module();
+            
+            // Check that the module has the function
+            assert(module.has_function(function_name), 
+                   "Module should have the test function");
+            
+            // Generate WAT - this should not crash
+            let wat = emitter.emit_wat();
+            
+            // Success
+            true
+        }
+    )
+}
+
+// Fuzz test for memory layout calculation
+fn fuzz_memory_layout_calculation(tester: &FuzzTester) -> bool {
+    tester.run(
+        |seed| generate_random_captures(seed, 20),
+        |captures: Vec<(String, String)>| {
+            // Skip empty captures (not a valid test case)
+            if captures.is_empty() {
+                return true;
+            }
+            
+            // Create compiler
+            let compiler = ClosureCompiler::new(false);
+            
+            // Create environment
+            let mut env = compiler.create_environment();
+            
+            // Add all captures
+            for (name, type_name) in captures {
+                compiler.add_capture(&mut env, name, type_name, 0);
+            }
+            
+            // Check environment properties
+            let size = compiler.environment_size(&env);
+            let count = compiler.capture_count(&env);
+            
+            // Size should be positive
+            assert(size > 0, "Environment size should be positive");
+            
+            // Count should match number of captures
+            assert_eq(count, captures.len() as i32, 
+                      "Environment should have the correct number of variables");
+            
+            // Success
+            true
+        }
+    )
+}
+
+// Main function to run all fuzz tests
+fn main() {
+    println("Running WASM-002: Closure Compilation TOOL phase fuzz tests");
+    
+    // Configure iterations
+    let iterations = 1000; // Reduced for testing, would be higher in production
+    
+    // Create testers for different test cases
+    let basic_tester = FuzzTester::new("basic_closure_compilation".to_string(), iterations, 12345);
+    let captures_tester = FuzzTester::new("closure_with_captures".to_string(), iterations, 23456);
+    let complex_tester = FuzzTester::new("complex_closure_scenarios".to_string(), iterations, 34567);
+    let memory_tester = FuzzTester::new("memory_layout_calculation".to_string(), iterations, 45678);
+    
+    // Run all fuzz tests
+    let mut all_passed = true;
+    
+    all_passed = all_passed && fuzz_basic_closure_compilation(&basic_tester);
+    all_passed = all_passed && fuzz_closure_with_captures(&captures_tester);
+    all_passed = all_passed && fuzz_complex_closure_scenarios(&complex_tester);
+    all_passed = all_passed && fuzz_memory_layout_calculation(&memory_tester);
+    
+    // Print summary
+    if all_passed {
+        println("✅ All WASM-002 TOOL phase fuzz tests passed successfully");
+    } else {
+        println("❌ Some WASM-002 TOOL phase fuzz tests failed");
+    }
+}

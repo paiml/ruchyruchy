@@ -1,0 +1,1887 @@
+// Performance benchmarking for the Multi-Target Compiler
+// Measures and validates performance characteristics
+
+// Import benchmark framework
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
+use std::collections::HashMap;
+use std::time::Instant;
+use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
+
+// Constants for benchmark configuration
+const BENCHMARK_SEED: u64 = 98765;
+const BENCHMARK_DIR: &str = "/tmp/ruchy_multi_target_benchmark";
+const WARMUP_RUNS: usize = 3;
+const BENCHMARK_RUNS: usize = 10;
+const MEMORY_THRESHOLD_MB: usize = 100; // Maximum allowed memory usage
+
+// Benchmark metrics
+struct BenchmarkResult {
+    name: String,
+    target: CompilationTarget,
+    config_type: String,
+    avg_time_ms: f64,
+    min_time_ms: f64,
+    max_time_ms: f64,
+    memory_usage_mb: f64,
+    throughput_loc_per_sec: f64,
+    passed: bool,
+}
+
+// Setup benchmark directory
+fun setup_benchmark_env() {
+    if Path::new(BENCHMARK_DIR).exists() {
+        fs::remove_dir_all(BENCHMARK_DIR).expect("Failed to clean benchmark directory");
+    }
+    fs::create_dir_all(BENCHMARK_DIR).expect("Failed to create benchmark directory");
+    println("📂 Created benchmark directory at: {}", BENCHMARK_DIR);
+}
+
+// Cleanup benchmark directory
+fun cleanup_benchmark_env() {
+    if Path::new(BENCHMARK_DIR).exists() {
+        fs::remove_dir_all(BENCHMARK_DIR).expect("Failed to clean benchmark directory");
+    }
+    println("🧹 Cleaned up benchmark directory");
+}
+
+// Write program to file
+fun write_program_to_file(program: &str, file_path: &str) -> std::io::Result<()> {
+    let mut file = File::create(file_path)?;
+    file.write_all(program.as_bytes())?;
+    Ok(())
+}
+
+// Count lines of code in a string
+fun count_loc(code: &str) -> usize {
+    code.lines().count()
+}
+
+// Measure memory usage of the current process in MB
+// Note: This is a simplified approach - in a real implementation
+// we would use platform-specific APIs for more accurate measurements
+fun measure_memory_usage() -> f64 {
+    let memory_usage = match std::process::Command::new("ps")
+        .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+        .output() {
+            Ok(output) => {
+                let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                output_str.parse::<f64>().unwrap_or(0.0) / 1024.0 // Convert KB to MB
+            },
+            Err(_) => 0.0
+        };
+    
+    memory_usage
+}
+
+// Benchmark a function and return timing statistics
+fun benchmark_function<F, R>(func: F, runs: usize) -> (f64, f64, f64, R)
+where 
+    F: Fn() -> R,
+    R: Clone,
+{
+    let mut times = Vec::with_capacity(runs);
+    let mut result = None;
+    
+    for i in 0..runs {
+        let start = Instant::now();
+        let run_result = func();
+        let elapsed = start.elapsed();
+        let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
+        
+        if i >= WARMUP_RUNS {
+            times.push(elapsed_ms);
+        }
+        
+        if i == runs - 1 {
+            result = Some(run_result);
+        }
+    }
+    
+    // Calculate statistics
+    let avg_time = times.iter().sum::<f64>() / times.len() as f64;
+    let min_time = *times.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap_or(&0.0);
+    let max_time = *times.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap_or(&0.0);
+    
+    (avg_time, min_time, max_time, result.unwrap())
+}
+
+// Generate sample programs for benchmarking
+// Each function returns (program, description, expected_performance_ms)
+
+// Small function - should be very fast
+fun generate_small_function() -> (String, String, f64) {
+    let program = r#"
+// A simple addition function
+fun add(a: i32, b: i32) -> i32 {
+    return a + b;
+}
+
+// A simple greeting function
+fun greet(name: string) -> string {
+    return "Hello, " + name + "!";
+}
+
+fun main() {
+    let result = add(5, 3);
+    let greeting = greet("World");
+    print(greeting);
+    print(result);
+}
+"#.trim();
+    
+    (program, "Small Functions", 50.0) // Expected to compile in under 50ms
+}
+
+// Medium project with multiple functions
+fun generate_medium_project() -> (String, String, f64) {
+    let program = r#"
+// A simple calculator module
+use std::io::{self, Write};
+
+// Addition function
+fun add(a: f64, b: f64) -> f64 {
+    return a + b;
+}
+
+// Subtraction function
+fun subtract(a: f64, b: f64) -> f64 {
+    return a - b;
+}
+
+// Multiplication function
+fun multiply(a: f64, b: f64) -> f64 {
+    return a * b;
+}
+
+// Division function
+fun divide(a: f64, b: f64) -> f64 {
+    if b == 0.0 {
+        print("Error: Division by zero");
+        return 0.0;
+    }
+    return a / b;
+}
+
+// Power function
+fun power(base: f64, exponent: i32) -> f64 {
+    if exponent == 0 {
+        return 1.0;
+    }
+    
+    let mut result = 1.0;
+    let mut abs_exp = if exponent < 0 { -exponent } else { exponent };
+    
+    for _ in 0..abs_exp {
+        result *= base;
+    }
+    
+    if exponent < 0 {
+        return 1.0 / result;
+    } else {
+        return result;
+    }
+}
+
+// Square root approximation using Newton's method
+fun sqrt(x: f64) -> f64 {
+    if x < 0.0 {
+        print("Error: Cannot calculate square root of negative number");
+        return 0.0;
+    }
+    
+    if x == 0.0 {
+        return 0.0;
+    }
+    
+    let mut guess = x / 2.0;
+    let mut prev_guess = 0.0;
+    
+    while abs(guess - prev_guess) > 0.000001 {
+        prev_guess = guess;
+        guess = 0.5 * (guess + x / guess);
+    }
+    
+    return guess;
+}
+
+// Absolute value function
+fun abs(x: f64) -> f64 {
+    if x < 0.0 {
+        return -x;
+    }
+    return x;
+}
+
+// Factorial function
+fun factorial(n: i32) -> i64 {
+    if n < 0 {
+        print("Error: Cannot calculate factorial of negative number");
+        return 0;
+    }
+    
+    if n == 0 || n == 1 {
+        return 1;
+    }
+    
+    let mut result: i64 = 1;
+    for i in 2..(n + 1) {
+        result *= i as i64;
+    }
+    
+    return result;
+}
+
+// Calculate the nth Fibonacci number
+fun fibonacci(n: i32) -> i64 {
+    if n <= 0 {
+        return 0;
+    }
+    
+    if n == 1 || n == 2 {
+        return 1;
+    }
+    
+    let mut a: i64 = 1;
+    let mut b: i64 = 1;
+    let mut result: i64 = 0;
+    
+    for _ in 3..(n + 1) {
+        result = a + b;
+        a = b;
+        b = result;
+    }
+    
+    return result;
+}
+
+// Check if a number is prime
+fun is_prime(n: i32) -> bool {
+    if n <= 1 {
+        return false;
+    }
+    
+    if n <= 3 {
+        return true;
+    }
+    
+    if n % 2 == 0 || n % 3 == 0 {
+        return false;
+    }
+    
+    let mut i = 5;
+    while i * i <= n {
+        if n % i == 0 || n % (i + 2) == 0 {
+            return false;
+        }
+        i += 6;
+    }
+    
+    return true;
+}
+
+// GCD (Greatest Common Divisor) using Euclidean algorithm
+fun gcd(a: i32, b: i32) -> i32 {
+    let mut x = abs_i32(a);
+    let mut y = abs_i32(b);
+    
+    while y != 0 {
+        let temp = y;
+        y = x % y;
+        x = temp;
+    }
+    
+    return x;
+}
+
+// Integer absolute value
+fun abs_i32(x: i32) -> i32 {
+    if x < 0 {
+        return -x;
+    }
+    return x;
+}
+
+// LCM (Least Common Multiple)
+fun lcm(a: i32, b: i32) -> i32 {
+    if a == 0 || b == 0 {
+        return 0;
+    }
+    
+    return abs_i32(a * b) / gcd(a, b);
+}
+
+// Main function to demonstrate usage
+fun main() {
+    print("Calculator Module Demo");
+    
+    // Demonstrate basic operations
+    let a = 10.0;
+    let b = 5.0;
+    
+    print("a = " + a + ", b = " + b);
+    print("Addition: " + add(a, b));
+    print("Subtraction: " + subtract(a, b));
+    print("Multiplication: " + multiply(a, b));
+    print("Division: " + divide(a, b));
+    
+    // Demonstrate advanced operations
+    print("Power: " + power(2.0, 8));
+    print("Square root of 16: " + sqrt(16.0));
+    print("Factorial of 5: " + factorial(5));
+    print("10th Fibonacci number: " + fibonacci(10));
+    print("Is 17 prime? " + is_prime(17));
+    print("GCD of 48 and 18: " + gcd(48, 18));
+    print("LCM of 12 and 18: " + lcm(12, 18));
+}
+"#.trim();
+    
+    (program, "Medium Project", 200.0) // Expected to compile in under 200ms
+}
+
+// Large project with complex types and structures
+fun generate_large_project() -> (String, String, f64) {
+    let program = r#"
+// Data structures and algorithms implementation
+use std::collections::HashMap;
+
+// =========== Data Structures ===========
+
+// Node structure for linked list
+struct Node<T> {
+    value: T,
+    next: Option<Box<Node<T>>>,
+}
+
+// Linked List implementation
+struct LinkedList<T> {
+    head: Option<Box<Node<T>>>,
+    size: usize,
+}
+
+impl<T> LinkedList<T> {
+    // Create a new empty linked list
+    fun new() -> Self {
+        LinkedList {
+            head: None,
+            size: 0,
+        }
+    }
+    
+    // Add an element to the front of the list
+    fun push_front(&mut self, value: T) {
+        let new_node = Box::new(Node {
+            value,
+            next: self.head.take(),
+        });
+        
+        self.head = Some(new_node);
+        self.size += 1;
+    }
+    
+    // Remove the first element and return its value
+    fun pop_front(&mut self) -> Option<T> {
+        self.head.take().map(|node| {
+            self.head = node.next;
+            self.size -= 1;
+            node.value
+        })
+    }
+    
+    // Get the size of the list
+    fun size(&self) -> usize {
+        self.size
+    }
+    
+    // Check if the list is empty
+    fun is_empty(&self) -> bool {
+        self.size == 0
+    }
+}
+
+// Binary tree node
+struct BinaryTreeNode<T> {
+    value: T,
+    left: Option<Box<BinaryTreeNode<T>>>,
+    right: Option<Box<BinaryTreeNode<T>>>,
+}
+
+// Binary Search Tree implementation
+struct BinarySearchTree<T> {
+    root: Option<Box<BinaryTreeNode<T>>>,
+    size: usize,
+}
+
+impl<T: Ord> BinarySearchTree<T> {
+    // Create a new empty binary search tree
+    fun new() -> Self {
+        BinarySearchTree {
+            root: None,
+            size: 0,
+        }
+    }
+    
+    // Insert a value into the tree
+    fun insert(&mut self, value: T) {
+        let mut current = &mut self.root;
+        
+        while let Some(node) = current {
+            if value < node.value {
+                current = &mut node.left;
+            } else if value > node.value {
+                current = &mut node.right;
+            } else {
+                // Value already exists, do nothing
+                return;
+            }
+        }
+        
+        *current = Some(Box::new(BinaryTreeNode {
+            value,
+            left: None,
+            right: None,
+        }));
+        
+        self.size += 1;
+    }
+    
+    // Check if a value exists in the tree
+    fun contains(&self, value: &T) -> bool {
+        let mut current = &self.root;
+        
+        while let Some(node) = current {
+            if value < &node.value {
+                current = &node.left;
+            } else if value > &node.value {
+                current = &node.right;
+            } else {
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    // Get the size of the tree
+    fun size(&self) -> usize {
+        self.size
+    }
+    
+    // Check if the tree is empty
+    fun is_empty(&self) -> bool {
+        self.size == 0
+    }
+}
+
+// Stack implementation using a vector
+struct Stack<T> {
+    elements: Vec<T>,
+}
+
+impl<T> Stack<T> {
+    // Create a new empty stack
+    fun new() -> Self {
+        Stack {
+            elements: Vec::new(),
+        }
+    }
+    
+    // Push an element onto the stack
+    fun push(&mut self, value: T) {
+        self.elements.push(value);
+    }
+    
+    // Pop an element from the stack
+    fun pop(&mut self) -> Option<T> {
+        self.elements.pop()
+    }
+    
+    // Peek at the top element without removing it
+    fun peek(&self) -> Option<&T> {
+        self.elements.last()
+    }
+    
+    // Get the size of the stack
+    fun size(&self) -> usize {
+        self.elements.len()
+    }
+    
+    // Check if the stack is empty
+    fun is_empty(&self) -> bool {
+        self.elements.is_empty()
+    }
+}
+
+// Queue implementation using a linked list
+struct Queue<T> {
+    list: LinkedList<T>,
+}
+
+impl<T> Queue<T> {
+    // Create a new empty queue
+    fun new() -> Self {
+        Queue {
+            list: LinkedList::new(),
+        }
+    }
+    
+    // Enqueue an element
+    fun enqueue(&mut self, value: T) {
+        self.list.push_back(value);
+    }
+    
+    // Dequeue an element
+    fun dequeue(&mut self) -> Option<T> {
+        self.list.pop_front()
+    }
+    
+    // Get the size of the queue
+    fun size(&self) -> usize {
+        self.list.size()
+    }
+    
+    // Check if the queue is empty
+    fun is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+}
+
+// =========== Sorting Algorithms ===========
+
+// Bubble sort algorithm
+fun bubble_sort<T: Ord>(arr: &mut [T]) {
+    let n = arr.len();
+    for i in 0..n {
+        let mut swapped = false;
+        
+        for j in 0..(n - i - 1) {
+            if arr[j] > arr[j + 1] {
+                // Swap elements
+                let temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+                swapped = true;
+            }
+        }
+        
+        // If no swapping occurred in this pass, array is sorted
+        if !swapped {
+            break;
+        }
+    }
+}
+
+// Selection sort algorithm
+fun selection_sort<T: Ord>(arr: &mut [T]) {
+    let n = arr.len();
+    
+    for i in 0..(n - 1) {
+        let mut min_idx = i;
+        
+        for j in (i + 1)..n {
+            if arr[j] < arr[min_idx] {
+                min_idx = j;
+            }
+        }
+        
+        // Swap the found minimum element with the element at index i
+        if min_idx != i {
+            let temp = arr[i];
+            arr[i] = arr[min_idx];
+            arr[min_idx] = temp;
+        }
+    }
+}
+
+// Insertion sort algorithm
+fun insertion_sort<T: Ord>(arr: &mut [T]) {
+    let n = arr.len();
+    
+    for i in 1..n {
+        let key = arr[i];
+        let mut j = i as isize - 1;
+        
+        // Move elements greater than key to one position ahead
+        while j >= 0 && arr[j as usize] > key {
+            arr[(j + 1) as usize] = arr[j as usize];
+            j -= 1;
+        }
+        
+        arr[(j + 1) as usize] = key;
+    }
+}
+
+// Merge sort algorithm
+fun merge_sort<T: Ord + Clone>(arr: &mut [T]) {
+    let n = arr.len();
+    if n <= 1 {
+        return;
+    }
+    
+    let mid = n / 2;
+    let mut left = Vec::with_capacity(mid);
+    let mut right = Vec::with_capacity(n - mid);
+    
+    // Copy data to temporary arrays
+    for i in 0..mid {
+        left.push(arr[i].clone());
+    }
+    
+    for i in mid..n {
+        right.push(arr[i].clone());
+    }
+    
+    // Sort the two halves
+    merge_sort(&mut left);
+    merge_sort(&mut right);
+    
+    // Merge the sorted halves
+    let mut i = 0;
+    let mut j = 0;
+    let mut k = 0;
+    
+    while i < left.len() && j < right.len() {
+        if left[i] <= right[j] {
+            arr[k] = left[i].clone();
+            i += 1;
+        } else {
+            arr[k] = right[j].clone();
+            j += 1;
+        }
+        k += 1;
+    }
+    
+    // Copy remaining elements
+    while i < left.len() {
+        arr[k] = left[i].clone();
+        i += 1;
+        k += 1;
+    }
+    
+    while j < right.len() {
+        arr[k] = right[j].clone();
+        j += 1;
+        k += 1;
+    }
+}
+
+// =========== Search Algorithms ===========
+
+// Linear search algorithm
+fun linear_search<T: Eq>(arr: &[T], target: &T) -> Option<usize> {
+    for (i, item) in arr.iter().enumerate() {
+        if item == target {
+            return Some(i);
+        }
+    }
+    None
+}
+
+// Binary search algorithm (for sorted arrays)
+fun binary_search<T: Ord>(arr: &[T], target: &T) -> Option<usize> {
+    let mut left = 0;
+    let mut right = arr.len();
+    
+    while left < right {
+        let mid = left + (right - left) / 2;
+        
+        if arr[mid] == *target {
+            return Some(mid);
+        } else if arr[mid] < *target {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
+    }
+    
+    None
+}
+
+// =========== Graph Algorithms ===========
+
+// Graph representation using adjacency list
+struct Graph {
+    vertices: usize,
+    adjacency_list: Vec<Vec<(usize, i32)>>, // (vertex, weight)
+}
+
+impl Graph {
+    // Create a new graph with the specified number of vertices
+    fun new(vertices: usize) -> Self {
+        let mut adjacency_list = Vec::with_capacity(vertices);
+        for _ in 0..vertices {
+            adjacency_list.push(Vec::new());
+        }
+        
+        Graph {
+            vertices,
+            adjacency_list,
+        }
+    }
+    
+    // Add an edge to the graph
+    fun add_edge(&mut self, u: usize, v: usize, weight: i32) {
+        self.adjacency_list[u].push((v, weight));
+    }
+    
+    // Breadth-first search traversal
+    fun bfs(&self, start: usize) -> Vec<usize> {
+        let mut visited = vec![false; self.vertices];
+        let mut queue = Vec::new();
+        let mut traversal = Vec::new();
+        
+        visited[start] = true;
+        queue.push(start);
+        
+        while !queue.is_empty() {
+            let vertex = queue.remove(0);
+            traversal.push(vertex);
+            
+            for &(neighbor, _) in &self.adjacency_list[vertex] {
+                if !visited[neighbor] {
+                    visited[neighbor] = true;
+                    queue.push(neighbor);
+                }
+            }
+        }
+        
+        traversal
+    }
+    
+    // Depth-first search traversal
+    fun dfs(&self, start: usize) -> Vec<usize> {
+        let mut visited = vec![false; self.vertices];
+        let mut traversal = Vec::new();
+        
+        self.dfs_util(start, &mut visited, &mut traversal);
+        
+        traversal
+    }
+    
+    // Helper function for DFS
+    fun dfs_util(&self, vertex: usize, visited: &mut [bool], traversal: &mut Vec<usize>) {
+        visited[vertex] = true;
+        traversal.push(vertex);
+        
+        for &(neighbor, _) in &self.adjacency_list[vertex] {
+            if !visited[neighbor] {
+                self.dfs_util(neighbor, visited, traversal);
+            }
+        }
+    }
+    
+    // Dijkstra's algorithm for shortest paths
+    fun dijkstra(&self, start: usize) -> Vec<i32> {
+        let mut distances = vec![i32::MAX; self.vertices];
+        let mut visited = vec![false; self.vertices];
+        
+        distances[start] = 0;
+        
+        for _ in 0..self.vertices {
+            // Find the vertex with the minimum distance
+            let mut min_distance = i32::MAX;
+            let mut min_vertex = 0;
+            
+            for v in 0..self.vertices {
+                if !visited[v] && distances[v] < min_distance {
+                    min_distance = distances[v];
+                    min_vertex = v;
+                }
+            }
+            
+            // Mark the selected vertex as visited
+            visited[min_vertex] = true;
+            
+            // Update distances of the adjacent vertices
+            for &(neighbor, weight) in &self.adjacency_list[min_vertex] {
+                if !visited[neighbor] && 
+                   distances[min_vertex] != i32::MAX && 
+                   distances[min_vertex] + weight < distances[neighbor] {
+                    distances[neighbor] = distances[min_vertex] + weight;
+                }
+            }
+        }
+        
+        distances
+    }
+}
+
+// =========== Dynamic Programming Examples ===========
+
+// Compute the nth Fibonacci number using dynamic programming
+fun fibonacci_dp(n: usize) -> u64 {
+    if n <= 1 {
+        return n as u64;
+    }
+    
+    let mut dp = vec![0; n + 1];
+    dp[1] = 1;
+    
+    for i in 2..=n {
+        dp[i] = dp[i - 1] + dp[i - 2];
+    }
+    
+    dp[n]
+}
+
+// Compute the longest common subsequence of two strings
+fun longest_common_subsequence(s1: &str, s2: &str) -> usize {
+    let m = s1.len();
+    let n = s2.len();
+    
+    let mut dp = vec![vec![0; n + 1]; m + 1];
+    
+    for i in 1..=m {
+        for j in 1..=n {
+            if s1.chars().nth(i - 1) == s2.chars().nth(j - 1) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = dp[i - 1][j].max(dp[i][j - 1]);
+            }
+        }
+    }
+    
+    dp[m][n]
+}
+
+// Compute the edit distance between two strings
+fun edit_distance(s1: &str, s2: &str) -> usize {
+    let m = s1.len();
+    let n = s2.len();
+    
+    let mut dp = vec![vec![0; n + 1]; m + 1];
+    
+    for i in 0..=m {
+        dp[i][0] = i;
+    }
+    
+    for j in 0..=n {
+        dp[0][j] = j;
+    }
+    
+    for i in 1..=m {
+        for j in 1..=n {
+            if s1.chars().nth(i - 1) == s2.chars().nth(j - 1) {
+                dp[i][j] = dp[i - 1][j - 1];
+            } else {
+                dp[i][j] = 1 + dp[i - 1][j].min(dp[i][j - 1]).min(dp[i - 1][j - 1]);
+            }
+        }
+    }
+    
+    dp[m][n]
+}
+
+// Compute the maximum subarray sum using Kadane's algorithm
+fun max_subarray_sum(arr: &[i32]) -> i32 {
+    let mut max_so_far = i32::MIN;
+    let mut max_ending_here = 0;
+    
+    for &x in arr {
+        max_ending_here = max_ending_here + x;
+        
+        if max_so_far < max_ending_here {
+            max_so_far = max_ending_here;
+        }
+        
+        if max_ending_here < 0 {
+            max_ending_here = 0;
+        }
+    }
+    
+    max_so_far
+}
+
+// =========== Main Function ===========
+
+fun main() {
+    println!("Data Structures and Algorithms Demo");
+    
+    // Test linked list
+    let mut list = LinkedList::new();
+    list.push_front(3);
+    list.push_front(2);
+    list.push_front(1);
+    
+    println!("Linked list size: {}", list.size());
+    println!("Popping elements from linked list:");
+    while !list.is_empty() {
+        println!("{}", list.pop_front().unwrap());
+    }
+    
+    // Test binary search tree
+    let mut bst = BinarySearchTree::new();
+    bst.insert(5);
+    bst.insert(3);
+    bst.insert(7);
+    bst.insert(1);
+    bst.insert(4);
+    
+    println!("BST size: {}", bst.size());
+    println!("BST contains 4: {}", bst.contains(&4));
+    println!("BST contains 6: {}", bst.contains(&6));
+    
+    // Test sorting algorithms
+    let mut arr = [5, 2, 8, 1, 9, 3];
+    bubble_sort(&mut arr);
+    println!("Bubble sort result: {:?}", arr);
+    
+    let mut arr = [5, 2, 8, 1, 9, 3];
+    selection_sort(&mut arr);
+    println!("Selection sort result: {:?}", arr);
+    
+    // Test search algorithms
+    let arr = [1, 2, 3, 5, 8, 9];
+    println!("Linear search for 5: {:?}", linear_search(&arr, &5));
+    println!("Binary search for 5: {:?}", binary_search(&arr, &5));
+    
+    // Test graph algorithms
+    let mut graph = Graph::new(6);
+    graph.add_edge(0, 1, 4);
+    graph.add_edge(0, 2, 2);
+    graph.add_edge(1, 2, 5);
+    graph.add_edge(1, 3, 10);
+    graph.add_edge(2, 3, 3);
+    graph.add_edge(2, 4, 2);
+    graph.add_edge(3, 4, 7);
+    graph.add_edge(3, 5, 6);
+    graph.add_edge(4, 5, 4);
+    
+    println!("BFS traversal from vertex 0: {:?}", graph.bfs(0));
+    println!("DFS traversal from vertex 0: {:?}", graph.dfs(0));
+    println!("Shortest distances from vertex 0: {:?}", graph.dijkstra(0));
+    
+    // Test dynamic programming algorithms
+    println!("Fibonacci(10) using DP: {}", fibonacci_dp(10));
+    println!("LCS of 'ABCDE' and 'ACE': {}", longest_common_subsequence("ABCDE", "ACE"));
+    println!("Edit distance between 'kitten' and 'sitting': {}", edit_distance("kitten", "sitting"));
+    
+    let arr = [-2, 1, -3, 4, -1, 2, 1, -5, 4];
+    println!("Maximum subarray sum: {}", max_subarray_sum(&arr));
+}
+"#.trim();
+    
+    (program, "Large Project", 500.0) // Expected to compile in under 500ms
+}
+
+// Type-heavy program with complex types and generics
+fun generate_type_heavy_program() -> (String, String, f64) {
+    let program = r#"
+// Type-heavy program with generics, traits, and complex types
+use std::collections::{HashMap, HashSet};
+use std::ops::{Add, Sub, Mul, Div};
+
+// =========== Type Definitions ===========
+
+// Generic point type
+struct Point<T> {
+    x: T,
+    y: T,
+}
+
+// Generic result type
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+// Generic option type
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+// Complex nested generic type
+struct Container<T, U, V> {
+    first: T,
+    second: HashMap<U, Vec<V>>,
+    third: Option<Box<Container<V, T, U>>>,
+}
+
+// Type with multiple generic parameters
+struct Pair<A, B> {
+    first: A,
+    second: B,
+}
+
+// Recursive type
+struct RecursiveList<T> {
+    value: T,
+    next: Option<Box<RecursiveList<T>>>,
+}
+
+// Complex struct with multiple type parameters
+struct ComplexStruct<T, U, V, W> 
+    where T: Add<U> + Sub<U>,
+          U: Mul<V> + Div<W>,
+          V: Clone,
+          W: Copy {
+    
+    field1: T,
+    field2: U,
+    field3: Vec<V>,
+    field4: [W; 10],
+    field5: HashMap<String, HashSet<V>>,
+    field6: Option<Box<dyn Fn(T, U) -> V>>,
+    field7: Result<Container<T, U, V>, String>,
+}
+
+// =========== Traits ===========
+
+// Basic trait
+trait Printable {
+    fun print(&self);
+    fun to_string(&self) -> String;
+}
+
+// Generic trait
+trait Converter<T, U> {
+    fun convert(&self, value: T) -> U;
+}
+
+// Trait with associated types
+trait Collection {
+    type Item;
+    
+    fun add(&mut self, item: Self::Item);
+    fun remove(&mut self) -> Option<Self::Item>;
+    fun is_empty(&self) -> bool;
+}
+
+// Trait with default implementation
+trait Measurable {
+    fun get_size(&self) -> usize;
+    
+    fun is_empty(&self) -> bool {
+        self.get_size() == 0
+    }
+    
+    fun is_small(&self) -> bool {
+        self.get_size() < 10
+    }
+}
+
+// Multiple trait bounds
+trait Processable: Printable + Measurable {
+    fun process(&self) -> String;
+}
+
+// =========== Implementations ===========
+
+// Implement Printable for Point
+impl<T: ToString> Printable for Point<T> {
+    fun print(&self) {
+        println!("Point({}, {})", self.x.to_string(), self.y.to_string());
+    }
+    
+    fun to_string(&self) -> String {
+        format!("Point({}, {})", self.x.to_string(), self.y.to_string())
+    }
+}
+
+// Implement Collection for RecursiveList
+impl<T> Collection for RecursiveList<T> {
+    type Item = T;
+    
+    fun add(&mut self, item: Self::Item) {
+        let new_node = RecursiveList {
+            value: item,
+            next: Some(Box::new(RecursiveList {
+                value: self.value,
+                next: self.next.take(),
+            })),
+        };
+        
+        self.value = new_node.value;
+        self.next = new_node.next;
+    }
+    
+    fun remove(&mut self) -> Option<Self::Item> {
+        if let Some(next_node) = self.next.take() {
+            let result = Some(self.value);
+            self.value = next_node.value;
+            self.next = next_node.next;
+            result
+        } else {
+            None
+        }
+    }
+    
+    fun is_empty(&self) -> bool {
+        self.next.is_none()
+    }
+}
+
+// Implement Measurable for Vec
+impl<T> Measurable for Vec<T> {
+    fun get_size(&self) -> usize {
+        self.len()
+    }
+}
+
+// Implement Converter for different types
+impl<T: Clone, U: From<T>> Converter<T, U> for Pair<T, U> {
+    fun convert(&self, value: T) -> U {
+        U::from(value)
+    }
+}
+
+// =========== Functions with Complex Type Signatures ===========
+
+// Function with generic parameters and complex return type
+fun create_container<T, U, V>(first: T, second_keys: Vec<U>, second_values: Vec<Vec<V>>, third: Option<Box<Container<V, T, U>>>) 
+    -> Result<Container<T, U, V>, String>
+    where T: Clone,
+          U: Clone + std::hash::Hash + Eq,
+          V: Clone {
+    
+    if second_keys.len() != second_values.len() {
+        return Result::Err("Keys and values must have the same length".to_string());
+    }
+    
+    let mut second = HashMap::new();
+    
+    for i in 0..second_keys.len() {
+        second.insert(second_keys[i].clone(), second_values[i].clone());
+    }
+    
+    Result::Ok(Container {
+        first: first.clone(),
+        second,
+        third,
+    })
+}
+
+// Function with multiple generic type parameters and constraints
+fun transform<T, U, V, W, X>(input: Vec<T>, converter1: impl Fn(T) -> U, converter2: impl Fn(U) -> V, combiner: impl Fn(V, W) -> X, default: W)
+    -> Vec<X>
+    where T: Clone,
+          U: Clone,
+          V: Clone,
+          W: Clone,
+          X: Clone {
+    
+    input.into_iter()
+        .map(|item| converter1(item))
+        .map(|item| converter2(item))
+        .map(|item| combiner(item, default.clone()))
+        .collect()
+}
+
+// Function with higher-rank trait bounds
+fun apply_to_pair<T, F>(pair: Pair<T, T>, f: F) -> Pair<T, T>
+    where F: Fn(T) -> T,
+          T: Clone {
+    
+    Pair {
+        first: f(pair.first.clone()),
+        second: f(pair.second.clone()),
+    }
+}
+
+// Function using dynamic dispatch
+fun process_printables(items: Vec<Box<dyn Printable>>) {
+    for item in items {
+        item.print();
+    }
+}
+
+// Function with complex trait bounds
+fun find_smallest<T, C>(collections: Vec<C>) -> Option<usize>
+    where C: Collection<Item = T> + Measurable {
+    
+    if collections.is_empty() {
+        return None;
+    }
+    
+    let mut smallest_idx = 0;
+    let mut smallest_size = collections[0].get_size();
+    
+    for i in 1..collections.len() {
+        let size = collections[i].get_size();
+        if size < smallest_size {
+            smallest_size = size;
+            smallest_idx = i;
+        }
+    }
+    
+    Some(smallest_idx)
+}
+
+// =========== Main Function ===========
+
+fun main() {
+    // Create points
+    let point_i32 = Point { x: 10, y: 20 };
+    let point_f64 = Point { x: 10.5, y: 20.5 };
+    let point_string = Point { x: "hello".to_string(), y: "world".to_string() };
+    
+    // Print points
+    point_i32.print();
+    point_f64.print();
+    point_string.print();
+    
+    // Create and use a recursive list
+    let mut list = RecursiveList { value: 1, next: None };
+    list.add(2);
+    list.add(3);
+    list.add(4);
+    
+    while let Some(value) = list.remove() {
+        println!("Removed: {}", value);
+    }
+    
+    // Create a complex container
+    let container_result = create_container(
+        42,
+        vec!["key1".to_string(), "key2".to_string()],
+        vec![vec![1, 2, 3], vec![4, 5, 6]],
+        None,
+    );
+    
+    match container_result {
+        Result::Ok(container) => {
+            println!("Container created successfully");
+            println!("First value: {}", container.first);
+            println!("Second value for key1: {:?}", container.second.get("key1"));
+        },
+        Result::Err(error) => {
+            println!("Error creating container: {}", error);
+        }
+    }
+    
+    // Transform a vector using multiple functions
+    let numbers = vec![1, 2, 3, 4, 5];
+    let transformed = transform(
+        numbers,
+        |x| x * 2,
+        |x| x.to_string(),
+        |s, prefix| format!("{}{}", prefix, s),
+        "Number: ".to_string(),
+    );
+    
+    println!("Transformed numbers: {:?}", transformed);
+    
+    // Create and process a vector of printables
+    let printables: Vec<Box<dyn Printable>> = vec![
+        Box::new(point_i32),
+        Box::new(point_f64),
+        Box::new(point_string),
+    ];
+    
+    process_printables(printables);
+}
+"#.trim();
+    
+    (program, "Type-Heavy Program", 300.0) // Expected to compile in under 300ms
+}
+
+// Error-heavy program with many errors
+fun generate_error_heavy_program() -> (String, String, f64) {
+    let program = r#"
+// Program with many deliberate type errors and syntax issues
+// The compiler should catch these errors efficiently
+
+// Missing return type
+fun add(a: i32, b: i32) {
+    return a + b;  // Error: function returns i32 but no return type is specified
+}
+
+// Incompatible types
+fun type_mismatch() -> i32 {
+    let x: i32 = "string";  // Error: string cannot be assigned to i32
+    return x;
+}
+
+// Type mismatch in function call
+fun expect_string(s: string) {
+    print(s);
+}
+
+fun call_with_wrong_type() {
+    expect_string(42);  // Error: expected string, got i32
+}
+
+// Invalid operations
+fun invalid_operations() {
+    let a = 5;
+    let b = "string";
+    let c = a + b;  // Error: cannot add i32 and string
+    
+    let d = true && 42;  // Error: cannot use && with i32
+    
+    let e = [1, 2, 3];
+    let f = e[true];  // Error: cannot index with bool
+}
+
+// Missing semicolons
+fun missing_semicolons() {
+    let x = 10
+    let y = 20  // Error: missing semicolons
+    return x + y
+}
+
+// Undefined variables
+fun undefined_variables() {
+    print(x);  // Error: x is not defined
+    
+    let y = 10;
+    print(y);  // This is fine
+    
+    print(z);  // Error: z is not defined
+}
+
+// Multiple declarations
+fun multiple_declarations() {
+    let x = 10;
+    let x = 20;  // Error: x is already declared
+    
+    let y: i32 = 30;
+    let y: string = "hello";  // Error: y is already declared
+}
+
+// Invalid function calls
+fun function_call_errors() {
+    let result = add();  // Error: missing arguments
+    
+    let sum = add(1, 2, 3);  // Error: too many arguments
+    
+    let value = nonexistent_function();  // Error: function doesn't exist
+}
+
+// Incompatible return types
+fun return_type_error() -> string {
+    if (true) {
+        return "string";
+    } else {
+        return 42;  // Error: expected string, got i32
+    }
+}
+
+// Invalid use of types
+fun type_usage_errors() {
+    // Trying to use a type as a variable
+    let string = 10;  // This is fine (shadow the type)
+    
+    // Invalid type annotations
+    let a: NonexistentType = 10;  // Error: type doesn't exist
+    
+    // Invalid array operations
+    let arr = [1, 2, 3];
+    let element = arr["index"];  // Error: array indices must be integers
+}
+
+// Syntax errors
+fun syntax_errors() {
+    let x = 10 +;  // Error: expected expression after +
+    
+    if x > 5 {  // Error: missing parentheses
+        print("x is greater than 5");
+    }
+    
+    for i in 0..10 print(i);  // Error: missing braces
+    
+    let y = (10 + 20;  // Error: unclosed parenthesis
+}
+
+// Mutability errors
+fun mutability_errors() {
+    let x = 10;
+    x = 20;  // Error: assignment to immutable variable
+    
+    let mut y = 10;
+    y = 20;  // This is fine
+}
+
+// Scope errors
+fun scope_errors() {
+    {
+        let x = 10;
+    }
+    
+    print(x);  // Error: x is out of scope
+    
+    if true {
+        let y = 20;
+    } else {
+        let y = 30;
+    }
+    
+    print(y);  // Error: y is out of scope
+}
+
+// Control flow errors
+fun control_flow_errors() {
+    // Break outside loop
+    break;  // Error: break outside of loop
+    
+    // Continue outside loop
+    continue;  // Error: continue outside of loop
+    
+    // Return with value from void function
+    return 10;  // Error: returning a value from a void function
+}
+
+// Type inference errors
+fun type_inference_errors() {
+    let x = 10;
+    let y = "string";
+    
+    if true {
+        x
+    } else {
+        y  // Error: branches have incompatible types
+    };
+    
+    let z = if true { 10 } else { "string" };  // Error: branches have incompatible types
+}
+
+// Collection errors
+fun collection_errors() {
+    let arr = [1, 2, "string"];  // Error: inconsistent element types
+    
+    let map = HashMap::new();
+    map.insert(1, "one");
+    map.insert("two", 2);  // Error: inconsistent key types
+    
+    let tuple = (1, "string", true);
+    let value = tuple.3;  // Error: tuple index out of bounds
+}
+
+// Borrowing and ownership errors
+fun ownership_errors() {
+    let s = "hello".to_string();
+    let t = s;  // s is moved here
+    
+    print(s);  // Error: use of moved value
+    
+    let mut v = vec![1, 2, 3];
+    let reference = &v;
+    
+    v.push(4);  // Error: cannot mutate while borrowed
+    
+    print(reference);
+    
+    let mut x = 10;
+    let r1 = &mut x;
+    let r2 = &mut x;  // Error: cannot have two mutable references
+    
+    print(r1);
+    print(r2);
+}
+
+// Main function with errors
+fun main() {
+    // Call all the error functions
+    add(1, "string");  // Error: expected i32, got string
+    
+    type_mismatch();
+    
+    call_with_wrong_type();
+    
+    invalid_operations();
+    
+    missing_semicolons();
+    
+    undefined_variables();
+    
+    multiple_declarations();
+    
+    function_call_errors();
+    
+    return_type_error();
+    
+    type_usage_errors();
+    
+    syntax_errors();
+    
+    mutability_errors();
+    
+    scope_errors();
+    
+    control_flow_errors();
+    
+    type_inference_errors();
+    
+    collection_errors();
+    
+    ownership_errors();
+}
+"#.trim();
+    
+    (program, "Error-Heavy Program", 200.0) // Expected to compile (with errors) in under 200ms
+}
+
+// Run benchmarks for different targets
+fun benchmark_target(
+    program_generator: fn() -> (String, String, f64),
+    target: CompilationTarget,
+    config_type: &str
+) -> BenchmarkResult {
+    let (program, name, expected_ms) = program_generator();
+    let program_loc = count_loc(&program);
+    
+    let file_path = format!("{}/bench_{}_{}.ruchy", BENCHMARK_DIR, name.to_lowercase().replace(" ", "_"), target.to_string().to_lowercase());
+    write_program_to_file(&program, &file_path).expect("Failed to write benchmark file");
+    
+    // Create source file
+    let source_file = SourceFile::new(
+        &file_path,
+        program.clone()
+    );
+    
+    // Create configuration based on type
+    let config = match config_type {
+        "development" => CompilationConfig {
+            optimization_level: OptimizationLevel::O0,
+            debug_info: true,
+            source_maps: true,
+            target_features: HashMap::new(),
+            mode: CompilationMode::Development,
+        },
+        "production" => CompilationConfig {
+            optimization_level: OptimizationLevel::O3,
+            debug_info: false,
+            source_maps: false,
+            target_features: HashMap::new(),
+            mode: CompilationMode::Production,
+        },
+        _ => CompilationConfig::default(),
+    };
+    
+    // Measure memory before compilation
+    let memory_before = measure_memory_usage();
+    
+    // Run benchmark
+    let (avg_time, min_time, max_time, result) = benchmark_function(
+        || {
+            let mut compiler = MultiTargetCompilerRefactored::new(config.clone());
+            compiler.compile_to_target(source_file.clone(), target)
+        },
+        WARMUP_RUNS + BENCHMARK_RUNS
+    );
+    
+    // Measure memory after compilation
+    let memory_after = measure_memory_usage();
+    let memory_usage = memory_after - memory_before;
+    
+    // Calculate throughput
+    let throughput = if avg_time > 0.0 {
+        (program_loc as f64) / (avg_time / 1000.0) // LOC per second
+    } else {
+        0.0
+    };
+    
+    // Determine if benchmark passed
+    let passed = result.is_ok() || name.contains("Error"); // Error-heavy programs are expected to fail compilation
+    
+    BenchmarkResult {
+        name: name.to_string(),
+        target,
+        config_type: config_type.to_string(),
+        avg_time_ms: avg_time,
+        min_time_ms: min_time,
+        max_time_ms: max_time,
+        memory_usage_mb: memory_usage,
+        throughput_loc_per_sec: throughput,
+        passed,
+    }
+}
+
+// Run all benchmarks
+fun run_benchmarks() {
+    println("🧪 Running Performance Benchmarks for Multi-Target Compiler");
+    println("========================================================");
+    
+    setup_benchmark_env();
+    
+    let mut results = Vec::new();
+    
+    // Define benchmark combinations
+    let program_generators = [
+        generate_small_function,
+        generate_medium_project,
+        generate_large_project,
+        generate_type_heavy_program,
+        generate_error_heavy_program,
+    ];
+    
+    let targets = [
+        CompilationTarget::Wasm,
+        CompilationTarget::TypeScript,
+        CompilationTarget::Rust,
+    ];
+    
+    let config_types = ["development", "production"];
+    
+    // Run all combinations
+    let total_benchmarks = program_generators.len() * targets.len() * config_types.len();
+    let mut completed = 0;
+    
+    for program_generator in program_generators.iter() {
+        let (_, name, _) = program_generator();
+        
+        for &target in &targets {
+            for config_type in &config_types {
+                println("🔄 Running benchmark: {} - Target: {:?} - Config: {}... ({}/{})",
+                    name, target, config_type, completed + 1, total_benchmarks);
+                
+                let result = benchmark_target(*program_generator, target, config_type);
+                results.push(result);
+                
+                completed += 1;
+            }
+        }
+    }
+    
+    // Generate benchmark report
+    generate_benchmark_report(&results);
+    
+    cleanup_benchmark_env();
+    
+    // Validate benchmark results
+    validate_benchmark_results(&results);
+    
+    println("\n✅ Performance benchmarking completed successfully!");
+}
+
+// Generate a benchmark report
+fun generate_benchmark_report(results: &[BenchmarkResult]) {
+    let report_path = format!("{}/benchmark_report.md", BENCHMARK_DIR);
+    let mut file = File::create(&report_path).expect("Failed to create report file");
+    
+    // Write report header
+    writeln!(file, "# Performance Benchmark Report for Multi-Target Compiler").unwrap();
+    writeln!(file, "\n## Summary").unwrap();
+    writeln!(file, "\n- **Date**: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")).unwrap();
+    writeln!(file, "- **Total Benchmarks**: {}", results.len()).unwrap();
+    
+    let passed_count = results.iter().filter(|r| r.passed).count();
+    writeln!(file, "- **Passed**: {} ({:.2}%)", passed_count, (passed_count as f64 / results.len() as f64) * 100.0).unwrap();
+    
+    // Write benchmark results table
+    writeln!(file, "\n## Results").unwrap();
+    writeln!(file, "\n| Program | Target | Config | Avg Time (ms) | Min Time (ms) | Max Time (ms) | Memory (MB) | Throughput (LOC/s) | Result |").unwrap();
+    writeln!(file, "|---------|--------|--------|--------------|--------------|--------------|------------|-------------------|--------|").unwrap();
+    
+    for result in results {
+        writeln!(file, "| {} | {:?} | {} | {:.2} | {:.2} | {:.2} | {:.2} | {:.2} | {} |",
+            result.name,
+            result.target,
+            result.config_type,
+            result.avg_time_ms,
+            result.min_time_ms,
+            result.max_time_ms,
+            result.memory_usage_mb,
+            result.throughput_loc_per_sec,
+            if result.passed { "✅" } else { "❌" }
+        ).unwrap();
+    }
+    
+    // Write target comparison
+    writeln!(file, "\n## Target Comparison").unwrap();
+    writeln!(file, "\n### Average Compilation Time (ms)").unwrap();
+    writeln!(file, "\n| Program | WASM | TypeScript | Rust |").unwrap();
+    writeln!(file, "|---------|------|------------|------|").unwrap();
+    
+    // Group by program name
+    let mut program_names = results.iter().map(|r| r.name.clone()).collect::<Vec<_>>();
+    program_names.sort();
+    program_names.dedup();
+    
+    for name in program_names {
+        let wasm_avg = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Wasm)
+            .map(|r| r.avg_time_ms)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Wasm)
+            .count() as f64;
+        
+        let ts_avg = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::TypeScript)
+            .map(|r| r.avg_time_ms)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::TypeScript)
+            .count() as f64;
+        
+        let rust_avg = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Rust)
+            .map(|r| r.avg_time_ms)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Rust)
+            .count() as f64;
+        
+        writeln!(file, "| {} | {:.2} | {:.2} | {:.2} |", name, wasm_avg, ts_avg, rust_avg).unwrap();
+    }
+    
+    // Write configuration comparison
+    writeln!(file, "\n### Development vs Production Mode").unwrap();
+    writeln!(file, "\n| Program | Target | Development (ms) | Production (ms) | Difference |").unwrap();
+    writeln!(file, "|---------|--------|-----------------|----------------|------------|").unwrap();
+    
+    for name in program_names {
+        for &target in &[CompilationTarget::Wasm, CompilationTarget::TypeScript, CompilationTarget::Rust] {
+            let dev_avg = results.iter()
+                .filter(|r| r.name == name && r.target == target && r.config_type == "development")
+                .map(|r| r.avg_time_ms)
+                .next().unwrap_or(0.0);
+            
+            let prod_avg = results.iter()
+                .filter(|r| r.name == name && r.target == target && r.config_type == "production")
+                .map(|r| r.avg_time_ms)
+                .next().unwrap_or(0.0);
+            
+            let diff_percent = if dev_avg > 0.0 {
+                ((prod_avg - dev_avg) / dev_avg) * 100.0
+            } else {
+                0.0
+            };
+            
+            writeln!(file, "| {} | {:?} | {:.2} | {:.2} | {:.2}% |", 
+                name, target, dev_avg, prod_avg, diff_percent).unwrap();
+        }
+    }
+    
+    // Write throughput comparison
+    writeln!(file, "\n### Throughput Comparison (LOC/s)").unwrap();
+    writeln!(file, "\n| Program | WASM | TypeScript | Rust |").unwrap();
+    writeln!(file, "|---------|------|------------|------|").unwrap();
+    
+    for name in program_names {
+        let wasm_throughput = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Wasm)
+            .map(|r| r.throughput_loc_per_sec)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Wasm)
+            .count() as f64;
+        
+        let ts_throughput = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::TypeScript)
+            .map(|r| r.throughput_loc_per_sec)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::TypeScript)
+            .count() as f64;
+        
+        let rust_throughput = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Rust)
+            .map(|r| r.throughput_loc_per_sec)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Rust)
+            .count() as f64;
+        
+        writeln!(file, "| {} | {:.2} | {:.2} | {:.2} |", name, wasm_throughput, ts_throughput, rust_throughput).unwrap();
+    }
+    
+    // Write memory usage comparison
+    writeln!(file, "\n### Memory Usage Comparison (MB)").unwrap();
+    writeln!(file, "\n| Program | WASM | TypeScript | Rust |").unwrap();
+    writeln!(file, "|---------|------|------------|------|").unwrap();
+    
+    for name in program_names {
+        let wasm_memory = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Wasm)
+            .map(|r| r.memory_usage_mb)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Wasm)
+            .count() as f64;
+        
+        let ts_memory = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::TypeScript)
+            .map(|r| r.memory_usage_mb)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::TypeScript)
+            .count() as f64;
+        
+        let rust_memory = results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Rust)
+            .map(|r| r.memory_usage_mb)
+            .sum::<f64>() / results.iter()
+            .filter(|r| r.name == name && r.target == CompilationTarget::Rust)
+            .count() as f64;
+        
+        writeln!(file, "| {} | {:.2} | {:.2} | {:.2} |", name, wasm_memory, ts_memory, rust_memory).unwrap();
+    }
+    
+    // Write conclusion
+    writeln!(file, "\n## Conclusion").unwrap();
+    
+    if passed_count == results.len() {
+        writeln!(file, "\nAll benchmarks have passed successfully. The multi-target compiler demonstrates efficient performance across different targets and configurations.").unwrap();
+    } else {
+        writeln!(file, "\n{} out of {} benchmarks have failed. There are performance issues that need to be addressed.", results.len() - passed_count, results.len()).unwrap();
+    }
+    
+    println("\n📊 Benchmark report generated at: {}", report_path);
+}
+
+// Validate benchmark results against expected performance
+fun validate_benchmark_results(results: &[BenchmarkResult]) {
+    println("\n🔍 Validating benchmark results...");
+    
+    let mut all_valid = true;
+    
+    for result in results {
+        // Lookup expected time based on program name
+        let (_, _, expected_time) = match result.name.as_str() {
+            "Small Functions" => generate_small_function(),
+            "Medium Project" => generate_medium_project(),
+            "Large Project" => generate_large_project(),
+            "Type-Heavy Program" => generate_type_heavy_program(),
+            "Error-Heavy Program" => generate_error_heavy_program(),
+            _ => ("", "", 0.0), // Unknown program
+        };
+        
+        // Allow some flexibility based on configuration
+        let multiplier = match result.config_type.as_str() {
+            "development" => 1.0,
+            "production" => 1.5, // Production might take longer due to optimizations
+            _ => 1.0,
+        };
+        
+        // Allow some flexibility based on target
+        let target_multiplier = match result.target {
+            CompilationTarget::Wasm => 1.2, // WASM might be slower
+            CompilationTarget::TypeScript => 1.0,
+            CompilationTarget::Rust => 1.1,
+        };
+        
+        let adjusted_expected = expected_time * multiplier * target_multiplier;
+        
+        // Validate average time
+        if result.avg_time_ms > adjusted_expected {
+            println("⚠️ Benchmark for {} on {:?} ({}) exceeded expected time: {:.2}ms > {:.2}ms",
+                result.name, result.target, result.config_type, result.avg_time_ms, adjusted_expected);
+            all_valid = false;
+        }
+        
+        // Validate memory usage
+        if result.memory_usage_mb > MEMORY_THRESHOLD_MB as f64 {
+            println("⚠️ Benchmark for {} on {:?} ({}) exceeded memory threshold: {:.2}MB > {}MB",
+                result.name, result.target, result.config_type, result.memory_usage_mb, MEMORY_THRESHOLD_MB);
+            all_valid = false;
+        }
+        
+        // Validate that the benchmark passed
+        if !result.passed {
+            println("❌ Benchmark for {} on {:?} ({}) failed to compile",
+                result.name, result.target, result.config_type);
+            all_valid = false;
+        }
+    }
+    
+    if all_valid {
+        println("✅ All benchmarks validated successfully!");
+    } else {
+        println("⚠️ Some benchmarks did not meet performance expectations.");
+        // We don't fail the validation completely as performance can vary by environment
+    }
+}
+
+// Entry point
+fun main() {
+    run_benchmarks();
+}

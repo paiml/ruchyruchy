@@ -1,0 +1,1836 @@
+// WASM-005: WebAssembly GC Type References - REFACTOR Phase Implementation
+//
+// This file implements an optimized and enhanced version of WebAssembly GC reference types
+// in the Ruchy compiler. The implementation focuses on performance optimization, 
+// improved API design, better error handling, and enhanced integration with the Ruchy type system.
+
+//------------------------------------------------------------------------------
+// Type System - Core Definitions with Enhanced Type Safety
+//------------------------------------------------------------------------------
+
+// Unified type system for WebAssembly reference types with improved semantics
+enum WasmRefKind {
+    // Core reference types
+    Extern,        // Reference to host values (externref)
+    Func,          // Reference to function (funcref)
+    Eq,            // Reference with equality comparison (eqref)
+    Any,           // Any reference type (anyref)
+    
+    // Specialized reference types
+    Struct,        // Reference to a struct type
+    Array,         // Reference to an array type
+    I31,           // Reference to a small integer (i31ref)
+    
+    // Advanced reference types
+    Parametric,    // Parametric reference (with type parameters)
+    Interface,     // Interface reference (for abstract types)
+    Union          // Union type reference
+}
+
+// Enhanced nullability representation with clear semantics
+enum Nullability {
+    NonNull,    // Cannot be null (ref type)
+    Nullable    // Can be null (ref null type)
+}
+
+// Enhanced type descriptor with better organization and memory efficiency
+struct TypeInfo {
+    // Unique identifier for caching and quick comparisons
+    id: string,
+    
+    // Reference kind
+    kind: WasmRefKind,
+    
+    // Nullability attribute
+    nullability: Nullability,
+    
+    // WebAssembly type index (for compact encoding)
+    type_index: i32,
+    
+    // Recursive type flag (for cycle detection)
+    is_recursive: bool,
+    
+    // Metadata for debugging and diagnostics
+    metadata: TypeMetadata
+}
+
+// Metadata for enhanced debugging and diagnostics
+struct TypeMetadata {
+    // Original source location
+    source_location: SourceLocation?,
+    
+    // Human-readable description
+    description: string,
+    
+    // Validation constraints
+    constraints: ValidationConstraint[],
+    
+    // Binary size estimation (bytes)
+    estimated_size: i32
+}
+
+// Source location for better error reporting
+struct SourceLocation {
+    file: string,
+    line: i32,
+    column: i32
+}
+
+// Validation constraint for improved type checking
+struct ValidationConstraint {
+    kind: string,    // Type of constraint
+    message: string, // Error message if validation fails
+    data: Map<string, any>  // Constraint-specific data
+}
+
+// Enhanced reference type definition with optimized memory layout
+struct ReferenceType {
+    // Type information
+    info: TypeInfo,
+    
+    // Runtime name
+    name: string,
+    
+    // Hierarchy information - optimized for fast subtyping checks
+    super_type: ReferenceType?,
+    sub_types: ReferenceType[],
+    
+    // For struct types - fields with optimal memory layout
+    fields: Field[],
+    
+    // For interface types - required methods
+    methods: Method[],
+    
+    // For array types - element type
+    element_type: ReferenceType?,
+    
+    // For parametric types - type parameters
+    type_parameters: ReferenceType[],
+    
+    // For interface types - implementations
+    implementations: ReferenceType[]
+}
+
+// Field definition with optimal layout information
+struct Field {
+    // Field name
+    name: string,
+    
+    // Field type
+    type: ReferenceType,
+    
+    // Mutability
+    mutable: bool,
+    
+    // Memory layout optimization data
+    offset: i32,
+    size: i32,
+    alignment: i32,
+    
+    // Default value (if any)
+    default_value: any?
+}
+
+// Method definition with virtual table information
+struct Method {
+    // Method name
+    name: string,
+    
+    // Parameter types
+    parameters: ReferenceType[],
+    
+    // Return type
+    return_type: ReferenceType,
+    
+    // Virtual table index (for fast dispatch)
+    vtable_index: i32,
+    
+    // Is this method virtual?
+    is_virtual: bool,
+    
+    // Is this an interface implementation?
+    is_interface_impl: bool,
+    
+    // Is this method inherited?
+    is_inherited: bool,
+    
+    // Original method (if overridden)
+    overrides: Method?
+}
+
+//------------------------------------------------------------------------------
+// Type Registry - Enhanced with Caching and Optimized Lookups
+//------------------------------------------------------------------------------
+
+// Type registry with optimized performance and memory usage
+struct TypeRegistry {
+    // Fast type lookup by name
+    types_by_name: Map<string, ReferenceType>,
+    
+    // Fast type lookup by ID
+    types_by_id: Map<string, ReferenceType>,
+    
+    // Fast type lookup by WebAssembly type index
+    types_by_index: Map<i32, ReferenceType>,
+    
+    // Fast subtype lookup (super_type_id -> [subtype_ids])
+    subtype_map: Map<string, string[]>,
+    
+    // Fast interface implementation lookup (interface_id -> [impl_ids])
+    interface_impl_map: Map<string, string[]>,
+    
+    // Type cache for quick reference equality
+    type_cache: Map<string, ReferenceType>,
+    
+    // Runtime-specific optimization hints
+    runtime_hints: Map<string, any>,
+    
+    // Next available type index
+    next_type_index: i32,
+    
+    // Type system configuration
+    config: TypeSystemConfig,
+    
+    // Initialize the registry with configuration
+    fun initialize(config: TypeSystemConfig = default_config()) -> void {
+        this.types_by_name = new Map<string, ReferenceType>();
+        this.types_by_id = new Map<string, ReferenceType>();
+        this.types_by_index = new Map<i32, ReferenceType>();
+        this.subtype_map = new Map<string, string[]>();
+        this.interface_impl_map = new Map<string, string[]>();
+        this.type_cache = new Map<string, ReferenceType>();
+        this.runtime_hints = config.runtime_hints || new Map<string, any>();
+        this.next_type_index = 0;
+        this.config = config;
+        
+        // Register built-in reference types
+        this.register_builtin_types();
+    }
+    
+    // Get or create a type with caching for improved performance
+    fun get_or_create_type(name: string, kind: WasmRefKind, nullability: Nullability) -> ReferenceType {
+        // Generate cache key
+        let cache_key = `${name}:${kind}:${nullability}`;
+        
+        // Check cache first for performance
+        if (this.type_cache.has(cache_key)) {
+            return this.type_cache.get(cache_key);
+        }
+        
+        // Create new type if not found
+        let type = this.types_by_name.get(name);
+        if (!type) {
+            // Create new type with given parameters
+            type = this.create_type(name, kind, nullability);
+            
+            // Register the new type
+            this.register_type(type);
+        } else if (type.info.nullability != nullability) {
+            // Create variant with different nullability but share structure
+            let variant = this.create_type_variant(type, nullability);
+            
+            // Cache the variant but don't register as a new named type
+            this.type_cache.set(cache_key, variant);
+            return variant;
+        }
+        
+        // Cache the type for future lookups
+        this.type_cache.set(cache_key, type);
+        return type;
+    }
+    
+    // Create a new type with optimized initialization
+    fun create_type(name: string, kind: WasmRefKind, nullability: Nullability) -> ReferenceType {
+        // Generate unique ID
+        let id = `${name}:${this.next_type_index}`;
+        
+        // Create type info
+        let info = TypeInfo {
+            id: id,
+            kind: kind,
+            nullability: nullability,
+            type_index: this.next_type_index,
+            is_recursive: false,
+            metadata: TypeMetadata {
+                source_location: null,
+                description: `${name} (${kind}, ${nullability == Nullability.Nullable ? "nullable" : "non-null"})`,
+                constraints: [],
+                estimated_size: estimate_type_size(kind, nullability)
+            }
+        };
+        
+        // Create the reference type
+        let ref_type = ReferenceType {
+            info: info,
+            name: name,
+            super_type: null,
+            sub_types: [],
+            fields: [],
+            methods: [],
+            element_type: null,
+            type_parameters: [],
+            implementations: []
+        };
+        
+        return ref_type;
+    }
+    
+    // Create a variant of an existing type with different nullability
+    fun create_type_variant(base_type: ReferenceType, nullability: Nullability) -> ReferenceType {
+        // Clone the base type
+        let variant = { ...base_type };
+        
+        // Update the type info with new nullability
+        variant.info = { 
+            ...base_type.info, 
+            nullability: nullability,
+            id: `${base_type.info.id}:${nullability}`
+        };
+        
+        return variant;
+    }
+    
+    // Register a type with optimized indexing
+    fun register_type(type: ReferenceType) -> i32 {
+        // Register in all lookup maps for fast access
+        this.types_by_name.set(type.name, type);
+        this.types_by_id.set(type.info.id, type);
+        this.types_by_index.set(type.info.type_index, type);
+        
+        // Increment type index for next registration
+        this.next_type_index++;
+        
+        // Return the assigned type index
+        return type.info.type_index;
+    }
+    
+    // Set up inheritance relationship with optimized subtyping
+    fun establish_inheritance(sub_type: ReferenceType, super_type: ReferenceType) -> void {
+        // Set the super type
+        sub_type.super_type = super_type;
+        
+        // Add to super type's sub-types list
+        super_type.sub_types.push(sub_type);
+        
+        // Update subtype map for fast lookup
+        let super_subtypes = this.subtype_map.get(super_type.info.id) || [];
+        super_subtypes.push(sub_type.info.id);
+        this.subtype_map.set(super_type.info.id, super_subtypes);
+        
+        // Inherit methods from super type
+        this.inherit_methods(sub_type, super_type);
+    }
+    
+    // Inherit methods from super type with virtual table optimization
+    fun inherit_methods(sub_type: ReferenceType, super_type: ReferenceType) -> void {
+        for (let super_method of super_type.methods) {
+            if (super_method.is_virtual) {
+                // Check if method is already overridden
+                let overridden = false;
+                for (let i = 0; i < sub_type.methods.length; i++) {
+                    if (sub_type.methods[i].name == super_method.name) {
+                        // Update method to mark as override
+                        sub_type.methods[i].is_inherited = false;
+                        sub_type.methods[i].overrides = super_method;
+                        sub_type.methods[i].vtable_index = super_method.vtable_index;
+                        overridden = true;
+                        break;
+                    }
+                }
+                
+                if (!overridden) {
+                    // Inherit the method
+                    let inherited_method = { ...super_method };
+                    inherited_method.is_inherited = true;
+                    sub_type.methods.push(inherited_method);
+                }
+            }
+        }
+    }
+    
+    // Establish interface implementation relationship
+    fun establish_interface_implementation(impl_type: ReferenceType, interface_type: ReferenceType) -> void {
+        // Add to type's implementations
+        impl_type.implementations.push(interface_type);
+        
+        // Update interface implementation map
+        let implementors = this.interface_impl_map.get(interface_type.info.id) || [];
+        implementors.push(impl_type.info.id);
+        this.interface_impl_map.set(interface_type.info.id, implementors);
+        
+        // Verify that all interface methods are implemented
+        this.verify_interface_implementation(impl_type, interface_type);
+    }
+    
+    // Verify interface implementation completeness
+    fun verify_interface_implementation(impl_type: ReferenceType, interface_type: ReferenceType) -> void {
+        for (let iface_method of interface_type.methods) {
+            let implemented = false;
+            
+            // Check direct methods
+            for (let method of impl_type.methods) {
+                if (method.name == iface_method.name && 
+                    this.are_signatures_compatible(method, iface_method)) {
+                    method.is_interface_impl = true;
+                    implemented = true;
+                    break;
+                }
+            }
+            
+            // Check inherited methods if not implemented directly
+            if (!implemented && impl_type.super_type) {
+                let current = impl_type.super_type;
+                while (current && !implemented) {
+                    for (let method of current.methods) {
+                        if (method.name == iface_method.name && 
+                            this.are_signatures_compatible(method, iface_method)) {
+                            implemented = true;
+                            break;
+                        }
+                    }
+                    current = current.super_type;
+                }
+            }
+            
+            // If not implemented, throw error
+            if (!implemented) {
+                throw new Error(`Type ${impl_type.name} claims to implement interface ${interface_type.name} but doesn't implement method ${iface_method.name}`);
+            }
+        }
+    }
+    
+    // Check if method signatures are compatible
+    fun are_signatures_compatible(method1: Method, method2: Method) -> bool {
+        // Check return type compatibility
+        if (!this.is_subtype_of(method1.return_type, method2.return_type)) {
+            return false;
+        }
+        
+        // Check parameter compatibility (contravariance)
+        if (method1.parameters.length != method2.parameters.length) {
+            return false;
+        }
+        
+        for (let i = 0; i < method1.parameters.length; i++) {
+            if (!this.is_subtype_of(method2.parameters[i], method1.parameters[i])) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    // Optimized subtype checking with caching
+    fun is_subtype_of(sub_type: ReferenceType, super_type: ReferenceType) -> bool {
+        // Fast path: same type
+        if (sub_type.info.id == super_type.info.id) {
+            return true;
+        }
+        
+        // Fast path: anyref is supertype of all references
+        if (super_type.info.kind == WasmRefKind.Any && 
+            super_type.info.nullability == Nullability.Nullable) {
+            return true;
+        }
+        
+        // Nullability check: non-null is subtype of nullable
+        if (sub_type.info.nullability == Nullability.NonNull && 
+            super_type.info.nullability == Nullability.Nullable) {
+            // Create non-null variant of super_type for comparison
+            let non_null_super = this.get_non_null_variant(super_type);
+            if (this.is_subtype_of(sub_type, non_null_super)) {
+                return true;
+            }
+        }
+        
+        // If super_type is non-null but sub_type is nullable, not a subtype
+        if (sub_type.info.nullability == Nullability.Nullable && 
+            super_type.info.nullability == Nullability.NonNull) {
+            return false;
+        }
+        
+        // Check direct inheritance hierarchy with fast path
+        let current = sub_type;
+        while (current.super_type) {
+            current = current.super_type;
+            if (current.info.id == super_type.info.id) {
+                return true;
+            }
+        }
+        
+        // Check interface implementations
+        for (let impl of sub_type.implementations) {
+            if (impl.info.id == super_type.info.id || this.is_subtype_of(impl, super_type)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    // Get non-null variant of a type
+    fun get_non_null_variant(type: ReferenceType) -> ReferenceType {
+        if (type.info.nullability == Nullability.NonNull) {
+            return type;
+        }
+        return this.get_or_create_type(type.name, type.info.kind, Nullability.NonNull);
+    }
+    
+    // Get nullable variant of a type
+    fun get_nullable_variant(type: ReferenceType) -> ReferenceType {
+        if (type.info.nullability == Nullability.Nullable) {
+            return type;
+        }
+        return this.get_or_create_type(type.name, type.info.kind, Nullability.Nullable);
+    }
+    
+    // Check if a type implements an interface with optimized lookup
+    fun implements_interface(type: ReferenceType, interface_type: ReferenceType) -> bool {
+        // Check direct implementations first (fast path)
+        for (let impl of type.implementations) {
+            if (impl.info.id == interface_type.info.id) {
+                return true;
+            }
+        }
+        
+        // Check interface implementation map (fast path)
+        let implementors = this.interface_impl_map.get(interface_type.info.id) || [];
+        if (implementors.includes(type.info.id)) {
+            return true;
+        }
+        
+        // Check inheritance chain
+        if (type.super_type) {
+            return this.implements_interface(type.super_type, interface_type);
+        }
+        
+        return false;
+    }
+    
+    // Find a type by name with optimized lookup
+    fun find_type_by_name(name: string) -> ReferenceType? {
+        return this.types_by_name.get(name);
+    }
+    
+    // Find a type by ID with optimized lookup
+    fun find_type_by_id(id: string) -> ReferenceType? {
+        return this.types_by_id.get(id);
+    }
+    
+    // Find a type by index with optimized lookup
+    fun find_type_by_index(index: i32) -> ReferenceType? {
+        return this.types_by_index.get(index);
+    }
+    
+    // Optimized struct field layout for better cache locality and GC performance
+    fun optimize_struct_layout(struct_type: ReferenceType) -> void {
+        // Skip optimization if disabled in configuration
+        if (!this.config.optimize_struct_layout) {
+            return;
+        }
+        
+        let fields = struct_type.fields;
+        let optimized_fields = [];
+        
+        // Group fields by reference status to improve GC scan performance
+        let ref_fields = fields.filter(f => this.is_reference_type(f.type));
+        let value_fields = fields.filter(f => !this.is_reference_type(f.type));
+        
+        // Sort value fields by size and alignment for better packing
+        value_fields.sort((a, b) => {
+            // Sort by size first (largest to smallest)
+            if (a.size != b.size) {
+                return b.size - a.size;
+            }
+            // Then by alignment (largest to smallest)
+            return b.alignment - a.alignment;
+        });
+        
+        // Combine fields in optimized order
+        optimized_fields = [...ref_fields, ...value_fields];
+        
+        // Recompute field offsets based on alignment requirements
+        let current_offset = 0;
+        for (let i = 0; i < optimized_fields.length; i++) {
+            let field = optimized_fields[i];
+            
+            // Align field based on its alignment requirement
+            if (field.alignment > 0) {
+                current_offset = Math.ceil(current_offset / field.alignment) * field.alignment;
+            }
+            
+            // Set field offset
+            field.offset = current_offset;
+            
+            // Move offset past this field
+            current_offset += field.size;
+        }
+        
+        // Update struct type with optimized fields
+        struct_type.fields = optimized_fields;
+    }
+    
+    // Check if a type is a reference type (vs primitive)
+    fun is_reference_type(type: ReferenceType) -> bool {
+        return type.info.kind != WasmRefKind.I31; // I31 is treated as a value type
+    }
+    
+    // Register built-in reference types with optimized initialization
+    fun register_builtin_types() -> void {
+        // Create Object type (base of all reference types)
+        let object_type = this.create_type("Object", WasmRefKind.Eq, Nullability.NonNull);
+        
+        // Add standard object methods
+        object_type.methods.push(Method {
+            name: "equals",
+            parameters: [], // Will update after registration
+            return_type: null, // Will update after registration
+            vtable_index: 0,
+            is_virtual: true,
+            is_interface_impl: false,
+            is_inherited: false,
+            overrides: null
+        });
+        
+        object_type.methods.push(Method {
+            name: "toString",
+            parameters: [],
+            return_type: null, // Will update after registration
+            vtable_index: 1,
+            is_virtual: true,
+            is_interface_impl: false,
+            is_inherited: false,
+            overrides: null
+        });
+        
+        // Register the object type
+        this.register_type(object_type);
+        
+        // Create Boolean primitive wrapper
+        let boolean_type = this.create_type("Boolean", WasmRefKind.Struct, Nullability.NonNull);
+        boolean_type.fields.push(Field {
+            name: "value",
+            type: null, // Will update after registration
+            mutable: false,
+            offset: 0,
+            size: 4, // i32 size
+            alignment: 4,
+            default_value: false
+        });
+        this.register_type(boolean_type);
+        
+        // Create String type
+        let string_type = this.create_type("String", WasmRefKind.Struct, Nullability.NonNull);
+        // String implementation details would go here
+        this.register_type(string_type);
+        
+        // Establish inheritance relationships
+        this.establish_inheritance(boolean_type, object_type);
+        this.establish_inheritance(string_type, object_type);
+        
+        // Fix circular references
+        object_type.methods[0].parameters = [object_type]; // equals takes an Object
+        object_type.methods[0].return_type = boolean_type;
+        object_type.methods[1].return_type = string_type;
+        
+        boolean_type.fields[0].type = this.create_type("i32", WasmRefKind.I31, Nullability.NonNull);
+        this.register_type(boolean_type.fields[0].type);
+        
+        // Create Array type
+        let array_type = this.create_type("Array", WasmRefKind.Array, Nullability.NonNull);
+        this.register_type(array_type);
+        this.establish_inheritance(array_type, object_type);
+        
+        // Create Function type
+        let function_type = this.create_type("Function", WasmRefKind.Func, Nullability.NonNull);
+        this.register_type(function_type);
+        this.establish_inheritance(function_type, object_type);
+    }
+}
+
+// Configuration for type system with tunable parameters
+struct TypeSystemConfig {
+    // Optimization level (size, speed, balanced)
+    optimization_level: string,
+    
+    // Enable struct layout optimization
+    optimize_struct_layout: bool,
+    
+    // Enable caching for type lookups
+    enable_caching: bool,
+    
+    // Enable aggressive subtyping optimizations
+    optimize_subtyping: bool,
+    
+    // Runtime-specific optimization hints
+    runtime_hints: Map<string, any>,
+    
+    // Enable detailed error reporting
+    detailed_errors: bool,
+    
+    // Maximum depth for recursive types
+    max_recursion_depth: i32
+}
+
+// Default configuration with balanced settings
+fun default_config() -> TypeSystemConfig {
+    return TypeSystemConfig {
+        optimization_level: "balanced",
+        optimize_struct_layout: true,
+        enable_caching: true,
+        optimize_subtyping: true,
+        runtime_hints: new Map<string, any>(),
+        detailed_errors: true,
+        max_recursion_depth: 32
+    };
+}
+
+// Estimate type size in bytes for binary size optimization
+fun estimate_type_size(kind: WasmRefKind, nullability: Nullability) -> i32 {
+    let base_size = 4; // Basic type encoding
+    
+    // Add for reference type kind
+    switch (kind) {
+        case WasmRefKind.Struct:
+        case WasmRefKind.Array:
+            base_size += 4; // These need type indices
+            break;
+        case WasmRefKind.Parametric:
+            base_size += 8; // Parametric types have additional metadata
+            break;
+        default:
+            break; // No additional size
+    }
+    
+    // Add for nullability
+    if (nullability == Nullability.Nullable) {
+        base_size += 1; // Null variant encoding
+    }
+    
+    return base_size;
+}
+
+//------------------------------------------------------------------------------
+// Type Builder API - Fluent Interface for Better Developer Experience
+//------------------------------------------------------------------------------
+
+// Type builder for fluent, intuitive type creation
+struct TypeBuilder {
+    registry: TypeRegistry,
+    current_type: ReferenceType?,
+    
+    // Create a new builder with registry
+    fun initialize(registry: TypeRegistry) -> void {
+        this.registry = registry;
+        this.current_type = null;
+    }
+    
+    // Start building a struct type
+    fun struct_type(name: string) -> TypeBuilder {
+        this.current_type = this.registry.create_type(
+            name, WasmRefKind.Struct, Nullability.NonNull
+        );
+        return this;
+    }
+    
+    // Start building an array type
+    fun array_type(name: string, element_type_name: string) -> TypeBuilder {
+        this.current_type = this.registry.create_type(
+            name, WasmRefKind.Array, Nullability.NonNull
+        );
+        
+        // Set element type
+        let element_type = this.registry.find_type_by_name(element_type_name);
+        if (element_type) {
+            this.current_type.element_type = element_type;
+        } else {
+            throw new Error(`Element type ${element_type_name} not found`);
+        }
+        
+        return this;
+    }
+    
+    // Start building a function type
+    fun function_type(name: string) -> TypeBuilder {
+        this.current_type = this.registry.create_type(
+            name, WasmRefKind.Func, Nullability.NonNull
+        );
+        return this;
+    }
+    
+    // Start building an interface type
+    fun interface_type(name: string) -> TypeBuilder {
+        this.current_type = this.registry.create_type(
+            name, WasmRefKind.Interface, Nullability.NonNull
+        );
+        return this;
+    }
+    
+    // Make the type nullable
+    fun nullable() -> TypeBuilder {
+        if (this.current_type) {
+            this.current_type.info.nullability = Nullability.Nullable;
+        }
+        return this;
+    }
+    
+    // Set super type
+    fun extends(super_type_name: string) -> TypeBuilder {
+        if (!this.current_type) {
+            throw new Error("No current type to set super type");
+        }
+        
+        let super_type = this.registry.find_type_by_name(super_type_name);
+        if (!super_type) {
+            throw new Error(`Super type ${super_type_name} not found`);
+        }
+        
+        this.registry.establish_inheritance(this.current_type, super_type);
+        return this;
+    }
+    
+    // Add interface implementation
+    fun implements(interface_name: string) -> TypeBuilder {
+        if (!this.current_type) {
+            throw new Error("No current type to implement interface");
+        }
+        
+        let interface_type = this.registry.find_type_by_name(interface_name);
+        if (!interface_type) {
+            throw new Error(`Interface ${interface_name} not found`);
+        }
+        
+        this.registry.establish_interface_implementation(this.current_type, interface_type);
+        return this;
+    }
+    
+    // Add a field to a struct type
+    fun with_field(name: string, type_name: string, mutable: bool = false) -> TypeBuilder {
+        if (!this.current_type) {
+            throw new Error("No current type to add field to");
+        }
+        
+        if (this.current_type.info.kind != WasmRefKind.Struct) {
+            throw new Error("Cannot add field to non-struct type");
+        }
+        
+        let field_type = this.registry.find_type_by_name(type_name);
+        if (!field_type) {
+            throw new Error(`Field type ${type_name} not found`);
+        }
+        
+        // Calculate size and alignment
+        let size = 4; // Default size
+        let alignment = 4; // Default alignment
+        
+        // Add field
+        this.current_type.fields.push(Field {
+            name: name,
+            type: field_type,
+            mutable: mutable,
+            offset: -1, // Will be computed during optimization
+            size: size,
+            alignment: alignment,
+            default_value: null
+        });
+        
+        return this;
+    }
+    
+    // Add a method to the current type
+    fun with_method(name: string, return_type_name: string, parameter_type_names: string[] = [], is_virtual: bool = false) -> TypeBuilder {
+        if (!this.current_type) {
+            throw new Error("No current type to add method to");
+        }
+        
+        // Get return type
+        let return_type = this.registry.find_type_by_name(return_type_name);
+        if (!return_type) {
+            throw new Error(`Return type ${return_type_name} not found`);
+        }
+        
+        // Get parameter types
+        let parameter_types: ReferenceType[] = [];
+        for (let param_type_name of parameter_type_names) {
+            let param_type = this.registry.find_type_by_name(param_type_name);
+            if (!param_type) {
+                throw new Error(`Parameter type ${param_type_name} not found`);
+            }
+            parameter_types.push(param_type);
+        }
+        
+        // Calculate vtable index
+        let vtable_index = -1;
+        if (is_virtual) {
+            let max_index = -1;
+            for (let method of this.current_type.methods) {
+                if (method.is_virtual && method.vtable_index > max_index) {
+                    max_index = method.vtable_index;
+                }
+            }
+            vtable_index = max_index + 1;
+        }
+        
+        // Add method
+        this.current_type.methods.push(Method {
+            name: name,
+            parameters: parameter_types,
+            return_type: return_type,
+            vtable_index: vtable_index,
+            is_virtual: is_virtual,
+            is_interface_impl: false,
+            is_inherited: false,
+            overrides: null
+        });
+        
+        return this;
+    }
+    
+    // Finalize and register the type
+    fun build() -> ReferenceType {
+        if (!this.current_type) {
+            throw new Error("No current type to build");
+        }
+        
+        // Optimize layout if it's a struct type
+        if (this.current_type.info.kind == WasmRefKind.Struct) {
+            this.registry.optimize_struct_layout(this.current_type);
+        }
+        
+        // Register the type
+        this.registry.register_type(this.current_type);
+        
+        let built_type = this.current_type;
+        this.current_type = null;
+        return built_type;
+    }
+}
+
+//------------------------------------------------------------------------------
+// WebAssembly Integration - Enhanced Code Generation
+//------------------------------------------------------------------------------
+
+// WebAssembly module representation with GC type extensions
+struct WasmModule {
+    // Standard WebAssembly sections
+    types: WasmType[],
+    functions: WasmFunction[],
+    exports: WasmExport[],
+    imports: WasmImport[],
+    
+    // GC extension configuration
+    gc_config: GcConfig,
+    
+    // Memory representation
+    memory: WasmMemory?,
+    
+    // Custom sections
+    custom_sections: Map<string, Uint8Array>,
+    
+    // Initialize module with configuration
+    fun initialize(gc_config: GcConfig = default_gc_config()) -> void {
+        this.types = [];
+        this.functions = [];
+        this.exports = [];
+        this.imports = [];
+        this.gc_config = gc_config;
+        this.memory = null;
+        this.custom_sections = new Map<string, Uint8Array>();
+    }
+    
+    // Add a reference type to the module
+    fun add_reference_type(ref_type: ReferenceType) -> i32 {
+        // Convert to WebAssembly type
+        let wasm_type = reference_to_wasm_type(ref_type, this.gc_config);
+        
+        // Check for duplicates to reduce binary size
+        for (let i = 0; i < this.types.length; i++) {
+            if (types_are_equivalent(this.types[i], wasm_type)) {
+                return i;
+            }
+        }
+        
+        // Add to types array
+        let type_index = this.types.length;
+        this.types.push(wasm_type);
+        return type_index;
+    }
+    
+    // Generate optimal reference test instruction
+    fun generate_ref_test(value_expr: string, type_index: i32, result_var: string) -> string {
+        // If caching is enabled, use temp variable
+        if (this.gc_config.cache_type_tests) {
+            return `
+                ;; Test if reference is of type ${type_index}
+                (local.set ${result_var}
+                    (ref.test $${type_index} ${value_expr})
+                )
+            `;
+        } else {
+            return `
+                ;; Test if reference is of type ${type_index} (no cache)
+                (local.set ${result_var}
+                    (ref.test $${type_index} ${value_expr})
+                )
+            `;
+        }
+    }
+    
+    // Generate safe reference cast with runtime checks
+    fun generate_safe_cast(value_expr: string, from_type: i32, to_type: i32, result_var: string) -> string {
+        return `
+            (block $cast_success
+                (block $cast_fail
+                    ;; Test if reference is of target type
+                    (br_if $cast_fail
+                        (i32.eqz
+                            (ref.test $${to_type} ${value_expr})
+                        )
+                    )
+                    
+                    ;; Cast successful
+                    (local.set ${result_var}
+                        (ref.cast $${to_type} ${value_expr})
+                    )
+                    (br $cast_success)
+                )
+                
+                ;; Cast failed - throw type error
+                (call $throw_type_error
+                    (i32.const 0) ;; Error message offset
+                    (i32.const ${from_type})
+                    (i32.const ${to_type})
+                )
+                
+                ;; Unreachable after error
+                (unreachable)
+            )
+        `;
+    }
+    
+    // Generate struct access with bounds checking and null checking
+    fun generate_safe_struct_get(struct_expr: string, struct_type: i32, field_idx: i32, result_var: string) -> string {
+        return `
+            (block $access_success
+                (block $access_fail
+                    ;; Check for null
+                    (br_if $access_fail
+                        (ref.is_null ${struct_expr})
+                    )
+                    
+                    ;; Access field safely
+                    (local.set ${result_var}
+                        (struct.get $${struct_type} ${field_idx}
+                            ${struct_expr}
+                        )
+                    )
+                    (br $access_success)
+                )
+                
+                ;; Access failed - throw null reference error
+                (call $throw_null_reference_error
+                    (i32.const 0) ;; Error message offset
+                    (i32.const ${struct_type})
+                    (i32.const ${field_idx})
+                )
+                
+                ;; Unreachable after error
+                (unreachable)
+            )
+        `;
+    }
+    
+    // Generate struct update with bounds checking, null checking, and mutability checking
+    fun generate_safe_struct_set(struct_expr: string, struct_type: i32, field_idx: i32, value_expr: string) -> string {
+        return `
+            (block $update_success
+                (block $update_fail
+                    ;; Check for null
+                    (br_if $update_fail
+                        (ref.is_null ${struct_expr})
+                    )
+                    
+                    ;; Update field safely
+                    (struct.set $${struct_type} ${field_idx}
+                        ${struct_expr}
+                        ${value_expr}
+                    )
+                    (br $update_success)
+                )
+                
+                ;; Update failed - throw null reference error
+                (call $throw_null_reference_error
+                    (i32.const 0) ;; Error message offset
+                    (i32.const ${struct_type})
+                    (i32.const ${field_idx})
+                )
+                
+                ;; Unreachable after error
+                (unreachable)
+            )
+        `;
+    }
+}
+
+// Convert a reference type to a WebAssembly type with optimization
+fun reference_to_wasm_type(ref_type: ReferenceType, config: GcConfig) -> WasmType {
+    let wasm_type: WasmType = { kind: "ref" };
+    
+    // Set up basic properties based on kind
+    switch (ref_type.info.kind) {
+        case WasmRefKind.Struct:
+            wasm_type = create_struct_wasm_type(ref_type, config);
+            break;
+        case WasmRefKind.Array:
+            wasm_type = create_array_wasm_type(ref_type, config);
+            break;
+        case WasmRefKind.Func:
+            wasm_type = create_func_wasm_type(ref_type, config);
+            break;
+        case WasmRefKind.Eq:
+            wasm_type = { kind: "ref", heap_type: "eq" };
+            break;
+        case WasmRefKind.Any:
+            wasm_type = { kind: "ref", heap_type: "any" };
+            break;
+        case WasmRefKind.Extern:
+            wasm_type = { kind: "ref", heap_type: "extern" };
+            break;
+        case WasmRefKind.I31:
+            wasm_type = { kind: "ref", heap_type: "i31" };
+            break;
+        default:
+            wasm_type = { kind: "ref", heap_type: "eq" }; // Default to eqref
+            break;
+    }
+    
+    // Add nullability if needed
+    if (ref_type.info.nullability == Nullability.Nullable) {
+        wasm_type.nullable = true;
+    }
+    
+    return wasm_type;
+}
+
+// Create a WebAssembly struct type with layout optimization
+fun create_struct_wasm_type(ref_type: ReferenceType, config: GcConfig) -> WasmType {
+    let fields = [];
+    
+    // Add super type if present
+    let super_type = null;
+    if (ref_type.super_type && ref_type.super_type.info.kind == WasmRefKind.Struct) {
+        super_type = ref_type.super_type.info.type_index;
+    }
+    
+    // Add fields with proper types
+    for (let field of ref_type.fields) {
+        fields.push({
+            type: reference_to_wasm_type(field.type, config),
+            mutable: field.mutable
+        });
+    }
+    
+    return {
+        kind: "struct",
+        fields: fields,
+        super_type: super_type
+    };
+}
+
+// Create a WebAssembly array type
+fun create_array_wasm_type(ref_type: ReferenceType, config: GcConfig) -> WasmType {
+    if (!ref_type.element_type) {
+        throw new Error(`Array type ${ref_type.name} missing element type`);
+    }
+    
+    return {
+        kind: "array",
+        element_type: reference_to_wasm_type(ref_type.element_type, config),
+        mutable: true
+    };
+}
+
+// Create a WebAssembly function type
+fun create_func_wasm_type(ref_type: ReferenceType, config: GcConfig) -> WasmType {
+    // Find invoke method
+    let invoke_method = null;
+    for (let method of ref_type.methods) {
+        if (method.name == "invoke") {
+            invoke_method = method;
+            break;
+        }
+    }
+    
+    if (!invoke_method) {
+        throw new Error(`Function type ${ref_type.name} missing invoke method`);
+    }
+    
+    let param_types = [];
+    for (let param of invoke_method.parameters) {
+        param_types.push(reference_to_wasm_type(param, config));
+    }
+    
+    let return_type = reference_to_wasm_type(invoke_method.return_type, config);
+    
+    return {
+        kind: "func",
+        params: param_types,
+        results: [return_type]
+    };
+}
+
+// Compare two WebAssembly types for structural equivalence
+fun types_are_equivalent(type1: WasmType, type2: WasmType) -> bool {
+    // Basic kind check
+    if (type1.kind != type2.kind) {
+        return false;
+    }
+    
+    // Nullability check
+    if (type1.nullable != type2.nullable) {
+        return false;
+    }
+    
+    // Kind-specific checks
+    switch (type1.kind) {
+        case "struct":
+            return structs_are_equivalent(type1, type2);
+        case "array":
+            return arrays_are_equivalent(type1, type2);
+        case "func":
+            return funcs_are_equivalent(type1, type2);
+        case "ref":
+            return refs_are_equivalent(type1, type2);
+        default:
+            return false;
+    }
+}
+
+// Compare struct types for equivalence
+fun structs_are_equivalent(type1: WasmType, type2: WasmType) -> bool {
+    // Super type check
+    if (type1.super_type != type2.super_type) {
+        return false;
+    }
+    
+    // Field count check
+    if (type1.fields.length != type2.fields.length) {
+        return false;
+    }
+    
+    // Field equivalence check
+    for (let i = 0; i < type1.fields.length; i++) {
+        let field1 = type1.fields[i];
+        let field2 = type2.fields[i];
+        
+        if (field1.mutable != field2.mutable) {
+            return false;
+        }
+        
+        if (!types_are_equivalent(field1.type, field2.type)) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Compare array types for equivalence
+fun arrays_are_equivalent(type1: WasmType, type2: WasmType) -> bool {
+    // Mutability check
+    if (type1.mutable != type2.mutable) {
+        return false;
+    }
+    
+    // Element type check
+    return types_are_equivalent(type1.element_type, type2.element_type);
+}
+
+// Compare function types for equivalence
+fun funcs_are_equivalent(type1: WasmType, type2: WasmType) -> bool {
+    // Parameter count check
+    if (type1.params.length != type2.params.length) {
+        return false;
+    }
+    
+    // Result count check
+    if (type1.results.length != type2.results.length) {
+        return false;
+    }
+    
+    // Parameter equivalence check
+    for (let i = 0; i < type1.params.length; i++) {
+        if (!types_are_equivalent(type1.params[i], type2.params[i])) {
+            return false;
+        }
+    }
+    
+    // Result equivalence check
+    for (let i = 0; i < type1.results.length; i++) {
+        if (!types_are_equivalent(type1.results[i], type2.results[i])) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Compare reference types for equivalence
+fun refs_are_equivalent(type1: WasmType, type2: WasmType) -> bool {
+    return type1.heap_type == type2.heap_type;
+}
+
+// GC configuration for WebAssembly module generation
+struct GcConfig {
+    // Binary size optimization level (0-3)
+    size_optimization: i32,
+    
+    // Performance optimization level (0-3)
+    performance_optimization: i32,
+    
+    // Enable cache for type tests
+    cache_type_tests: bool,
+    
+    // Enable safe casting
+    safe_casting: bool,
+    
+    // Enable null checks
+    null_checks: bool,
+    
+    // Enable bounds checks
+    bounds_checks: bool,
+    
+    // Enable mutability checks
+    mutability_checks: bool,
+    
+    // Target runtime
+    target_runtime: string,
+    
+    // Runtime-specific hints
+    runtime_hints: Map<string, any>
+}
+
+// Default GC configuration with balanced settings
+fun default_gc_config() -> GcConfig {
+    return GcConfig {
+        size_optimization: 1, // Moderate size optimization
+        performance_optimization: 1, // Moderate performance optimization
+        cache_type_tests: true,
+        safe_casting: true,
+        null_checks: true,
+        bounds_checks: true,
+        mutability_checks: true,
+        target_runtime: "generic",
+        runtime_hints: new Map<string, any>()
+    };
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Code Generation - Enhanced with Safety and Optimization
+//------------------------------------------------------------------------------
+
+// Code generator for reference operations
+struct ReferenceCodeGenerator {
+    module: WasmModule,
+    registry: TypeRegistry,
+    
+    // Initialize with module and registry
+    fun initialize(module: WasmModule, registry: TypeRegistry) -> void {
+        this.module = module;
+        this.registry = registry;
+    }
+    
+    // Generate code for struct creation
+    fun generate_struct_new(struct_type: ReferenceType, values: string[]) -> string {
+        // Get struct type index
+        let type_index = struct_type.info.type_index;
+        
+        // Build struct.new instruction
+        let code = `(struct.new $${type_index}`;
+        
+        // Add values with proper field ordering
+        for (let i = 0; i < struct_type.fields.length; i++) {
+            let value = i < values.length ? values[i] : default_value_for_field(struct_type.fields[i]);
+            code += ` ${value}`;
+        }
+        
+        code += ")";
+        return code;
+    }
+    
+    // Generate default value for field based on its type
+    fun default_value_for_field(field: Field) -> string {
+        switch (field.type.info.kind) {
+            case WasmRefKind.I31:
+                return "(i32.const 0)";
+            case WasmRefKind.Func:
+                return "(ref.null func)";
+            case WasmRefKind.Extern:
+                return "(ref.null extern)";
+            case WasmRefKind.Struct:
+            case WasmRefKind.Array:
+            case WasmRefKind.Any:
+            case WasmRefKind.Eq:
+                if (field.type.info.nullability == Nullability.Nullable) {
+                    return "(ref.null eq)";
+                } else {
+                    // Cannot have default for non-nullable references
+                    throw new Error(`Cannot generate default value for non-nullable field ${field.name} of type ${field.type.name}`);
+                }
+            default:
+                return "(i32.const 0)";
+        }
+    }
+    
+    // Generate code for array creation
+    fun generate_array_new(array_type: ReferenceType, length: string, init_value: string? = null) -> string {
+        // Get array type index
+        let type_index = array_type.info.type_index;
+        
+        // If no init value provided, use default based on element type
+        if (!init_value && array_type.element_type) {
+            init_value = default_value_for_field(Field {
+                name: "element",
+                type: array_type.element_type,
+                mutable: true,
+                offset: 0,
+                size: 4,
+                alignment: 4,
+                default_value: null
+            });
+        }
+        
+        // Build array.new instruction
+        let code = `(array.new $${type_index} ${length}`;
+        if (init_value) {
+            code += ` ${init_value}`;
+        }
+        code += ")";
+        
+        return code;
+    }
+    
+    // Generate code for array length
+    fun generate_array_len(array_expr: string) -> string {
+        return `(array.len ${array_expr})`;
+    }
+    
+    // Generate code for safe array access
+    fun generate_safe_array_get(array_expr: string, index_expr: string, array_type: ReferenceType) -> string {
+        // Get array type index
+        let type_index = array_type.info.type_index;
+        
+        // Generate bounds-checked array access
+        return `
+            (block $access_success (result anyref)
+                (block $access_fail
+                    ;; Check for null array reference
+                    (br_if $access_fail
+                        (ref.is_null ${array_expr})
+                    )
+                    
+                    ;; Check index within bounds
+                    (br_if $access_fail
+                        (i32.ge_u
+                            ${index_expr}
+                            (array.len ${array_expr})
+                        )
+                    )
+                    
+                    ;; Access is safe
+                    (return
+                        (array.get $${type_index}
+                            ${array_expr}
+                            ${index_expr}
+                        )
+                    )
+                )
+                
+                ;; Access failed - throw bounds error
+                (call $throw_array_bounds_error
+                    ${index_expr}
+                    (array.len ${array_expr})
+                )
+                
+                ;; Return dummy value (unreachable)
+                (ref.null eq)
+            )
+        `;
+    }
+    
+    // Generate code for safe array update
+    fun generate_safe_array_set(array_expr: string, index_expr: string, value_expr: string, array_type: ReferenceType) -> string {
+        // Get array type index
+        let type_index = array_type.info.type_index;
+        
+        // Generate bounds-checked array update
+        return `
+            (block $update_success
+                (block $update_fail
+                    ;; Check for null array reference
+                    (br_if $update_fail
+                        (ref.is_null ${array_expr})
+                    )
+                    
+                    ;; Check index within bounds
+                    (br_if $update_fail
+                        (i32.ge_u
+                            ${index_expr}
+                            (array.len ${array_expr})
+                        )
+                    )
+                    
+                    ;; Update is safe
+                    (array.set $${type_index}
+                        ${array_expr}
+                        ${index_expr}
+                        ${value_expr}
+                    )
+                    (br $update_success)
+                )
+                
+                ;; Update failed - throw bounds error
+                (call $throw_array_bounds_error
+                    ${index_expr}
+                    (array.len ${array_expr})
+                )
+                
+                ;; Unreachable after error
+                (unreachable)
+            )
+        `;
+    }
+    
+    // Generate code for reference equality test
+    fun generate_ref_eq(left_expr: string, right_expr: string) -> string {
+        return `(ref.eq ${left_expr} ${right_expr})`;
+    }
+    
+    // Generate code for null check
+    fun generate_ref_is_null(expr: string) -> string {
+        return `(ref.is_null ${expr})`;
+    }
+    
+    // Generate code for type test
+    fun generate_ref_test(expr: string, type_name: string) -> string {
+        // Find type by name
+        let type = this.registry.find_type_by_name(type_name);
+        if (!type) {
+            throw new Error(`Type ${type_name} not found for ref.test`);
+        }
+        
+        // Generate test
+        return `(ref.test $${type.info.type_index} ${expr})`;
+    }
+    
+    // Generate code for safe type cast
+    fun generate_safe_cast(expr: string, type_name: string, source_type_name: string? = null) -> string {
+        // Find target type
+        let target_type = this.registry.find_type_by_name(type_name);
+        if (!target_type) {
+            throw new Error(`Type ${type_name} not found for safe cast`);
+        }
+        
+        // Find source type if provided
+        let source_type = null;
+        if (source_type_name) {
+            source_type = this.registry.find_type_by_name(source_type_name);
+            if (!source_type) {
+                throw new Error(`Source type ${source_type_name} not found for safe cast`);
+            }
+        }
+        
+        // If source and target types have subtype relationship, optimize
+        if (source_type && this.registry.is_subtype_of(source_type, target_type)) {
+            // Can skip runtime check for known subtype relationship
+            return `(ref.cast $${target_type.info.type_index} ${expr})`;
+        } else {
+            // Need runtime check for unknown relationship
+            return `
+                (block $cast_success (result anyref)
+                    (block $cast_fail
+                        ;; Check if reference is of target type
+                        (br_if $cast_fail
+                            (i32.eqz
+                                (ref.test $${target_type.info.type_index} ${expr})
+                            )
+                        )
+                        
+                        ;; Cast is safe
+                        (return
+                            (ref.cast $${target_type.info.type_index} ${expr})
+                        )
+                    )
+                    
+                    ;; Cast failed - throw type error
+                    (call $throw_type_error
+                        (i32.const 0) ;; Error message offset
+                        (i32.const ${source_type ? source_type.info.type_index : -1})
+                        (i32.const ${target_type.info.type_index})
+                    )
+                    
+                    ;; Return dummy value (unreachable)
+                    (ref.null eq)
+                )
+            `;
+        }
+    }
+    
+    // Generate code for virtual method call
+    fun generate_virtual_call(instance_expr: string, method_name: string, args: string[]) -> string {
+        return `
+            (block $call_success (result anyref)
+                (block $call_fail
+                    ;; Check for null instance
+                    (br_if $call_fail
+                        (ref.is_null ${instance_expr})
+                    )
+                    
+                    ;; Dynamic dispatch via call_indirect
+                    ;; This is simplified - actual implementation would use vtable
+                    (return
+                        (call_indirect (type $method_signature)
+                            ;; Method arguments
+                            ${instance_expr}
+                            ${args.join(' ')}
+                            
+                            ;; Table index would be computed at runtime based on method name
+                            ;; and instance type - simplified for illustration
+                            (i32.const 0)
+                        )
+                    )
+                )
+                
+                ;; Call failed - throw null reference error
+                (call $throw_null_reference_error
+                    (i32.const 0) ;; Error message offset
+                    (i32.const -1) ;; Unknown type
+                    (i32.const -1) ;; Unknown method
+                )
+                
+                ;; Return dummy value (unreachable)
+                (ref.null eq)
+            )
+        `;
+    }
+}
+
+//------------------------------------------------------------------------------
+// Runtime Support and Error Handling
+//------------------------------------------------------------------------------
+
+// Error handler for runtime type errors
+fun generate_error_handlers() -> string {
+    return `
+        ;; Type error handler
+        (func $throw_type_error (param $msg_offset i32) (param $source_type i32) (param $target_type i32)
+            ;; Log error information
+            (call $log_error_prefix)
+            (call $log_string
+                (i32.const 10000) ;; "Type error: Cannot cast from "
+            )
+            (call $log_type_name
+                (local.get $source_type)
+            )
+            (call $log_string
+                (i32.const 10001) ;; " to "
+            )
+            (call $log_type_name
+                (local.get $target_type)
+            )
+            (call $log_newline)
+            
+            ;; Trap to halt execution
+            (unreachable)
+        )
+        
+        ;; Null reference error handler
+        (func $throw_null_reference_error (param $msg_offset i32) (param $type_index i32) (param $field_or_method_index i32)
+            ;; Log error information
+            (call $log_error_prefix)
+            (call $log_string
+                (i32.const 10002) ;; "Null reference error: Cannot access "
+            )
+            
+            ;; Log field or method info if available
+            (if (i32.ge_s (local.get $field_or_method_index) (i32.const 0))
+                (then
+                    (if (i32.ge_s (local.get $type_index) (i32.const 0))
+                        (then
+                            (call $log_field_or_method_name
+                                (local.get $type_index)
+                                (local.get $field_or_method_index)
+                            )
+                        )
+                        (else
+                            (call $log_string
+                                (i32.const 10003) ;; "member"
+                            )
+                        )
+                    )
+                )
+                (else
+                    (call $log_string
+                        (i32.const 10004) ;; "object"
+                    )
+                )
+            )
+            
+            (call $log_string
+                (i32.const 10005) ;; " on null reference"
+            )
+            (call $log_newline)
+            
+            ;; Trap to halt execution
+            (unreachable)
+        )
+        
+        ;; Array bounds error handler
+        (func $throw_array_bounds_error (param $index i32) (param $length i32)
+            ;; Log error information
+            (call $log_error_prefix)
+            (call $log_string
+                (i32.const 10006) ;; "Array bounds error: Index "
+            )
+            (call $log_i32
+                (local.get $index)
+            )
+            (call $log_string
+                (i32.const 10007) ;; " out of range [0, "
+            )
+            (call $log_i32
+                (i32.sub
+                    (local.get $length)
+                    (i32.const 1)
+                )
+            )
+            (call $log_string
+                (i32.const 10008) ;; "]"
+            )
+            (call $log_newline)
+            
+            ;; Trap to halt execution
+            (unreachable)
+        )
+    `;
+}
+
+//------------------------------------------------------------------------------
+// Global Registry and Utilities
+//------------------------------------------------------------------------------
+
+// Global type registry instance
+let global_type_registry = null;
+
+// Global type builder instance
+let global_type_builder = null;
+
+// Initialize the global registry and builder
+fun init_global_registry(config: TypeSystemConfig = default_config()) -> void {
+    // Create registry
+    global_type_registry = new TypeRegistry();
+    global_type_registry.initialize(config);
+    
+    // Create builder
+    global_type_builder = new TypeBuilder();
+    global_type_builder.initialize(global_type_registry);
+}
+
+// Get the global registry instance
+fun get_registry() -> TypeRegistry {
+    if (!global_type_registry) {
+        init_global_registry();
+    }
+    return global_type_registry;
+}
+
+// Get the global type builder
+fun get_type_builder() -> TypeBuilder {
+    if (!global_type_builder) {
+        init_global_registry();
+    }
+    return global_type_builder;
+}
+
+// Create a new module with GC support
+fun create_gc_module(gc_config: GcConfig = default_gc_config()) -> WasmModule {
+    let module = new WasmModule();
+    module.initialize(gc_config);
+    return module;
+}
+
+// Create a new code generator with registry
+fun create_code_generator(module: WasmModule) -> ReferenceCodeGenerator {
+    let generator = new ReferenceCodeGenerator();
+    generator.initialize(module, get_registry());
+    return generator;
+}
+
+//------------------------------------------------------------------------------
+// Simplified API for Common Operations
+//------------------------------------------------------------------------------
+
+// Create a struct type with the builder pattern
+fun define_struct(name: string) -> TypeBuilder {
+    return get_type_builder().struct_type(name);
+}
+
+// Create an array type with the builder pattern
+fun define_array(name: string, element_type_name: string) -> TypeBuilder {
+    return get_type_builder().array_type(name, element_type_name);
+}
+
+// Create a function type with the builder pattern
+fun define_function(name: string) -> TypeBuilder {
+    return get_type_builder().function_type(name);
+}
+
+// Create an interface type with the builder pattern
+fun define_interface(name: string) -> TypeBuilder {
+    return get_type_builder().interface_type(name);
+}
+
+// Get a reference type by name
+fun get_type(name: string) -> ReferenceType? {
+    return get_registry().find_type_by_name(name);
+}
+
+// Check if a type is a subtype of another
+fun is_subtype(sub_name: string, super_name: string) -> bool {
+    let registry = get_registry();
+    let sub_type = registry.find_type_by_name(sub_name);
+    let super_type = registry.find_type_by_name(super_name);
+    
+    if (!sub_type || !super_type) {
+        return false;
+    }
+    
+    return registry.is_subtype_of(sub_type, super_type);
+}
+
+//------------------------------------------------------------------------------
+// Module Initialization
+//------------------------------------------------------------------------------
+
+// Initialize module with default configuration
+fun initialize() -> void {
+    // Initialize global registry with default configuration
+    init_global_registry();
+    
+    print("WebAssembly GC reference types initialized - REFACTORED implementation");
+}
+
+// Call initialization function to set up the module
+initialize();
+
+// Public exports
+fun main() -> void {
+    print("WebAssembly GC Reference Type Support - REFACTORED");
+    print("This module implements optimized reference type support for WebAssembly GC.");
+    print("Features:");
+    print("  - Enhanced type system with better performance");
+    print("  - Optimized memory layout for better GC efficiency");
+    print("  - Improved API design with fluent interface");
+    print("  - Better error handling and debugging support");
+    print("  - Runtime-specific optimizations");
+}

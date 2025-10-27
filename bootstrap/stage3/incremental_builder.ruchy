@@ -1,0 +1,508 @@
+// WASM-006: Incremental Compilation - Incremental Builder
+//
+// Orchestrates incremental compilation using cache and dependency graph
+// Implements minimal rebuild computation and parallel compilation
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
+
+use incremental_cache::{ModuleCache, CompiledModule, CachedModule, ModuleMetadata};
+use dependency_graph::{DependencyGraph, parse_dependencies};
+use content_hasher::ContentHasher;
+use wasm_compiler::WasmCompiler;
+
+// ============================================================================
+// Build Result Types
+// ============================================================================
+
+/// Result of an incremental build
+#[derive(Debug, Clone)]
+pub struct BuildResult {
+    pub success: bool,
+    pub compiled_modules: Vec<String>,
+    pub cached_modules: Vec<String>,
+    pub failed_modules: Vec<String>,
+    pub duration_ms: u64,
+    pub cache_hit_rate: f64,
+}
+
+impl BuildResult {
+    pub fun new() -> Self {
+        BuildResult {
+            success: true,
+            compiled_modules: vec![],
+            cached_modules: vec![],
+            failed_modules: vec![],
+            duration_ms: 0,
+            cache_hit_rate: 0.0,
+        }
+    }
+
+    pub fun with_duration(mut self, duration_ms: u64) -> Self {
+        self.duration_ms = duration_ms;
+        self.cache_hit_rate = self.compute_hit_rate();
+        self
+    }
+
+    fun compute_hit_rate(&self) -> f64 {
+        let total = self.compiled_modules.len() + self.cached_modules.len();
+        if total == 0 {
+            return 0.0;
+        }
+        self.cached_modules.len() as f64 / total as f64
+    }
+
+    pub fun add_compiled(&mut self, module: String) {
+        self.compiled_modules.push(module);
+    }
+
+    pub fun add_cached(&mut self, module: String) {
+        self.cached_modules.push(module);
+    }
+
+    pub fun add_failed(&mut self, module: String) {
+        self.failed_modules.push(module);
+        self.success = false;
+    }
+}
+
+/// A project to be built
+#[derive(Debug, Clone)]
+pub struct Project {
+    pub name: String,
+    pub root_dir: PathBuf,
+    pub source_files: Vec<PathBuf>,
+}
+
+impl Project {
+    pub fun new(name: String, root_dir: PathBuf) -> Self {
+        Project {
+            name,
+            root_dir,
+            source_files: vec![],
+        }
+    }
+
+    pub fun add_source(&mut self, file: PathBuf) {
+        self.source_files.push(file);
+    }
+
+    pub fun discover_sources(&mut self) -> Result<(), String> {
+        // Find all .ruchy files in project directory
+        let sources = find_ruchy_files(&self.root_dir)?;
+        self.source_files = sources;
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Incremental Builder
+// ============================================================================
+
+pub struct IncrementalBuilder {
+    cache: ModuleCache,
+    graph: DependencyGraph,
+    compiler: WasmCompiler,
+    hasher: ContentHasher,
+}
+
+impl IncrementalBuilder {
+    /// Create new incremental builder
+    pub fun new(cache_dir: PathBuf) -> Result<Self, String> {
+        let cache = ModuleCache::new(cache_dir)?;
+        let graph = DependencyGraph::new();
+        let compiler = WasmCompiler::new();
+        let hasher = ContentHasher::new();
+
+        Ok(IncrementalBuilder {
+            cache,
+            graph,
+            compiler,
+            hasher,
+        })
+    }
+
+    /// Build project incrementally
+    pub fun build(&mut self, project: &Project) -> BuildResult {
+        let start = Instant::now();
+        let mut result = BuildResult::new();
+
+        // Step 1: Scan all source files and compute hashes
+        let file_hashes = match self.scan_files(&project.source_files) {
+            Ok(hashes) => hashes,
+            Err(e) => {
+                eprintln!("Failed to scan files: {}", e);
+                result.success = false;
+                return result.with_duration(start.elapsed().as_millis() as u64);
+            }
+        };
+
+        // Step 2: Build dependency graph
+        if let Err(e) = self.build_dependency_graph(&project.source_files, &file_hashes) {
+            eprintln!("Failed to build dependency graph: {}", e);
+            result.success = false;
+            return result.with_duration(start.elapsed().as_millis() as u64);
+        }
+
+        // Step 3: Detect changed files
+        let changed = self.detect_changes(&project.source_files, &file_hashes);
+
+        // Step 4: Compute rebuild set (changed + affected)
+        let rebuild_set = if changed.is_empty() {
+            // No changes - nothing to rebuild
+            vec![]
+        } else {
+            self.compute_rebuild_set(changed)
+        };
+
+        // Step 5: Determine what can use cache
+        let all_modules: HashSet<String> = project.source_files
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+
+        let to_compile: HashSet<String> = rebuild_set.iter().cloned().collect();
+        let can_cache: Vec<String> = all_modules
+            .difference(&to_compile)
+            .cloned()
+            .collect();
+
+        // Step 6: Use cached modules where possible
+        for module in can_cache {
+            result.add_cached(module);
+        }
+
+        // Step 7: Compile modules that need rebuilding
+        if !rebuild_set.is_empty() {
+            if let Err(e) = self.compile_modules(&rebuild_set, &mut result) {
+                eprintln!("Compilation failed: {}", e);
+                result.success = false;
+            }
+        }
+
+        result.with_duration(start.elapsed().as_millis() as u64)
+    }
+
+    /// Scan all files and compute hashes
+    fun scan_files(&mut self, files: &Vec<PathBuf>) -> Result<HashMap<String, String>, String> {
+        let mut hashes = HashMap::new();
+
+        for file in files {
+            let path = file.to_string_lossy().to_string();
+            let hash = self.hasher.hash_file(&path)?;
+            hashes.insert(path, hash);
+        }
+
+        Ok(hashes)
+    }
+
+    /// Build dependency graph from source files
+    fun build_dependency_graph(
+        &mut self,
+        files: &Vec<PathBuf>,
+        hashes: &HashMap<String, String>
+    ) -> Result<(), String> {
+        for file in files {
+            let path = file.to_string_lossy().to_string();
+            let hash = hashes.get(&path).unwrap().clone();
+
+            // Parse source to find dependencies
+            let source = fs::read_to_string(file)
+                .map_err(|e| format!("Failed to read {}: {}", path, e))?;
+
+            let deps = parse_dependencies(&source);
+
+            // Convert to full paths
+            let dep_paths: Vec<String> = deps.iter()
+                .filter_map(|dep| self.resolve_dependency(&path, dep))
+                .collect();
+
+            // Add to graph
+            self.graph.add_module(path, hash, dep_paths);
+        }
+
+        Ok(())
+    }
+
+    /// Detect which files have changed
+    fun detect_changes(
+        &self,
+        files: &Vec<PathBuf>,
+        current_hashes: &HashMap<String, String>
+    ) -> Vec<String> {
+        let mut changed = vec![];
+
+        for file in files {
+            let path = file.to_string_lossy().to_string();
+            let current_hash = current_hashes.get(&path).unwrap();
+
+            // Check cache for previous hash
+            if let Ok(Some(cached)) = self.cache.get(&path) {
+                if &cached.metadata.source_hash != current_hash {
+                    changed.push(path);
+                }
+            } else {
+                // Not in cache - needs compilation
+                changed.push(path);
+            }
+        }
+
+        changed
+    }
+
+    /// Compute set of modules that need rebuilding
+    fun compute_rebuild_set(&self, changed: Vec<String>) -> Vec<String> {
+        // Get all affected modules (changed + dependents)
+        self.graph.get_affected_modules(changed)
+    }
+
+    /// Compile a set of modules
+    fun compile_modules(
+        &mut self,
+        modules: &Vec<String>,
+        result: &mut BuildResult
+    ) -> Result<(), String> {
+        // Get build order via topological sort
+        let build_order = self.graph.topological_sort()?;
+
+        // Filter to only modules we need to compile
+        let to_compile: Vec<String> = build_order
+            .into_iter()
+            .filter(|m| modules.contains(m))
+            .collect();
+
+        // Compile each module in order
+        for module in to_compile {
+            match self.compile_module(&module) {
+                Ok(compiled) => {
+                    // Store in cache
+                    if let Err(e) = self.cache.put(&module, compiled) {
+                        eprintln!("Failed to cache {}: {}", module, e);
+                    }
+
+                    result.add_compiled(module);
+                }
+                Err(e) => {
+                    eprintln!("Failed to compile {}: {}", module, e);
+                    result.add_failed(module);
+                    return Err(format!("Compilation failed for {}", module));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Compile a single module
+    fun compile_module(&mut self, path: &str) -> Result<CompiledModule, String> {
+        // Read source
+        let source = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {}", path, e))?;
+
+        // Compile to WASM
+        let wasm_binary = self.compiler.compile(&source)?;
+
+        // Extract metadata
+        let deps = parse_dependencies(&source);
+        let exports = extract_exports(&source);
+        let imports = deps.clone();
+
+        let source_hash = self.hasher.hash_file(path)?;
+        let dep_hashes = self.get_dependency_hashes(&deps)?;
+
+        let metadata = ModuleMetadata::new(
+            exports,
+            imports,
+            path.to_string(),
+            source_hash,
+            dep_hashes,
+        );
+
+        Ok(CompiledModule::new(wasm_binary, metadata))
+    }
+
+    /// Get hashes for all dependencies
+    fun get_dependency_hashes(&mut self, deps: &Vec<String>) -> Result<Vec<String>, String> {
+        let mut hashes = vec![];
+
+        for dep in deps {
+            let hash = self.hasher.hash_file(dep)?;
+            hashes.push(hash);
+        }
+
+        Ok(hashes)
+    }
+
+    /// Resolve a dependency name to a file path
+    fun resolve_dependency(&self, from: &str, dep: &str) -> Option<String> {
+        // Simple resolution: look for dep.ruchy in same directory
+        let from_path = Path::new(from);
+        let dir = from_path.parent()?;
+        let dep_path = dir.join(format!("{}.ruchy", dep));
+
+        if dep_path.exists() {
+            Some(dep_path.to_string_lossy().to_string())
+        } else {
+            None
+        }
+    }
+}
+
+// ============================================================================
+// Parallel Incremental Builder
+// ============================================================================
+
+pub struct ParallelBuilder {
+    builder: IncrementalBuilder,
+    num_threads: usize,
+}
+
+impl ParallelBuilder {
+    pub fun new(cache_dir: PathBuf, num_threads: usize) -> Result<Self, String> {
+        let builder = IncrementalBuilder::new(cache_dir)?;
+
+        Ok(ParallelBuilder {
+            builder,
+            num_threads,
+        })
+    }
+
+    /// Build project with parallel compilation
+    pub fun build(&mut self, project: &Project) -> BuildResult {
+        let start = Instant::now();
+
+        // Use sequential builder for now
+        // Parallel compilation requires thread-safe builder (WASM-009)
+        let result = self.builder.build(project);
+
+        result.with_duration(start.elapsed().as_millis() as u64)
+    }
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/// Find all .ruchy files in a directory
+fun find_ruchy_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut files = vec![];
+
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                if ext == "ruchy" {
+                    files.push(path);
+                }
+            }
+        } else if path.is_dir() {
+            // Recurse into subdirectories
+            let mut sub_files = find_ruchy_files(&path)?;
+            files.append(&mut sub_files);
+        }
+    }
+
+    Ok(files)
+}
+
+/// Extract exported functions from source
+fun extract_exports(source: &str) -> Vec<String> {
+    let mut exports = vec![];
+    let lines = source.lines();
+
+    for line in lines {
+        let trimmed = line.trim();
+
+        // Look for "pub fun" declarations
+        if trimmed.starts_with("pub fun ") {
+            if let Some(name) = extract_function_name(trimmed) {
+                exports.push(name);
+            }
+        }
+    }
+
+    exports
+}
+
+/// Extract function name from declaration
+fun extract_function_name(decl: &str) -> Option<String> {
+    // "pub fun main() {" -> "main"
+    let parts: Vec<&str> = decl.split_whitespace().collect();
+    if parts.len() < 3 {
+        return None;
+    }
+
+    let name = parts[2].split('(').next()?;
+    Some(name.to_string())
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    test test_build_result_creation() {
+        let result = BuildResult::new();
+        assert(result.success, "New result should be successful");
+        assert(result.compiled_modules.is_empty(), "Should have no compiled modules");
+        assert(result.cached_modules.is_empty(), "Should have no cached modules");
+    }
+
+    test test_build_result_hit_rate() {
+        let mut result = BuildResult::new();
+        result.add_compiled("a.ruchy".to_string());
+        result.add_cached("b.ruchy".to_string());
+        result.add_cached("c.ruchy".to_string());
+
+        let hit_rate = result.compute_hit_rate();
+        assert(hit_rate > 0.6 && hit_rate < 0.7, "Hit rate should be ~66%");
+    }
+
+    test test_project_creation() {
+        let project = Project::new(
+            "test_project".to_string(),
+            PathBuf::from("/tmp/test")
+        );
+
+        assert(project.name == "test_project", "Project name should match");
+        assert(project.source_files.is_empty(), "Should have no sources initially");
+    }
+
+    test test_extract_exports() {
+        let source = r#"
+            pub fun main() {
+                println("Hello");
+            }
+
+            pub fun helper() {
+                return 42;
+            }
+
+            fun private_func() {
+                // Not exported
+            }
+        "#;
+
+        let exports = extract_exports(source);
+
+        assert(exports.contains(&"main".to_string()), "Should export main");
+        assert(exports.contains(&"helper".to_string()), "Should export helper");
+        assert(!exports.contains(&"private_func".to_string()), "Should not export private_func");
+    }
+
+    test test_extract_function_name() {
+        let decl = "pub fun main() {";
+        let name = extract_function_name(decl).unwrap();
+        assert(name == "main", "Should extract function name");
+    }
+}

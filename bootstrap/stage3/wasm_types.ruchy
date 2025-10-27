@@ -1,0 +1,304 @@
+// WASM Type Mapping System
+// Date: October 23, 2025
+// Part of the RuchyRuchy WASM Compilation Target
+
+// Type tags for runtime type information
+enum WasmTypeTag {
+    Null,       // 0: Null/undefined value
+    Boolean,    // 1: Boolean value
+    Number,     // 2: Numeric value (i32, i64, f32, f64)
+    String,     // 3: String value
+    Array,      // 4: Array value
+    Object,     // 5: Object/struct value
+    Function,   // 6: Function reference
+    Closure,    // 7: Closure with captured variables
+    Option,     // 8: Option<T> type
+    Result,     // 9: Result<T, E> type
+    Enum,       // 10: Enum value with variant
+    Tuple       // 11: Tuple value
+}
+
+// WASM primitive type representation
+enum WasmType {
+    I32,        // 32-bit integer
+    I64,        // 64-bit integer
+    F32,        // 32-bit float
+    F64,        // 64-bit float
+    V128,       // 128-bit vector (SIMD)
+    FuncRef,    // Function reference
+    ExternRef,  // External reference
+    Memory      // Linear memory address (for complex types)
+}
+
+// WASM memory layout for complex types
+struct WasmMemoryLayout {
+    tag: WasmTypeTag,    // Type tag (runtime type info)
+    size: i32,           // Total size in bytes
+    alignment: i32,      // Memory alignment requirement
+    fields: [WasmFieldLayout],  // For structs/objects
+    element_type: Box<WasmTypeMapping>  // For arrays
+}
+
+// WASM field layout for struct fields
+struct WasmFieldLayout {
+    name: String,        // Field name
+    offset: i32,         // Offset from struct start
+    type_mapping: WasmTypeMapping  // Field type mapping
+}
+
+// Main type mapping between Ruchy and WASM
+struct WasmTypeMapping {
+    ruchy_type: String,          // Ruchy type name
+    wasm_type: WasmType,         // WASM primitive type
+    memory_layout: Option<WasmMemoryLayout>,  // For complex types
+    is_reference: bool           // True if reference type
+}
+
+// Wasm function type representation
+struct WasmFunctionType {
+    params: [WasmTypeMapping],   // Parameter types
+    results: [WasmTypeMapping],  // Result types
+    is_closure: bool             // True if closure (extra param)
+}
+
+// Create type mapping for primitive types
+fun create_primitive_mapping(ruchy_type: String, wasm_type: WasmType) -> WasmTypeMapping {
+    WasmTypeMapping {
+        ruchy_type: ruchy_type,
+        wasm_type: wasm_type,
+        memory_layout: None,
+        is_reference: false
+    }
+}
+
+// Create type mapping for reference types
+fun create_reference_mapping(
+    ruchy_type: String, 
+    tag: WasmTypeTag, 
+    size: i32, 
+    alignment: i32
+) -> WasmTypeMapping {
+    let memory_layout = WasmMemoryLayout {
+        tag: tag,
+        size: size,
+        alignment: alignment,
+        fields: [],
+        element_type: None
+    };
+    
+    WasmTypeMapping {
+        ruchy_type: ruchy_type,
+        wasm_type: WasmType::Memory,
+        memory_layout: Some(memory_layout),
+        is_reference: true
+    }
+}
+
+// Create the base type mapping system
+fun create_type_mapping_system() -> [WasmTypeMapping] {
+    let mappings = [
+        // Primitive types
+        create_primitive_mapping("i32", WasmType::I32),
+        create_primitive_mapping("i64", WasmType::I64),
+        create_primitive_mapping("f32", WasmType::F32),
+        create_primitive_mapping("f64", WasmType::F64),
+        create_primitive_mapping("bool", WasmType::I32),
+        
+        // Reference types
+        create_reference_mapping("String", WasmTypeTag::String, 8, 4),
+        create_reference_mapping("Array", WasmTypeTag::Array, 8, 4),
+        create_reference_mapping("Object", WasmTypeTag::Object, 4, 4),
+        create_reference_mapping("Function", WasmTypeTag::Function, 4, 4),
+        create_reference_mapping("Closure", WasmTypeTag::Closure, 8, 4),
+        create_reference_mapping("Option", WasmTypeTag::Option, 8, 4),
+        create_reference_mapping("Result", WasmTypeTag::Result, 8, 4),
+        create_reference_mapping("Enum", WasmTypeTag::Enum, 8, 4),
+        create_reference_mapping("Tuple", WasmTypeTag::Tuple, 4, 4)
+    ];
+    
+    mappings
+}
+
+// Get WASM type for a Ruchy type
+fun get_wasm_type(type_mapping_system: &[WasmTypeMapping], ruchy_type: String) -> WasmTypeMapping {
+    for mapping in type_mapping_system {
+        if mapping.ruchy_type == ruchy_type {
+            return mapping;
+        }
+    }
+    
+    // Default to i32 if not found (should never happen in practice)
+    create_primitive_mapping("unknown", WasmType::I32)
+}
+
+// Check if a type needs heap allocation
+fun needs_heap_allocation(type_mapping: &WasmTypeMapping) -> bool {
+    type_mapping.is_reference
+}
+
+// Calculate memory layout for a struct type
+fun calculate_struct_layout(
+    fields: [(String, String)],  // (name, type)
+    type_mapping_system: &[WasmTypeMapping]
+) -> WasmMemoryLayout {
+    let mut offset = 4;  // Start after type tag
+    let mut field_layouts = [];
+    
+    for field in fields {
+        let (name, type_name) = field;
+        let type_mapping = get_wasm_type(type_mapping_system, type_name);
+        
+        // Align offset to field requirements
+        let alignment = if type_mapping.is_reference {
+            4  // Reference types aligned to 4 bytes
+        } else {
+            match type_mapping.wasm_type {
+                WasmType::I32 => 4,
+                WasmType::I64 => 8,
+                WasmType::F32 => 4,
+                WasmType::F64 => 8,
+                _ => 4
+            }
+        };
+        
+        // Align offset
+        offset = (offset + alignment - 1) & ~(alignment - 1);
+        
+        // Create field layout
+        let field_layout = WasmFieldLayout {
+            name: name,
+            offset: offset,
+            type_mapping: type_mapping
+        };
+        
+        field_layouts.push(field_layout);
+        
+        // Update offset for next field
+        offset += if type_mapping.is_reference {
+            4  // References are 4-byte pointers
+        } else {
+            match type_mapping.wasm_type {
+                WasmType::I32 => 4,
+                WasmType::I64 => 8,
+                WasmType::F32 => 4,
+                WasmType::F64 => 8,
+                _ => 4
+            }
+        };
+    }
+    
+    WasmMemoryLayout {
+        tag: WasmTypeTag::Object,
+        size: offset,
+        alignment: 4,
+        fields: field_layouts,
+        element_type: None
+    }
+}
+
+// Create mapping for array type
+fun create_array_mapping(
+    element_type: String,
+    type_mapping_system: &[WasmTypeMapping]
+) -> WasmTypeMapping {
+    let elem_mapping = get_wasm_type(type_mapping_system, element_type);
+    
+    // Create element type box
+    let elem_type_box = Box::new(elem_mapping);
+    
+    // Create memory layout
+    let memory_layout = WasmMemoryLayout {
+        tag: WasmTypeTag::Array,
+        size: 8,  // Header size (length + type tag)
+        alignment: 4,
+        fields: [],
+        element_type: Some(elem_type_box)
+    };
+    
+    // Create array type mapping
+    WasmTypeMapping {
+        ruchy_type: "Array<" + element_type + ">",
+        wasm_type: WasmType::Memory,
+        memory_layout: Some(memory_layout),
+        is_reference: true
+    }
+}
+
+// Generate WASM type for a function
+fun create_function_type(
+    param_types: [String],
+    result_type: String,
+    is_closure: bool,
+    type_mapping_system: &[WasmTypeMapping]
+) -> WasmFunctionType {
+    let mut param_mappings = [];
+    
+    // Add closure parameter if needed
+    if is_closure {
+        let closure_mapping = create_primitive_mapping("i32", WasmType::I32);
+        param_mappings.push(closure_mapping);
+    }
+    
+    // Add regular parameters
+    for param_type in param_types {
+        let mapping = get_wasm_type(type_mapping_system, param_type);
+        param_mappings.push(mapping);
+    }
+    
+    // Get result type
+    let mut result_mappings = [];
+    if result_type != "unit" {
+        let mapping = get_wasm_type(type_mapping_system, result_type);
+        result_mappings.push(mapping);
+    }
+    
+    WasmFunctionType {
+        params: param_mappings,
+        results: result_mappings,
+        is_closure: is_closure
+    }
+}
+
+// Convert WASM function type to function type string (e.g., "(param i32) (result i32)")
+fun function_type_to_string(func_type: &WasmFunctionType) -> String {
+    let mut result = "";
+    
+    // Add parameters
+    for param in func_type.params {
+        result += "(param ";
+        
+        match param.wasm_type {
+            WasmType::I32 => result += "i32",
+            WasmType::I64 => result += "i64",
+            WasmType::F32 => result += "f32",
+            WasmType::F64 => result += "f64",
+            WasmType::Memory => result += "i32",  // References are i32 pointers
+            _ => result += "i32"  // Default
+        }
+        
+        result += ") ";
+    }
+    
+    // Add results
+    for result_type in func_type.results {
+        result += "(result ";
+        
+        match result_type.wasm_type {
+            WasmType::I32 => result += "i32",
+            WasmType::I64 => result += "i64",
+            WasmType::F32 => result += "f32",
+            WasmType::F64 => result += "f64",
+            WasmType::Memory => result += "i32",  // References are i32 pointers
+            _ => result += "i32"  // Default
+        }
+        
+        result += ") ";
+    }
+    
+    result
+}
+
+// Export type mapping API
+fun init_wasm_type_mapping() -> [WasmTypeMapping] {
+    create_type_mapping_system()
+}

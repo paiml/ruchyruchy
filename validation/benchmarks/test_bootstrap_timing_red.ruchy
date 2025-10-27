@@ -1,0 +1,259 @@
+// OPT-INFRA-001: Bootstrap Timing Harness - RED Phase
+//
+// Phase 1/8 of EXTREME TDD: Demonstrate need for benchmark infrastructure
+//
+// Strategy: Show that we need to measure Ruchy compilation performance
+
+// ============================================
+// DATA STRUCTURES
+// ============================================
+
+struct BenchmarkResult {
+    name: String,
+    duration_ms: i32,
+    iterations: i32
+}
+
+struct StatisticalResult {
+    mean: i32,
+    std_dev: i32,
+    min: i32,
+    max: i32,
+    runs: i32
+}
+
+// ============================================
+// STUB IMPLEMENTATIONS (RED PHASE)
+// ============================================
+
+fun benchmark_ruchy_compile(file: String, iterations: i32) -> BenchmarkResult {
+    // Stub: Not implemented yet!
+    BenchmarkResult {
+        name: file,
+        duration_ms: 0,  // Should measure actual time
+        iterations: iterations
+    }
+}
+
+fun run_statistical_benchmark(file: String, runs: i32) -> StatisticalResult {
+    // Stub: Not implemented yet!
+    StatisticalResult {
+        mean: 0,
+        std_dev: 0,
+        min: 0,
+        max: 0,
+        runs: runs
+    }
+}
+
+fun calculate_speedup(baseline: i32, optimized: i32) -> i32 {
+    // Stub: Not implemented yet!
+    if baseline == 0 {
+        0
+    } else {
+        ((baseline - optimized) * 100) / baseline
+    }
+}
+
+fun is_statistically_significant(baseline: StatisticalResult, optimized: StatisticalResult) -> bool {
+    // Stub: Should implement Welch's t-test (p < 0.05)
+    false
+}
+
+// ============================================
+// RED PHASE TESTS
+// ============================================
+
+fun test_benchmark_simple_file() -> bool {
+    println("Test 1: Benchmark simple file compilation")
+
+    let result = benchmark_ruchy_compile("test.ruchy", 1)
+
+    if result.duration_ms == 0 {
+        println("❌ No timing measured (expected: >0ms)")
+        false
+    } else {
+        println("✅ Timing measured: {}ms", result.duration_ms)
+        true
+    }
+}
+
+fun test_statistical_benchmark_30_runs() -> bool {
+    println("Test 2: Statistical benchmark (N=30)")
+
+    let result = run_statistical_benchmark("test.ruchy", 30)
+
+    if result.runs != 30 {
+        println("❌ Expected 30 runs, got {}", result.runs)
+        return false
+    }
+
+    if result.mean == 0 {
+        println("❌ Mean not calculated")
+        return false
+    }
+
+    if result.std_dev == 0 {
+        println("❌ Standard deviation not calculated")
+        return false
+    }
+
+    println("✅ Statistical benchmark complete: mean={}ms, stddev={}ms", result.mean, result.std_dev)
+    true
+}
+
+fun test_speedup_calculation() -> bool {
+    println("Test 3: Speedup calculation")
+
+    let baseline = 1000  // 1000ms
+    let optimized = 800  // 800ms
+    let speedup = calculate_speedup(baseline, optimized)
+
+    if speedup != 20 {
+        println("❌ Expected 20% speedup, got {}%", speedup)
+        false
+    } else {
+        println("✅ Speedup calculated: {}%", speedup)
+        true
+    }
+}
+
+fun test_statistical_significance() -> bool {
+    println("Test 4: Statistical significance (Welch's t-test)")
+
+    let baseline = StatisticalResult {
+        mean: 1000,
+        std_dev: 50,
+        min: 900,
+        max: 1100,
+        runs: 30
+    }
+
+    let optimized = StatisticalResult {
+        mean: 800,
+        std_dev: 40,
+        min: 720,
+        max: 880,
+        runs: 30
+    }
+
+    let significant = is_statistically_significant(baseline, optimized)
+
+    if !significant {
+        println("❌ Should be statistically significant (p < 0.05)")
+        false
+    } else {
+        println("✅ Statistically significant improvement detected")
+        true
+    }
+}
+
+fun test_baseline_measurement() -> bool {
+    println("Test 5: Establish baseline measurement")
+
+    // Should measure current Ruchy compile time
+    let baseline = run_statistical_benchmark("bootstrap/stage0/lexer.ruchy", 30)
+
+    if baseline.mean == 0 {
+        println("❌ Baseline not measured")
+        false
+    } else {
+        println("✅ Baseline: {}ms ± {}ms (N={})", baseline.mean, baseline.std_dev, baseline.runs)
+        true
+    }
+}
+
+fun test_confidence_interval() -> bool {
+    println("Test 6: Calculate 95% confidence interval")
+
+    let result = StatisticalResult {
+        mean: 1000,
+        std_dev: 50,
+        min: 900,
+        max: 1100,
+        runs: 30
+    }
+
+    // 95% CI ≈ mean ± 1.96 * (std_dev / sqrt(N))
+    // For N=30: ±1.96 * (50 / 5.48) ≈ ±17.9
+    let margin = (196 * result.std_dev) / 548  // Approximation
+    let ci_lower = result.mean - margin
+    let ci_upper = result.mean + margin
+
+    if ci_lower < 900 || ci_upper > 1100 {
+        println("❌ Confidence interval calculation incorrect")
+        false
+    } else {
+        println("✅ 95% CI: [{}, {}]", ci_lower, ci_upper)
+        true
+    }
+}
+
+fun test_benchmark_comparison() -> bool {
+    println("Test 7: Compare two configurations")
+
+    let config_a = run_statistical_benchmark("test_baseline.ruchy", 30)
+    let config_b = run_statistical_benchmark("test_optimized.ruchy", 30)
+
+    let speedup = calculate_speedup(config_a.mean, config_b.mean)
+    let significant = is_statistically_significant(config_a, config_b)
+
+    if speedup == 0 {
+        println("❌ Cannot compare configurations")
+        false
+    } else {
+        println("✅ Config B: {}% faster (significant: {})", speedup, significant)
+        true
+    }
+}
+
+fun test_multiple_file_benchmark() -> bool {
+    println("Test 8: Benchmark multiple files")
+
+    // Benchmark 3 files
+    let result1 = benchmark_ruchy_compile("lexer.ruchy", 1)
+    let result2 = benchmark_ruchy_compile("parser.ruchy", 1)
+    let result3 = benchmark_ruchy_compile("types.ruchy", 1)
+
+    let total = result1.duration_ms + result2.duration_ms + result3.duration_ms
+
+    if total == 0 {
+        println("❌ No files benchmarked")
+        false
+    } else {
+        println("✅ Total benchmark time: {}ms", total)
+        true
+    }
+}
+
+fun main() {
+    println("OPT-INFRA-001: Bootstrap Timing Harness - RED Phase")
+    println("EXTREME TDD Phase 1/8: Demonstrate Need")
+    println("")
+
+    let mut passed = 0
+    let total = 8
+
+    if test_benchmark_simple_file() { passed = passed + 1 }
+    if test_statistical_benchmark_30_runs() { passed = passed + 1 }
+    if test_speedup_calculation() { passed = passed + 1 }
+    if test_statistical_significance() { passed = passed + 1 }
+    if test_baseline_measurement() { passed = passed + 1 }
+    if test_confidence_interval() { passed = passed + 1 }
+    if test_benchmark_comparison() { passed = passed + 1 }
+    if test_multiple_file_benchmark() { passed = passed + 1 }
+
+    println("")
+    println("Results: {}/{} tests passed", passed, total)
+    println("")
+
+    if passed >= 2 && passed <= 4 {
+        println("RED PHASE SUCCESS! {}/{} tests passing (demonstrates need)", passed, total)
+    } else {
+        if passed == total {
+            println("WARNING: All tests passing - need actual benchmark implementation for RED")
+        } else {
+            println("ADJUST: {} tests passing (target: 2-4 for RED phase)", passed)
+        }
+    }
+}

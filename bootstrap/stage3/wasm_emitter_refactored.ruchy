@@ -1,0 +1,1424 @@
+// wasm_emitter_refactored.ruchy
+// WASM-001: WebAssembly Type Mapping and Emitter
+// REFACTOR Phase: Improved implementation with better organization, performance, and error handling
+
+// ====================================================
+// Module imports
+// ====================================================
+
+// Mock Ruchy WASM API imports
+// These would be replaced by actual imports in production
+
+/// Represents a WebAssembly type
+enum Type {
+    I32,
+    I64,
+    F32,
+    F64,
+    V128,
+    FuncRef,
+    ExternRef,
+    Void,
+}
+
+/// Represents a WebAssembly module
+struct Module {
+    sections: Vec<Section>,
+    memories: Vec<Memory>,
+    functions: Vec<Function>,
+    imports: Vec<Import>,
+    exports: Vec<Export>,
+}
+
+/// Represents a section in a WebAssembly module
+enum Section {
+    Type,
+    Import,
+    Function,
+    Table,
+    Memory,
+    Global,
+    Export,
+    Start,
+    Element,
+    Code,
+    Data,
+}
+
+/// Represents a WebAssembly function
+struct Function {
+    name: String,
+    params: Vec<Type>,
+    results: Vec<Type>,
+    locals: Vec<(String, Type)>,
+    instructions: Vec<Instruction>,
+    exported: bool,
+}
+
+/// Represents a WebAssembly memory definition
+struct Memory {
+    name: String,
+    initial_pages: i32,
+    max_pages: Option<i32>,
+    exported: bool,
+}
+
+/// Represents a WebAssembly import
+struct Import {
+    module: String,
+    name: String,
+    kind: ImportKind,
+}
+
+/// Kinds of imports in WebAssembly
+enum ImportKind {
+    Function(Function),
+    Table,
+    Memory,
+    Global,
+}
+
+/// Represents a WebAssembly export
+struct Export {
+    name: String,
+    internal_name: String,
+    kind: ExportKind,
+}
+
+/// Kinds of exports in WebAssembly
+enum ExportKind {
+    Function,
+    Table,
+    Memory,
+    Global,
+}
+
+/// Represents a WebAssembly instruction
+struct Instruction {
+    kind: InstructionKind,
+    operands: Vec<Operand>,
+}
+
+/// Kinds of instructions in WebAssembly
+enum InstructionKind {
+    Const,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Call,
+    LocalGet,
+    LocalSet,
+    LocalTee,
+    GlobalGet,
+    GlobalSet,
+    Load,
+    Store,
+    Memory,
+    Block,
+    Loop,
+    If,
+    Else,
+    End,
+    Br,
+    BrIf,
+    Return,
+    Drop,
+    Select,
+    Unreachable,
+    Nop,
+}
+
+/// Operands for WebAssembly instructions
+enum Operand {
+    I32(i32),
+    I64(i64),
+    F32(f32),
+    F64(f64),
+    String(String),
+    Type(Type),
+    Label(String),
+    FunctionIndex(i32),
+    LocalIndex(i32),
+}
+
+/// Implementation of Module
+impl Module {
+    /// Creates a new empty WebAssembly module
+    fn new() -> Module {
+        Module {
+            sections: vec![],
+            memories: vec![],
+            functions: vec![],
+            imports: vec![],
+            exports: vec![],
+        }
+    }
+    
+    /// Adds a memory section to the module
+    fn add_memory(&mut self, name: String, initial_pages: i32, max_pages: Option<i32>) -> Result<(), String> {
+        if initial_pages < 0 {
+            return Err("Initial pages must be non-negative".to_string());
+        }
+        
+        if let Some(max) = max_pages {
+            if max < initial_pages {
+                return Err("Maximum pages must be greater than or equal to initial pages".to_string());
+            }
+        }
+        
+        self.memories.push(Memory {
+            name: name,
+            initial_pages: initial_pages,
+            max_pages: max_pages,
+            exported: false,
+        });
+        
+        Ok(())
+    }
+    
+    /// Adds an import to the module
+    fn add_import(&mut self, module: String, name: String, kind: ImportKind) -> Result<(), String> {
+        if module.is_empty() {
+            return Err("Import module name cannot be empty".to_string());
+        }
+        
+        if name.is_empty() {
+            return Err("Import name cannot be empty".to_string());
+        }
+        
+        self.imports.push(Import {
+            module: module,
+            name: name,
+            kind: kind,
+        });
+        
+        Ok(())
+    }
+    
+    /// Adds a function import to the module
+    fn add_function_import(&mut self, module: String, name: String, function: Function) -> Result<(), String> {
+        self.add_import(module, name, ImportKind::Function(function))
+    }
+    
+    /// Adds a function to the module
+    fn add_function(&mut self, name: String, function: Function) -> Result<(), String> {
+        if name.is_empty() {
+            return Err("Function name cannot be empty".to_string());
+        }
+        
+        // Check if function already exists
+        for existing in &self.functions {
+            if existing.name == name {
+                return Err(format!("Function {} already exists", name));
+            }
+        }
+        
+        self.functions.push(function);
+        Ok(())
+    }
+    
+    /// Creates a new function with the given parameters and results
+    fn new_function(&self, name: String, params: Vec<Type>, results: Vec<Type>) -> Function {
+        Function {
+            name: name,
+            params: params,
+            results: results,
+            locals: vec![],
+            instructions: vec![],
+            exported: false,
+        }
+    }
+    
+    /// Gets a mutable reference to a function by name
+    fn get_function_mut(&mut self, name: String) -> Option<&mut Function> {
+        for function in &mut self.functions {
+            if function.name == name {
+                return Some(function);
+            }
+        }
+        None
+    }
+    
+    /// Exports a function
+    fn export_function(&mut self, internal_name: String, external_name: String) -> Result<(), String> {
+        // Check if function exists
+        let mut function_exists = false;
+        for function in &mut self.functions {
+            if function.name == internal_name {
+                function.exported = true;
+                function_exists = true;
+                break;
+            }
+        }
+        
+        if !function_exists {
+            return Err(format!("Function {} does not exist", internal_name));
+        }
+        
+        self.exports.push(Export {
+            name: external_name,
+            internal_name: internal_name,
+            kind: ExportKind::Function,
+        });
+        
+        Ok(())
+    }
+    
+    /// Exports a memory
+    fn export_memory(&mut self, internal_name: String, external_name: String) -> Result<(), String> {
+        // Check if memory exists
+        let mut memory_exists = false;
+        for memory in &mut self.memories {
+            if memory.name == internal_name {
+                memory.exported = true;
+                memory_exists = true;
+                break;
+            }
+        }
+        
+        if !memory_exists {
+            return Err(format!("Memory {} does not exist", internal_name));
+        }
+        
+        self.exports.push(Export {
+            name: external_name,
+            internal_name: internal_name,
+            kind: ExportKind::Memory,
+        });
+        
+        Ok(())
+    }
+    
+    /// Validates the module for correctness
+    fn validate(&self) -> Result<(), String> {
+        // Check that all exports reference valid functions or memories
+        for export in &self.exports {
+            match export.kind {
+                ExportKind::Function => {
+                    let mut found = false;
+                    for function in &self.functions {
+                        if function.name == export.internal_name {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        return Err(format!("Exported function {} not found", export.internal_name));
+                    }
+                },
+                ExportKind::Memory => {
+                    let mut found = false;
+                    for memory in &self.memories {
+                        if memory.name == export.internal_name {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        return Err(format!("Exported memory {} not found", export.internal_name));
+                    }
+                },
+                _ => {},
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Creates a deep clone of the module
+    fn clone(&self) -> Module {
+        Module {
+            sections: self.sections.clone(),
+            memories: self.memories.clone(),
+            functions: self.functions.clone(),
+            imports: self.imports.clone(),
+            exports: self.exports.clone(),
+        }
+    }
+}
+
+/// Implementation of Function
+impl Function {
+    /// Creates a new function with the given parameters and results
+    fn new(params: Vec<Type>, results: Vec<Type>) -> Function {
+        Function {
+            name: String::new(),
+            params: params,
+            results: results,
+            locals: vec![],
+            instructions: vec![],
+            exported: false,
+        }
+    }
+    
+    /// Sets a parameter name at the given index
+    fn set_param_name(&mut self, index: i32, name: String) -> Result<(), String> {
+        if index < 0 || index as usize >= self.params.len() {
+            return Err(format!("Parameter index out of bounds: {}", index));
+        }
+        
+        // Store parameter name in locals for tracking
+        self.locals.push((name, self.params[index as usize].clone()));
+        
+        Ok(())
+    }
+    
+    /// Adds an instruction to the function body
+    fn add_instruction(&mut self, instruction: Instruction) {
+        self.instructions.push(instruction);
+    }
+    
+    /// Adds a local variable with the given name and type
+    fn add_local(&mut self, name: String, local_type: Type) {
+        self.locals.push((name, local_type));
+    }
+}
+
+/// Implementation of Instruction
+impl Instruction {
+    /// Creates a new i32.const instruction
+    fn i32_const(value: i32) -> Instruction {
+        Instruction {
+            kind: InstructionKind::Const,
+            operands: vec![Operand::I32(value), Operand::Type(Type::I32)],
+        }
+    }
+    
+    /// Creates a new i64.const instruction
+    fn i64_const(value: i64) -> Instruction {
+        Instruction {
+            kind: InstructionKind::Const,
+            operands: vec![Operand::I64(value), Operand::Type(Type::I64)],
+        }
+    }
+    
+    /// Creates a new f32.const instruction
+    fn f32_const(value: f32) -> Instruction {
+        Instruction {
+            kind: InstructionKind::Const,
+            operands: vec![Operand::F32(value), Operand::Type(Type::F32)],
+        }
+    }
+    
+    /// Creates a new f64.const instruction
+    fn f64_const(value: f64) -> Instruction {
+        Instruction {
+            kind: InstructionKind::Const,
+            operands: vec![Operand::F64(value), Operand::Type(Type::F64)],
+        }
+    }
+    
+    /// Creates a new call instruction
+    fn call(function_name: String) -> Instruction {
+        Instruction {
+            kind: InstructionKind::Call,
+            operands: vec![Operand::String(function_name)],
+        }
+    }
+    
+    /// Creates a new sequence of instructions
+    fn sequence() -> InstructionSequence {
+        InstructionSequence {
+            instructions: vec![],
+        }
+    }
+    
+    /// Converts the instruction to a string representation
+    fn to_string(&self) -> String {
+        match self.kind {
+            InstructionKind::Const => {
+                match self.operands[1] {
+                    Operand::Type(Type::I32) => format!("i32.const {}", match self.operands[0] {
+                        Operand::I32(value) => value.to_string(),
+                        _ => "?".to_string(),
+                    }),
+                    Operand::Type(Type::I64) => format!("i64.const {}", match self.operands[0] {
+                        Operand::I64(value) => value.to_string(),
+                        _ => "?".to_string(),
+                    }),
+                    Operand::Type(Type::F32) => format!("f32.const {}", match self.operands[0] {
+                        Operand::F32(value) => value.to_string(),
+                        _ => "?".to_string(),
+                    }),
+                    Operand::Type(Type::F64) => format!("f64.const {}", match self.operands[0] {
+                        Operand::F64(value) => value.to_string(),
+                        _ => "?".to_string(),
+                    }),
+                    _ => "const ?".to_string(),
+                }
+            },
+            InstructionKind::Call => {
+                match &self.operands[0] {
+                    Operand::String(function_name) => format!("call {}", function_name),
+                    _ => "call ?".to_string(),
+                }
+            },
+            _ => "instruction".to_string(),
+        }
+    }
+}
+
+/// A sequence of instructions that can be built up incrementally
+struct InstructionSequence {
+    instructions: Vec<Instruction>,
+}
+
+impl InstructionSequence {
+    /// Adds an instruction to the sequence
+    fn add(&mut self, instruction: Instruction) {
+        self.instructions.push(instruction);
+    }
+    
+    /// Converts the sequence to a string representation
+    fn to_string(&self) -> String {
+        let mut result = String::new();
+        for instruction in &self.instructions {
+            if !result.is_empty() {
+                result.push_str("\n");
+            }
+            result.push_str(&instruction.to_string());
+        }
+        result
+    }
+}
+
+// Helper function to convert a module to WebAssembly Text Format (WAT)
+fn emit(module: Module) -> Result<String, String> {
+    // Validate the module first
+    module.validate()?;
+    
+    // Basic WAT generation
+    let mut wat = String::from("(module");
+    
+    // Add imports
+    for import in &module.imports {
+        wat.push_str(&format!("\n  (import \"{}\" \"{}\" ", import.module, import.name));
+        match &import.kind {
+            ImportKind::Function(function) => {
+                wat.push_str("(func ");
+                
+                // Add parameters
+                for param in &function.params {
+                    match param {
+                        Type::I32 => wat.push_str("(param i32) "),
+                        Type::I64 => wat.push_str("(param i64) "),
+                        Type::F32 => wat.push_str("(param f32) "),
+                        Type::F64 => wat.push_str("(param f64) "),
+                        _ => wat.push_str("(param ?) "),
+                    }
+                }
+                
+                // Add results
+                for result in &function.results {
+                    match result {
+                        Type::I32 => wat.push_str("(result i32)"),
+                        Type::I64 => wat.push_str("(result i64)"),
+                        Type::F32 => wat.push_str("(result f32)"),
+                        Type::F64 => wat.push_str("(result f64)"),
+                        _ => wat.push_str("(result ?)"),
+                    }
+                }
+                
+                wat.push_str(")");
+            },
+            ImportKind::Memory => {
+                wat.push_str("(memory ...)");
+            },
+            _ => {
+                wat.push_str("(...)");
+            },
+        }
+        wat.push_str(")");
+    }
+    
+    // Add memories
+    for memory in &module.memories {
+        if memory.exported {
+            wat.push_str(&format!("\n  (memory ${}{}(export \"{}\") {} {}))",
+                memory.name,
+                if memory.exported { " " } else { "" },
+                memory.name,
+                memory.initial_pages,
+                match memory.max_pages {
+                    Some(max) => max.to_string(),
+                    None => "".to_string(),
+                }));
+        } else {
+            wat.push_str(&format!("\n  (memory ${} {})",
+                memory.name,
+                memory.initial_pages));
+        }
+    }
+    
+    // Add functions
+    for function in &module.functions {
+        wat.push_str(&format!("\n  (func ${}", function.name));
+        
+        // Add export if needed
+        if function.exported {
+            for export in &module.exports {
+                if export.internal_name == function.name && export.kind == ExportKind::Function {
+                    wat.push_str(&format!(" (export \"{}\")", export.name));
+                    break;
+                }
+            }
+        }
+        
+        // Add parameters
+        for (i, param) in function.params.iter().enumerate() {
+            // Find parameter name if any
+            let mut param_name = format!("${}", i);
+            for (name, param_type) in &function.locals {
+                if *param_type == function.params[i] {
+                    param_name = format!("${}", name);
+                    break;
+                }
+            }
+            
+            match param {
+                Type::I32 => wat.push_str(&format!(" (param {} i32)", param_name)),
+                Type::I64 => wat.push_str(&format!(" (param {} i64)", param_name)),
+                Type::F32 => wat.push_str(&format!(" (param {} f32)", param_name)),
+                Type::F64 => wat.push_str(&format!(" (param {} f64)", param_name)),
+                _ => wat.push_str(&format!(" (param {} ?)", param_name)),
+            }
+        }
+        
+        // Add results
+        for result in &function.results {
+            match result {
+                Type::I32 => wat.push_str(" (result i32)"),
+                Type::I64 => wat.push_str(" (result i64)"),
+                Type::F32 => wat.push_str(" (result f32)"),
+                Type::F64 => wat.push_str(" (result f64)"),
+                Type::Void => {},
+                _ => wat.push_str(" (result ?)"),
+            }
+        }
+        
+        // Add locals (excluding parameters)
+        let mut local_count = 0;
+        for (name, local_type) in &function.locals {
+            // Skip parameters
+            let mut is_param = false;
+            for (i, param_type) in function.params.iter().enumerate() {
+                if *param_type == *local_type {
+                    is_param = true;
+                    break;
+                }
+            }
+            
+            if !is_param {
+                match local_type {
+                    Type::I32 => wat.push_str(&format!(" (local ${} i32)", name)),
+                    Type::I64 => wat.push_str(&format!(" (local ${} i64)", name)),
+                    Type::F32 => wat.push_str(&format!(" (local ${} f32)", name)),
+                    Type::F64 => wat.push_str(&format!(" (local ${} f64)", name)),
+                    _ => wat.push_str(&format!(" (local ${} ?)", name)),
+                }
+                local_count += 1;
+            }
+        }
+        
+        // Add instructions
+        for instruction in &function.instructions {
+            wat.push_str(&format!("\n    {}", instruction.to_string()));
+        }
+        
+        wat.push_str("\n  )");
+    }
+    
+    // Add exports that weren't already added with their definitions
+    for export in &module.exports {
+        let mut already_exported = false;
+        
+        match export.kind {
+            ExportKind::Function => {
+                for function in &module.functions {
+                    if function.name == export.internal_name && function.exported {
+                        already_exported = true;
+                        break;
+                    }
+                }
+            },
+            ExportKind::Memory => {
+                for memory in &module.memories {
+                    if memory.name == export.internal_name && memory.exported {
+                        already_exported = true;
+                        break;
+                    }
+                }
+            },
+            _ => {},
+        }
+        
+        if !already_exported {
+            wat.push_str(&format!("\n  (export \"{}\" ", export.name));
+            match export.kind {
+                ExportKind::Function => wat.push_str(&format!("(func ${}))", export.internal_name)),
+                ExportKind::Memory => wat.push_str(&format!("(memory ${}))", export.internal_name)),
+                _ => wat.push_str(&format!("(? ${}))", export.internal_name)),
+            }
+        }
+    }
+    
+    wat.push_str("\n)");
+    
+    Ok(wat)
+}
+
+// ====================================================
+// Memory layout calculation for complex types
+// ====================================================
+
+/// Represents a memory layout for a Ruchy type in WebAssembly
+struct MemoryLayout {
+    /// Size of the header (in bytes)
+    header_size: i32,
+    
+    /// Size of the body (in bytes)
+    body_size: i32,
+    
+    /// Field offsets (field name -> offset)
+    field_offsets: Map<String, i32>,
+    
+    /// Field types (field name -> type)
+    field_types: Map<String, RuchyWasmType>,
+    
+    /// Alignment (in bytes)
+    alignment: i32,
+}
+
+impl MemoryLayout {
+    /// Creates a new memory layout
+    fn new(header_size: i32, body_size: i32, alignment: i32) -> MemoryLayout {
+        MemoryLayout {
+            header_size: header_size,
+            body_size: body_size,
+            field_offsets: {},
+            field_types: {},
+            alignment: alignment,
+        }
+    }
+    
+    /// Adds a field to the memory layout
+    fn add_field(&mut self, name: String, field_type: RuchyWasmType, offset: i32) {
+        self.field_offsets.insert(name.clone(), offset);
+        self.field_types.insert(name, field_type);
+    }
+    
+    /// Gets the total size of the memory layout (header + body)
+    fn size(&self) -> i32 {
+        // Align to the layout's alignment
+        align(self.header_size + self.body_size, self.alignment)
+    }
+    
+    /// Gets the offset of a field
+    fn field_offset(&self, field_name: &String) -> Option<i32> {
+        self.field_offsets.get(field_name).map(|&offset| offset)
+    }
+    
+    /// Gets the type of a field
+    fn field_type(&self, field_name: &String) -> Option<&RuchyWasmType> {
+        self.field_types.get(field_name)
+    }
+    
+    /// Creates a deep clone of the memory layout
+    fn clone(&self) -> MemoryLayout {
+        MemoryLayout {
+            header_size: self.header_size,
+            body_size: self.body_size,
+            field_offsets: self.field_offsets.clone(),
+            field_types: self.field_types.clone(),
+            alignment: self.alignment,
+        }
+    }
+}
+
+/// Aligns a value to the given alignment
+fn align(value: i32, alignment: i32) -> i32 {
+    if alignment <= 1 {
+        return value;
+    }
+    
+    let remainder = value % alignment;
+    if remainder == 0 {
+        value
+    } else {
+        value + (alignment - remainder)
+    }
+}
+
+// ====================================================
+// Type mapping system
+// ====================================================
+
+/// Represents a Ruchy type mapped to WebAssembly
+struct RuchyWasmType {
+    /// Name of the type
+    type_name: String,
+    
+    /// Memory layout of the type
+    memory_layout: MemoryLayout,
+    
+    /// Element type (for arrays and collections)
+    element_type: Option<Box<RuchyWasmType>>,
+    
+    /// Fields (for structs)
+    fields: Vec<(String, Box<RuchyWasmType>)>,
+    
+    /// Parameter types (for functions)
+    param_types: Vec<Box<RuchyWasmType>>,
+    
+    /// Result type (for functions)
+    result_type: Option<Box<RuchyWasmType>>,
+    
+    /// Captured variables (for closures)
+    captured_vars: Vec<Box<RuchyWasmType>>,
+    
+    /// Type parameters (for generic types)
+    type_params: Vec<Box<RuchyWasmType>>,
+    
+    /// Size of the type in bytes
+    size_bytes: i32,
+    
+    /// Alignment of the type in bytes
+    alignment: i32,
+}
+
+impl RuchyWasmType {
+    /// Creates a new type mapping
+    fn new(type_name: String) -> RuchyWasmType {
+        let (memory_layout, size_bytes, alignment) = match type_name.as_str() {
+            // Primitive types
+            "i32" => (MemoryLayout::new(0, 4, 4), 4, 4),
+            "i64" => (MemoryLayout::new(0, 8, 8), 8, 8),
+            "f32" => (MemoryLayout::new(0, 4, 4), 4, 4),
+            "f64" => (MemoryLayout::new(0, 8, 8), 8, 8),
+            "bool" => (MemoryLayout::new(0, 4, 4), 4, 4),  // bool uses i32 in WASM
+            "()" => (MemoryLayout::new(0, 0, 1), 0, 1),  // unit type has no memory layout
+            
+            // Complex types
+            "String" => {
+                // String has length (4 bytes) and capacity (4 bytes)
+                let mut layout = MemoryLayout::new(8, 0, 4);
+                (layout, 8, 4)  // 8 bytes for header, aligned to 4 bytes
+            },
+            
+            // Array types
+            _ if type_name.starts_with("Array<") => {
+                // Arrays have length (4 bytes) and capacity (4 bytes)
+                let mut layout = MemoryLayout::new(8, 0, 4);
+                (layout, 8, 4)  // 8 bytes for header, aligned to 4 bytes
+            },
+            
+            // Default to i32 pointer for other types
+            _ => (MemoryLayout::new(0, 4, 4), 4, 4),
+        };
+        
+        let element_type = if type_name.starts_with("Array<") {
+            // Extract element type from Array<T>
+            let element_type_str = type_name[6..type_name.len()-1].to_string();
+            Some(Box::new(RuchyWasmType::new(element_type_str)))
+        } else {
+            None
+        };
+        
+        RuchyWasmType {
+            type_name: type_name,
+            memory_layout: memory_layout,
+            element_type: element_type,
+            fields: vec![],
+            param_types: vec![],
+            result_type: None,
+            captured_vars: vec![],
+            type_params: vec![],
+            size_bytes: size_bytes,
+            alignment: alignment,
+        }
+    }
+    
+    /// Creates a new struct type
+    fn new_struct(name: String, fields: Vec<(String, RuchyWasmType)>) -> RuchyWasmType {
+        let mut memory_layout = MemoryLayout::new(0, 0, 4);  // Start with 4-byte alignment
+        let mut offset = 0;
+        let mut max_alignment = 4;
+        
+        // Add fields with proper alignment
+        for (field_name, field_type) in &fields {
+            // Align field to its type's alignment
+            offset = align(offset, field_type.alignment);
+            
+            // Add field to layout
+            memory_layout.add_field(field_name.clone(), field_type.clone(), offset);
+            
+            // Update offset for next field
+            offset += field_type.size_bytes;
+            
+            // Update max alignment
+            if field_type.alignment > max_alignment {
+                max_alignment = field_type.alignment;
+            }
+        }
+        
+        // Update layout alignment to max field alignment
+        memory_layout.alignment = max_alignment;
+        
+        // Total size is aligned to the struct's alignment
+        let total_size = align(offset, max_alignment);
+        
+        RuchyWasmType {
+            type_name: name,
+            memory_layout: memory_layout,
+            element_type: None,
+            fields: fields.into_iter().map(|(name, type_)| (name, Box::new(type_))).collect(),
+            param_types: vec![],
+            result_type: None,
+            captured_vars: vec![],
+            type_params: vec![],
+            size_bytes: total_size,
+            alignment: max_alignment,
+        }
+    }
+    
+    /// Creates a new function type
+    fn new_function(params: Vec<RuchyWasmType>, result: RuchyWasmType) -> RuchyWasmType {
+        RuchyWasmType {
+            type_name: "Function".to_string(),
+            memory_layout: MemoryLayout::new(0, 4, 4),  // Function is a pointer (i32)
+            element_type: None,
+            fields: vec![],
+            param_types: params.into_iter().map(|p| Box::new(p)).collect(),
+            result_type: Some(Box::new(result)),
+            captured_vars: vec![],
+            type_params: vec![],
+            size_bytes: 4,
+            alignment: 4,
+        }
+    }
+    
+    /// Creates a new closure type
+    fn new_closure(params: Vec<RuchyWasmType>, result: RuchyWasmType, 
+                   captured: Vec<RuchyWasmType>) -> RuchyWasmType {
+        let mut memory_layout = MemoryLayout::new(4, 0, 4);  // Start with function index (4 bytes)
+        let mut offset = 4;  // Start after function index
+        let mut max_alignment = 4;
+        
+        // Add captured variables with proper alignment
+        for (i, capture_type) in captured.iter().enumerate() {
+            // Align capture to its type's alignment
+            offset = align(offset, capture_type.alignment);
+            
+            // Add capture to layout
+            memory_layout.add_field(format!("capture_{}", i), capture_type.clone(), offset);
+            
+            // Update offset for next capture
+            offset += capture_type.size_bytes;
+            
+            // Update max alignment
+            if capture_type.alignment > max_alignment {
+                max_alignment = capture_type.alignment;
+            }
+        }
+        
+        // Update layout alignment to max capture alignment
+        memory_layout.alignment = max_alignment;
+        
+        // Total size is aligned to the closure's alignment
+        let total_size = align(offset, max_alignment);
+        
+        RuchyWasmType {
+            type_name: "Closure".to_string(),
+            memory_layout: memory_layout,
+            element_type: None,
+            fields: vec![],
+            param_types: params.into_iter().map(|p| Box::new(p)).collect(),
+            result_type: Some(Box::new(result)),
+            captured_vars: captured.into_iter().map(|c| Box::new(c)).collect(),
+            type_params: vec![],
+            size_bytes: total_size,
+            alignment: max_alignment,
+        }
+    }
+    
+    /// Gets the WebAssembly type for this Ruchy type
+    fn wasm_type(&self) -> Type {
+        match self.type_name.as_str() {
+            "i32" => Type::I32,
+            "i64" => Type::I64,
+            "f32" => Type::F32,
+            "f64" => Type::F64,
+            "bool" => Type::I32,  // bool uses i32 in WASM
+            "()" => Type::Void,
+            _ => Type::I32,  // All complex types are pointers (i32)
+        }
+    }
+    
+    /// Gets the memory layout for this type
+    fn memory_layout(&self) -> &MemoryLayout {
+        &self.memory_layout
+    }
+    
+    /// Gets the element type for arrays
+    fn element_type(&self) -> Option<&RuchyWasmType> {
+        match &self.element_type {
+            Some(boxed) => Some(boxed.as_ref()),
+            None => None,
+        }
+    }
+    
+    /// Gets the offset of a field in a struct
+    fn field_offset(&self, field_name: &String) -> Option<i32> {
+        self.memory_layout.field_offset(field_name)
+    }
+    
+    /// Gets the type of a field in a struct
+    fn field_type(&self, field_name: &String) -> Option<&RuchyWasmType> {
+        match self.memory_layout.field_type(field_name) {
+            Some(field_type) => Some(field_type),
+            None => None,
+        }
+    }
+    
+    /// Converts this type to a WebAssembly function type
+    fn to_wasm_function(&self) -> WasmFunction {
+        let param_types = self.param_types.iter()
+            .map(|param| param.wasm_type())
+            .collect();
+        
+        let result_type = match &self.result_type {
+            Some(result) => result.wasm_type(),
+            None => Type::Void,
+        };
+        
+        WasmFunction {
+            params: param_types,
+            result: result_type,
+        }
+    }
+    
+    /// Creates a deep clone of the type
+    fn clone(&self) -> RuchyWasmType {
+        RuchyWasmType {
+            type_name: self.type_name.clone(),
+            memory_layout: self.memory_layout.clone(),
+            element_type: self.element_type.as_ref().map(|e| Box::new(e.as_ref().clone())),
+            fields: self.fields.iter().map(|(name, type_)| (name.clone(), Box::new(type_.as_ref().clone()))).collect(),
+            param_types: self.param_types.iter().map(|p| Box::new(p.as_ref().clone())).collect(),
+            result_type: self.result_type.as_ref().map(|r| Box::new(r.as_ref().clone())),
+            captured_vars: self.captured_vars.iter().map(|c| Box::new(c.as_ref().clone())).collect(),
+            type_params: self.type_params.iter().map(|t| Box::new(t.as_ref().clone())).collect(),
+            size_bytes: self.size_bytes,
+            alignment: self.alignment,
+        }
+    }
+}
+
+/// Represents a WebAssembly function type
+struct WasmFunction {
+    params: Vec<Type>,
+    result: Type,
+}
+
+impl WasmFunction {
+    /// Creates a new WebAssembly function type
+    fn new(params: Vec<Type>, result: Type) -> WasmFunction {
+        WasmFunction {
+            params: params,
+            result: result,
+        }
+    }
+    
+    /// Gets the parameter types
+    fn param_types(&self) -> &Vec<Type> {
+        &self.params
+    }
+    
+    /// Gets the result type
+    fn result_type(&self) -> Type {
+        self.result
+    }
+}
+
+// ====================================================
+// WASM emitter
+// ====================================================
+
+/// A function definition
+struct FunctionDef {
+    name: String,
+    params: Vec<(String, String)>,  // (name, type)
+    result_type: String,
+    body: String,
+}
+
+/// WebAssembly emitter for Ruchy
+struct WasmEmitter {
+    /// The WebAssembly module being built
+    module: Module,
+    
+    /// Function table (name -> index)
+    function_table: Map<String, i32>,
+    
+    /// Type registry (type name -> RuchyWasmType)
+    type_registry: Map<String, RuchyWasmType>,
+    
+    /// Function definitions
+    functions: Vec<FunctionDef>,
+    
+    /// String literal cache (string -> address)
+    string_cache: Map<String, i32>,
+    
+    /// Next string address
+    next_string_address: i32,
+}
+
+impl WasmEmitter {
+    /// Creates a new WebAssembly emitter
+    fn new() -> Result<WasmEmitter, String> {
+        let mut emitter = WasmEmitter {
+            module: Module::new(),
+            function_table: {},
+            type_registry: {},
+            functions: vec![],
+            string_cache: {},
+            next_string_address: 1024,  // Start strings at 1KB
+        };
+        
+        // Initialize with standard memory
+        emitter.module.add_memory("memory".to_string(), 1, None)?;  // 1 page initial, no maximum
+        
+        // Add standard imports for memory management
+        emitter.add_memory_management_imports()?;
+        
+        // Register known types
+        emitter.register_primitive_types();
+        
+        Ok(emitter)
+    }
+    
+    /// Adds standard memory management imports
+    fn add_memory_management_imports(&mut self) -> Result<(), String> {
+        // Allocate memory
+        let alloc_func = Function::new(
+            vec![Type::I32],  // size in bytes
+            vec![Type::I32],  // pointer
+        );
+        self.module.add_function_import(
+            "js".to_string(),
+            "alloc".to_string(),
+            alloc_func
+        )?;
+        
+        // Free memory
+        let free_func = Function::new(
+            vec![Type::I32],  // pointer
+            vec![],           // void
+        );
+        self.module.add_function_import(
+            "js".to_string(),
+            "free".to_string(),
+            free_func
+        )?;
+        
+        // Allocate string
+        let alloc_string_func = Function::new(
+            vec![Type::I32, Type::I32],  // length, capacity
+            vec![Type::I32],             // pointer
+        );
+        self.module.add_function_import(
+            "js".to_string(),
+            "alloc_string".to_string(),
+            alloc_string_func
+        )?;
+        
+        Ok(())
+    }
+    
+    /// Registers primitive types
+    fn register_primitive_types(&mut self) {
+        self.type_registry.insert("i32".to_string(), RuchyWasmType::new("i32".to_string()));
+        self.type_registry.insert("i64".to_string(), RuchyWasmType::new("i64".to_string()));
+        self.type_registry.insert("f32".to_string(), RuchyWasmType::new("f32".to_string()));
+        self.type_registry.insert("f64".to_string(), RuchyWasmType::new("f64".to_string()));
+        self.type_registry.insert("bool".to_string(), RuchyWasmType::new("bool".to_string()));
+        self.type_registry.insert("()".to_string(), RuchyWasmType::new("()".to_string()));
+        self.type_registry.insert("String".to_string(), RuchyWasmType::new("String".to_string()));
+    }
+    
+    /// Gets a type from the registry or creates it if it doesn't exist
+    fn get_type(&mut self, type_name: String) -> RuchyWasmType {
+        if self.type_registry.contains_key(&type_name) {
+            return self.type_registry[&type_name].clone();
+        } else {
+            let ruchy_type = RuchyWasmType::new(type_name.clone());
+            self.type_registry.insert(type_name, ruchy_type.clone());
+            ruchy_type
+        }
+    }
+    
+    /// Adds a function to the module
+    fn add_function(&mut self, name: String, params: Vec<(String, String)>, 
+                    result_type: String, body: String) -> Result<(), String> {
+        // Convert parameters to WASM types
+        let mut wasm_params = vec![];
+        let mut param_names = vec![];
+        
+        for (param_name, param_type) in &params {
+            param_names.push(param_name.clone());
+            wasm_params.push(wasmify_type(&param_type));
+        }
+        
+        // Convert result type to WASM type
+        let wasm_result = wasmify_type(&result_type);
+        
+        // Create function
+        let mut function = self.module.new_function(name.clone(), wasm_params, vec![wasm_result]);
+        
+        // Set parameter names
+        for (i, param_name) in param_names.iter().enumerate() {
+            function.set_param_name(i as i32, param_name.clone())?;
+        }
+        
+        // Add function to module
+        self.module.add_function(name.clone(), function)?;
+        
+        // Add to function table
+        self.function_table.insert(name.clone(), self.functions.len() as i32);
+        
+        // Add to function definitions
+        self.functions.push(FunctionDef {
+            name: name,
+            params: params,
+            result_type: result_type,
+            body: body,
+        });
+        
+        Ok(())
+    }
+    
+    /// Generates function bodies and exports
+    fn generate_bodies_and_exports(&mut self) -> Result<(), String> {
+        // Generate function bodies
+        for func_def in &self.functions {
+            let function = self.module.get_function_mut(func_def.name.clone())
+                .ok_or(format!("Function {} not found", func_def.name))?;
+            
+            // Simple implementation - just return a constant for now
+            match func_def.result_type.as_str() {
+                "i32" => {
+                    function.add_instruction(Instruction::i32_const(42));
+                },
+                "i64" => {
+                    function.add_instruction(Instruction::i64_const(42));
+                },
+                "f32" => {
+                    function.add_instruction(Instruction::f32_const(3.14));
+                },
+                "f64" => {
+                    function.add_instruction(Instruction::f64_const(3.14159));
+                },
+                "()" => {
+                    // No return value needed
+                },
+                _ => {
+                    // Default to returning null (0)
+                    function.add_instruction(Instruction::i32_const(0));
+                },
+            }
+        }
+        
+        // Export functions
+        for func_def in &self.functions {
+            self.module.export_function(func_def.name.clone(), func_def.name.clone())?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Generates the WebAssembly module
+    fn generate_module(&mut self) -> Result<Module, String> {
+        // Generate function bodies and exports
+        self.generate_bodies_and_exports()?;
+        
+        // Return a clone of the module
+        Ok(self.module.clone())
+    }
+    
+    /// Generates WebAssembly Text Format (WAT)
+    fn emit_wat(&mut self) -> Result<String, String> {
+        // Generate module
+        let module = self.generate_module()?;
+        
+        // Convert to WAT format
+        emit(module)
+    }
+    
+    /// Checks if the module has memory
+    fn has_memory(&self) -> bool {
+        !self.module.memories.is_empty()
+    }
+    
+    /// Checks if the module has a function with the given name
+    fn has_function(&self, name: &String) -> bool {
+        self.function_table.contains_key(name)
+    }
+}
+
+// ====================================================
+// Utility functions
+// ====================================================
+
+/// Maps a Ruchy type string to a WebAssembly type
+fn wasmify_type(type_string: &String) -> Type {
+    match type_string.as_str() {
+        "i32" => Type::I32,
+        "i64" => Type::I64,
+        "f32" => Type::F32,
+        "f64" => Type::F64,
+        "bool" => Type::I32,  // Booleans are i32 in WASM (0 = false, 1 = true)
+        "()" => Type::Void,
+        _ => Type::I32,  // All other types are pointers (i32)
+    }
+}
+
+/// Converts a Ruchy literal to a WebAssembly instruction
+fn wasmify_literal(type_string: &String, literal_value: &String) -> Result<Instruction, String> {
+    match type_string.as_str() {
+        "i32" => {
+            match literal_value.parse::<i32>() {
+                Ok(value) => Ok(Instruction::i32_const(value)),
+                Err(_) => Err(format!("Invalid i32 literal: {}", literal_value)),
+            }
+        },
+        "i64" => {
+            match literal_value.parse::<i64>() {
+                Ok(value) => Ok(Instruction::i64_const(value)),
+                Err(_) => Err(format!("Invalid i64 literal: {}", literal_value)),
+            }
+        },
+        "f32" => {
+            match literal_value.parse::<f32>() {
+                Ok(value) => Ok(Instruction::f32_const(value)),
+                Err(_) => Err(format!("Invalid f32 literal: {}", literal_value)),
+            }
+        },
+        "f64" => {
+            match literal_value.parse::<f64>() {
+                Ok(value) => Ok(Instruction::f64_const(value)),
+                Err(_) => Err(format!("Invalid f64 literal: {}", literal_value)),
+            }
+        },
+        "bool" => {
+            match literal_value.as_str() {
+                "true" => Ok(Instruction::i32_const(1)),
+                "false" => Ok(Instruction::i32_const(0)),
+                _ => Err(format!("Invalid bool literal: {}", literal_value)),
+            }
+        },
+        "String" => {
+            // Check for string literal format
+            if !literal_value.starts_with("\"") || !literal_value.ends_with("\"") {
+                return Err(format!("Invalid string literal: {}", literal_value));
+            }
+            
+            // Extract string content (remove quotes)
+            let str_content = &literal_value[1..literal_value.len()-1];
+            let str_length = str_content.len();
+            
+            // Create a sequence that calls alloc_string
+            let mut seq = InstructionSequence::sequence();
+            seq.add(Instruction::i32_const(str_length as i32));  // Length
+            seq.add(Instruction::i32_const(str_length as i32));  // Capacity
+            seq.add(Instruction::call("$alloc_string".to_string()));
+            
+            Ok(seq)
+        },
+        _ => {
+            // Default to i32 const 0 for unknown types
+            Ok(Instruction::i32_const(0))
+        }
+    }
+}
+
+/// Creates an instruction sequence for allocating a string
+fn alloc_string_sequence(length: i32, capacity: i32) -> InstructionSequence {
+    let mut seq = InstructionSequence::sequence();
+    seq.add(Instruction::i32_const(length));
+    seq.add(Instruction::i32_const(capacity));
+    seq.add(Instruction::call("$alloc_string".to_string()));
+    seq
+}
+
+/// A simple map implementation (would be replaced by a real Map in production)
+struct Map<K, V> {
+    entries: Vec<(K, V)>,
+}
+
+impl<K: Clone + PartialEq, V: Clone> Map<K, V> {
+    fn new() -> Map<K, V> {
+        Map { entries: vec![] }
+    }
+    
+    fn insert(&mut self, key: K, value: V) {
+        for entry in &mut self.entries {
+            if entry.0 == key {
+                entry.1 = value;
+                return;
+            }
+        }
+        self.entries.push((key, value));
+    }
+    
+    fn get(&self, key: &K) -> Option<&V> {
+        for entry in &self.entries {
+            if &entry.0 == key {
+                return Some(&entry.1);
+            }
+        }
+        None
+    }
+    
+    fn contains_key(&self, key: &K) -> bool {
+        for entry in &self.entries {
+            if &entry.0 == key {
+                return true;
+            }
+        }
+        false
+    }
+    
+    fn clone(&self) -> Map<K, V> {
+        Map { entries: self.entries.clone() }
+    }
+}
+
+// ====================================================
+// Public API
+// ====================================================
+
+/// Creates a new WebAssembly emitter
+pub fn create_wasm_emitter() -> Result<WasmEmitter, String> {
+    WasmEmitter::new()
+}
+
+/// Creates a new Ruchy type mapping
+pub fn create_ruchy_wasm_type(type_name: String) -> RuchyWasmType {
+    RuchyWasmType::new(type_name)
+}
+
+/// Creates a new WebAssembly function type
+pub fn create_wasm_function(params: Vec<Type>, result: Type) -> WasmFunction {
+    WasmFunction::new(params, result)
+}
+
+/// Maps a Ruchy type string to a WebAssembly type
+pub fn get_wasm_type(type_string: &String) -> Type {
+    wasmify_type(type_string)
+}
+
+/// Converts a Ruchy literal to a WebAssembly instruction
+pub fn get_wasm_literal(type_string: &String, literal_value: &String) -> Result<Instruction, String> {
+    wasmify_literal(type_string, literal_value)
+}

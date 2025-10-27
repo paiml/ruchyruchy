@@ -1,0 +1,131 @@
+// Runner script for multi-target compiler refactored tests
+// This script executes the test suite and reports results
+
+use std::process::Command;
+use std::time::Instant;
+use std::fs::File;
+use std::io::Write;
+
+fun main() {
+    println("🧪 Running Multi-Target Compiler Refactored Tests");
+    println("==============================================");
+    
+    let start = Instant::now();
+    
+    // Execute the test suite
+    let result = Command::new("ruchy")
+        .arg("run")
+        .arg("/home/noah/src/ruchyruchy/validation/wasm/test_multi_target_refactored.ruchy")
+        .output();
+        
+    let elapsed = start.elapsed();
+    
+    match result {
+        Ok(output) => {
+            // Convert output bytes to string
+            let output_str = String::from_utf8_lossy(&output.stdout);
+            let error_str = String::from_utf8_lossy(&output.stderr);
+            
+            // Print test output
+            println("\n{}", output_str);
+            
+            if !error_str.is_empty() {
+                println("\n⚠️ Errors:");
+                println("{}", error_str);
+            }
+            
+            // Check if tests passed
+            let success = output.status.success() && output_str.contains("All tests passed");
+            
+            // Generate report
+            generate_report(success, output_str.to_string(), error_str.to_string(), elapsed);
+            
+            if success {
+                println("\n✅ REFACTOR Phase Tests: PASSED");
+                println("Time: {:.2}s", elapsed.as_secs_f64());
+                println("\nResults saved to: /home/noah/src/ruchyruchy/validation/wasm/refactor_test_results.md");
+            } else {
+                println("\n❌ REFACTOR Phase Tests: FAILED");
+                println("Time: {:.2}s", elapsed.as_secs_f64());
+                println("\nCheck the error output above and fix the failing tests.");
+                std::process::exit(1);
+            }
+        },
+        Err(e) => {
+            println("\n❌ Failed to run tests: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fun generate_report(success: bool, output: String, errors: String, elapsed: std::time::Duration) {
+    let mut file = File::create("/home/noah/src/ruchyruchy/validation/wasm/refactor_test_results.md").unwrap();
+    
+    writeln!(file, "# Multi-Target Compiler REFACTOR Phase Test Results").unwrap();
+    writeln!(file, "\n## Summary").unwrap();
+    writeln!(file, "\n**Status**: {}", if success { "✅ PASSED" } else { "❌ FAILED" }).unwrap();
+    writeln!(file, "**Execution Time**: {:.2}s", elapsed.as_secs_f64()).unwrap();
+    writeln!(file, "**Date**: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")).unwrap();
+    
+    // Extract test results
+    let mut passed_tests = Vec::new();
+    let mut failed_tests = Vec::new();
+    
+    for line in output.lines() {
+        if line.starts_with("✅") {
+            passed_tests.push(line.trim_start_matches("✅ ").trim_end_matches(" passed"));
+        } else if line.starts_with("❌") {
+            failed_tests.push(line.trim_start_matches("❌ ").trim_end_matches(" failed"));
+        }
+    }
+    
+    writeln!(file, "**Tests Passed**: {}/{}", passed_tests.len(), passed_tests.len() + failed_tests.len()).unwrap();
+    
+    writeln!(file, "\n## Test Details").unwrap();
+    
+    writeln!(file, "\n### Passed Tests").unwrap();
+    writeln!(file, "\n| Test Name |").unwrap();
+    writeln!(file, "|-----------|").unwrap();
+    
+    for test in passed_tests {
+        writeln!(file, "| {} |", test).unwrap();
+    }
+    
+    if !failed_tests.is_empty() {
+        writeln!(file, "\n### Failed Tests").unwrap();
+        writeln!(file, "\n| Test Name |").unwrap();
+        writeln!(file, "|-----------|").unwrap();
+        
+        for test in failed_tests {
+            writeln!(file, "| {} |", test).unwrap();
+        }
+        
+        writeln!(file, "\n## Error Details").unwrap();
+        writeln!(file, "\n```").unwrap();
+        writeln!(file, "{}", errors).unwrap();
+        writeln!(file, "```").unwrap();
+    }
+    
+    writeln!(file, "\n## Next Steps").unwrap();
+    
+    if success {
+        writeln!(file, "\n1. Proceed to the TOOL phase").unwrap();
+        writeln!(file, "2. Implement property testing validation").unwrap();
+        writeln!(file, "3. Implement performance benchmarks").unwrap();
+        writeln!(file, "4. Verify quality metrics").unwrap();
+    } else {
+        writeln!(file, "\n1. Fix the failing tests").unwrap();
+        writeln!(file, "2. Verify the implementation against the requirements").unwrap();
+        writeln!(file, "3. Re-run the tests").unwrap();
+    }
+    
+    writeln!(file, "\n## Conclusion").unwrap();
+    
+    if success {
+        writeln!(file, "\nThe REFACTOR phase for WASM-003 (Multi-Target Integration) has been successfully completed.").unwrap();
+        writeln!(file, "The implementation provides a robust, modular, and maintainable multi-target compiler with enhanced").unwrap();
+        writeln!(file, "diagnostics, performance monitoring, and error recovery capabilities.").unwrap();
+    } else {
+        writeln!(file, "\nThe REFACTOR phase tests failed. Address the issues above before continuing.").unwrap();
+    }
+}

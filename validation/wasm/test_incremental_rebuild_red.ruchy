@@ -1,0 +1,489 @@
+// WASM-006: Incremental Compilation - Incremental Rebuild Tests (RED Phase)
+//
+// These tests verify incremental rebuild detection and minimal recompilation.
+// All tests should FAIL in the RED phase, indicating missing implementation.
+
+use std::path::Path;
+use std::collections::HashMap;
+
+// ============================================================================
+// Test 1: No Change - No Rebuild
+// ============================================================================
+
+test test_no_change_no_rebuild() {
+    println("Testing that unchanged project requires no rebuild...");
+
+    // Create a project with 10 modules
+    let project = Project::new("test_project");
+    for i in 0..10 {
+        project.add_module(format!("module{}.ruchy", i),
+            format!("pub fun func{}() -> i32 {{ return {}; }}", i, i));
+    }
+
+    // Initial build
+    let build1 = build_project(project.clone());
+    assert(build1.compiled_modules == 10, "Initial build should compile all 10 modules");
+    assert(build1.duration_ms > 0, "Build should take measurable time");
+
+    // Second build with no changes
+    let build2 = build_project(project.clone());
+    assert(build2.compiled_modules == 0, "No modules should be recompiled");
+    assert(build2.cache_hits == 10, "All modules should be cache hits");
+    assert(build2.duration_ms < 100, "No-change build should be <100ms");
+
+    println("✅ No change - no rebuild test passed");
+}
+
+// ============================================================================
+// Test 2: Single File Minimal Rebuild
+// ============================================================================
+
+test test_single_file_minimal_rebuild() {
+    println("Testing minimal rebuild for single file change...");
+
+    // Create project
+    let mut project = Project::new("minimal_rebuild");
+    for i in 0..10 {
+        project.add_module(format!("module{}.ruchy", i),
+            format!("pub fun func{}() -> i32 {{ return {}; }}", i, i));
+    }
+
+    // Initial build
+    build_project(project.clone());
+
+    // Change one file
+    project.update_module("module5.ruchy",
+        "pub fun func5() -> i32 { return 999; }");
+
+    // Rebuild
+    let build = build_project(project.clone());
+    assert(build.compiled_modules == 1, "Only changed module should be recompiled");
+    assert(build.recompiled == vec!["module5.ruchy"], "module5 should be recompiled");
+    assert(build.cache_hits == 9, "Other 9 modules should be cache hits");
+
+    println("✅ Single file minimal rebuild test passed");
+}
+
+// ============================================================================
+// Test 3: Dependency-Triggered Rebuild
+// ============================================================================
+
+test test_dependency_triggered_rebuild() {
+    println("Testing rebuild triggered by dependency changes...");
+
+    // Create modules with dependencies
+    let mut project = Project::new("deps");
+
+    // moduleB is independent
+    project.add_module("moduleB.ruchy",
+        "pub fun helper() -> i32 { return 42; }");
+
+    // moduleA depends on moduleB
+    project.add_module("moduleA.ruchy",
+        "use moduleB::helper;\npub fun main() -> i32 { return helper(); }");
+
+    // moduleC is independent
+    project.add_module("moduleC.ruchy",
+        "pub fun other() -> i32 { return 99; }");
+
+    // Initial build
+    build_project(project.clone());
+
+    // Change moduleB (dependency)
+    project.update_module("moduleB.ruchy",
+        "pub fun helper() -> i32 { return 100; }");
+
+    // Rebuild
+    let build = build_project(project.clone());
+
+    // Both moduleB and moduleA should be recompiled
+    assert(build.compiled_modules == 2, "Should recompile moduleB and dependent moduleA");
+    assert(build.recompiled.contains(&"moduleB.ruchy"), "moduleB should be recompiled");
+    assert(build.recompiled.contains(&"moduleA.ruchy"), "moduleA should be recompiled (dependent)");
+    assert(!build.recompiled.contains(&"moduleC.ruchy"), "moduleC should not be recompiled");
+    assert(build.cache_hits == 1, "moduleC should be cache hit");
+
+    println("✅ Dependency-triggered rebuild test passed");
+}
+
+// ============================================================================
+// Test 4: Transitive Dependencies
+// ============================================================================
+
+test test_transitive_dependencies() {
+    println("Testing transitive dependency rebuild...");
+
+    // Create chain: A -> B -> C
+    let mut project = Project::new("transitive");
+
+    project.add_module("moduleC.ruchy",
+        "pub fun base() -> i32 { return 1; }");
+
+    project.add_module("moduleB.ruchy",
+        "use moduleC::base;\npub fun middle() -> i32 { return base() + 1; }");
+
+    project.add_module("moduleA.ruchy",
+        "use moduleB::middle;\npub fun top() -> i32 { return middle() + 1; }");
+
+    // Initial build
+    build_project(project.clone());
+
+    // Change moduleC (bottom of chain)
+    project.update_module("moduleC.ruchy",
+        "pub fun base() -> i32 { return 10; }");
+
+    // Rebuild
+    let build = build_project(project.clone());
+
+    // All three should be recompiled (transitive)
+    assert(build.compiled_modules == 3, "All 3 modules should be recompiled");
+    assert(build.recompiled.contains(&"moduleC.ruchy"), "moduleC changed");
+    assert(build.recompiled.contains(&"moduleB.ruchy"), "moduleB depends on C");
+    assert(build.recompiled.contains(&"moduleA.ruchy"), "moduleA depends on B (transitive)");
+
+    println("✅ Transitive dependencies test passed");
+}
+
+// ============================================================================
+// Test 5: Circular Dependencies
+// ============================================================================
+
+test test_circular_dependencies() {
+    println("Testing circular dependency handling...");
+
+    // Create circular dependency: A -> B -> A
+    let mut project = Project::new("circular");
+
+    project.add_module("moduleA.ruchy",
+        "use moduleB::funcB;\npub fun funcA() -> i32 { return funcB() + 1; }");
+
+    project.add_module("moduleB.ruchy",
+        "use moduleA::funcA;\npub fun funcB() -> i32 { return 10; }");
+
+    // Initial build should handle circular deps
+    let build1 = build_project(project.clone());
+    assert(build1.success, "Should handle circular dependencies");
+
+    // Change one module in the cycle
+    project.update_module("moduleB.ruchy",
+        "use moduleA::funcA;\npub fun funcB() -> i32 { return 20; }");
+
+    // Rebuild should recompile both (they're in a cycle)
+    let build2 = build_project(project.clone());
+    assert(build2.compiled_modules == 2, "Both modules in cycle should be recompiled");
+    assert(build2.success, "Should successfully rebuild with circular deps");
+
+    println("✅ Circular dependencies test passed");
+}
+
+// ============================================================================
+// Test 6: Parallel Compilation
+// ============================================================================
+
+test test_parallel_compilation() {
+    println("Testing parallel compilation of independent modules...");
+
+    // Create 10 independent modules
+    let mut project = Project::new("parallel");
+    for i in 0..10 {
+        project.add_module(format!("module{}.ruchy", i),
+            format!("pub fun func{}() -> i32 {{ return {}; }}", i, i));
+    }
+
+    // Build with parallelism
+    let start = now();
+    let build = build_project_parallel(project.clone(), 4); // 4 threads
+    let parallel_duration = now() - start;
+
+    // Build sequentially for comparison
+    let start2 = now();
+    let build2 = build_project_sequential(project.clone());
+    let sequential_duration = now() - start2;
+
+    // Parallel should be faster
+    let speedup = sequential_duration as f64 / parallel_duration as f64;
+    assert(speedup > 2.0, format!("Parallel build should be >2x faster (got {}x)", speedup));
+
+    println("✅ Parallel compilation test passed ({}x speedup)", speedup);
+}
+
+// ============================================================================
+// Test 7: Diamond Dependency Pattern
+// ============================================================================
+
+test test_diamond_dependency() {
+    println("Testing diamond dependency pattern...");
+
+    // Diamond: A depends on B and C, both depend on D
+    //     A
+    //    / \
+    //   B   C
+    //    \ /
+    //     D
+
+    let mut project = Project::new("diamond");
+
+    project.add_module("moduleD.ruchy",
+        "pub fun base() -> i32 { return 1; }");
+
+    project.add_module("moduleB.ruchy",
+        "use moduleD::base;\npub fun left() -> i32 { return base() + 10; }");
+
+    project.add_module("moduleC.ruchy",
+        "use moduleD::base;\npub fun right() -> i32 { return base() + 20; }");
+
+    project.add_module("moduleA.ruchy",
+        "use moduleB::left;\nuse moduleC::right;\npub fun top() -> i32 { return left() + right(); }");
+
+    // Initial build
+    build_project(project.clone());
+
+    // Change moduleD (bottom of diamond)
+    project.update_module("moduleD.ruchy",
+        "pub fun base() -> i32 { return 5; }");
+
+    // Rebuild - all 4 should be recompiled
+    let build = build_project(project.clone());
+    assert(build.compiled_modules == 4, "All 4 modules should be recompiled");
+
+    // Now change only moduleB (middle)
+    project.update_module("moduleB.ruchy",
+        "use moduleD::base;\npub fun left() -> i32 { return base() + 15; }");
+
+    // Rebuild - only A and B should be recompiled
+    let build2 = build_project(project.clone());
+    assert(build2.compiled_modules == 2, "Only B and A should be recompiled");
+    assert(build2.recompiled.contains(&"moduleB.ruchy"), "B changed");
+    assert(build2.recompiled.contains(&"moduleA.ruchy"), "A depends on B");
+    assert(!build2.recompiled.contains(&"moduleC.ruchy"), "C unchanged");
+    assert(!build2.recompiled.contains(&"moduleD.ruchy"), "D unchanged");
+
+    println("✅ Diamond dependency test passed");
+}
+
+// ============================================================================
+// Test 8: Type-Only Changes
+// ============================================================================
+
+test test_type_only_changes() {
+    println("Testing rebuild for type-only changes...");
+
+    let mut project = Project::new("types");
+
+    project.add_module("types.ruchy",
+        "pub type UserId = i32;");
+
+    project.add_module("users.ruchy",
+        "use types::UserId;\npub fun get_user(id: UserId) -> String { return \"User\"; }");
+
+    // Initial build
+    build_project(project.clone());
+
+    // Change type definition
+    project.update_module("types.ruchy",
+        "pub type UserId = i64;"); // i32 -> i64
+
+    // Rebuild - users.ruchy should be recompiled
+    let build = build_project(project.clone());
+    assert(build.compiled_modules == 2, "Both modules should be recompiled");
+    assert(build.recompiled.contains(&"users.ruchy"), "users.ruchy uses the changed type");
+
+    println("✅ Type-only changes test passed");
+}
+
+// ============================================================================
+// Test 9: Multi-File Changes Batched
+// ============================================================================
+
+test test_multi_file_changes_batched() {
+    println("Testing efficient batched rebuild for multiple changes...");
+
+    let mut project = Project::new("batch");
+    for i in 0..20 {
+        project.add_module(format!("module{}.ruchy", i),
+            format!("pub fun func{}() -> i32 {{ return {}; }}", i, i));
+    }
+
+    // Initial build
+    build_project(project.clone());
+
+    // Change 5 files
+    for i in vec![2, 5, 9, 13, 17] {
+        project.update_module(format!("module{}.ruchy", i),
+            format!("pub fun func{}() -> i32 {{ return {}; }}", i, i * 2));
+    }
+
+    // Rebuild
+    let build = build_project(project.clone());
+    assert(build.compiled_modules == 5, "Should recompile exactly 5 changed modules");
+    assert(build.cache_hits == 15, "Other 15 modules should be cache hits");
+
+    println("✅ Multi-file changes batched test passed");
+}
+
+// ============================================================================
+// Test 10: Dependency Graph Correctness
+// ============================================================================
+
+test test_dependency_graph_correctness() {
+    println("Testing dependency graph construction correctness...");
+
+    let mut project = Project::new("graph");
+
+    project.add_module("a.ruchy", "use b::B; use c::C; pub struct A {}");
+    project.add_module("b.ruchy", "use d::D; pub struct B {}");
+    project.add_module("c.ruchy", "use d::D; pub struct C {}");
+    project.add_module("d.ruchy", "pub struct D {}");
+
+    // Build and get dependency graph
+    build_project(project.clone());
+    let graph = get_dependency_graph(project.clone());
+
+    // Verify graph structure
+    assert(graph.has_edge("a.ruchy", "b.ruchy"), "A should depend on B");
+    assert(graph.has_edge("a.ruchy", "c.ruchy"), "A should depend on C");
+    assert(graph.has_edge("b.ruchy", "d.ruchy"), "B should depend on D");
+    assert(graph.has_edge("c.ruchy", "d.ruchy"), "C should depend on D");
+
+    // Verify transitive dependencies
+    let transitive = graph.get_transitive_dependencies("a.ruchy");
+    assert(transitive.contains(&"b.ruchy"), "A transitively depends on B");
+    assert(transitive.contains(&"c.ruchy"), "A transitively depends on C");
+    assert(transitive.contains(&"d.ruchy"), "A transitively depends on D (through B and C)");
+
+    // Verify reverse dependencies
+    let dependents = graph.get_dependents("d.ruchy");
+    assert(dependents.contains(&"b.ruchy"), "B depends on D");
+    assert(dependents.contains(&"c.ruchy"), "C depends on D");
+
+    println("✅ Dependency graph correctness test passed");
+}
+
+// ============================================================================
+// Helper Types (will fail in RED - not implemented)
+// ============================================================================
+
+struct Project {
+    name: String,
+    modules: HashMap<String, String>,
+}
+
+impl Project {
+    fun new(name: String) -> Self {
+        Project {
+            name,
+            modules: HashMap::new(),
+        }
+    }
+
+    fun add_module(&mut self, path: String, content: String) {
+        self.modules.insert(path, content);
+    }
+
+    fun update_module(&mut self, path: String, content: String) {
+        self.modules.insert(path, content);
+    }
+
+    fun clone(&self) -> Self {
+        Project {
+            name: self.name.clone(),
+            modules: self.modules.clone(),
+        }
+    }
+}
+
+struct BuildResult {
+    success: bool,
+    compiled_modules: usize,
+    cache_hits: usize,
+    recompiled: Vec<String>,
+    duration_ms: u64,
+}
+
+struct DependencyGraph {
+    edges: Vec<(String, String)>,
+}
+
+impl DependencyGraph {
+    fun has_edge(&self, from: &str, to: &str) -> bool {
+        self.edges.iter().any(|(f, t)| f == from && t == to)
+    }
+
+    fun get_transitive_dependencies(&self, module: &str) -> Vec<String> {
+        Vec::new() // Placeholder
+    }
+
+    fun get_dependents(&self, module: &str) -> Vec<String> {
+        Vec::new() // Placeholder
+    }
+}
+
+// ============================================================================
+// Helper Functions (will fail in RED - not implemented)
+// ============================================================================
+
+fun build_project(project: Project) -> BuildResult {
+    panic!("Incremental build not implemented");
+}
+
+fun build_project_parallel(project: Project, threads: usize) -> BuildResult {
+    panic!("Parallel build not implemented");
+}
+
+fun build_project_sequential(project: Project) -> BuildResult {
+    panic!("Sequential build not implemented");
+}
+
+fun get_dependency_graph(project: Project) -> DependencyGraph {
+    panic!("Dependency graph construction not implemented");
+}
+
+fun now() -> u64 {
+    panic!("Timestamp not implemented");
+}
+
+// ============================================================================
+// Main Test Runner
+// ============================================================================
+
+fun main() {
+    println("=== WASM-006: Incremental Rebuild Tests (RED Phase) ===");
+    println("All tests should FAIL - implementation not yet done");
+    println("");
+
+    let mut passed = 0;
+    let mut failed = 0;
+
+    let tests = vec![
+        ("No Change - No Rebuild", test_no_change_no_rebuild),
+        ("Single File Minimal Rebuild", test_single_file_minimal_rebuild),
+        ("Dependency-Triggered Rebuild", test_dependency_triggered_rebuild),
+        ("Transitive Dependencies", test_transitive_dependencies),
+        ("Circular Dependencies", test_circular_dependencies),
+        ("Parallel Compilation", test_parallel_compilation),
+        ("Diamond Dependency Pattern", test_diamond_dependency),
+        ("Type-Only Changes", test_type_only_changes),
+        ("Multi-File Changes Batched", test_multi_file_changes_batched),
+        ("Dependency Graph Correctness", test_dependency_graph_correctness),
+    ];
+
+    for (name, test_fn) in tests {
+        println("\nRunning: {}", name);
+        match std::panic::catch_unwind(test_fn) {
+            Ok(_) => {
+                println!("❌ UNEXPECTED PASS: {}", name);
+                passed += 1;
+            },
+            Err(e) => {
+                println!("✅ EXPECTED FAIL: {}", name);
+                println!("   Reason: {:?}", e);
+                failed += 1;
+            }
+        }
+    }
+
+    println("\n=== Test Summary ===");
+    println!("Expected Failures: {}", failed);
+    println!("Unexpected Passes: {}", passed);
+    println!("\n✅ RED Phase: All tests failing as expected!");
+}

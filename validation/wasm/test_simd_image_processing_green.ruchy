@@ -1,0 +1,376 @@
+// SIMD Image Processing Tests for WASM-004 TOOL phase
+// This file demonstrates SIMD acceleration for common image processing operations
+
+import { 
+    F32x4, I32x4, I8x16, V128,
+    f32x4, i32x4,
+    property_simd_scalar_equivalence,
+    simd_equals, assert_simd_equals,
+    gen_f32x4, gen_i32x4,
+    benchmark_scalar_vs_simd,
+    register_simd_test_suite,
+    run_simd_tests
+} from "./simd_test_framework.ruchy";
+
+// -----------------------------------------------------------------------------
+// SIMD-accelerated image processing operations
+// -----------------------------------------------------------------------------
+
+// SIMD implementation of RGBA to grayscale conversion
+// Uses luminance formula: Y = 0.299*R + 0.587*G + 0.114*B
+fun rgba_to_grayscale_simd(pixels: [I32x4]) -> [I32x4] {
+    let result = [];
+    
+    // Coefficients for R, G, B channels
+    let r_coeff = f32x4(0.299, 0.299, 0.299, 0.299);
+    let g_coeff = f32x4(0.587, 0.587, 0.587, 0.587);
+    let b_coeff = f32x4(0.114, 0.114, 0.114, 0.114);
+    
+    for pixel_group in pixels {
+        // Extract RGBA components from packed integers
+        // In real implementation, would use SIMD shuffles
+        let r = extract_red_simd(pixel_group);
+        let g = extract_green_simd(pixel_group);
+        let b = extract_blue_simd(pixel_group);
+        
+        // Calculate grayscale using SIMD operations
+        let r_contribution = f32x4_mul(r_coeff, r);
+        let g_contribution = f32x4_mul(g_coeff, g);
+        let b_contribution = f32x4_mul(b_coeff, b);
+        
+        // Sum contributions
+        let gray = f32x4_add(r_contribution, g_contribution);
+        gray = f32x4_add(gray, b_contribution);
+        
+        // Pack back into RGBA format (keeping alpha channel)
+        let gray_rgba = pack_grayscale_simd(gray, pixel_group);
+        result.push(gray_rgba);
+    }
+    
+    return result;
+}
+
+// Helper: extract red channel from RGBA pixels (simplified for demo)
+fun extract_red_simd(rgba: I32x4) -> F32x4 {
+    return [
+        ((rgba[0] >> 24) & 0xFF) as f32,
+        ((rgba[1] >> 24) & 0xFF) as f32,
+        ((rgba[2] >> 24) & 0xFF) as f32,
+        ((rgba[3] >> 24) & 0xFF) as f32
+    ];
+}
+
+// Helper: extract green channel from RGBA pixels (simplified for demo)
+fun extract_green_simd(rgba: I32x4) -> F32x4 {
+    return [
+        ((rgba[0] >> 16) & 0xFF) as f32,
+        ((rgba[1] >> 16) & 0xFF) as f32,
+        ((rgba[2] >> 16) & 0xFF) as f32,
+        ((rgba[3] >> 16) & 0xFF) as f32
+    ];
+}
+
+// Helper: extract blue channel from RGBA pixels (simplified for demo)
+fun extract_blue_simd(rgba: I32x4) -> F32x4 {
+    return [
+        ((rgba[0] >> 8) & 0xFF) as f32,
+        ((rgba[1] >> 8) & 0xFF) as f32,
+        ((rgba[2] >> 8) & 0xFF) as f32,
+        ((rgba[3] >> 8) & 0xFF) as f32
+    ];
+}
+
+// Helper: pack grayscale values back into RGBA format (simplified for demo)
+fun pack_grayscale_simd(gray: F32x4, original: I32x4) -> I32x4 {
+    return [
+        ((gray[0] as i32) << 24) | ((gray[0] as i32) << 16) | 
+        ((gray[0] as i32) << 8) | (original[0] & 0xFF),
+        
+        ((gray[1] as i32) << 24) | ((gray[1] as i32) << 16) | 
+        ((gray[1] as i32) << 8) | (original[1] & 0xFF),
+        
+        ((gray[2] as i32) << 24) | ((gray[2] as i32) << 16) | 
+        ((gray[2] as i32) << 8) | (original[2] & 0xFF),
+        
+        ((gray[3] as i32) << 24) | ((gray[3] as i32) << 16) | 
+        ((gray[3] as i32) << 8) | (original[3] & 0xFF)
+    ];
+}
+
+// Scalar implementation of RGBA to grayscale for comparison
+fun rgba_to_grayscale_scalar(pixels: [I32x4]) -> [I32x4] {
+    let result = [];
+    
+    for pixel_group in pixels {
+        let scalar_result = [0, 0, 0, 0];
+        
+        for i in 0..4 {
+            let rgba = pixel_group[i];
+            
+            // Extract RGB components
+            let r = ((rgba >> 24) & 0xFF) as f32;
+            let g = ((rgba >> 16) & 0xFF) as f32;
+            let b = ((rgba >> 8) & 0xFF) as f32;
+            let a = (rgba & 0xFF) as f32;
+            
+            // Calculate grayscale
+            let gray = (0.299 * r + 0.587 * g + 0.114 * b) as i32;
+            
+            // Pack back into RGBA format
+            scalar_result[i] = (gray << 24) | (gray << 16) | (gray << 8) | (rgba & 0xFF);
+        }
+        
+        result.push(scalar_result);
+    }
+    
+    return result;
+}
+
+// SIMD implementation of image blur (box filter)
+fun box_blur_simd(pixels: [I32x4], width: i32, height: i32) -> [I32x4] {
+    let result = [];
+    
+    // For a real implementation, we'd handle borders properly
+    // This is simplified for the example
+    for y in 1..(height - 1) {
+        for x in 1..(width - 1) {
+            let idx = y * width + x;
+            
+            // Get 3x3 neighborhood (simplified)
+            let center = pixels[idx];
+            let up = pixels[idx - width];
+            let down = pixels[idx + width];
+            let left = pixels[idx - 1];
+            let right = pixels[idx + 1];
+            
+            // Average the pixel values using SIMD
+            let sum = f32x4_add(f32x4_add(f32x4_add(f32x4_add(
+                convert_rgba_to_f32x4(center),
+                convert_rgba_to_f32x4(up)),
+                convert_rgba_to_f32x4(down)),
+                convert_rgba_to_f32x4(left)),
+                convert_rgba_to_f32x4(right));
+            
+            // Divide by 5 (average)
+            let blurred = f32x4_div(sum, f32x4(5.0, 5.0, 5.0, 5.0));
+            
+            // Convert back to integer format
+            result.push(convert_f32x4_to_rgba(blurred));
+        }
+    }
+    
+    return result;
+}
+
+// Helper: Convert RGBA to floating point format for calculations
+fun convert_rgba_to_f32x4(rgba: I32x4) -> F32x4 {
+    return [
+        rgba[0] as f32,
+        rgba[1] as f32,
+        rgba[2] as f32,
+        rgba[3] as f32
+    ];
+}
+
+// Helper: Convert floating point back to RGBA format
+fun convert_f32x4_to_rgba(values: F32x4) -> I32x4 {
+    return [
+        values[0] as i32,
+        values[1] as i32,
+        values[2] as i32,
+        values[3] as i32
+    ];
+}
+
+// SIMD vector addition for F32x4 (used in blur)
+fun f32x4_add(a: F32x4, b: F32x4) -> F32x4 {
+    return [
+        a[0] + b[0],
+        a[1] + b[1],
+        a[2] + b[2],
+        a[3] + b[3]
+    ];
+}
+
+// SIMD vector multiplication for F32x4 (used in grayscale)
+fun f32x4_mul(a: F32x4, b: F32x4) -> F32x4 {
+    return [
+        a[0] * b[0],
+        a[1] * b[1],
+        a[2] * b[2],
+        a[3] * b[3]
+    ];
+}
+
+// SIMD vector division for F32x4 (used in blur)
+fun f32x4_div(a: F32x4, b: F32x4) -> F32x4 {
+    return [
+        a[0] / b[0],
+        a[1] / b[1],
+        a[2] / b[2],
+        a[3] / b[3]
+    ];
+}
+
+// -----------------------------------------------------------------------------
+// Tests for image processing operations
+// -----------------------------------------------------------------------------
+
+// Test grayscale conversion with specific values
+fun test_grayscale_specific() -> bool {
+    // Create test pixels (R, G, B values in different positions)
+    let red_pixel = 0xFF0000FF;    // RGBA: 255, 0, 0, 255
+    let green_pixel = 0x00FF00FF;  // RGBA: 0, 255, 0, 255
+    let blue_pixel = 0x0000FFFF;   // RGBA: 0, 0, 255, 255
+    let white_pixel = 0xFFFFFFFF;  // RGBA: 255, 255, 255, 255
+    
+    let test_pixels = [
+        [red_pixel, green_pixel, blue_pixel, white_pixel]
+    ];
+    
+    // Calculate expected grayscale values
+    // Red: 0.299 * 255 = 76.245
+    // Green: 0.587 * 255 = 149.685
+    // Blue: 0.114 * 255 = 29.07
+    // White: 0.299 * 255 + 0.587 * 255 + 0.114 * 255 = 255
+    
+    let expected_red_gray = 76; // rounded from 76.245
+    let expected_green_gray = 150; // rounded from 149.685
+    let expected_blue_gray = 29; // rounded from 29.07
+    let expected_white_gray = 255;
+    
+    // Expected result (gray value repeated in R, G, B channels, preserving alpha)
+    let expected_result = [
+        [
+            (expected_red_gray << 24) | (expected_red_gray << 16) | (expected_red_gray << 8) | 0xFF,
+            (expected_green_gray << 24) | (expected_green_gray << 16) | (expected_green_gray << 8) | 0xFF,
+            (expected_blue_gray << 24) | (expected_blue_gray << 16) | (expected_blue_gray << 8) | 0xFF,
+            (expected_white_gray << 24) | (expected_white_gray << 16) | (expected_white_gray << 8) | 0xFF
+        ]
+    ];
+    
+    // Convert to grayscale using SIMD
+    let simd_result = rgba_to_grayscale_simd(test_pixels);
+    
+    // Due to floating point rounding, do approximate comparison
+    for i in 0..1 {
+        for j in 0..4 {
+            let diff = abs((simd_result[i][j] >> 24) - (expected_result[i][j] >> 24));
+            if diff > 1 { // Allow 1 unit difference due to rounding
+                println("Grayscale test failed: Expected " + 
+                       expected_result[i][j].to_string() +
+                       " got " + simd_result[i][j].to_string());
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
+// Test that SIMD and scalar implementations give equivalent results
+fun test_grayscale_equivalence() -> bool {
+    // Generate random pixel data
+    let pixels = [];
+    for _ in 0..10 {
+        pixels.push([
+            gen.int32(), 
+            gen.int32(), 
+            gen.int32(), 
+            gen.int32()
+        ]);
+    }
+    
+    let simd_result = rgba_to_grayscale_simd(pixels);
+    let scalar_result = rgba_to_grayscale_scalar(pixels);
+    
+    // Compare results (allowing for minor differences in floating point)
+    for i in 0..pixels.length {
+        for j in 0..4 {
+            let simd_gray = (simd_result[i][j] >> 24) & 0xFF;
+            let scalar_gray = (scalar_result[i][j] >> 24) & 0xFF;
+            let diff = abs(simd_gray - scalar_gray);
+            
+            if diff > 1 { // Allow 1 unit difference due to rounding
+                println("Grayscale equivalence test failed at pixel " + 
+                       i.to_string() + "," + j.to_string() +
+                       ": SIMD=" + simd_gray.to_string() + 
+                       ", Scalar=" + scalar_gray.to_string());
+                return false;
+            }
+        }
+    }
+    
+    return true;
+}
+
+// Helper for absolute value
+fun abs(x: i32) -> i32 {
+    return if x < 0 { -x } else { x };
+}
+
+// -----------------------------------------------------------------------------
+// Performance benchmarks for image processing operations
+// -----------------------------------------------------------------------------
+
+// Benchmark SIMD vs scalar grayscale conversion
+fun benchmark_grayscale_conversion() -> bool {
+    // Generate test image data (10x10 pixels = 25 groups of 4 pixels)
+    let width = 10;
+    let height = 10;
+    let pixels = [];
+    
+    for _ in 0..(width * height / 4) {
+        pixels.push([
+            gen.int32(), 
+            gen.int32(), 
+            gen.int32(), 
+            gen.int32()
+        ]);
+    }
+    
+    // Run benchmark
+    let iterations = 10000; // Process the image 10,000 times
+    let [scalar_time, simd_time, speedup] = benchmark_scalar_vs_simd(
+        pixels,
+        rgba_to_grayscale_scalar,
+        rgba_to_grayscale_simd,
+        iterations
+    );
+    
+    println("Grayscale conversion benchmark:");
+    println("  Scalar time: " + scalar_time.to_string() + " ms");
+    println("  SIMD time: " + simd_time.to_string() + " ms");
+    println("  Speedup factor: " + speedup.to_string() + "x");
+    
+    return speedup >= 1.0;  // At least some improvement
+}
+
+// -----------------------------------------------------------------------------
+// Main test runner
+// -----------------------------------------------------------------------------
+
+fun main() {
+    // Register all tests
+    let tests = [
+        // Functional tests
+        test_grayscale_specific,
+        test_grayscale_equivalence,
+        
+        // Performance benchmarks
+        benchmark_grayscale_conversion
+    ];
+    
+    register_simd_test_suite("SIMD Image Processing Tests", tests);
+    
+    // Run tests
+    let all_passed = run_simd_tests();
+    
+    if all_passed {
+        println("✅ All SIMD image processing tests passed!");
+        return 0;
+    } else {
+        println("❌ Some SIMD image processing tests failed!");
+        return 1;
+    }
+}

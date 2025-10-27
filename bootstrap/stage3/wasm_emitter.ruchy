@@ -1,0 +1,490 @@
+// wasm_emitter.ruchy
+// WASM-001: WebAssembly Type Mapping and Emitter
+// This file implements the WASM target for Ruchy compilation
+// GREEN PHASE: Implementation to make tests pass
+
+// Import native WASM APIs from Ruchy v3.125.0
+// Note: These may need to be adjusted based on the actual Ruchy WASM API
+
+// Memory layout calculation for complex types
+struct MemoryLayout {
+    header_size: i32,
+    body_size: i32,
+    fields: Map<String, i32>,  // Field name to offset mapping
+}
+
+impl MemoryLayout {
+    fn new(header_size: i32, body_size: i32) -> MemoryLayout {
+        MemoryLayout {
+            header_size: header_size,
+            body_size: body_size,
+            fields: {},
+        }
+    }
+    
+    fn add_field(&mut self, name: String, offset: i32) {
+        self.fields.insert(name, offset);
+    }
+    
+    fn size(&self) -> i32 {
+        self.header_size + self.body_size
+    }
+}
+
+// Maps Ruchy types to WASM representations
+struct RuchyWasmType {
+    type_name: String,
+    memory_layout: MemoryLayout,
+    element_type: Option<RuchyWasmType>,
+    fields: Vec<(String, RuchyWasmType)>,
+    params: Vec<RuchyWasmType>,
+    result: Option<RuchyWasmType>,
+    captured: Vec<RuchyWasmType>,
+}
+
+impl RuchyWasmType {
+    fn new(type_name: String) -> RuchyWasmType {
+        let memory_layout = if type_name == "String" {
+            // Strings have length (4) and capacity (4) headers
+            MemoryLayout::new(8, 0)
+        } else if type_name.starts_with("Array<") {
+            // Arrays have length (4) and capacity (4) headers
+            MemoryLayout::new(8, 0)
+        } else {
+            // Primitive types don't need memory layout
+            MemoryLayout::new(0, 0)
+        };
+        
+        let element_type = if type_name.starts_with("Array<") {
+            // Extract element type
+            let element_type_str = type_name.substring(6, type_name.len() - 1);
+            Some(RuchyWasmType::new(element_type_str))
+        } else {
+            None
+        };
+        
+        RuchyWasmType {
+            type_name: type_name,
+            memory_layout: memory_layout,
+            element_type: element_type,
+            fields: vec![],
+            params: vec![],
+            result: None,
+            captured: vec![],
+        }
+    }
+    
+    fn new_struct(name: String, field_defs: Vec<(String, RuchyWasmType)>) -> RuchyWasmType {
+        let mut memory_layout = MemoryLayout::new(0, 0);
+        let mut offset = 0;
+        
+        for (field_name, field_type) in &field_defs {
+            // Add field with its offset
+            memory_layout.add_field(field_name.clone(), offset);
+            
+            // Update offset based on field's WASM type
+            match field_type.wasm_type() {
+                Type::I32 | Type::F32 => offset += 4,
+                Type::I64 | Type::F64 => offset += 8,
+                _ => offset += 4,  // Default to 4 bytes
+            }
+        }
+        
+        RuchyWasmType {
+            type_name: name,
+            memory_layout: memory_layout,
+            element_type: None,
+            fields: field_defs,
+            params: vec![],
+            result: None,
+            captured: vec![],
+        }
+    }
+    
+    fn new_function(params: Vec<RuchyWasmType>, result: RuchyWasmType) -> RuchyWasmType {
+        RuchyWasmType {
+            type_name: "Function".to_string(),
+            memory_layout: MemoryLayout::new(0, 0),
+            element_type: None,
+            fields: vec![],
+            params: params,
+            result: Some(result),
+            captured: vec![],
+        }
+    }
+    
+    fn new_closure(params: Vec<RuchyWasmType>, result: RuchyWasmType, 
+                   captured: Vec<RuchyWasmType>) -> RuchyWasmType {
+        // Calculate closure memory layout
+        // Function index (4 bytes) + captured variables
+        let mut memory_layout = MemoryLayout::new(4, 0);
+        let mut offset = 4;  // Start after function index
+        
+        for capture_type in &captured {
+            // Update offset based on captured variable's WASM type
+            match capture_type.wasm_type() {
+                Type::I32 | Type::F32 => offset += 4,
+                Type::I64 | Type::F64 => offset += 8,
+                _ => offset += 4,  // Default to 4 bytes
+            }
+        }
+        
+        RuchyWasmType {
+            type_name: "Closure".to_string(),
+            memory_layout: memory_layout,
+            element_type: None,
+            fields: vec![],
+            params: params,
+            result: Some(result),
+            captured: captured,
+        }
+    }
+    
+    fn wasm_type(&self) -> Type {
+        match self.type_name.as_str() {
+            "i32" => Type::I32,
+            "i64" => Type::I64,
+            "f32" => Type::F32,
+            "f64" => Type::F64,
+            "bool" => Type::I32,
+            "()" => Type::Void,
+            _ => Type::I32,  // All other types are represented as pointers (i32)
+        }
+    }
+    
+    fn memory_layout(&self) -> &MemoryLayout {
+        &self.memory_layout
+    }
+    
+    fn element_type(&self) -> Option<&RuchyWasmType> {
+        self.element_type.as_ref()
+    }
+    
+    fn field_offset(&self, field_name: String) -> Option<i32> {
+        self.memory_layout.fields.get(&field_name).map(|&offset| offset)
+    }
+    
+    fn to_wasm_function(&self) -> WasmFunction {
+        let wasm_params = self.params.iter()
+            .map(|param| param.wasm_type())
+            .collect();
+        
+        let wasm_result = match &self.result {
+            Some(result) => result.wasm_type(),
+            None => Type::Void,
+        };
+        
+        WasmFunction::new(wasm_params, wasm_result)
+    }
+}
+
+// WASM function representation
+struct WasmFunction {
+    params: Vec<Type>,
+    result: Type,
+}
+
+impl WasmFunction {
+    fn new(params: Vec<Type>, result: Type) -> WasmFunction {
+        WasmFunction {
+            params: params,
+            result: result,
+        }
+    }
+    
+    fn param_types(&self) -> &Vec<Type> {
+        &self.params
+    }
+    
+    fn result_type(&self) -> Type {
+        self.result
+    }
+}
+
+// WASM emitter for code generation
+struct WasmEmitter {
+    module: Module,
+    function_table: Map<String, i32>,
+    type_registry: Map<String, RuchyWasmType>,
+    functions: Vec<FunctionDef>,
+}
+
+struct FunctionDef {
+    name: String,
+    params: Vec<(String, String)>,
+    result_type: String,
+    body: String,
+}
+
+impl WasmEmitter {
+    fn new() -> WasmEmitter {
+        let mut emitter = WasmEmitter {
+            module: Module::new(),
+            function_table: {},
+            type_registry: {},
+            functions: vec![],
+        };
+        
+        // Initialize with standard memory
+        emitter.module.add_memory("memory", 1, None);  // 1 page initial, no maximum
+        
+        // Add standard imports for memory management
+        emitter.module.add_import("js", "alloc", Function::new(vec![Type::I32], vec![Type::I32]));
+        emitter.module.add_import("js", "free", Function::new(vec![Type::I32], vec![]));
+        emitter.module.add_import("js", "alloc_string", Function::new(vec![Type::I32, Type::I32], vec![Type::I32]));
+        
+        // Register known types
+        emitter.register_primitive_types();
+        
+        emitter
+    }
+    
+    fn register_primitive_types(&mut self) {
+        self.type_registry.insert("i32".to_string(), RuchyWasmType::new("i32".to_string()));
+        self.type_registry.insert("i64".to_string(), RuchyWasmType::new("i64".to_string()));
+        self.type_registry.insert("f32".to_string(), RuchyWasmType::new("f32".to_string()));
+        self.type_registry.insert("f64".to_string(), RuchyWasmType::new("f64".to_string()));
+        self.type_registry.insert("bool".to_string(), RuchyWasmType::new("bool".to_string()));
+        self.type_registry.insert("()".to_string(), RuchyWasmType::new("()".to_string()));
+        self.type_registry.insert("String".to_string(), RuchyWasmType::new("String".to_string()));
+    }
+    
+    fn add_function(&mut self, name: String, params: Vec<(String, String)>, 
+                   result_type: String, body: String) {
+        // Convert parameters to WASM types
+        let mut wasm_params = vec![];
+        let mut param_names = vec![];
+        
+        for (param_name, param_type) in &params {
+            param_names.push(param_name.clone());
+            wasm_params.push(wasmify_type(param_type.clone()));
+        }
+        
+        // Convert result type to WASM type
+        let wasm_result = wasmify_type(result_type.clone());
+        
+        // Create function
+        let wasm_function = Function::new(wasm_params, vec![wasm_result]);
+        
+        // Set parameter names
+        for (i, param_name) in param_names.iter().enumerate() {
+            wasm_function.set_param_name(i as i32, param_name.clone());
+        }
+        
+        // Add function to module
+        self.module.add_function(name.clone(), wasm_function);
+        
+        // Add to function table
+        self.function_table.insert(name.clone(), self.functions.len() as i32);
+        self.functions.push(FunctionDef {
+            name: name,
+            params: params,
+            result_type: result_type,
+            body: body,
+        });
+    }
+    
+    fn generate_module(&self) -> Module {
+        // Generate function bodies
+        for (i, func) in self.functions.iter().enumerate() {
+            // Simple implementation - just return a constant for now
+            // This will be expanded in the future
+            if func.result_type == "i32" {
+                self.module.get_function(func.name.clone()).add_instruction(Instruction::i32_const(42));
+            } else if func.result_type == "f64" {
+                self.module.get_function(func.name.clone()).add_instruction(Instruction::f64_const(3.14));
+            } else if func.result_type == "()" {
+                // No return value needed
+            }
+        }
+        
+        // Export functions
+        for func in &self.functions {
+            self.module.export_function(func.name.clone(), func.name.clone());
+        }
+        
+        self.module.clone()
+    }
+    
+    fn emit_wat(&self) -> String {
+        // Generate module
+        let module = self.generate_module();
+        
+        // Convert to WAT format
+        emit(module)
+    }
+    
+    fn has_memory(&self) -> bool {
+        true
+    }
+    
+    fn has_function(&self, name: String) -> bool {
+        self.function_table.contains_key(name)
+    }
+}
+
+// Utility function to map Ruchy types to WASM types
+fn wasmify_type(type_string: String) -> Type {
+    match type_string.as_str() {
+        "i32" => Type::I32,
+        "i64" => Type::I64,
+        "f32" => Type::F32,
+        "f64" => Type::F64,
+        "bool" => Type::I32,  // Booleans are i32 in WASM (0 = false, 1 = true)
+        "()" => Type::Void,
+        _ => Type::I32,      // All other types are pointers (i32)
+    }
+}
+
+// Convert Ruchy literal to WASM instruction
+fn wasmify_literal(type_string: String, literal_value: String) -> Instruction {
+    match type_string.as_str() {
+        "i32" => {
+            let value = literal_value.parse::<i32>().unwrap_or(0);
+            Instruction::i32_const(value)
+        },
+        "i64" => {
+            let value = literal_value.parse::<i64>().unwrap_or(0);
+            Instruction::i64_const(value)
+        },
+        "f32" => {
+            let value = literal_value.parse::<f32>().unwrap_or(0.0);
+            Instruction::f32_const(value)
+        },
+        "f64" => {
+            let value = literal_value.parse::<f64>().unwrap_or(0.0);
+            Instruction::f64_const(value)
+        },
+        "bool" => {
+            if literal_value == "true" {
+                Instruction::i32_const(1)
+            } else {
+                Instruction::i32_const(0)
+            }
+        },
+        "String" => {
+            // For strings, we'll create a sequence of instructions
+            // 1. Get the string length (minus quotes)
+            let str_content = literal_value.substring(1, literal_value.len() - 1);
+            let str_length = str_content.len() as i32;
+            
+            // 2. Create a sequence that calls alloc_string
+            let mut seq = Instruction::sequence();
+            seq.add(Instruction::i32_const(str_length));    // Length
+            seq.add(Instruction::i32_const(str_length));    // Capacity
+            seq.add(Instruction::call("$alloc_string"));
+            
+            seq
+        },
+        _ => {
+            // Default to i32 const 0 for unknown types
+            Instruction::i32_const(0)
+        }
+    }
+}
+
+// Mock Ruchy WASM API for development
+// These would be replaced by actual imports
+enum Type {
+    I32,
+    I64,
+    F32,
+    F64,
+    Void,
+}
+
+struct Module {}
+
+impl Module {
+    fn new() -> Module {
+        Module {}
+    }
+    
+    fn add_memory(&mut self, name: String, initial_pages: i32, max_pages: Option<i32>) {}
+    
+    fn add_import(&mut self, module: String, name: String, function: Function) {}
+    
+    fn add_function(&mut self, name: String, function: Function) {}
+    
+    fn get_function(&self, name: String) -> Function {
+        Function::new(vec![], vec![])
+    }
+    
+    fn export_function(&mut self, internal_name: String, external_name: String) {}
+    
+    fn clone(&self) -> Module {
+        Module {}
+    }
+}
+
+struct Function {
+    params: Vec<Type>,
+    results: Vec<Type>,
+}
+
+impl Function {
+    fn new(params: Vec<Type>, results: Vec<Type>) -> Function {
+        Function {
+            params: params,
+            results: results,
+        }
+    }
+    
+    fn set_param_name(&mut self, index: i32, name: String) {}
+    
+    fn add_instruction(&mut self, instruction: Instruction) {}
+}
+
+struct Instruction {}
+
+impl Instruction {
+    fn i32_const(value: i32) -> Instruction {
+        Instruction {}
+    }
+    
+    fn i64_const(value: i64) -> Instruction {
+        Instruction {}
+    }
+    
+    fn f32_const(value: f32) -> Instruction {
+        Instruction {}
+    }
+    
+    fn f64_const(value: f64) -> Instruction {
+        Instruction {}
+    }
+    
+    fn sequence() -> Instruction {
+        Instruction {}
+    }
+    
+    fn add(&mut self, instruction: Instruction) {}
+    
+    fn call(function_name: String) -> Instruction {
+        Instruction {}
+    }
+    
+    fn to_string(&self) -> String {
+        match self {
+            _ => "instruction".to_string(),
+        }
+    }
+}
+
+fn emit(module: Module) -> String {
+    "(module)".to_string()
+}
+
+// Export public symbols
+// In a real implementation these would be properly exported
+pub fn get_wasm_emitter() -> WasmEmitter {
+    WasmEmitter::new()
+}
+
+pub fn get_ruchy_wasm_type(type_name: String) -> RuchyWasmType {
+    RuchyWasmType::new(type_name)
+}
+
+pub fn get_wasm_function(params: Vec<Type>, result: Type) -> WasmFunction {
+    WasmFunction::new(params, result)
+}

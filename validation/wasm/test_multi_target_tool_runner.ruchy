@@ -1,0 +1,742 @@
+// Runner script for Multi-Target Compiler TOOL phase
+// Executes all validation tests for the TOOL phase
+
+use std::process::Command;
+use std::time::Instant;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
+
+// Constants
+const OUTPUT_DIR: &str = "/tmp/ruchy_multi_target_tool";
+
+// Validation test types
+enum TestType {
+    Property,
+    Fuzz,
+    Benchmark,
+    Quality,
+    Integration
+}
+
+impl TestType {
+    fun to_string(&self) -> &'static str {
+        match self {
+            TestType::Property => "Property",
+            TestType::Fuzz => "Fuzz",
+            TestType::Benchmark => "Benchmark",
+            TestType::Quality => "Quality",
+            TestType::Integration => "Integration"
+        }
+    }
+}
+
+// Test result
+struct TestResult {
+    test_type: TestType,
+    success: bool,
+    execution_time: f64,
+    details: String,
+}
+
+// Setup output directory
+fun setup_output_dir() {
+    if Path::new(OUTPUT_DIR).exists() {
+        fs::remove_dir_all(OUTPUT_DIR).expect("Failed to clean output directory");
+    }
+    fs::create_dir_all(OUTPUT_DIR).expect("Failed to create output directory");
+    println("📂 Created output directory at: {}", OUTPUT_DIR);
+}
+
+// Run a specific test
+fun run_test(test_type: TestType) -> TestResult {
+    let test_file = match test_type {
+        TestType::Property => "/home/noah/src/ruchyruchy/validation/wasm/property_multi_target.ruchy",
+        TestType::Fuzz => "/home/noah/src/ruchyruchy/validation/wasm/fuzz_multi_target.ruchy",
+        TestType::Benchmark => "/home/noah/src/ruchyruchy/validation/wasm/benchmark_multi_target.ruchy",
+        TestType::Quality => "/home/noah/src/ruchyruchy/validation/wasm/quality_multi_target.ruchy",
+        TestType::Integration => "/home/noah/src/ruchyruchy/validation/wasm/integration_multi_target.ruchy",
+    };
+    
+    println("\n🧪 Running {} Test...", test_type.to_string());
+    
+    // Check if file exists
+    if !Path::new(test_file).exists() {
+        return TestResult {
+            test_type,
+            success: false,
+            execution_time: 0.0,
+            details: format!("Test file not found: {}", test_file),
+        };
+    }
+    
+    let start = Instant::now();
+    
+    // Execute the test
+    let result = Command::new("ruchy")
+        .arg("run")
+        .arg(test_file)
+        .output();
+    
+    let elapsed = start.elapsed();
+    let execution_time = elapsed.as_secs_f64();
+    
+    match result {
+        Ok(output) => {
+            // Convert output bytes to string
+            let output_str = String::from_utf8_lossy(&output.stdout).to_string();
+            let error_str = String::from_utf8_lossy(&output.stderr).to_string();
+            
+            // Save output to file
+            let output_file = format!("{}/{}_{}_output.txt", 
+                OUTPUT_DIR, test_type.to_string().to_lowercase(), 
+                chrono::Local::now().format("%Y%m%d_%H%M%S"));
+            
+            let mut file = File::create(&output_file).expect("Failed to create output file");
+            writeln!(file, "STDOUT:\n{}\n\nSTDERR:\n{}", output_str, error_str).expect("Failed to write to output file");
+            
+            // Check if the test succeeded
+            let success = output.status.success() && !output_str.contains("❌");
+            
+            // Print a summary
+            println!("  Status: {}", if success { "✅ PASSED" } else { "❌ FAILED" });
+            println!("  Time: {:.2}s", execution_time);
+            println!("  Output saved to: {}", output_file);
+            
+            // If there are errors, show the first few lines
+            if !success {
+                println!("\n  Error Summary:");
+                for line in error_str.lines().take(5) {
+                    println!("    {}", line);
+                }
+                
+                // Also show any lines with "❌" from stdout
+                let error_lines = output_str.lines()
+                    .filter(|line| line.contains("❌"))
+                    .take(5)
+                    .collect::<Vec<_>>();
+                
+                if !error_lines.is_empty() {
+                    println!("\n  Failure Summary:");
+                    for line in error_lines {
+                        println!("    {}", line);
+                    }
+                }
+            }
+            
+            TestResult {
+                test_type,
+                success,
+                execution_time,
+                details: if success {
+                    format!("Test completed successfully in {:.2}s", execution_time)
+                } else {
+                    format!("Test failed. See {} for details", output_file)
+                },
+            }
+        },
+        Err(e) => {
+            println!("  Failed to run test: {}", e);
+            
+            TestResult {
+                test_type,
+                success: false,
+                execution_time,
+                details: format!("Failed to run test: {}", e),
+            }
+        }
+    }
+}
+
+// Generate the final report
+fun generate_report(results: &[TestResult]) {
+    let report_path = format!("{}/tool_phase_report.md", OUTPUT_DIR);
+    let mut file = File::create(&report_path).expect("Failed to create report file");
+    
+    // Write report header
+    writeln!(file, "# WASM-003 Multi-Target Integration - TOOL Phase Report").unwrap();
+    writeln!(file, "\n## Summary").unwrap();
+    writeln!(file, "\n- **Date**: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")).unwrap();
+    writeln!(file, "- **Tests Run**: {}", results.len()).unwrap();
+    
+    let passed_count = results.iter().filter(|r| r.success).count();
+    writeln!(file, "- **Passed**: {}/{} ({:.2}%)", passed_count, results.len(), 
+        (passed_count as f64 / results.len() as f64) * 100.0).unwrap();
+    
+    let total_time = results.iter().map(|r| r.execution_time).sum::<f64>();
+    writeln!(file, "- **Total Time**: {:.2} seconds", total_time).unwrap();
+    
+    // Write test results table
+    writeln!(file, "\n## Test Results").unwrap();
+    writeln!(file, "\n| Test Type | Status | Time (s) | Details |").unwrap();
+    writeln!(file, "|-----------|--------|----------|---------|").unwrap();
+    
+    for result in results {
+        writeln!(file, "| {} | {} | {:.2} | {} |",
+            result.test_type.to_string(),
+            if result.success { "✅ PASS" } else { "❌ FAIL" },
+            result.execution_time,
+            result.details
+        ).unwrap();
+    }
+    
+    // Write overall status
+    writeln!(file, "\n## Overall Status").unwrap();
+    
+    if passed_count == results.len() {
+        writeln!(file, "\n✅ **PASSED**: All tests completed successfully").unwrap();
+    } else {
+        writeln!(file, "\n❌ **FAILED**: {}/{} tests failed", results.len() - passed_count, results.len()).unwrap();
+    }
+    
+    // Write detailed findings
+    writeln!(file, "\n## Detailed Findings").unwrap();
+    
+    writeln!(file, "\n### Property Testing").unwrap();
+    let property_result = results.iter().find(|r| matches!(r.test_type, TestType::Property));
+    if let Some(result) = property_result {
+        if result.success {
+            writeln!(file, "\nThe property testing phase verified the following mathematical properties of the Multi-Target Compiler:").unwrap();
+            writeln!(file, "- **Compilation Soundness**: Well-typed programs compile successfully to all targets").unwrap();
+            writeln!(file, "- **Type Safety**: Type errors are caught during compilation").unwrap();
+            writeln!(file, "- **Idempotence**: Compiling the same source twice produces equivalent output").unwrap();
+            writeln!(file, "- **Target Independence**: AST and type-checking phases are target-independent").unwrap();
+            writeln!(file, "- **Error Recovery**: The compiler recovers from non-critical errors").unwrap();
+            writeln!(file, "- **Semantic Preservation**: Semantics are preserved across different targets").unwrap();
+        } else {
+            writeln!(file, "\nThe property testing phase failed. See the output file for details.").unwrap();
+        }
+    } else {
+        writeln!(file, "\nProperty testing was not run.").unwrap();
+    }
+    
+    writeln!(file, "\n### Fuzz Testing").unwrap();
+    let fuzz_result = results.iter().find(|r| matches!(r.test_type, TestType::Fuzz));
+    if let Some(result) = fuzz_result {
+        if result.success {
+            writeln!(file, "\nThe fuzz testing phase verified the robustness of the Multi-Target Compiler:").unwrap();
+            writeln!(file, "- **Valid Programs**: The compiler correctly handles well-formed input").unwrap();
+            writeln!(file, "- **Invalid Programs**: The compiler gracefully handles malformed input").unwrap();
+            writeln!(file, "- **Boundary Configurations**: The compiler functions correctly with extreme configurations").unwrap();
+            writeln!(file, "- **Large Programs**: The compiler can handle large input files").unwrap();
+            writeln!(file, "- **Malformed AST**: The compiler is robust against malformed internal structures").unwrap();
+        } else {
+            writeln!(file, "\nThe fuzz testing phase failed. See the output file for details.").unwrap();
+        }
+    } else {
+        writeln!(file, "\nFuzz testing was not run.").unwrap();
+    }
+    
+    writeln!(file, "\n### Performance Benchmarking").unwrap();
+    let benchmark_result = results.iter().find(|r| matches!(r.test_type, TestType::Benchmark));
+    if let Some(result) = benchmark_result {
+        if result.success {
+            writeln!(file, "\nThe performance benchmarking phase verified that the Multi-Target Compiler meets performance expectations:").unwrap();
+            writeln!(file, "- **Small Functions**: Compilation completes within expected time").unwrap();
+            writeln!(file, "- **Medium Projects**: Compilation scales linearly with project size").unwrap();
+            writeln!(file, "- **Large Projects**: Compilation handles large projects efficiently").unwrap();
+            writeln!(file, "- **Type-Heavy Programs**: The compiler efficiently handles complex type structures").unwrap();
+            writeln!(file, "- **Error-Heavy Programs**: The compiler efficiently catches and reports errors").unwrap();
+            writeln!(file, "- **Memory Usage**: The compiler stays within memory usage limits").unwrap();
+        } else {
+            writeln!(file, "\nThe performance benchmarking phase failed. See the output file for details.").unwrap();
+        }
+    } else {
+        writeln!(file, "\nPerformance benchmarking was not run.").unwrap();
+    }
+    
+    writeln!(file, "\n### Quality Analysis").unwrap();
+    let quality_result = results.iter().find(|r| matches!(r.test_type, TestType::Quality));
+    if let Some(result) = quality_result {
+        if result.success {
+            writeln!(file, "\nThe quality analysis phase verified the code quality of the Multi-Target Compiler:").unwrap();
+            writeln!(file, "- **Cyclomatic Complexity**: Functions meet complexity requirements").unwrap();
+            writeln!(file, "- **Maintainability Index**: Code is maintainable according to industry standards").unwrap();
+            writeln!(file, "- **Documentation Coverage**: Functions are adequately documented").unwrap();
+            writeln!(file, "- **Coverage Metrics**: Code has appropriate test coverage").unwrap();
+            writeln!(file, "- **Extensibility**: Code is designed for easy addition of new targets").unwrap();
+            writeln!(file, "- **Consistency**: Implementation is consistent across different targets").unwrap();
+        } else {
+            writeln!(file, "\nThe quality analysis phase failed. See the output file for details.").unwrap();
+        }
+    } else {
+        writeln!(file, "\nQuality analysis was not run.").unwrap();
+    }
+    
+    writeln!(file, "\n### Integration Testing").unwrap();
+    let integration_result = results.iter().find(|r| matches!(r.test_type, TestType::Integration));
+    if let Some(result) = integration_result {
+        if result.success {
+            writeln!(file, "\nThe integration testing phase verified that the Multi-Target Compiler works with the rest of the system:").unwrap();
+            writeln!(file, "- **Pipeline Integration**: The compiler works with the full compilation pipeline").unwrap();
+            writeln!(file, "- **Error Propagation**: Errors propagate correctly through the system").unwrap();
+            writeln!(file, "- **Multi-Stage Compilation**: The compiler works in multi-stage compilation processes").unwrap();
+            writeln!(file, "- **API Compatibility**: The compiler's API is compatible with other components").unwrap();
+            writeln!(file, "- **Resource Management**: Resources are managed properly during compilation").unwrap();
+        } else {
+            writeln!(file, "\nThe integration testing phase failed. See the output file for details.").unwrap();
+        }
+    } else {
+        writeln!(file, "\nIntegration testing was not run.").unwrap();
+    }
+    
+    // Write conclusion
+    writeln!(file, "\n## Conclusion").unwrap();
+    
+    if passed_count == results.len() {
+        writeln!(file, "\nThe TOOL phase for WASM-003 (Multi-Target Integration) has been completed successfully.").unwrap();
+        writeln!(file, "All validation criteria have been met, and the implementation is ready for integration into the main compiler.").unwrap();
+    } else {
+        writeln!(file, "\nThe TOOL phase for WASM-003 (Multi-Target Integration) has not been completed successfully.").unwrap();
+        writeln!(file, "Some validation tests failed and need to be addressed before proceeding.").unwrap();
+    }
+    
+    // Write next steps
+    writeln!(file, "\n## Next Steps").unwrap();
+    
+    if passed_count == results.len() {
+        writeln!(file, "\n1. Update the roadmap with WASM-003 completion").unwrap();
+        writeln!(file, "2. Integrate the multi-target compiler into the main codebase").unwrap();
+        writeln!(file, "3. Update documentation with WebAssembly support").unwrap();
+        writeln!(file, "4. Plan for future WASM-related enhancements").unwrap();
+    } else {
+        writeln!(file, "\n1. Address the failing tests (see output files for details)").unwrap();
+        writeln!(file, "2. Re-run the TOOL phase validation").unwrap();
+        writeln!(file, "3. Proceed with integration once all tests pass").unwrap();
+    }
+    
+    println("\n📊 Tool phase report generated at: {}", report_path);
+}
+
+// Run the integration test
+fun run_integration_test() -> TestResult {
+    // Note: For this demonstration, we'll create a simplified integration test
+    // In a real implementation, this would be more comprehensive
+    
+    println("\n🧪 Running Integration Test...");
+    
+    let test_content = r#"
+// Integration test for Multi-Target Compiler
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
+use std::process::Command;
+use std::time::Instant;
+
+// Test integration with full compilation pipeline
+fun test_pipeline_integration() {
+    println("Testing pipeline integration...");
+    
+    // Create a test program
+    let program = r#"
+        fun add(a: i32, b: i32) -> i32 {
+            return a + b;
+        }
+        
+        fun main() {
+            print(add(5, 3));
+        }
+    "#;
+    
+    let test_dir = "/tmp/ruchy_integration_test";
+    if !Path::new(test_dir).exists() {
+        fs::create_dir_all(test_dir).expect("Failed to create test directory");
+    }
+    
+    let file_path = format!("{}/test_program.ruchy", test_dir);
+    let mut file = File::create(&file_path).expect("Failed to create test file");
+    file.write_all(program.as_bytes()).expect("Failed to write test program");
+    
+    // Create a source file
+    let source_file = SourceFile::new(
+        &file_path,
+        program.to_string()
+    );
+    
+    // Create a compiler with default config
+    let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+    
+    // Compile to all targets
+    let wasm_result = compiler.compile_to_target(
+        source_file.clone(),
+        CompilationTarget::Wasm
+    );
+    
+    let ts_result = compiler.compile_to_target(
+        source_file.clone(),
+        CompilationTarget::TypeScript
+    );
+    
+    let rust_result = compiler.compile_to_target(
+        source_file.clone(),
+        CompilationTarget::Rust
+    );
+    
+    assert(wasm_result.is_ok());
+    assert(ts_result.is_ok());
+    assert(rust_result.is_ok());
+    
+    // Verify output files
+    let wasm_output = wasm_result.unwrap();
+    let ts_output = ts_result.unwrap();
+    let rust_output = rust_result.unwrap();
+    
+    assert(!wasm_output.code.is_empty());
+    assert(!ts_output.code.is_empty());
+    assert(!rust_output.code.is_empty());
+    
+    // Write outputs to files
+    let wasm_path = format!("{}/output.wasm", test_dir);
+    let ts_path = format!("{}/output.ts", test_dir);
+    let rust_path = format!("{}/output.rs", test_dir);
+    
+    let mut file = File::create(&wasm_path).expect("Failed to create WASM output file");
+    file.write_all(wasm_output.code.as_bytes()).expect("Failed to write WASM output");
+    
+    let mut file = File::create(&ts_path).expect("Failed to create TS output file");
+    file.write_all(ts_output.code.as_bytes()).expect("Failed to write TS output");
+    
+    let mut file = File::create(&rust_path).expect("Failed to create Rust output file");
+    file.write_all(rust_output.code.as_bytes()).expect("Failed to write Rust output");
+    
+    println("✅ Pipeline integration test passed");
+}
+
+// Test error propagation
+fun test_error_propagation() {
+    println("Testing error propagation...");
+    
+    // Create a test program with errors
+    let program = r#"
+        fun add(a: i32, b: string) -> i32 {  // Type error
+            return a + b;
+        }
+        
+        fun main() {
+            print(add(5, "3"));
+        }
+    "#;
+    
+    let test_dir = "/tmp/ruchy_integration_test";
+    if !Path::new(test_dir).exists() {
+        fs::create_dir_all(test_dir).expect("Failed to create test directory");
+    }
+    
+    let file_path = format!("{}/test_program_error.ruchy", test_dir);
+    let mut file = File::create(&file_path).expect("Failed to create test file");
+    file.write_all(program.as_bytes()).expect("Failed to write test program");
+    
+    // Create a source file
+    let source_file = SourceFile::new(
+        &file_path,
+        program.to_string()
+    );
+    
+    // Create a compiler with default config
+    let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+    
+    // Compile to any target (should fail)
+    let result = compiler.compile_to_target(
+        source_file.clone(),
+        CompilationTarget::TypeScript
+    );
+    
+    assert(result.is_err() || compiler.diagnostics.has_errors());
+    assert(compiler.diagnostics.has_errors());
+    assert(!compiler.diagnostics.get_errors().is_empty());
+    
+    println("✅ Error propagation test passed");
+}
+
+// Test multi-stage compilation
+fun test_multi_stage_compilation() {
+    println("Testing multi-stage compilation...");
+    
+    // Create a test program
+    let program = r#"
+        fun add(a: i32, b: i32) -> i32 {
+            return a + b;
+        }
+        
+        fun multiply(a: i32, b: i32) -> i32 {
+            return a * b;
+        }
+        
+        fun main() {
+            print(multiply(add(5, 3), 2));
+        }
+    "#;
+    
+    let test_dir = "/tmp/ruchy_integration_test";
+    if !Path::new(test_dir).exists() {
+        fs::create_dir_all(test_dir).expect("Failed to create test directory");
+    }
+    
+    let file_path = format!("{}/test_program_multi.ruchy", test_dir);
+    let mut file = File::create(&file_path).expect("Failed to create test file");
+    file.write_all(program.as_bytes()).expect("Failed to write test program");
+    
+    // Create a source file
+    let source_file = SourceFile::new(
+        &file_path,
+        program.to_string()
+    );
+    
+    // Stage 1: Parse and type check
+    let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+    compiler.parse_and_type_check(source_file.clone());
+    
+    assert(!compiler.diagnostics.has_errors());
+    assert(compiler.ast.is_some());
+    assert(compiler.type_env.is_some());
+    
+    // Stage 2: Emit code for different targets
+    let wasm_result = compiler.emit_code(CompilationTarget::Wasm);
+    let ts_result = compiler.emit_code(CompilationTarget::TypeScript);
+    let rust_result = compiler.emit_code(CompilationTarget::Rust);
+    
+    assert(wasm_result.is_ok());
+    assert(ts_result.is_ok());
+    assert(rust_result.is_ok());
+    
+    println("✅ Multi-stage compilation test passed");
+}
+
+// Test API compatibility
+fun test_api_compatibility() {
+    println("Testing API compatibility...");
+    
+    // Test compiler API
+    let compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+    
+    // Verify interface consistency
+    assert(compiler.config.is_some());
+    assert(compiler.diagnostics.is_empty());
+    assert(compiler.metrics.is_some());
+    assert(compiler.ast.is_none());
+    assert(compiler.type_env.is_none());
+    
+    // Verify that compiler can be used with other components
+    let parser = compiler.create_parser();
+    assert(parser.is_ok());
+    
+    let type_checker = compiler.create_type_checker();
+    assert(type_checker.is_ok());
+    
+    let emitter = compiler.create_emitter(CompilationTarget::Wasm);
+    assert(emitter.is_ok());
+    
+    println("✅ API compatibility test passed");
+}
+
+// Test resource management
+fun test_resource_management() {
+    println("Testing resource management...");
+    
+    // Create a large test program to stress memory usage
+    let mut program = String::from("fun main() {\n");
+    for i in 0..1000 {
+        program.push_str(&format!("    let var_{} = {};\n", i, i));
+    }
+    program.push_str("}\n");
+    
+    let test_dir = "/tmp/ruchy_integration_test";
+    if !Path::new(test_dir).exists() {
+        fs::create_dir_all(test_dir).expect("Failed to create test directory");
+    }
+    
+    let file_path = format!("{}/test_program_large.ruchy", test_dir);
+    let mut file = File::create(&file_path).expect("Failed to create test file");
+    file.write_all(program.as_bytes()).expect("Failed to write test program");
+    
+    // Create a source file
+    let source_file = SourceFile::new(
+        &file_path,
+        program
+    );
+    
+    // Measure memory usage during compilation
+    let start_memory = get_memory_usage();
+    
+    // Compile to TypeScript (fastest target)
+    let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+    let result = compiler.compile_to_target(
+        source_file.clone(),
+        CompilationTarget::TypeScript
+    );
+    
+    // Ensure compilation succeeded
+    assert(result.is_ok());
+    
+    // Check memory usage
+    let end_memory = get_memory_usage();
+    let memory_used = end_memory - start_memory;
+    
+    println("Memory used: {} MB", memory_used);
+    
+    // Check that memory usage is reasonable
+    assert(memory_used < 100.0); // 100MB limit
+    
+    println("✅ Resource management test passed");
+}
+
+// Helper function to get memory usage
+fun get_memory_usage() -> f64 {
+    let memory_usage = match std::process::Command::new("ps")
+        .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+        .output() {
+            Ok(output) => {
+                let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                output_str.parse::<f64>().unwrap_or(0.0) / 1024.0 // Convert KB to MB
+            },
+            Err(_) => 0.0
+        };
+    
+    memory_usage
+}
+
+// Run all integration tests
+fun run_all_tests() {
+    println("🧪 Running Integration Tests for Multi-Target Compiler");
+    println("==================================================");
+    
+    test_pipeline_integration();
+    test_error_propagation();
+    test_multi_stage_compilation();
+    test_api_compatibility();
+    test_resource_management();
+    
+    println("\n✅ All integration tests passed!");
+}
+
+fun main() {
+    run_all_tests();
+}
+"#;
+    
+    // Write the test file
+    let test_file_path = format!("{}/integration_multi_target.ruchy", OUTPUT_DIR);
+    match File::create(&test_file_path) {
+        Ok(mut file) => {
+            match file.write_all(test_content.as_bytes()) {
+                Ok(_) => {
+                    println("  Created integration test file at: {}", test_file_path);
+                    
+                    // Run the test
+                    let start = Instant::now();
+                    
+                    let result = Command::new("ruchy")
+                        .arg("run")
+                        .arg(&test_file_path)
+                        .output();
+                    
+                    let elapsed = start.elapsed();
+                    let execution_time = elapsed.as_secs_f64();
+                    
+                    match result {
+                        Ok(output) => {
+                            // Convert output bytes to string
+                            let output_str = String::from_utf8_lossy(&output.stdout).to_string();
+                            let error_str = String::from_utf8_lossy(&output.stderr).to_string();
+                            
+                            // Save output to file
+                            let output_file = format!("{}/integration_output.txt", OUTPUT_DIR);
+                            
+                            let mut file = File::create(&output_file).expect("Failed to create output file");
+                            writeln!(file, "STDOUT:\n{}\n\nSTDERR:\n{}", output_str, error_str).expect("Failed to write to output file");
+                            
+                            // Check if the test succeeded
+                            let success = output.status.success() && output_str.contains("All integration tests passed");
+                            
+                            // Print a summary
+                            println!("  Status: {}", if success { "✅ PASSED" } else { "❌ FAILED" });
+                            println!("  Time: {:.2}s", execution_time);
+                            println!("  Output saved to: {}", output_file);
+                            
+                            TestResult {
+                                test_type: TestType::Integration,
+                                success,
+                                execution_time,
+                                details: if success {
+                                    format!("Integration tests completed successfully in {:.2}s", execution_time)
+                                } else {
+                                    format!("Integration tests failed. See {} for details", output_file)
+                                },
+                            }
+                        },
+                        Err(e) => {
+                            println!("  Failed to run integration test: {}", e);
+                            
+                            TestResult {
+                                test_type: TestType::Integration,
+                                success: false,
+                                execution_time,
+                                details: format!("Failed to run integration test: {}", e),
+                            }
+                        }
+                    }
+                },
+                Err(e) => {
+                    println!("  Failed to write integration test file: {}", e);
+                    
+                    TestResult {
+                        test_type: TestType::Integration,
+                        success: false,
+                        execution_time: 0.0,
+                        details: format!("Failed to write integration test file: {}", e),
+                    }
+                }
+            }
+        },
+        Err(e) => {
+            println!("  Failed to create integration test file: {}", e);
+            
+            TestResult {
+                test_type: TestType::Integration,
+                success: false,
+                execution_time: 0.0,
+                details: format!("Failed to create integration test file: {}", e),
+            }
+        }
+    }
+}
+
+// Main function - run all tests
+fun main() {
+    println("🧪 Running TOOL Phase Tests for WASM-003: Multi-Target Integration");
+    println("=============================================================");
+    
+    setup_output_dir();
+    
+    let mut results = Vec::new();
+    
+    // Run property tests
+    results.push(run_test(TestType::Property));
+    
+    // Run fuzz tests
+    results.push(run_test(TestType::Fuzz));
+    
+    // Run benchmarks
+    results.push(run_test(TestType::Benchmark));
+    
+    // Run quality analysis
+    results.push(run_test(TestType::Quality));
+    
+    // Run integration tests
+    results.push(run_integration_test());
+    
+    // Generate report
+    generate_report(&results);
+    
+    // Summary
+    let passed_count = results.iter().filter(|r| r.success).count();
+    
+    println("\n=============================================================");
+    if passed_count == results.len() {
+        println!("✅ TOOL Phase PASSED: All tests completed successfully");
+    } else {
+        println!("❌ TOOL Phase FAILED: {}/{} tests failed", results.len() - passed_count, results.len());
+    }
+    println!("Report generated at: {}/tool_phase_report.md", OUTPUT_DIR);
+    println!("=============================================================");
+}

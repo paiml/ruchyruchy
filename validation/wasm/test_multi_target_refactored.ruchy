@@ -1,0 +1,455 @@
+// Test suite for the refactored multi-target compiler
+// Tests the enhanced functionality while ensuring backwards compatibility
+
+fun test_compiler_initialization() {
+    // Test improved initialization with configuration
+    let compiler = MultiTargetCompilerRefactored::new(CompilationConfig {
+        optimization_level: OptimizationLevel::O2,
+        debug_info: true,
+        source_maps: true,
+        target_features: HashMap::new(),
+        mode: CompilationMode::Development,
+    });
+
+    assert(compiler.config.optimization_level == OptimizationLevel::O2);
+    assert(compiler.config.debug_info);
+    assert(compiler.config.source_maps);
+    assert(compiler.config.mode == CompilationMode::Development);
+    assert(compiler.diagnostics.get_all().is_empty());
+    assert(compiler.metrics.phase == "Initialization");
+    assert(compiler.ast.is_none());
+    assert(compiler.type_env.is_none());
+    assert(compiler.active_target.is_none());
+
+    print("✅ test_compiler_initialization passed");
+}
+
+fun test_source_file_handling() {
+    // Test the new SourceFile handling capabilities
+    let source = "fun main() {\n    print(\"Hello, World!\");\n}";
+    let file = SourceFile::new("test.ruchy", source.to_string());
+    
+    assert(file.path == "test.ruchy");
+    assert(file.content == source);
+    assert(file.line_offsets.len() == 3); // 3 lines
+    assert(file.line_offsets[0] == 0);
+    assert(file.line_offsets[1] == 14); // After first newline
+    assert(file.line_offsets[2] == 39); // After second newline
+    
+    let loc = file.location_from_offset(16);
+    assert(loc.line == 2);
+    assert(loc.column == 2);
+    
+    print("✅ test_source_file_handling passed");
+}
+
+fun test_diagnostics_collection() {
+    // Test the enhanced diagnostics collection
+    let mut diagnostics = DiagnosticCollection::new();
+    
+    diagnostics.add(Diagnostic {
+        severity: DiagnosticSeverity::Error,
+        code: "E001".to_string(),
+        message: "Test error".to_string(),
+        location: Some(SourceLocation {
+            line: 10,
+            column: 5,
+            file: "test.ruchy".to_string(),
+        }),
+        related: Vec::new(),
+    });
+    
+    diagnostics.add(Diagnostic {
+        severity: DiagnosticSeverity::Warning,
+        code: "W001".to_string(),
+        message: "Test warning".to_string(),
+        location: None,
+        related: Vec::new(),
+    });
+    
+    let all = diagnostics.get_all();
+    assert(all.len() == 2);
+    
+    let errors = diagnostics.get_errors();
+    assert(errors.len() == 1);
+    assert(errors[0].code == "E001");
+    
+    let warnings = diagnostics.get_warnings();
+    assert(warnings.len() == 1);
+    assert(warnings[0].code == "W001");
+    
+    assert(diagnostics.has_errors());
+    assert(!diagnostics.has_fatal_errors());
+    
+    print("✅ test_diagnostics_collection passed");
+}
+
+fun test_performance_metrics() {
+    // Test the performance metrics tracking
+    let mut metrics = PerformanceMetrics::new("Test Phase");
+    
+    // Simulate some work
+    let mut submetric = metrics.start_sub_metric("Sub Phase 1");
+    // Simulate some more work
+    submetric.end();
+    
+    metrics.start_and_end_sub_metric("Sub Phase 2", || {
+        // Simulate more work
+        true
+    });
+    
+    metrics.end();
+    
+    assert(metrics.phase == "Test Phase");
+    assert(metrics.sub_metrics.len() == 2);
+    assert(metrics.sub_metrics[0].phase == "Sub Phase 1");
+    assert(metrics.sub_metrics[1].phase == "Sub Phase 2");
+    assert(metrics.start_time > 0.0);
+    assert(metrics.end_time > 0.0);
+    assert(metrics.end_time >= metrics.start_time);
+    
+    print("✅ test_performance_metrics passed");
+}
+
+fun test_parser_improvements() {
+    // Test the improved parser
+    let source = "fun add(a: i32, b: i32) -> i32 { return a + b; }";
+    let options = ParserOptions {
+        strict_mode: true,
+        recover_from_errors: true,
+        max_errors: 10,
+    };
+    
+    let mut parser = RuchyParserRefactored::new(
+        SourceFile::new("test.ruchy", source.to_string()),
+        options,
+    );
+    
+    let ast = parser.parse();
+    assert(!parser.diagnostics.has_errors());
+    assert(ast.functions.len() == 1);
+    assert(ast.functions[0].name == "add");
+    assert(ast.functions[0].params.len() == 2);
+    assert(ast.functions[0].params[0].name == "a");
+    assert(ast.functions[0].params[0].type_annotation == Some(TypeInfo::Primitive("i32".to_string())));
+    
+    // Test with error
+    let source_with_error = "fun broken(a: i32 { return a; }"; // Missing closing parenthesis
+    let mut parser_with_error = RuchyParserRefactored::new(
+        SourceFile::new("test_error.ruchy", source_with_error.to_string()),
+        options,
+    );
+    
+    let ast_with_error = parser_with_error.parse();
+    assert(parser_with_error.diagnostics.has_errors());
+    let errors = parser_with_error.diagnostics.get_errors();
+    assert(!errors.is_empty());
+    assert(errors[0].message.contains("Expected ')'"));
+    assert(errors[0].location.is_some());
+    
+    // With error recovery enabled, we should still get a partial AST
+    assert(!ast_with_error.functions.is_empty());
+    
+    print("✅ test_parser_improvements passed");
+}
+
+fun test_type_checker_improvements() {
+    // Test the improved type checker
+    let source = "fun add(a: i32, b: i32) -> i32 { return a + b; }";
+    let mut parser = RuchyParserRefactored::new(
+        SourceFile::new("test.ruchy", source.to_string()),
+        ParserOptions::default(),
+    );
+    
+    let ast = parser.parse();
+    let mut type_checker = RuchyTypeCheckerRefactored::new(TypeCheckOptions {
+        strict_null_checks: true,
+        infer_return_types: true,
+        max_errors: 10,
+    });
+    
+    let type_env = type_checker.check_ast(&ast);
+    assert(!type_checker.diagnostics.has_errors());
+    assert(type_env.get_function_type("add").is_some());
+    
+    // Test with type error
+    let source_with_error = "fun mismatched() -> i32 { return \"string\"; }"; // Type mismatch
+    let mut parser_with_error = RuchyParserRefactored::new(
+        SourceFile::new("test_type_error.ruchy", source_with_error.to_string()),
+        ParserOptions::default(),
+    );
+    
+    let ast_with_error = parser_with_error.parse();
+    let mut type_checker_with_error = RuchyTypeCheckerRefactored::new(TypeCheckOptions::default());
+    
+    let type_env_with_error = type_checker_with_error.check_ast(&ast_with_error);
+    assert(type_checker_with_error.diagnostics.has_errors());
+    let errors = type_checker_with_error.diagnostics.get_errors();
+    assert(!errors.is_empty());
+    assert(errors[0].message.contains("Type mismatch"));
+    
+    print("✅ test_type_checker_improvements passed");
+}
+
+fun test_compilation_pipeline() {
+    // Test the improved compilation pipeline
+    let source = "fun main() { print(\"Hello, WebAssembly!\"); }";
+    let mut pipeline = CompilationPipeline::new(CompilationConfig {
+        optimization_level: OptimizationLevel::O1,
+        debug_info: true,
+        source_maps: true,
+        target_features: HashMap::new(),
+        mode: CompilationMode::Development,
+    });
+    
+    let result = pipeline.compile(
+        SourceFile::new("test.ruchy", source.to_string()),
+        CompilationTarget::Wasm,
+    );
+    
+    assert(result.is_ok());
+    assert(!pipeline.diagnostics.has_errors());
+    assert(pipeline.metrics.phase == "Compilation");
+    assert(pipeline.metrics.sub_metrics.len() >= 3); // Parsing, type checking, emission
+    assert(pipeline.active_target == Some(CompilationTarget::Wasm));
+    
+    let output = result.unwrap();
+    assert(!output.code.is_empty());
+    assert(output.target == CompilationTarget::Wasm);
+    assert(output.source_map.is_some());
+    
+    print("✅ test_compilation_pipeline passed");
+}
+
+fun test_multi_target_compilation() {
+    // Test compilation to multiple targets
+    let source = "fun factorial(n: i32) -> i32 { if n <= 1 { return 1; } return n * factorial(n - 1); }";
+    let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+    
+    // Compile to WebAssembly
+    let wasm_result = compiler.compile_to_target(
+        SourceFile::new("factorial.ruchy", source.to_string()),
+        CompilationTarget::Wasm,
+    );
+    assert(wasm_result.is_ok());
+    let wasm_output = wasm_result.unwrap();
+    assert(wasm_output.target == CompilationTarget::Wasm);
+    assert(!wasm_output.code.is_empty());
+    
+    // Compile to TypeScript
+    let ts_result = compiler.compile_to_target(
+        SourceFile::new("factorial.ruchy", source.to_string()),
+        CompilationTarget::TypeScript,
+    );
+    assert(ts_result.is_ok());
+    let ts_output = ts_result.unwrap();
+    assert(ts_output.target == CompilationTarget::TypeScript);
+    assert(!ts_output.code.is_empty());
+    assert(ts_output.code.contains("function factorial"));
+    
+    // Compile to Rust
+    let rust_result = compiler.compile_to_target(
+        SourceFile::new("factorial.ruchy", source.to_string()),
+        CompilationTarget::Rust,
+    );
+    assert(rust_result.is_ok());
+    let rust_output = rust_result.unwrap();
+    assert(rust_output.target == CompilationTarget::Rust);
+    assert(!rust_output.code.is_empty());
+    assert(rust_output.code.contains("fun factorial"));
+    
+    print("✅ test_multi_target_compilation passed");
+}
+
+fun test_target_specific_features() {
+    // Test target-specific features through configuration
+    let source = "fun test_target_features() { /* Uses target-specific features */ }";
+    let mut target_features = HashMap::new();
+    
+    // Add WebAssembly specific features
+    let mut wasm_features = HashMap::new();
+    wasm_features.insert("simd".to_string(), "true".to_string());
+    wasm_features.insert("bulk-memory".to_string(), "true".to_string());
+    target_features.insert(CompilationTarget::Wasm, wasm_features);
+    
+    // Add TypeScript specific features
+    let mut ts_features = HashMap::new();
+    ts_features.insert("strictNullChecks".to_string(), "true".to_string());
+    ts_features.insert("esModuleInterop".to_string(), "true".to_string());
+    target_features.insert(CompilationTarget::TypeScript, ts_features);
+    
+    let config = CompilationConfig {
+        optimization_level: OptimizationLevel::O2,
+        debug_info: true,
+        source_maps: true,
+        target_features,
+        mode: CompilationMode::Production,
+    };
+    
+    let mut compiler = MultiTargetCompilerRefactored::new(config);
+    
+    // Check WebAssembly features
+    let wasm_result = compiler.compile_to_target(
+        SourceFile::new("test.ruchy", source.to_string()),
+        CompilationTarget::Wasm,
+    );
+    assert(wasm_result.is_ok());
+    
+    // Verify WASM emitter received the features
+    let wasm_emitter = compiler.get_emitter(CompilationTarget::Wasm);
+    assert(wasm_emitter.is_some());
+    
+    let features = wasm_emitter.unwrap().get_target_features();
+    assert(features.contains_key("simd"));
+    assert(features.contains_key("bulk-memory"));
+    assert(features["simd"] == "true");
+    
+    // Check TypeScript features
+    let ts_result = compiler.compile_to_target(
+        SourceFile::new("test.ruchy", source.to_string()),
+        CompilationTarget::TypeScript,
+    );
+    assert(ts_result.is_ok());
+    
+    // Verify TS emitter received the features
+    let ts_emitter = compiler.get_emitter(CompilationTarget::TypeScript);
+    assert(ts_emitter.is_some());
+    
+    let ts_features = ts_emitter.unwrap().get_target_features();
+    assert(ts_features.contains_key("strictNullChecks"));
+    assert(ts_features.contains_key("esModuleInterop"));
+    assert(ts_features["strictNullChecks"] == "true");
+    
+    print("✅ test_target_specific_features passed");
+}
+
+fun test_error_recovery_and_diagnostics() {
+    // Test improved error recovery and diagnostics
+    let source_with_errors = "fun main() { 
+        let x: i32 = \"string\";  // Type error
+        let y = 10 + ;  // Syntax error
+        print(undefined_variable);  // Reference error
+    }";
+    
+    let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig {
+        optimization_level: OptimizationLevel::O0,
+        debug_info: true,
+        source_maps: true,
+        target_features: HashMap::new(),
+        mode: CompilationMode::Development,
+    });
+    
+    let result = compiler.compile_to_target(
+        SourceFile::new("errors.ruchy", source_with_errors.to_string()),
+        CompilationTarget::Wasm,
+    );
+    
+    // Should get an error result
+    assert(result.is_err());
+    assert(compiler.diagnostics.has_errors());
+    
+    // Check specific diagnostics
+    let errors = compiler.diagnostics.get_errors();
+    assert(errors.len() >= 3); // At least one for each error
+    
+    // Ensure we have descriptive error messages
+    let error_messages = errors.iter().map(|e| e.message.clone()).collect::<Vec<_>>();
+    assert(error_messages.iter().any(|msg| msg.contains("Type mismatch")));
+    assert(error_messages.iter().any(|msg| msg.contains("Expected expression")));
+    assert(error_messages.iter().any(|msg| msg.contains("Undefined variable")));
+    
+    // Check that error locations are correct
+    assert(errors.iter().all(|e| e.location.is_some()));
+    assert(errors.iter().any(|e| e.location.as_ref().unwrap().line == 2));
+    
+    print("✅ test_error_recovery_and_diagnostics passed");
+}
+
+fun test_source_map_generation() {
+    // Test source map generation
+    let source = "fun greet(name: string) -> string { 
+        return \"Hello, \" + name + \"!\"; 
+    }";
+    
+    let mut compiler = MultiTargetCompilerRefactored::new(CompilationConfig {
+        optimization_level: OptimizationLevel::O0,
+        debug_info: true,
+        source_maps: true,
+        target_features: HashMap::new(),
+        mode: CompilationMode::Development,
+    });
+    
+    let result = compiler.compile_to_target(
+        SourceFile::new("greet.ruchy", source.to_string()),
+        CompilationTarget::TypeScript,
+    );
+    
+    assert(result.is_ok());
+    let output = result.unwrap();
+    
+    // Verify source map exists
+    assert(output.source_map.is_some());
+    let source_map = output.source_map.unwrap();
+    
+    // Verify source map content
+    assert(!source_map.mappings.is_empty());
+    assert(source_map.sources.contains(&"greet.ruchy".to_string()));
+    assert(!source_map.sources_content.is_empty());
+    assert(source_map.sources_content[0] == source);
+    
+    print("✅ test_source_map_generation passed");
+}
+
+fun test_performance_improvement() {
+    // Test to verify that the refactored compiler performs better
+    let source = "fun fibonacci(n: i32) -> i32 { 
+        if n <= 1 { return n; } 
+        return fibonacci(n - 1) + fibonacci(n - 2); 
+    }";
+    
+    // Measure time with the original implementation
+    let start_original = current_time_millis();
+    let mut original_compiler = MultiTargetCompiler::new();
+    let _ = original_compiler.compile(source, CompilationTarget::Wasm);
+    let end_original = current_time_millis();
+    let original_time = end_original - start_original;
+    
+    // Measure time with the refactored implementation
+    let start_refactored = current_time_millis();
+    let mut refactored_compiler = MultiTargetCompilerRefactored::new(CompilationConfig::default());
+    let _ = refactored_compiler.compile_to_target(
+        SourceFile::new("fibonacci.ruchy", source.to_string()),
+        CompilationTarget::Wasm,
+    );
+    let end_refactored = current_time_millis();
+    let refactored_time = end_refactored - start_refactored;
+    
+    // The refactored implementation should be at least as fast,
+    // considering added functionality, we'll allow a small overhead
+    let overhead_factor = 1.2; // Allow up to 20% overhead for added features
+    assert(refactored_time <= (original_time * overhead_factor));
+    
+    print("✅ test_performance_improvement passed");
+}
+
+fun run_all_tests() {
+    test_compiler_initialization();
+    test_source_file_handling();
+    test_diagnostics_collection();
+    test_performance_metrics();
+    test_parser_improvements();
+    test_type_checker_improvements();
+    test_compilation_pipeline();
+    test_multi_target_compilation();
+    test_target_specific_features();
+    test_error_recovery_and_diagnostics();
+    test_source_map_generation();
+    test_performance_improvement();
+    
+    print("\n🎉 All tests passed for the refactored multi-target compiler!");
+}
+
+// Entry point for test suite
+fun main() {
+    run_all_tests();
+}

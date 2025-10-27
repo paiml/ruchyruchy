@@ -1,0 +1,47 @@
+// test_closure_red_runner.ruchy
+// Test runner for RED phase of WASM-002: Closure Compilation
+// This file verifies that our tests fail as expected before implementation
+
+fn test_expected_failures() {
+    println("Running WASM-002: Closure Compilation RED phase tests");
+    println("Expecting failures since implementation doesn't exist yet");
+    
+    // Run the test file, expecting it to fail since we haven't implemented
+    // the actual closure compiler yet
+    let result = execute("ruchy run validation/wasm/test_closure_compilation_red.ruchy");
+    
+    // The test should fail to compile due to missing implementations
+    assert(!result.success, "Tests should fail in RED phase");
+    
+    // Check that the error messages mention the missing components
+    let stderr = result.stderr;
+    
+    // Verify expected error messages
+    assert(stderr.contains("ClosureCompiler"), 
+           "Error should mention missing ClosureCompiler");
+    assert(stderr.contains("ClosureEnvironment"), 
+           "Error should mention missing ClosureEnvironment");
+    
+    println("✅ RED phase verification successful - tests fail as expected");
+}
+
+// Helper function to execute a command
+fn execute(cmd) {
+    println("Executing: " + cmd);
+    
+    let process = spawn(cmd);
+    let stdout = process.stdout;
+    let stderr = process.stderr;
+    let status = process.status;
+    
+    return {
+        stdout: stdout,
+        stderr: stderr,
+        success: status == 0,
+        status: status
+    };
+}
+
+fn main() {
+    test_expected_failures();
+}

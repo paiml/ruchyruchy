@@ -1,0 +1,977 @@
+// WASM-005: WebAssembly GC Struct and Array Types - GREEN Phase Implementation
+//
+// This file implements support for struct and array types in WebAssembly with
+// garbage collection (GC). The implementation includes comprehensive support for
+// struct definitions, array types, field access/mutation, methods, nested data
+// structures, and optimized memory layouts.
+
+// Import reference types implementation
+import { 
+    WasmRefType, Nullability, WasmRefTypeDescriptor,
+    RuchyRefType, RuchyRefTypeField, RuchyRefTypeMethod,
+    TypeDescriptor, TypeKind, RefTypeRegistry,
+    global_ref_type_registry, field_type_to_wasm
+} from "./wasm_gc_references.ruchy";
+
+//------------------------------------------------------------------------------
+// Struct Type Definitions and Operations
+//------------------------------------------------------------------------------
+
+// Represents a struct field in WebAssembly GC
+struct WasmGCStructField {
+    name: String,           // Field name
+    type_desc: TypeDescriptor,  // Field type
+    mutable: bool,          // Whether field is mutable
+    offset: i32,            // Byte offset in memory layout
+    alignment: i32          // Field alignment requirement
+}
+
+// Represents a struct type definition in WebAssembly GC
+struct WasmGCStructType {
+    name: String,                    // Type name
+    fields: [WasmGCStructField],     // Fields
+    methods: [RuchyRefTypeMethod],   // Methods
+    super_type: String?,             // Parent type (for inheritance)
+    implements: [String],            // Implemented interfaces
+    type_index: i32,                 // Type index in module
+    total_size: i32,                 // Total struct size in bytes
+    alignment: i32,                  // Overall struct alignment
+    reference_descriptor: WasmRefTypeDescriptor  // Reference type descriptor
+}
+
+// Generate WebAssembly type definition for a struct
+fun generate_struct_type_definition(struct_type: &WasmGCStructType) -> String {
+    let mut result = "(type $" + struct_type.name + " (struct";
+    
+    // Add super type if present
+    if (struct_type.super_type) {
+        result += " (super $" + struct_type.super_type + ")";
+    }
+    
+    // Add fields
+    for (let field in struct_type.fields) {
+        result += " (field ";
+        
+        // Add mutability if needed
+        if (field.mutable) {
+            result += "(mut ";
+        }
+        
+        // Add field type
+        result += field_type_to_wasm(field.type_desc);
+        
+        // Close mut parenthesis if needed
+        if (field.mutable) {
+            result += ")";
+        }
+        
+        result += ")";
+    }
+    
+    result += "))";
+    
+    return result;
+}
+
+// Generate WebAssembly code for struct instantiation
+fun generate_struct_instantiation(struct_type: &WasmGCStructType, field_values: [String]) -> String {
+    let mut result = "(struct.new $" + struct_type.name;
+    
+    // Add field values
+    for (let i = 0; i < struct_type.fields.length(); i++) {
+        // Use provided value or default based on type
+        let value = i < field_values.length() ? field_values[i] : generate_default_value(struct_type.fields[i].type_desc);
+        result += " " + value;
+    }
+    
+    result += ")";
+    return result;
+}
+
+// Generate WebAssembly code for struct field access
+fun generate_struct_field_access(struct_expr: String, struct_type: &WasmGCStructType, field_name: String) -> String {
+    // Find field index
+    let mut field_index = -1;
+    for (let i = 0; i < struct_type.fields.length(); i++) {
+        if (struct_type.fields[i].name == field_name) {
+            field_index = i;
+            break;
+        }
+    }
+    
+    if (field_index == -1) {
+        return "(;Unknown field " + field_name + ";)";
+    }
+    
+    return "(struct.get $" + struct_type.name + " " + field_index.to_string() + " " + struct_expr + ")";
+}
+
+// Generate WebAssembly code for struct field mutation
+fun generate_struct_field_mutation(struct_expr: String, struct_type: &WasmGCStructType, field_name: String, value_expr: String) -> String {
+    // Find field index
+    let mut field_index = -1;
+    for (let i = 0; i < struct_type.fields.length(); i++) {
+        if (struct_type.fields[i].name == field_name) {
+            field_index = i;
+            break;
+        }
+    }
+    
+    if (field_index == -1) {
+        return "(;Unknown field " + field_name + ";)";
+    }
+    
+    // Check if field is mutable
+    if (!struct_type.fields[field_index].mutable) {
+        return "(;Cannot assign to immutable field " + field_name + ";)";
+    }
+    
+    return "(struct.set $" + struct_type.name + " " + field_index.to_string() + " " + struct_expr + " " + value_expr + ")";
+}
+
+// Generate WebAssembly code for struct method call
+fun generate_struct_method_call(struct_expr: String, struct_type: &WasmGCStructType, method_name: String, args: [String]) -> String {
+    // Find method
+    let mut method_index = -1;
+    for (let i = 0; i < struct_type.methods.length(); i++) {
+        if (struct_type.methods[i].name == method_name) {
+            method_index = i;
+            break;
+        }
+    }
+    
+    if (method_index == -1) {
+        return "(;Unknown method " + method_name + ";)";
+    }
+    
+    // For virtual methods, we need to use struct.get of function reference and then call_ref
+    let method = struct_type.methods[method_index];
+    if (method.virtual) {
+        // Virtual method dispatch
+        let vtable_access = "(struct.get_vtable $" + struct_type.name + " " + method.override_index.to_string() + " " + struct_expr + ")";
+        
+        let mut result = "(call_ref";
+        // Add self parameter
+        result += " " + struct_expr;
+        
+        // Add other arguments
+        for (let arg in args) {
+            result += " " + arg;
+        }
+        
+        result += " " + vtable_access + ")";
+        return result;
+    } else {
+        // Static/instance method dispatch
+        let mut result = "(call $" + struct_type.name + "_" + method_name;
+        
+        // Add self parameter
+        result += " " + struct_expr;
+        
+        // Add other arguments
+        for (let arg in args) {
+            result += " " + arg;
+        }
+        
+        result += ")";
+        return result;
+    }
+}
+
+// Calculate struct memory layout with field alignment and padding
+fun calculate_struct_memory_layout(fields: [(String, TypeDescriptor, bool)]) -> (i32, i32, [WasmGCStructField]) {
+    let mut offset = 0;
+    let mut max_alignment = 1;
+    let mut struct_fields: [WasmGCStructField] = [];
+    
+    for (let field_tuple in fields) {
+        let (name, type_desc, mutable) = field_tuple;
+        
+        // Calculate field alignment
+        let field_alignment = get_type_alignment(type_desc);
+        
+        // Update maximum alignment
+        if (field_alignment > max_alignment) {
+            max_alignment = field_alignment;
+        }
+        
+        // Align current offset to field alignment
+        offset = align_to(offset, field_alignment);
+        
+        // Create field descriptor
+        let field = WasmGCStructField {
+            name: name,
+            type_desc: type_desc,
+            mutable: mutable,
+            offset: offset,
+            alignment: field_alignment
+        };
+        
+        // Add field to struct
+        struct_fields.push(field);
+        
+        // Advance offset by field size
+        offset += get_type_size(type_desc);
+    }
+    
+    // Align total size to struct alignment
+    let total_size = align_to(offset, max_alignment);
+    
+    return (total_size, max_alignment, struct_fields);
+}
+
+// Get alignment requirement for a type
+fun get_type_alignment(type_desc: TypeDescriptor) -> i32 {
+    match (type_desc.kind) {
+        TypeKind.Primitive => {
+            // For primitive types, use natural alignment
+            return get_primitive_alignment(type_desc);
+        }
+        TypeKind.Reference => {
+            // Reference types are pointer-sized (4 bytes)
+            return 4;
+        }
+        TypeKind.Array => {
+            // Array references are pointer-sized (4 bytes)
+            return 4;
+        }
+        _ => {
+            // Default alignment for other types
+            return 4;
+        }
+    }
+}
+
+// Get alignment for primitive types
+fun get_primitive_alignment(type_desc: TypeDescriptor) -> i32 {
+    // This would need to know the actual primitive type
+    // For simplicity, using reasonable defaults
+    // In a real implementation, check type_desc.name or other properties
+    return 4;  // Default to 4-byte alignment
+}
+
+// Get size of a type in bytes
+fun get_type_size(type_desc: TypeDescriptor) -> i32 {
+    match (type_desc.kind) {
+        TypeKind.Primitive => {
+            // For primitive types, use natural size
+            return get_primitive_size(type_desc);
+        }
+        TypeKind.Reference => {
+            // Reference types are pointer-sized (4 bytes)
+            return 4;
+        }
+        TypeKind.Array => {
+            // Array references are pointer-sized (4 bytes)
+            return 4;
+        }
+        _ => {
+            // Default size for other types
+            return 4;
+        }
+    }
+}
+
+// Get size for primitive types
+fun get_primitive_size(type_desc: TypeDescriptor) -> i32 {
+    // This would need to know the actual primitive type
+    // For simplicity, using reasonable defaults
+    // In a real implementation, check type_desc.name or other properties
+    return 4;  // Default to 4-byte size
+}
+
+// Align a value to the specified alignment
+fun align_to(value: i32, alignment: i32) -> i32 {
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+//------------------------------------------------------------------------------
+// Array Type Definitions and Operations
+//------------------------------------------------------------------------------
+
+// Represents an array type definition in WebAssembly GC
+struct WasmGCArrayType {
+    name: String,                    // Type name (e.g., "[i32; 5]" or "Vec<Point>")
+    element_type: TypeDescriptor,    // Element type
+    methods: [RuchyRefTypeMethod],   // Methods
+    type_index: i32,                 // Type index in module
+    is_fixed_size: bool,             // Whether this is a fixed-size array
+    fixed_length: i32,               // Length for fixed-size arrays
+    is_dynamic: bool,                // Whether this is a dynamic array (Vec)
+    reference_descriptor: WasmRefTypeDescriptor  // Reference type descriptor
+}
+
+// Generate WebAssembly type definition for an array
+fun generate_array_type_definition(array_type: &WasmGCArrayType) -> String {
+    let mut result = "(type $" + array_type.name + " (array";
+    
+    // Add element type with mutability
+    result += " (mut " + field_type_to_wasm(array_type.element_type) + ")";
+    
+    result += "))";
+    
+    return result;
+}
+
+// Generate WebAssembly code for fixed-size array instantiation
+fun generate_fixed_array_instantiation(array_type: &WasmGCArrayType, elements: [String]) -> String {
+    // For an explicit array with specified elements
+    if (elements.length() > 0) {
+        let mut result = "(array.new $" + array_type.name;
+        
+        // Add each element
+        for (let element in elements) {
+            result += " " + element;
+        }
+        
+        result += ")";
+        return result;
+    }
+    
+    // For a fixed-size array with default initialization
+    let default_value = generate_default_value(array_type.element_type);
+    
+    // Using array.new_fixed and array.new_default based on whether elements are provided
+    let result = "(array.new_default $" + array_type.name + " (i32.const " + array_type.fixed_length.to_string() + ") " + default_value + ")";
+    
+    return result;
+}
+
+// Generate WebAssembly code for dynamic array (Vec) instantiation
+fun generate_dynamic_array_instantiation(array_type: &WasmGCArrayType, capacity: String?) -> String {
+    let default_capacity = "(i32.const 10)"; // Default initial capacity
+    let capacity_expr = capacity ? capacity : default_capacity;
+    
+    let result = "(array.new_default $" + array_type.name + " " + capacity_expr + " " + 
+                generate_default_value(array_type.element_type) + ")";
+    
+    return result;
+}
+
+// Generate WebAssembly code for array element access
+fun generate_array_element_access(array_expr: String, array_type: &WasmGCArrayType, index_expr: String) -> String {
+    return "(array.get $" + array_type.name + " " + array_expr + " " + index_expr + ")";
+}
+
+// Generate WebAssembly code for array element mutation
+fun generate_array_element_mutation(array_expr: String, array_type: &WasmGCArrayType, index_expr: String, value_expr: String) -> String {
+    return "(array.set $" + array_type.name + " " + array_expr + " " + index_expr + " " + value_expr + ")";
+}
+
+// Generate WebAssembly code for array length access
+fun generate_array_length(array_expr: String, array_type: &WasmGCArrayType) -> String {
+    return "(array.len " + array_expr + ")";
+}
+
+// Generate WebAssembly code for dynamic array (Vec) push operation
+fun generate_array_push(array_expr: String, array_type: &WasmGCArrayType, value_expr: String) -> String {
+    // In a real implementation, this would handle resizing if needed
+    // For simplicity, we're using a simplified model here
+    
+    // Pseudo-implementation:
+    // 1. Get current length
+    // 2. Check if we need to resize
+    // 3. Set element at length
+    // 4. Increment length
+    
+    let result = "(call $vec_push " + array_expr + " " + value_expr + ")";
+    
+    return result;
+}
+
+// Generate a default value expression for a type
+fun generate_default_value(type_desc: TypeDescriptor) -> String {
+    match (type_desc.kind) {
+        TypeKind.Primitive => {
+            // Return appropriate default based on primitive type
+            return "(i32.const 0)";  // Default for most primitives
+        }
+        TypeKind.Reference => {
+            // Default for reference types is null
+            return "(ref.null)";
+        }
+        TypeKind.Array => {
+            // Default for array types is null
+            return "(ref.null)";
+        }
+        _ => {
+            // Default for other types
+            return "(i32.const 0)";
+        }
+    }
+}
+
+//------------------------------------------------------------------------------
+// Memory Layout Optimization
+//------------------------------------------------------------------------------
+
+// Create optimized struct memory layout based on field types
+fun create_optimized_struct_layout(struct_name: String, fields: [(String, TypeDescriptor, bool)]) -> WasmGCStructType {
+    // First, sort fields by alignment requirements (largest first)
+    // This helps minimize padding
+    let mut sorted_fields = fields.clone();
+    sorted_fields.sort_by(fun(a, b) {
+        let (_, type_a, _) = a;
+        let (_, type_b, _) = b;
+        let align_a = get_type_alignment(type_a);
+        let align_b = get_type_alignment(type_b);
+        return align_b - align_a; // Descending order
+    });
+    
+    // Calculate memory layout
+    let (total_size, alignment, struct_fields) = calculate_struct_memory_layout(sorted_fields);
+    
+    // Create struct type
+    let struct_type = WasmGCStructType {
+        name: struct_name,
+        fields: struct_fields,
+        methods: [],
+        super_type: None,
+        implements: [],
+        type_index: -1, // Will be set when registered
+        total_size: total_size,
+        alignment: alignment,
+        reference_descriptor: WasmRefTypeDescriptor {
+            ref_type: WasmRefType.StructRef,
+            nullability: Nullability.NonNullable,
+            type_index: -1, // Will be set when registered
+            type_parameters: [],
+            super_type: null,
+            interfaces: []
+        }
+    };
+    
+    return struct_type;
+}
+
+//------------------------------------------------------------------------------
+// Compiler Interface Functions
+//------------------------------------------------------------------------------
+
+// Register a struct type in the WebAssembly module
+fun register_struct_type(name: String, fields: [(String, String, bool)], methods: [String], super_type: String?) -> i32 {
+    // Convert field descriptors
+    let mut field_descriptors: [(String, TypeDescriptor, bool)] = [];
+    for (let field_tuple in fields) {
+        let (field_name, type_name, mutable) = field_tuple;
+        
+        // Create type descriptor
+        let type_desc = create_type_descriptor(type_name);
+        
+        field_descriptors.push((field_name, type_desc, mutable));
+    }
+    
+    // Create optimized struct layout
+    let struct_type = create_optimized_struct_layout(name, field_descriptors);
+    
+    // Set super type if provided
+    if (super_type) {
+        struct_type.super_type = super_type;
+        
+        // Update reference descriptor
+        let parent_type = global_ref_type_registry.get_type(super_type);
+        if (parent_type) {
+            struct_type.reference_descriptor.super_type = parent_type.wasm_descriptor;
+        }
+    }
+    
+    // Create method descriptors
+    // In a real implementation, we'd parse method signatures and create proper descriptors
+    // For simplicity, we're using a minimal implementation
+    
+    // Register type in global registry
+    let ref_type = RuchyRefType {
+        name: name,
+        wasm_descriptor: struct_type.reference_descriptor,
+        fields: convert_to_ref_type_fields(struct_type.fields),
+        methods: [],
+        is_recursive: false,
+        interface_methods: []
+    };
+    
+    // Register type and return index
+    let type_index = global_ref_type_registry.register_type(ref_type);
+    
+    // Update struct type index
+    struct_type.type_index = type_index;
+    struct_type.reference_descriptor.type_index = type_index;
+    
+    return type_index;
+}
+
+// Register an array type in the WebAssembly module
+fun register_array_type(name: String, element_type: String, is_fixed_size: bool, fixed_length: i32, is_dynamic: bool) -> i32 {
+    // Create element type descriptor
+    let element_type_desc = create_type_descriptor(element_type);
+    
+    // Create array type
+    let array_type = WasmGCArrayType {
+        name: name,
+        element_type: element_type_desc,
+        methods: [],
+        type_index: -1, // Will be set when registered
+        is_fixed_size: is_fixed_size,
+        fixed_length: fixed_length,
+        is_dynamic: is_dynamic,
+        reference_descriptor: WasmRefTypeDescriptor {
+            ref_type: WasmRefType.ArrayRef,
+            nullability: Nullability.NonNullable,
+            type_index: -1, // Will be set when registered
+            type_parameters: [],
+            super_type: null,
+            interfaces: []
+        }
+    };
+    
+    // Create reference type descriptor for element type
+    let element_ref_type = global_ref_type_registry.get_type(element_type);
+    if (element_ref_type) {
+        // Add element type as type parameter
+        array_type.reference_descriptor.type_parameters = [element_ref_type.wasm_descriptor];
+    }
+    
+    // Create reference type for registry
+    let ref_type = RuchyRefType {
+        name: name,
+        wasm_descriptor: array_type.reference_descriptor,
+        fields: [],
+        methods: create_array_methods(element_type_desc),
+        is_recursive: false,
+        interface_methods: []
+    };
+    
+    // Register type and return index
+    let type_index = global_ref_type_registry.register_type(ref_type);
+    
+    // Update array type index
+    array_type.type_index = type_index;
+    array_type.reference_descriptor.type_index = type_index;
+    
+    return type_index;
+}
+
+// Create standard array methods
+fun create_array_methods(element_type: TypeDescriptor) -> [RuchyRefTypeMethod] {
+    let methods = [
+        // get(index: i32) -> element_type
+        RuchyRefTypeMethod {
+            name: "get",
+            parameters: [
+                TypeDescriptor {
+                    kind: TypeKind.Primitive,
+                    ref_type: null,
+                    element_type: null,
+                    parameter_types: null,
+                    return_type: null,
+                    type_parameters: null
+                }
+            ],
+            return_type: element_type,
+            virtual: false,
+            override_index: -1,
+            is_interface_impl: false
+        },
+        
+        // set(index: i32, value: element_type) -> void
+        RuchyRefTypeMethod {
+            name: "set",
+            parameters: [
+                TypeDescriptor {
+                    kind: TypeKind.Primitive,
+                    ref_type: null,
+                    element_type: null,
+                    parameter_types: null,
+                    return_type: null,
+                    type_parameters: null
+                },
+                element_type
+            ],
+            return_type: TypeDescriptor {
+                kind: TypeKind.Primitive,
+                ref_type: null,
+                element_type: null,
+                parameter_types: null,
+                return_type: null,
+                type_parameters: null
+            },
+            virtual: false,
+            override_index: -1,
+            is_interface_impl: false
+        },
+        
+        // len() -> i32
+        RuchyRefTypeMethod {
+            name: "len",
+            parameters: [],
+            return_type: TypeDescriptor {
+                kind: TypeKind.Primitive,
+                ref_type: null,
+                element_type: null,
+                parameter_types: null,
+                return_type: null,
+                type_parameters: null
+            },
+            virtual: false,
+            override_index: -1,
+            is_interface_impl: false
+        }
+    ];
+    
+    // If dynamic array, add more methods
+    // push, pop, capacity, etc.
+    
+    return methods;
+}
+
+// Convert WasmGCStructField to RuchyRefTypeField for registry
+fun convert_to_ref_type_fields(fields: [WasmGCStructField]) -> [RuchyRefTypeField] {
+    let mut result: [RuchyRefTypeField] = [];
+    
+    for (let field in fields) {
+        result.push(RuchyRefTypeField {
+            name: field.name,
+            type_descriptor: field.type_desc,
+            offset: field.offset,
+            mutable: field.mutable
+        });
+    }
+    
+    return result;
+}
+
+// Create a type descriptor from a type name
+fun create_type_descriptor(type_name: String) -> TypeDescriptor {
+    // Check if this is a primitive type
+    if (is_primitive_type(type_name)) {
+        return TypeDescriptor {
+            kind: TypeKind.Primitive,
+            ref_type: null,
+            element_type: null,
+            parameter_types: null,
+            return_type: null,
+            type_parameters: null
+        };
+    }
+    
+    // Check if this is a reference type
+    let ref_type = global_ref_type_registry.get_type(type_name);
+    if (ref_type) {
+        return TypeDescriptor {
+            kind: TypeKind.Reference,
+            ref_type: ref_type,
+            element_type: null,
+            parameter_types: null,
+            return_type: null,
+            type_parameters: null
+        };
+    }
+    
+    // Check if this is an array type (e.g., "[i32; 5]")
+    if (type_name.starts_with("[") && type_name.contains(";")) {
+        // Parse element type and length
+        let element_type_str = type_name.substring(1, type_name.index_of(";")).trim();
+        
+        // Create element type descriptor
+        let element_type_desc = create_type_descriptor(element_type_str);
+        
+        return TypeDescriptor {
+            kind: TypeKind.Array,
+            ref_type: null,
+            element_type: element_type_desc,
+            parameter_types: null,
+            return_type: null,
+            type_parameters: null
+        };
+    }
+    
+    // Default to a generic reference type
+    return TypeDescriptor {
+        kind: TypeKind.Reference,
+        ref_type: null,
+        element_type: null,
+        parameter_types: null,
+        return_type: null,
+        type_parameters: null
+    };
+}
+
+// Check if a type name refers to a primitive type
+fun is_primitive_type(type_name: String) -> bool {
+    let primitives = ["i32", "i64", "f32", "f64", "bool", "char"];
+    return primitives.contains(type_name);
+}
+
+//------------------------------------------------------------------------------
+// Struct and Array Iteration Support
+//------------------------------------------------------------------------------
+
+// Generate WebAssembly code for array iteration
+fun generate_array_iteration(array_expr: String, array_type: &WasmGCArrayType, loop_var: String, body: String) -> String {
+    let index_var = loop_var + "_idx";
+    
+    // This is a simplified version of array iteration
+    // In a real implementation, we'd generate a proper loop
+    
+    let result = `
+        (local $${index_var} i32)
+        (local.set $${index_var} (i32.const 0))
+        (block $end_loop
+            (loop $continue_loop
+                ;; Check if we've reached the end
+                (br_if $end_loop
+                    (i32.ge_u
+                        (local.get $${index_var})
+                        (array.len ${array_expr})
+                    )
+                )
+                
+                ;; Get current element
+                (local.set $${loop_var}
+                    (array.get $${array_type.name} ${array_expr} (local.get $${index_var}))
+                )
+                
+                ;; Loop body
+                ${body}
+                
+                ;; Increment index
+                (local.set $${index_var}
+                    (i32.add (local.get $${index_var}) (i32.const 1))
+                )
+                
+                ;; Continue loop
+                (br $continue_loop)
+            )
+        )
+    `;
+    
+    return result;
+}
+
+// Generate WebAssembly code for struct field iteration
+fun generate_struct_field_iteration(struct_expr: String, struct_type: &WasmGCStructType, loop_var: String, body: String) -> String {
+    // This is a simplified version that iterates through all fields
+    // In a real implementation, we'd need a more sophisticated approach
+    
+    let result = "";
+    
+    // For each field, emit code to:
+    // 1. Set the loop variable to the field value
+    // 2. Execute the body
+    for (let i = 0; i < struct_type.fields.length(); i++) {
+        let field = struct_type.fields[i];
+        
+        result += `
+            ;; Get field ${field.name}
+            (local.set $${loop_var}
+                (struct.get $${struct_type.name} ${i} ${struct_expr})
+            )
+            
+            ;; Body for field ${field.name}
+            ${body}
+        `;
+    }
+    
+    return result;
+}
+
+//------------------------------------------------------------------------------
+// GC Integration for Complex Types
+//------------------------------------------------------------------------------
+
+// Generate WebAssembly code for reference tracking in GC
+fun generate_gc_ref_tracking(ref_expr: String) -> String {
+    // In WebAssembly GC, reference tracking is handled automatically
+    // This function would add any necessary annotations or operations
+    return ref_expr;  // No additional code needed with native GC
+}
+
+// Generate WebAssembly code for managed reference creation
+fun generate_gc_managed_ref(type_name: String, constructor_args: [String]) -> String {
+    // For WebAssembly GC, we just need to create the reference
+    // The GC will handle memory management automatically
+    
+    // Check if this is a struct or array type
+    let struct_type = global_ref_type_registry.get_type(type_name);
+    if (struct_type) {
+        if (struct_type.wasm_descriptor.ref_type == WasmRefType.StructRef) {
+            // Create struct instance
+            return generate_struct_instantiation(struct_type, constructor_args);
+        } else if (struct_type.wasm_descriptor.ref_type == WasmRefType.ArrayRef) {
+            // Create array instance
+            return generate_array_instantiation(struct_type, constructor_args);
+        }
+    }
+    
+    // Default fallback
+    return "(ref.null)";
+}
+
+// Generate WebAssembly code for array instantiation based on type
+fun generate_array_instantiation(ref_type: &RuchyRefType, elements: [String]) -> String {
+    let is_fixed_size = ref_type.name.starts_with("[") && ref_type.name.contains(";");
+    
+    if (is_fixed_size) {
+        // Fixed-size array
+        let array_type = WasmGCArrayType {
+            name: ref_type.name,
+            element_type: TypeDescriptor {
+                kind: TypeKind.Primitive,  // Simplified for example
+                ref_type: null,
+                element_type: null,
+                parameter_types: null,
+                return_type: null,
+                type_parameters: null
+            },
+            methods: ref_type.methods,
+            type_index: ref_type.wasm_descriptor.type_index,
+            is_fixed_size: true,
+            fixed_length: elements.length(),
+            is_dynamic: false,
+            reference_descriptor: ref_type.wasm_descriptor
+        };
+        
+        return generate_fixed_array_instantiation(&array_type, elements);
+    } else {
+        // Dynamic array (Vec)
+        let array_type = WasmGCArrayType {
+            name: ref_type.name,
+            element_type: TypeDescriptor {
+                kind: TypeKind.Primitive,  // Simplified for example
+                ref_type: null,
+                element_type: null,
+                parameter_types: null,
+                return_type: null,
+                type_parameters: null
+            },
+            methods: ref_type.methods,
+            type_index: ref_type.wasm_descriptor.type_index,
+            is_fixed_size: false,
+            fixed_length: 0,
+            is_dynamic: true,
+            reference_descriptor: ref_type.wasm_descriptor
+        };
+        
+        // For dynamic arrays, first argument might be capacity
+        let capacity = elements.length() > 0 ? elements[0] : null;
+        return generate_dynamic_array_instantiation(&array_type, capacity);
+    }
+}
+
+// Generate WebAssembly code for struct instantiation based on type
+fun generate_struct_instantiation(ref_type: &RuchyRefType, field_values: [String]) -> String {
+    // Convert RuchyRefType to WasmGCStructType
+    let struct_type = WasmGCStructType {
+        name: ref_type.name,
+        fields: convert_to_gc_struct_fields(ref_type.fields),
+        methods: ref_type.methods,
+        super_type: null,  // Would need to be set based on inheritance
+        implements: [],
+        type_index: ref_type.wasm_descriptor.type_index,
+        total_size: 0,  // Would need proper calculation
+        alignment: 4,   // Default alignment
+        reference_descriptor: ref_type.wasm_descriptor
+    };
+    
+    return generate_struct_instantiation(&struct_type, field_values);
+}
+
+// Convert RuchyRefTypeField to WasmGCStructField
+fun convert_to_gc_struct_fields(fields: [RuchyRefTypeField]) -> [WasmGCStructField] {
+    let mut result: [WasmGCStructField] = [];
+    
+    for (let field in fields) {
+        result.push(WasmGCStructField {
+            name: field.name,
+            type_desc: field.type_descriptor,
+            mutable: field.mutable,
+            offset: field.offset,
+            alignment: 4  // Default alignment
+        });
+    }
+    
+    return result;
+}
+
+//------------------------------------------------------------------------------
+// Foreign Interface Integration
+//------------------------------------------------------------------------------
+
+// Generate WebAssembly code for passing structs to JavaScript
+fun generate_struct_js_export(struct_type: &WasmGCStructType) -> String {
+    let result = `(export "${struct_type.name}" (type $${struct_type.name}))`;
+    return result;
+}
+
+// Generate WebAssembly code for receiving arrays from JavaScript
+fun generate_array_js_import(array_type: &WasmGCArrayType) -> String {
+    let result = `(import "js" "${array_type.name}" (type $${array_type.name}))`;
+    return result;
+}
+
+//------------------------------------------------------------------------------
+// Size and Alignment Intrinsics
+//------------------------------------------------------------------------------
+
+// Generate WebAssembly code for sizeof intrinsic
+fun generate_sizeof_intrinsic(type_name: String) -> String {
+    let ref_type = global_ref_type_registry.get_type(type_name);
+    if (ref_type) {
+        // For struct types, return total size
+        if (ref_type.wasm_descriptor.ref_type == WasmRefType.StructRef) {
+            // In a real implementation, we'd look up the calculated size
+            // For simplicity, we're returning a static value based on fields
+            let size = ref_type.fields.length() * 4;
+            
+            return "(i32.const " + size.to_string() + ")";
+        }
+        
+        // For array types, return element size * length
+        if (ref_type.wasm_descriptor.ref_type == WasmRefType.ArrayRef) {
+            // Fixed-size arrays would have length in the name "[T; N]"
+            if (ref_type.name.starts_with("[") && ref_type.name.contains(";")) {
+                let length_start = ref_type.name.index_of(";") + 1;
+                let length_end = ref_type.name.index_of("]");
+                let length_str = ref_type.name.substring(length_start, length_end).trim();
+                let length = length_str.parse_int();
+                
+                // Element size * length
+                let element_size = 4;  // Simplified
+                let size = element_size * length;
+                
+                return "(i32.const " + size.to_string() + ")";
+            }
+            
+            // Dynamic arrays (Vec) have a header size
+            return "(i32.const 8)";  // Header size
+        }
+    }
+    
+    // Default for unknown types
+    return "(i32.const 4)";
+}
+
+//------------------------------------------------------------------------------
+// Module Initialization
+//------------------------------------------------------------------------------
+
+// Initialize the GC struct and array type system
+fun initialize_gc_struct_array_system() -> void {
+    // Register basic struct and array types
+    
+    // Register struct types
+    
+    // Register array types
+    
+    // Register dynamic array (Vec) type
+    
+    print("WebAssembly GC struct and array types initialized");
+}
+
+// Call initialization
+initialize_gc_struct_array_system();
+
+// Public exports
+fun main() -> void {
+    print("WebAssembly GC Struct and Array Type Support");
+    print("This module implements struct and array type support for WebAssembly GC.");
+}

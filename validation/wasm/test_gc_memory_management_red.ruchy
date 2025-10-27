@@ -1,0 +1,348 @@
+// WASM-005: Memory Management and Garbage Collection for WebAssembly
+// RED phase - Tests to validate memory management capabilities
+
+import { Test, expect, bench, assert } from "@ruchy/test";
+import { wasm, memory, gc } from "@ruchy/wasm";
+import { measurePerformance, allocateStress, createCircularReferences } from "@ruchy/perf";
+
+// Utility function to create complex object graphs for testing
+fun createObjectGraph(depth: i32, breadth: i32, hasCircularRefs: bool) -> Object {
+    // Implementation will be added in GREEN phase
+    // This should create a complex object graph with configurable depth and breadth
+    // and optional circular references
+    unimplemented!("Object graph creation not implemented");
+}
+
+// Utility to create weak references
+fun createWeakRef<T>(obj: T) -> WeakRef<T> {
+    // Implementation will be added in GREEN phase
+    unimplemented!("Weak reference creation not implemented");
+}
+
+// Test suite for basic garbage collection functionality
+Test("GC.BasicAllocationAndCollection", fun() {
+    // Test 1: Objects should be collected when they go out of scope
+    fun testBasicCollection() {
+        // Allocate memory and create reference
+        let obj = gc.allocate(1024);  // Allocate 1KB
+        
+        // Store a marker to validate collection
+        obj.setFinalizer(fun() {
+            gc.setCollected("testObject");
+        });
+        
+        // Force collection - object should be collected as it goes out of scope
+        gc.collect();
+        
+        // Verify the object was collected by checking the finalizer ran
+        expect(gc.wasCollected("testObject")).toBe(true);
+    }
+    
+    // Execute the test
+    testBasicCollection();
+    
+    // Test memory pressure by allocating until collection is triggered
+    let allocations = 0;
+    let collected = false;
+    
+    while (!collected && allocations < 1000) {
+        let largeObj = gc.allocate(1024 * 1024);  // 1MB allocation
+        largeObj.setFinalizer(fun() {
+            collected = true;
+        });
+        allocations += 1;
+    }
+    
+    // Verify collection occurred under memory pressure
+    expect(collected).toBe(true);
+});
+
+// Test suite for reference counting and weak references
+Test("GC.ReferenceTypesAndCounting", fun() {
+    // Test reference counting mechanisms
+    let refCount = 0;
+    
+    // Create an object with a finalizer that tracks collection
+    let trackedObj = {
+        data: "important data",
+        id: 12345
+    };
+    
+    gc.setFinalizer(trackedObj, fun() {
+        refCount -= 1;
+    });
+    
+    // Add references to the object
+    let refs = [];
+    for (let i = 0; i < 10; i++) {
+        refCount += 1;
+        refs.push(trackedObj);
+    }
+    
+    // Clear some references
+    refs.splice(0, 5);
+    gc.collect();
+    
+    // References should still exist, so object shouldn't be collected
+    expect(refCount).toBe(5);
+    
+    // Create weak references that shouldn't prevent collection
+    let weakRef = createWeakRef(trackedObj);
+    
+    // Clear all strong references
+    refs = [];
+    gc.collect();
+    
+    // Object should be collected, and weak reference should be cleared
+    expect(refCount).toBe(0);
+    expect(weakRef.deref()).toBe(null);
+});
+
+// Test circular references to ensure they are properly collected
+Test("GC.CircularReferences", fun() {
+    // Create objects that reference each other
+    let objA = {};
+    let objB = {};
+    let collected = [false, false];
+    
+    // Set up circular references
+    objA.ref = objB;
+    objB.ref = objA;
+    
+    // Add finalizers to track collection
+    gc.setFinalizer(objA, fun() {
+        collected[0] = true;
+    });
+    
+    gc.setFinalizer(objB, fun() {
+        collected[1] = true;
+    });
+    
+    // Remove references to both objects
+    objA = null;
+    objB = null;
+    
+    // Force collection
+    gc.collect();
+    
+    // Both objects should be collected despite circular references
+    expect(collected[0]).toBe(true);
+    expect(collected[1]).toBe(true);
+});
+
+// Test finalization hooks and lifecycle
+Test("GC.Finalization", fun() {
+    let finalizationOrder = [];
+    
+    // Create parent object
+    let parent = {};
+    gc.setFinalizer(parent, fun() {
+        finalizationOrder.push("parent");
+    });
+    
+    // Create child object that parent references
+    let child = {};
+    gc.setFinalizer(child, fun() {
+        finalizationOrder.push("child");
+    });
+    
+    // Set up the parent-child relationship
+    parent.child = child;
+    
+    // Remove reference to parent (which has the only reference to child)
+    parent = null;
+    
+    // Force collection
+    gc.collect();
+    
+    // Verify both were finalized and child was finalized first
+    expect(finalizationOrder).toContain("parent");
+    expect(finalizationOrder).toContain("child");
+    expect(finalizationOrder.indexOf("child")).toBeLessThan(finalizationOrder.indexOf("parent"));
+});
+
+// Test memory safety guarantees
+Test("GC.MemorySafety", fun() {
+    // Test use-after-free scenarios that should be prevented
+    let obj = {};
+    let weakRef = createWeakRef(obj);
+    
+    // Store reference in JavaScript
+    let dangerousRef = wasm.createUnsafePointer(obj);
+    
+    // Remove the safe reference
+    obj = null;
+    
+    // Force collection
+    gc.collect();
+    
+    // Attempting to use the weak reference should return null
+    expect(weakRef.deref()).toBe(null);
+    
+    // Attempting to access via unsafe pointer should throw a safety violation
+    expect(fun() {
+        wasm.dereferenceUnsafePointer(dangerousRef);
+    }).toThrow("Memory safety violation");
+});
+
+// Performance characteristics and benchmarks
+Test("GC.PerformanceCharacteristics", fun() {
+    // Measure allocation performance
+    let allocationTime = bench(fun() {
+        for (let i = 0; i < 10000; i++) {
+            let obj = gc.allocate(1024);  // 1KB allocations
+        }
+    });
+    
+    // Allocation should be reasonably fast
+    expect(allocationTime).toBeLessThan(100);  // milliseconds
+    
+    // Measure collection pause times
+    let collectionPause = bench(fun() {
+        // Create many objects
+        for (let i = 0; i < 10000; i++) {
+            let obj = gc.allocate(1024);  // 1KB allocations
+        }
+        // Force collection and measure pause
+        gc.collect();
+    });
+    
+    // Collection pauses should be minimal
+    expect(collectionPause).toBeLessThan(50);  // milliseconds
+    
+    // Test incremental collection to ensure it doesn't block for too long
+    let maxPause = 0;
+    for (let i = 0; i < 10; i++) {
+        // Create complex object graph
+        let graph = createObjectGraph(5, 10, true);
+        
+        // Measure pause time during incremental collection
+        let pause = bench(fun() {
+            gc.incrementalCollect();
+        });
+        
+        if (pause > maxPause) {
+            maxPause = pause;
+        }
+    }
+    
+    // Max pause for incremental collection should be very low
+    expect(maxPause).toBeLessThan(10);  // milliseconds
+});
+
+// Test memory leak detection
+Test("GC.MemoryLeakDetection", fun() {
+    // Configure leak detection
+    gc.enableLeakDetection();
+    
+    // Create potential leak scenarios
+    let leaks = [];
+    
+    // 1. Detached DOM elements (simulated)
+    let detachedElement = gc.createDetachedElement();
+    
+    // 2. Event listeners that aren't removed
+    let eventTarget = {};
+    gc.addEventListenerWithoutRemoval(eventTarget);
+    
+    // 3. Closures holding references
+    fun createClosure() {
+        let data = new Uint8Array(1024 * 1024);  // 1MB of data
+        return fun() {
+            return data.length;
+        };
+    }
+    
+    leaks.push(createClosure());
+    
+    // Run leak detection analysis
+    let leakReport = gc.detectLeaks();
+    
+    // Should detect the leaks we created
+    expect(leakReport.detachedElements).toBeGreaterThan(0);
+    expect(leakReport.danglingEventListeners).toBeGreaterThan(0);
+    expect(leakReport.suspiciousClosures).toBeGreaterThan(0);
+    
+    // Leak detection should provide actionable information
+    expect(leakReport.leakPaths.length).toBeGreaterThan(0);
+    expect(leakReport.leakPaths[0]).toContain("root");  // Should show path from GC roots
+});
+
+// Test interop with JavaScript GC
+Test("GC.JavaScriptInterop", fun() {
+    // Create a Ruchy object
+    let ruchyObj = gc.allocate(1024);
+    let collected = false;
+    
+    gc.setFinalizer(ruchyObj, fun() {
+        collected = true;
+    });
+    
+    // Pass to JavaScript and back
+    let jsResult = wasm.passToJavaScript(ruchyObj);
+    let roundTrip = wasm.getFromJavaScript(jsResult);
+    
+    // The object should maintain identity
+    expect(roundTrip).toBe(ruchyObj);
+    
+    // Clear references and trigger collection in both environments
+    ruchyObj = null;
+    roundTrip = null;
+    jsResult = null;
+    
+    // Force collection in both Ruchy and JavaScript
+    gc.collect();
+    wasm.triggerJavaScriptGC();
+    
+    // Object should be collected
+    expect(collected).toBe(true);
+});
+
+// Test memory pressure and recovery
+Test("GC.MemoryPressureAndRecovery", fun() {
+    // Track memory usage
+    let initialMemory = gc.getUsedMemory();
+    
+    // Create significant memory pressure
+    let largeObjects = [];
+    
+    // Allocate until we reach 80% of available memory
+    while (gc.getUsedMemory() < gc.getTotalMemory() * 0.8) {
+        largeObjects.push(gc.allocate(1024 * 1024));  // 1MB chunks
+    }
+    
+    let peakMemory = gc.getUsedMemory();
+    
+    // Test low-memory notification
+    let lowMemoryNotified = false;
+    gc.onLowMemory(fun() {
+        lowMemoryNotified = true;
+    });
+    
+    // Trigger more allocations to force low-memory condition
+    try {
+        for (let i = 0; i < 10; i++) {
+            largeObjects.push(gc.allocate(1024 * 1024));  // More 1MB chunks
+        }
+    } catch (e) {
+        // Expected to potentially fail with out of memory
+    }
+    
+    // Low memory callback should have triggered
+    expect(lowMemoryNotified).toBe(true);
+    
+    // Clear references and trigger recovery
+    largeObjects = [];
+    gc.collect();
+    
+    // Memory should be recovered
+    let recoveredMemory = gc.getUsedMemory();
+    expect(recoveredMemory).toBeLessThan(peakMemory * 0.5);  // Should recover at least 50%
+});
+
+// Run all tests
+fun main() {
+    Test.runAll();
+}
+
+main();

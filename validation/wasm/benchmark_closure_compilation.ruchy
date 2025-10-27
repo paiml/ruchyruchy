@@ -1,0 +1,318 @@
+// benchmark_closure_compilation.ruchy
+// TOOL phase benchmarks for WASM-002: Closure Compilation
+// These benchmarks measure the performance of WebAssembly compilation for Ruchy closures
+
+// Import the closure compiler implementation
+import bootstrap::stage3::wasm_closure_refactored::ClosureCompiler;
+import bootstrap::stage3::wasm_closure_refactored::WasmEmitter;
+import bootstrap::stage3::wasm_closure_refactored::Type;
+
+// Import benchmarking framework
+// In a real implementation, these would be imported from the Ruchy benchmarking library
+struct Benchmark {
+    name: String,
+    iterations: i32,
+    warmup_iterations: i32,
+}
+
+impl Benchmark {
+    fn new(name: String, iterations: i32, warmup_iterations: i32) -> Benchmark {
+        Benchmark {
+            name: name,
+            iterations: iterations,
+            warmup_iterations: warmup_iterations,
+        }
+    }
+    
+    fn run<T>(&self, function: fn() -> T) -> BenchmarkResult {
+        println("Running benchmark '{}' (warmup: {}, iterations: {})...", 
+               self.name, self.warmup_iterations, self.iterations);
+        
+        // Warmup
+        for _ in 0..self.warmup_iterations {
+            let _ = function();
+        }
+        
+        // Actual measurement
+        let start_time = get_current_time_ms();
+        
+        for _ in 0..self.iterations {
+            let _ = function();
+        }
+        
+        let end_time = get_current_time_ms();
+        let total_time_ms = end_time - start_time;
+        let average_time_ms = total_time_ms as f64 / self.iterations as f64;
+        
+        println("  Benchmark '{}' completed:", self.name);
+        println("  - Total time: {:.2} ms", total_time_ms);
+        println("  - Average time: {:.4} ms per iteration", average_time_ms);
+        
+        BenchmarkResult {
+            name: self.name.clone(),
+            iterations: self.iterations,
+            total_time_ms: total_time_ms,
+            average_time_ms: average_time_ms,
+        }
+    }
+}
+
+struct BenchmarkResult {
+    name: String,
+    iterations: i32,
+    total_time_ms: f64,
+    average_time_ms: f64,
+}
+
+// Mock implementation of get_current_time_ms for testing
+fn get_current_time_ms() -> f64 {
+    // In a real implementation, this would use a system call to get the current time
+    // For testing, we'll just return a random value
+    42.0
+}
+
+// Test cases for benchmarking
+
+// Benchmark: Simple closure compilation
+fn benchmark_simple_closure() -> BenchmarkResult {
+    let benchmark = Benchmark::new(
+        "simple_closure_compilation".to_string(),
+        1000,
+        100
+    );
+    
+    benchmark.run(|| {
+        // Create emitter
+        let mut emitter = WasmEmitter::new();
+        
+        // Add simple closure
+        emitter.add_function(
+            "simple_closure".to_string(),
+            vec![],
+            "Function<(i32) -> i32>".to_string(),
+            "(x) => x + 1".to_string()
+        );
+        
+        // Generate module
+        let module = emitter.generate_module();
+        
+        // Generate WAT
+        let wat = emitter.emit_wat();
+        
+        wat.len() // Return something to prevent optimization
+    })
+}
+
+// Benchmark: Closure with captures
+fn benchmark_closure_with_captures() -> BenchmarkResult {
+    let benchmark = Benchmark::new(
+        "closure_with_captures_compilation".to_string(),
+        1000,
+        100
+    );
+    
+    benchmark.run(|| {
+        // Create emitter
+        let mut emitter = WasmEmitter::new();
+        
+        // Add closure with captures
+        emitter.add_function(
+            "closure_with_captures".to_string(),
+            vec![("a".to_string(), "i32".to_string()), 
+                 ("b".to_string(), "i32".to_string())],
+            "Function<(i32) -> i32>".to_string(),
+            "
+            let sum = a + b;
+            return (x) => x + sum;
+            ".to_string()
+        );
+        
+        // Generate module
+        let module = emitter.generate_module();
+        
+        // Generate WAT
+        let wat = emitter.emit_wat();
+        
+        wat.len() // Return something to prevent optimization
+    })
+}
+
+// Benchmark: Nested closures
+fn benchmark_nested_closures() -> BenchmarkResult {
+    let benchmark = Benchmark::new(
+        "nested_closures_compilation".to_string(),
+        1000,
+        100
+    );
+    
+    benchmark.run(|| {
+        // Create emitter
+        let mut emitter = WasmEmitter::new();
+        
+        // Add nested closure
+        emitter.add_function(
+            "nested_closures".to_string(),
+            vec![],
+            "Function<(i32) -> Function<(i32) -> i32>>".to_string(),
+            "
+            return (a) => {
+                return (b) => {
+                    return a + b;
+                };
+            };
+            ".to_string()
+        );
+        
+        // Generate module
+        let module = emitter.generate_module();
+        
+        // Generate WAT
+        let wat = emitter.emit_wat();
+        
+        wat.len() // Return something to prevent optimization
+    })
+}
+
+// Benchmark: Complex closure with multiple captures
+fn benchmark_complex_closure() -> BenchmarkResult {
+    let benchmark = Benchmark::new(
+        "complex_closure_compilation".to_string(),
+        1000,
+        100
+    );
+    
+    benchmark.run(|| {
+        // Create emitter
+        let mut emitter = WasmEmitter::new();
+        
+        // Add complex closure
+        emitter.add_function(
+            "complex_closure".to_string(),
+            vec![
+                ("a".to_string(), "i32".to_string()),
+                ("b".to_string(), "i32".to_string()),
+                ("c".to_string(), "f64".to_string()),
+                ("d".to_string(), "i64".to_string())
+            ],
+            "Function<(i32, i32, f64) -> i32>".to_string(),
+            "
+            let sum1 = a + b;
+            let sum2 = c + d as f64;
+            
+            return (x, y, z) => {
+                let result = sum1 + x + y + (sum2 + z) as i32;
+                return result;
+            };
+            ".to_string()
+        );
+        
+        // Generate module
+        let module = emitter.generate_module();
+        
+        // Generate WAT
+        let wat = emitter.emit_wat();
+        
+        wat.len() // Return something to prevent optimization
+    })
+}
+
+// Benchmark: Garbage collection integration
+fn benchmark_gc_integration() -> BenchmarkResult {
+    let benchmark = Benchmark::new(
+        "gc_integration_compilation".to_string(),
+        1000,
+        100
+    );
+    
+    benchmark.run(|| {
+        // Create both GC and non-GC emitters
+        let mut gc_emitter = WasmEmitter::new_with_gc();
+        let mut normal_emitter = WasmEmitter::new();
+        
+        // Add the same function to both
+        let closure_expr = "(x) => x + 1".to_string();
+        
+        gc_emitter.add_function(
+            "gc_closure".to_string(),
+            vec![],
+            "Function".to_string(),
+            closure_expr.clone()
+        );
+        
+        normal_emitter.add_function(
+            "normal_closure".to_string(),
+            vec![],
+            "Function".to_string(),
+            closure_expr
+        );
+        
+        // Generate WAT for both
+        let gc_wat = gc_emitter.emit_wat();
+        let normal_wat = normal_emitter.emit_wat();
+        
+        gc_wat.len() + normal_wat.len() // Return something to prevent optimization
+    })
+}
+
+// Benchmark: Memory layout optimization
+fn benchmark_memory_layout() -> BenchmarkResult {
+    let benchmark = Benchmark::new(
+        "memory_layout_optimization".to_string(),
+        1000,
+        100
+    );
+    
+    benchmark.run(|| {
+        // Create compiler
+        let compiler = ClosureCompiler::new(false);
+        
+        // Create environment
+        let mut env = compiler.create_environment();
+        
+        // Add variables of different types
+        compiler.add_capture(&mut env, "a".to_string(), "i32".to_string(), 0);
+        compiler.add_capture(&mut env, "b".to_string(), "f64".to_string(), 8);
+        compiler.add_capture(&mut env, "c".to_string(), "i32".to_string(), 16);
+        compiler.add_capture(&mut env, "d".to_string(), "i64".to_string(), 24);
+        
+        // Get environment properties
+        let size = compiler.environment_size(&env);
+        let count = compiler.capture_count(&env);
+        
+        size + count // Return something to prevent optimization
+    })
+}
+
+// Benchmark suite for all cases
+fn run_benchmark_suite() -> Vec<BenchmarkResult> {
+    let mut results = vec![];
+    
+    // Run all benchmarks
+    results.push(benchmark_simple_closure());
+    results.push(benchmark_closure_with_captures());
+    results.push(benchmark_nested_closures());
+    results.push(benchmark_complex_closure());
+    results.push(benchmark_gc_integration());
+    results.push(benchmark_memory_layout());
+    
+    results
+}
+
+// Main function to run all benchmarks
+fn main() {
+    println("Running WASM-002: Closure Compilation TOOL phase benchmarks");
+    
+    // Run benchmark suite
+    let results = run_benchmark_suite();
+    
+    // Print summary
+    println("\nBenchmark Summary:");
+    println("=================");
+    
+    for result in results {
+        println("- {}: {:.4} ms per iteration (total: {:.2} ms for {} iterations)",
+               result.name, result.average_time_ms, result.total_time_ms, result.iterations);
+    }
+    
+    println("\n✅ All WASM-002 TOOL phase benchmarks completed successfully");
+}

@@ -1,0 +1,209 @@
+// test_wasm_emitter_red.ruchy
+// RED phase tests for WASM-001: WASM Type Mapping
+// These tests validate the type mapping between Ruchy and WebAssembly
+
+// Forward declarations for the components we'll be testing
+// These will be implemented in bootstrap/stage3/wasm_emitter.ruchy
+// import bootstrap::stage3::WasmEmitter
+// import bootstrap::stage3::RuchyWasmType
+// import bootstrap::stage3::WasmFunction
+// import bootstrap::stage3::wasmify_literal
+// import bootstrap::stage3::wasmify_type
+
+fun test_primitive_type_mapping() {
+    // Test that primitive Ruchy types map to the correct WASM types
+    let emitter = WasmEmitter.new();
+    
+    // Integer types
+    assert_eq(wasmify_type("i32"), Type.I32, "i32 should map to WASM i32");
+    assert_eq(wasmify_type("i64"), Type.I64, "i64 should map to WASM i64");
+    
+    // Floating point types
+    assert_eq(wasmify_type("f32"), Type.F32, "f32 should map to WASM f32");
+    assert_eq(wasmify_type("f64"), Type.F64, "f64 should map to WASM f64");
+    
+    // Boolean should map to i32 in WASM (0 = false, 1 = true)
+    assert_eq(wasmify_type("bool"), Type.I32, "bool should map to WASM i32");
+    
+    // Unit type () should map to void in WASM (empty result)
+    assert_eq(wasmify_type("()"), Type.Void, "unit type should map to void");
+}
+
+fun test_string_type_mapping() {
+    // Test that string maps to a memory pointer (i32) in WASM
+    // with proper length encoding
+    let emitter = WasmEmitter.new();
+    
+    // String should be a pointer to a memory structure
+    let string_type = RuchyWasmType.new("String");
+    assert_eq(string_type.wasm_type(), Type.I32, 
+               "String should map to i32 memory pointer");
+    
+    // String memory layout should have length and capacity
+    assert_eq(string_type.memory_layout().header_size, 8, 
+               "String header should contain length (4 bytes) and capacity (4 bytes)");
+}
+
+fun test_array_type_mapping() {
+    // Test that arrays map to memory pointers with proper layouts
+    let emitter = WasmEmitter.new();
+    
+    // Array should be a pointer to a memory structure
+    let array_type = RuchyWasmType.new("Array<i32>");
+    assert_eq(array_type.wasm_type(), Type.I32, 
+               "Array should map to i32 memory pointer");
+    
+    // Array memory layout should have length and capacity
+    assert_eq(array_type.memory_layout().header_size, 8, 
+               "Array header should contain length (4 bytes) and capacity (4 bytes)");
+    
+    // Element type should be correctly identified
+    assert_eq(array_type.element_type().wasm_type(), Type.I32, 
+               "Array<i32> element type should be i32");
+}
+
+fun test_struct_type_mapping() {
+    // Test that structs map to memory pointers with correct field offsets
+    let emitter = WasmEmitter.new();
+    
+    // Create a struct type with multiple fields
+    let struct_type = RuchyWasmType.new_struct("Point", [
+        ["x", RuchyWasmType.new("f32")],
+        ["y", RuchyWasmType.new("f32")],
+        ["name", RuchyWasmType.new("String")]
+    ]);
+    
+    assert_eq(struct_type.wasm_type(), Type.I32, 
+               "Struct should map to i32 memory pointer");
+    
+    // Verify field offsets
+    assert_eq(struct_type.field_offset("x"), 0, "First field should be at offset 0");
+    assert_eq(struct_type.field_offset("y"), 4, "Second field should be at offset 4 (after f32)");
+    assert_eq(struct_type.field_offset("name"), 8, "Third field should be at offset 8 (after two f32s)");
+}
+
+fun test_function_type_mapping() {
+    // Test that functions map to function indices with correct signatures
+    let emitter = WasmEmitter.new();
+    
+    // Create a function type
+    let func_type = RuchyWasmType.new_function(
+        [RuchyWasmType.new("i32"), RuchyWasmType.new("f64")],
+        RuchyWasmType.new("i32")
+    );
+    
+    // Function should have correct parameter and return types
+    let wasm_func = func_type.to_wasm_function();
+    assert_eq(wasm_func.param_types(), [Type.I32, Type.F64], 
+               "Function parameters should map to correct WASM types");
+    assert_eq(wasm_func.result_type(), Type.I32, 
+               "Function result should map to correct WASM type");
+}
+
+fun test_literal_emission() {
+    // Test that Ruchy literals map to correct WASM instructions
+    let emitter = WasmEmitter.new();
+    
+    // Integer literal
+    let int_instr = wasmify_literal("i32", "42");
+    assert_eq(int_instr.to_string(), "i32.const 42", 
+               "Integer literal should map to i32.const");
+    
+    // Float literal
+    let float_instr = wasmify_literal("f64", "3.14159");
+    assert_eq(float_instr.to_string(), "f64.const 3.14159", 
+               "Float literal should map to f64.const");
+    
+    // Boolean literal
+    let true_instr = wasmify_literal("bool", "true");
+    assert_eq(true_instr.to_string(), "i32.const 1", 
+               "true should map to i32.const 1");
+    
+    let false_instr = wasmify_literal("bool", "false");
+    assert_eq(false_instr.to_string(), "i32.const 0", 
+               "false should map to i32.const 0");
+    
+    // String literal
+    let string_instr = wasmify_literal("String", "\"hello\"");
+    // Should call a string allocation function and return pointer
+    assert(string_instr.to_string().contains("call $alloc_string"), 
+           "String literal should call string allocation function");
+}
+
+fun test_closure_type_mapping() {
+    // Test that closures map to closure records
+    let emitter = WasmEmitter.new();
+    
+    // Create a closure type
+    let closure_type = RuchyWasmType.new_closure(
+        [RuchyWasmType.new("i32")],
+        RuchyWasmType.new("i32"),
+        [RuchyWasmType.new("f64"), RuchyWasmType.new("i32")]
+    );
+    
+    // Closure should be a pointer to memory
+    assert_eq(closure_type.wasm_type(), Type.I32, 
+               "Closure should map to i32 memory pointer");
+    
+    // Closure memory layout should include function index and captured variables
+    let layout = closure_type.memory_layout();
+    
+    // Function index (4 bytes) + captured variables (f64 and i32)
+    assert_eq(layout.size(), 16, 
+               "Closure size should be 4 (func idx) + 8 (f64) + 4 (i32)");
+}
+
+fun test_wasm_module_creation() {
+    // Test that the emitter creates a valid WASM module structure
+    let emitter = WasmEmitter.new();
+    
+    // Add a simple function
+    emitter.add_function("add", [["x", "i32"], ["y", "i32"]], "i32", 
+                         "return x + y;");
+    
+    // Generate the module
+    let module = emitter.generate_module();
+    
+    // Verify the module has expected sections
+    assert(module.has_memory(), "Module should have a memory section");
+    assert(module.has_function("add"), "Module should have the added function");
+    
+    // Verify the module is valid
+    let validation_result = validate(module);
+    assert(validation_result.is_ok(), 
+           "Generated module should be valid WASM: " + validation_result.error().unwrap_or(""));
+}
+
+fun test_wasm_emission() {
+    // Test that the emitter generates correct WAT code
+    let emitter = WasmEmitter.new();
+    
+    // Add a simple function
+    emitter.add_function("add", [["x", "i32"], ["y", "i32"]], "i32", 
+                         "return x + y;");
+    
+    // Generate WAT
+    let wat = emitter.emit_wat();
+    
+    // Verify WAT contains expected elements
+    assert(wat.contains("(func $add"), "WAT should contain the add function");
+    assert(wat.contains("(param $x i32)"), "WAT should contain parameter x");
+    assert(wat.contains("(param $y i32)"), "WAT should contain parameter y");
+    assert(wat.contains("(result i32)"), "WAT should contain result type");
+    assert(wat.contains("i32.add"), "WAT should contain addition operation");
+}
+
+fun main() {
+    // Run all tests
+    test_primitive_type_mapping();
+    test_string_type_mapping();
+    test_array_type_mapping();
+    test_struct_type_mapping();
+    test_function_type_mapping();
+    test_literal_emission();
+    test_closure_type_mapping();
+    test_wasm_module_creation();
+    test_wasm_emission();
+    
+    println("✅ All tests would pass if the WASM emitter was implemented");
+}

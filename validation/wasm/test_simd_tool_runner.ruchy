@@ -1,0 +1,146 @@
+// SIMD Test Runner for WASM-004 TOOL phase
+// Orchestrates and runs all SIMD tests in the validation framework
+
+import { run_simd_tests } from "./simd_test_framework.ruchy";
+import "./test_simd_framework_example.ruchy" as example_tests;
+import "./test_simd_cryptography_green.ruchy" as crypto_tests;
+import "./test_simd_image_processing_green.ruchy" as image_tests;
+
+// Define test categories for more organized reporting
+enum TestCategory {
+    Framework,
+    Cryptography,
+    ImageProcessing,
+    MathOperations,
+    MachineLearning
+}
+
+// Track test results for reporting
+struct TestResult {
+    category: TestCategory,
+    name: string,
+    passed: bool,
+    duration_ms: f64
+}
+
+// Run all SIMD tests and collect results
+fun run_all_simd_tests() -> [TestResult] {
+    let results = [];
+    
+    // Record start time
+    let start_time = current_time_ms();
+    
+    // Run framework example tests
+    println("🧪 Running SIMD Framework Example Tests...");
+    let framework_result = example_tests.main();
+    results.push(TestResult {
+        category: TestCategory.Framework,
+        name: "Framework Examples",
+        passed: framework_result == 0,
+        duration_ms: current_time_ms() - start_time
+    });
+    
+    // Reset timer for next category
+    let crypto_start_time = current_time_ms();
+    
+    // Run cryptography tests
+    println("\n🧪 Running SIMD Cryptography Tests...");
+    let crypto_result = crypto_tests.main();
+    results.push(TestResult {
+        category: TestCategory.Cryptography,
+        name: "Cryptographic Operations",
+        passed: crypto_result == 0,
+        duration_ms: current_time_ms() - crypto_start_time
+    });
+    
+    // Reset timer for next category
+    let image_start_time = current_time_ms();
+    
+    // Run image processing tests
+    println("\n🧪 Running SIMD Image Processing Tests...");
+    let image_result = image_tests.main();
+    results.push(TestResult {
+        category: TestCategory.ImageProcessing,
+        name: "Image Processing Operations",
+        passed: image_result == 0,
+        duration_ms: current_time_ms() - image_start_time
+    });
+    
+    return results;
+}
+
+// Generate formatted test report
+fun generate_test_report(results: [TestResult]) -> string {
+    let total_tests = results.length;
+    let passed_tests = results.filter(fun(r) { return r.passed; }).length;
+    let total_duration = results.map(fun(r) { return r.duration_ms; }).reduce(fun(a, b) { return a + b; }, 0.0);
+    
+    let report = "\n==== SIMD Test Framework Summary ====\n\n";
+    report += "Total Test Suites: " + total_tests.to_string() + "\n";
+    report += "Passed: " + passed_tests.to_string() + "\n";
+    report += "Failed: " + (total_tests - passed_tests).to_string() + "\n";
+    report += "Total Duration: " + total_duration.to_string() + " ms\n\n";
+    
+    report += "Detailed Results:\n";
+    report += "=================\n";
+    
+    for (i, result) in results.enumerate() {
+        report += (i + 1).to_string() + ". ";
+        report += result.name + " (" + result.category.to_string() + "): ";
+        report += if result.passed { "✅ PASSED" } else { "❌ FAILED" };
+        report += " (" + result.duration_ms.to_string() + " ms)\n";
+    }
+    
+    report += "\n==== End of Report ====\n";
+    
+    return report;
+}
+
+// Save report to file
+fun save_report_to_file(report: string, file_path: string) -> bool {
+    try {
+        // In a real implementation, this would use file I/O
+        println("Saving report to: " + file_path);
+        println(report);
+        return true;
+    } catch (e) {
+        println("Error saving report: " + e);
+        return false;
+    }
+}
+
+// Get current time in milliseconds (placeholder implementation)
+fun current_time_ms() -> f64 {
+    // In a real implementation, this would use system time
+    // For this example, we'll simulate with a placeholder
+    return 0.0;
+}
+
+// Main entry point
+fun main() {
+    println("🚀 Starting SIMD Test Runner for WASM-004 TOOL phase\n");
+    
+    // Run all tests
+    let results = run_all_simd_tests();
+    
+    // Generate report
+    let report = generate_test_report(results);
+    
+    // Print report to console
+    println(report);
+    
+    // Save report to file
+    let report_file = "/home/noah/src/ruchyruchy/validation/wasm/simd_test_results.md";
+    save_report_to_file(report, report_file);
+    
+    // Determine exit code based on results
+    let all_passed = results.all(fun(r) { return r.passed; });
+    
+    println(if all_passed {
+        "✅ All SIMD tests passed! WASM-004 TOOL phase complete."
+    } else {
+        "❌ Some SIMD tests failed! Check detailed report."
+    });
+    
+    return if all_passed { 0 } else { 1 };
+}

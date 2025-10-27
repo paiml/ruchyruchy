@@ -1,0 +1,1608 @@
+// SIMD Benchmarking Suite for WASM-004 TOOL phase
+// Comprehensive performance measurement for WebAssembly SIMD operations
+
+// Import core modules
+import { 
+    // SIMD vector types and operations
+    V128, F32x4, I32x4, I16x8, I8x16,
+    f32x4, i32x4,
+    v128_as_i32x4, v128_as_f32x4,
+    assert_simd_equals,
+    
+    // Performance measurement functions
+    benchmark_scalar_vs_simd
+} from "./simd_test_framework.ruchy";
+
+import { 
+    // Timing and statistics functions
+    measure, benchmark, compare 
+} from "../benchmarks/test_statistical_framework_green.ruchy";
+
+import { assert, assert_eq } from "../../bootstrap/stage0/test_utils";
+import { compile_to_wasm, run_wasm } from "../multi_target/wasm_compiler";
+
+// -----------------------------------------------------------------------------
+// Benchmark Configuration
+// -----------------------------------------------------------------------------
+
+// Configuration for different benchmark levels
+enum BenchmarkLevel {
+    Quick,     // Fast benchmarks for development (few iterations)
+    Standard,  // Standard benchmarks for regular testing
+    Extensive, // Extensive benchmarks for thorough performance testing
+    Extreme    // Maximum benchmarking for final verification
+}
+
+struct BenchmarkConfig {
+    // Core settings
+    level: BenchmarkLevel,        // Benchmark detail level
+    iterations: i32,              // Number of iterations for each benchmark
+    warmup_iterations: i32,       // Number of warmup iterations
+    samples: i32,                 // Number of samples to collect
+    report_percentiles: bool,     // Whether to report percentiles
+    memory_tracking: bool,        // Whether to track memory usage
+    
+    // Display settings
+    print_progress: bool,         // Whether to print progress during benchmarking
+    print_summary: bool,          // Whether to print summary after benchmarking
+    print_detailed_results: bool, // Whether to print detailed results
+    
+    // Output settings
+    output_csv: bool,             // Whether to output CSV results
+    output_markdown: bool,        // Whether to output Markdown results
+    output_path: string,          // Path to save benchmark results
+    
+    // Filter settings
+    include_categories: [string], // Categories to include (empty = all)
+    exclude_categories: [string], // Categories to exclude
+}
+
+// Default configuration based on level
+fun default_config(level: BenchmarkLevel) -> BenchmarkConfig {
+    match level {
+        BenchmarkLevel.Quick => {
+            BenchmarkConfig {
+                level: level,
+                iterations: 1_000,
+                warmup_iterations: 100,
+                samples: 3,
+                report_percentiles: false,
+                memory_tracking: false,
+                print_progress: true,
+                print_summary: true,
+                print_detailed_results: false,
+                output_csv: false,
+                output_markdown: false,
+                output_path: "",
+                include_categories: [],
+                exclude_categories: []
+            }
+        },
+        BenchmarkLevel.Standard => {
+            BenchmarkConfig {
+                level: level,
+                iterations: 10_000,
+                warmup_iterations: 1_000,
+                samples: 5,
+                report_percentiles: true,
+                memory_tracking: true,
+                print_progress: true,
+                print_summary: true,
+                print_detailed_results: true,
+                output_csv: true,
+                output_markdown: true,
+                output_path: "/tmp/simd_benchmark_results",
+                include_categories: [],
+                exclude_categories: []
+            }
+        },
+        BenchmarkLevel.Extensive => {
+            BenchmarkConfig {
+                level: level,
+                iterations: 100_000,
+                warmup_iterations: 10_000,
+                samples: 10,
+                report_percentiles: true,
+                memory_tracking: true,
+                print_progress: true,
+                print_summary: true,
+                print_detailed_results: true,
+                output_csv: true,
+                output_markdown: true,
+                output_path: "/tmp/simd_benchmark_results",
+                include_categories: [],
+                exclude_categories: []
+            }
+        },
+        BenchmarkLevel.Extreme => {
+            BenchmarkConfig {
+                level: level,
+                iterations: 1_000_000,
+                warmup_iterations: 100_000,
+                samples: 20,
+                report_percentiles: true,
+                memory_tracking: true,
+                print_progress: true,
+                print_summary: true,
+                print_detailed_results: true,
+                output_csv: true,
+                output_markdown: true,
+                output_path: "/tmp/simd_benchmark_results",
+                include_categories: [],
+                exclude_categories: []
+            }
+        },
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Benchmark Registry and Results
+// -----------------------------------------------------------------------------
+
+// Benchmark metadata
+struct BenchmarkInfo {
+    id: string,                   // Unique benchmark ID
+    name: string,                 // Human-readable name
+    category: string,             // Category (e.g., "arithmetic", "crypto")
+    description: string,          // Description of what is being benchmarked
+    scalar_fn: fun() -> (),       // Scalar implementation to benchmark
+    simd_fn: fun() -> (),         // SIMD implementation to benchmark
+    setup_fn: fun() -> (),        // Setup function (run once before benchmarking)
+    teardown_fn: fun() -> (),     // Teardown function (run once after benchmarking)
+    validation_fn: fun() -> bool, // Validation function to ensure correctness
+}
+
+// Individual benchmark result
+struct BenchmarkResult {
+    info: BenchmarkInfo,          // The benchmark that was run
+    scalar_time: f64,             // Average time for scalar implementation (ms)
+    simd_time: f64,               // Average time for SIMD implementation (ms)
+    speedup: f64,                 // Speedup factor (scalar_time / simd_time)
+    scalar_variance: f64,         // Variance in scalar measurements
+    simd_variance: f64,           // Variance in SIMD measurements
+    scalar_min: f64,              // Minimum scalar time
+    scalar_max: f64,              // Maximum scalar time
+    simd_min: f64,                // Minimum SIMD time
+    simd_max: f64,                // Maximum SIMD time
+    scalar_percentiles: Map<string, f64>, // Percentiles for scalar times (if collected)
+    simd_percentiles: Map<string, f64>,   // Percentiles for SIMD times (if collected)
+    scalar_memory_mb: f64,        // Memory usage for scalar implementation (MB)
+    simd_memory_mb: f64,          // Memory usage for SIMD implementation (MB)
+    passed_validation: bool,      // Whether the implementation passed validation
+}
+
+// Benchmark registry to store all registered benchmarks
+struct BenchmarkRegistry {
+    benchmarks: Map<string, BenchmarkInfo>,
+    results: Map<string, BenchmarkResult>,
+    config: BenchmarkConfig,
+}
+
+// Singleton registry instance
+let registry = BenchmarkRegistry {
+    benchmarks: {},
+    results: {},
+    config: default_config(BenchmarkLevel.Standard)
+};
+
+// Configure the benchmark suite
+fun configure_benchmarks(config: BenchmarkConfig) {
+    registry.config = config;
+}
+
+// Register a benchmark
+fun register_benchmark(info: BenchmarkInfo) {
+    registry.benchmarks[info.id] = info;
+    println("Registered benchmark: " + info.name + " (" + info.category + ")");
+}
+
+// -----------------------------------------------------------------------------
+// Benchmark Runner and Reporting
+// -----------------------------------------------------------------------------
+
+// Run a single benchmark
+fun run_benchmark(id: string) -> BenchmarkResult {
+    let info = registry.benchmarks[id];
+    println("Running benchmark: " + info.name);
+
+    // Run setup function
+    if info.setup_fn != null {
+        info.setup_fn();
+    }
+    
+    // Prepare benchmark structures
+    let scalar_times = [];
+    let simd_times = [];
+    let scalar_memory_before = 0.0;
+    let scalar_memory_after = 0.0;
+    let simd_memory_before = 0.0;
+    let simd_memory_after = 0.0;
+    
+    // Validate implementations
+    let passed_validation = info.validation_fn();
+    assert(passed_validation, "Validation failed for benchmark: " + info.name);
+    
+    // Warmup phase
+    for _ in 0..registry.config.warmup_iterations {
+        info.scalar_fn();
+        info.simd_fn();
+    }
+    
+    // Measurement phase
+    for sample in 0..registry.config.samples {
+        if registry.config.print_progress {
+            println("  Sample " + (sample + 1) + "/" + registry.config.samples);
+        }
+        
+        // Benchmark scalar implementation
+        if registry.config.memory_tracking {
+            scalar_memory_before = measure_memory();
+        }
+        
+        let scalar_start = measure_time();
+        for _ in 0..registry.config.iterations {
+            info.scalar_fn();
+        }
+        let scalar_end = measure_time();
+        
+        if registry.config.memory_tracking {
+            scalar_memory_after = measure_memory();
+        }
+        
+        scalar_times.push((scalar_end - scalar_start) / registry.config.iterations);
+        
+        // Benchmark SIMD implementation
+        if registry.config.memory_tracking {
+            simd_memory_before = measure_memory();
+        }
+        
+        let simd_start = measure_time();
+        for _ in 0..registry.config.iterations {
+            info.simd_fn();
+        }
+        let simd_end = measure_time();
+        
+        if registry.config.memory_tracking {
+            simd_memory_after = measure_memory();
+        }
+        
+        simd_times.push((simd_end - simd_start) / registry.config.iterations);
+    }
+    
+    // Calculate statistics
+    let scalar_time = calculate_mean(scalar_times);
+    let simd_time = calculate_mean(simd_times);
+    let speedup = scalar_time / simd_time;
+    let scalar_variance = calculate_variance(scalar_times);
+    let simd_variance = calculate_variance(simd_times);
+    let scalar_min = calculate_min(scalar_times);
+    let scalar_max = calculate_max(scalar_times);
+    let simd_min = calculate_min(simd_times);
+    let simd_max = calculate_max(simd_times);
+    
+    // Calculate percentiles if required
+    let scalar_percentiles = {};
+    let simd_percentiles = {};
+    
+    if registry.config.report_percentiles && scalar_times.length >= 5 {
+        scalar_percentiles["p50"] = calculate_percentile(scalar_times, 50);
+        scalar_percentiles["p95"] = calculate_percentile(scalar_times, 95);
+        scalar_percentiles["p99"] = calculate_percentile(scalar_times, 99);
+        
+        simd_percentiles["p50"] = calculate_percentile(simd_times, 50);
+        simd_percentiles["p95"] = calculate_percentile(simd_times, 95);
+        simd_percentiles["p99"] = calculate_percentile(simd_times, 99);
+    }
+    
+    // Calculate memory usage
+    let scalar_memory_mb = 0.0;
+    let simd_memory_mb = 0.0;
+    
+    if registry.config.memory_tracking {
+        scalar_memory_mb = scalar_memory_after - scalar_memory_before;
+        simd_memory_mb = simd_memory_after - simd_memory_before;
+    }
+    
+    // Create result object
+    let result = BenchmarkResult {
+        info: info,
+        scalar_time: scalar_time,
+        simd_time: simd_time,
+        speedup: speedup,
+        scalar_variance: scalar_variance,
+        simd_variance: simd_variance,
+        scalar_min: scalar_min,
+        scalar_max: scalar_max,
+        simd_min: simd_min,
+        simd_max: simd_max,
+        scalar_percentiles: scalar_percentiles,
+        simd_percentiles: simd_percentiles,
+        scalar_memory_mb: scalar_memory_mb,
+        simd_memory_mb: simd_memory_mb,
+        passed_validation: passed_validation,
+    };
+    
+    // Print summary if requested
+    if registry.config.print_summary {
+        print_benchmark_summary(result);
+    }
+    
+    // Run teardown function
+    if info.teardown_fn != null {
+        info.teardown_fn();
+    }
+    
+    // Store results
+    registry.results[id] = result;
+    
+    return result;
+}
+
+// Run all registered benchmarks
+fun run_all_benchmarks() -> Map<string, BenchmarkResult> {
+    println("Running " + registry.benchmarks.size() + " benchmarks with level: " + registry.config.level.to_string());
+    
+    let filtered_benchmarks = [];
+    
+    // Apply category filters
+    for id in registry.benchmarks.keys() {
+        let info = registry.benchmarks[id];
+        let include = true;
+        
+        // Apply include filter if present
+        if registry.config.include_categories.length > 0 {
+            include = false;
+            for category in registry.config.include_categories {
+                if info.category == category {
+                    include = true;
+                    break;
+                }
+            }
+        }
+        
+        // Apply exclude filter
+        for category in registry.config.exclude_categories {
+            if info.category == category {
+                include = false;
+                break;
+            }
+        }
+        
+        if include {
+            filtered_benchmarks.push(id);
+        }
+    }
+    
+    println("Running " + filtered_benchmarks.length + " benchmarks after filtering");
+    
+    // Run all filtered benchmarks
+    for id in filtered_benchmarks {
+        run_benchmark(id);
+    }
+    
+    // Print final report if requested
+    if registry.config.print_summary {
+        print_benchmark_report();
+    }
+    
+    // Generate output files if requested
+    if registry.config.output_csv {
+        generate_csv_report();
+    }
+    
+    if registry.config.output_markdown {
+        generate_markdown_report();
+    }
+    
+    return registry.results;
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Operations for Benchmarking
+// -----------------------------------------------------------------------------
+
+// Vector addition benchmark implementations
+fun scalar_vector_add(a: F32x4, b: F32x4) -> F32x4 {
+    return [
+        a[0] + b[0],
+        a[1] + b[1],
+        a[2] + b[2],
+        a[3] + b[3]
+    ];
+}
+
+fun simd_vector_add(a: F32x4, b: F32x4) -> F32x4 {
+    // In a real SIMD implementation, this would use SIMD instructions
+    // For now, we're using the same logic but will be replaced by actual SIMD
+    return [
+        a[0] + b[0],
+        a[1] + b[1],
+        a[2] + b[2],
+        a[3] + b[3]
+    ];
+}
+
+// Vector multiplication benchmark implementations
+fun scalar_vector_mul(a: F32x4, b: F32x4) -> F32x4 {
+    return [
+        a[0] * b[0],
+        a[1] * b[1],
+        a[2] * b[2],
+        a[3] * b[3]
+    ];
+}
+
+fun simd_vector_mul(a: F32x4, b: F32x4) -> F32x4 {
+    // In a real SIMD implementation, this would use SIMD instructions
+    return [
+        a[0] * b[0],
+        a[1] * b[1],
+        a[2] * b[2],
+        a[3] * b[3]
+    ];
+}
+
+// Vector FMA (Fused Multiply-Add) benchmark implementations
+fun scalar_vector_fma(a: F32x4, b: F32x4, c: F32x4) -> F32x4 {
+    return [
+        a[0] * b[0] + c[0],
+        a[1] * b[1] + c[1],
+        a[2] * b[2] + c[2],
+        a[3] * b[3] + c[3]
+    ];
+}
+
+fun simd_vector_fma(a: F32x4, b: F32x4, c: F32x4) -> F32x4 {
+    // In a real SIMD implementation, this would use SIMD instructions
+    return [
+        a[0] * b[0] + c[0],
+        a[1] * b[1] + c[1],
+        a[2] * b[2] + c[2],
+        a[3] * b[3] + c[3]
+    ];
+}
+
+// Vector comparison benchmark implementations
+fun scalar_vector_eq(a: F32x4, b: F32x4) -> [bool; 4] {
+    return [
+        a[0] == b[0],
+        a[1] == b[1],
+        a[2] == b[2],
+        a[3] == b[3]
+    ];
+}
+
+fun simd_vector_eq(a: F32x4, b: F32x4) -> [bool; 4] {
+    // In a real SIMD implementation, this would use SIMD instructions
+    return [
+        a[0] == b[0],
+        a[1] == b[1],
+        a[2] == b[2],
+        a[3] == b[3]
+    ];
+}
+
+// -----------------------------------------------------------------------------
+// Domain-Specific Benchmark Implementations
+// -----------------------------------------------------------------------------
+
+// 1. Linear Algebra Benchmarks
+
+// Vector dot product
+fun scalar_dot_product(a: &[f32], b: &[f32], len: usize) -> f32 {
+    let mut sum = 0.0;
+    for i in 0..len {
+        sum += a[i] * b[i];
+    }
+    return sum;
+}
+
+fun simd_dot_product(a: &[f32], b: &[f32], len: usize) -> f32 {
+    let mut sum = [0.0, 0.0, 0.0, 0.0]; // f32x4 accumulator
+    
+    // Process 4 elements at a time
+    let mut i = 0;
+    while i + 3 < len {
+        let a_vec = [a[i], a[i+1], a[i+2], a[i+3]];
+        let b_vec = [b[i], b[i+1], b[i+2], b[i+3]];
+        
+        sum = simd_vector_fma(a_vec, b_vec, sum);
+        i += 4;
+    }
+    
+    // Horizontal sum of vector elements
+    let mut result = sum[0] + sum[1] + sum[2] + sum[3];
+    
+    // Process remaining elements
+    while i < len {
+        result += a[i] * b[i];
+        i += 1;
+    }
+    
+    return result;
+}
+
+// Matrix multiplication
+fun scalar_matrix_multiply(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
+    // Compute C = A * B where A is m x n, B is n x k, C is m x k
+    for i in 0..m {
+        for j in 0..k {
+            let mut sum = 0.0;
+            for p in 0..n {
+                sum += a[i * n + p] * b[p * k + j];
+            }
+            c[i * k + j] = sum;
+        }
+    }
+}
+
+fun simd_matrix_multiply(a: &[f32], b: &[f32], c: &mut [f32], m: usize, n: usize, k: usize) {
+    // Compute C = A * B where A is m x n, B is n x k, C is m x k
+    // In this simplified version, we'll only use SIMD for the innermost loop
+    for i in 0..m {
+        for j in 0..k {
+            c[i * k + j] = 0.0;
+            
+            // Process 4 elements at a time in the dot product
+            let mut p = 0;
+            let mut sum = [0.0, 0.0, 0.0, 0.0];
+            
+            while p + 3 < n {
+                let a_vec = [a[i * n + p], a[i * n + p + 1], a[i * n + p + 2], a[i * n + p + 3]];
+                let b_vec = [b[p * k + j], b[(p + 1) * k + j], b[(p + 2) * k + j], b[(p + 3) * k + j]];
+                
+                sum = simd_vector_fma(a_vec, b_vec, sum);
+                p += 4;
+            }
+            
+            // Sum the vector elements
+            c[i * k + j] = sum[0] + sum[1] + sum[2] + sum[3];
+            
+            // Process remaining elements
+            while p < n {
+                c[i * k + j] += a[i * n + p] * b[p * k + j];
+                p += 1;
+            }
+        }
+    }
+}
+
+// 2. Image Processing Benchmarks
+
+// Simple grayscale conversion
+fun scalar_rgb_to_grayscale(rgb: &[u8], gray: &mut [u8], len: usize) {
+    // Process RGB triplets
+    for i in 0..(len / 3) {
+        // Standard grayscale formula: 0.299*R + 0.587*G + 0.114*B
+        let r = rgb[i * 3] as f32;
+        let g = rgb[i * 3 + 1] as f32;
+        let b = rgb[i * 3 + 2] as f32;
+        
+        let gray_value = 0.299 * r + 0.587 * g + 0.114 * b;
+        gray[i] = gray_value as u8;
+    }
+}
+
+fun simd_rgb_to_grayscale(rgb: &[u8], gray: &mut [u8], len: usize) {
+    // Weights as SIMD constants
+    let weights = [0.299, 0.587, 0.114, 0.0];
+    
+    // Process 4 RGB triplets at a time (12 bytes -> 4 grayscale bytes)
+    let mut i = 0;
+    while i + 11 < len { // Need at least 12 bytes for 4 RGB triplets
+        // Load 4 RGB triplets and convert to 4 separate F32x4 vectors
+        let r = [rgb[i] as f32, rgb[i+3] as f32, rgb[i+6] as f32, rgb[i+9] as f32];
+        let g = [rgb[i+1] as f32, rgb[i+4] as f32, rgb[i+7] as f32, rgb[i+10] as f32];
+        let b = [rgb[i+2] as f32, rgb[i+5] as f32, rgb[i+8] as f32, rgb[i+11] as f32];
+        
+        // Multiply by weights and add
+        let gray_values = simd_vector_fma(r, [weights[0], weights[0], weights[0], weights[0]], 
+                          simd_vector_fma(g, [weights[1], weights[1], weights[1], weights[1]],
+                          simd_vector_mul(b, [weights[2], weights[2], weights[2], weights[2]])));
+        
+        // Store results
+        gray[i/3] = gray_values[0] as u8;
+        gray[i/3 + 1] = gray_values[1] as u8;
+        gray[i/3 + 2] = gray_values[2] as u8;
+        gray[i/3 + 3] = gray_values[3] as u8;
+        
+        i += 12;
+    }
+    
+    // Process remaining RGB triplets
+    while i + 2 < len {
+        let r = rgb[i] as f32;
+        let g = rgb[i+1] as f32;
+        let b = rgb[i+2] as f32;
+        
+        let gray_value = 0.299 * r + 0.587 * g + 0.114 * b;
+        gray[i/3] = gray_value as u8;
+        
+        i += 3;
+    }
+}
+
+// 3. Signal Processing Benchmarks
+
+// Simple FIR filter
+fun scalar_fir_filter(input: &[f32], output: &mut [f32], coeffs: &[f32], len: usize, filter_len: usize) {
+    for i in 0..len {
+        let mut sum = 0.0;
+        for j in 0..filter_len {
+            if i >= j {
+                sum += input[i - j] * coeffs[j];
+            }
+        }
+        output[i] = sum;
+    }
+}
+
+fun simd_fir_filter(input: &[f32], output: &mut [f32], coeffs: &[f32], len: usize, filter_len: usize) {
+    // Process each output sample
+    for i in 0..len {
+        let mut sum = [0.0, 0.0, 0.0, 0.0];
+        let mut j = 0;
+        
+        // Process 4 coefficients at a time
+        while j + 3 < filter_len && i >= j + 3 {
+            let input_vec = [input[i-j], input[i-j-1], input[i-j-2], input[i-j-3]];
+            let coeff_vec = [coeffs[j], coeffs[j+1], coeffs[j+2], coeffs[j+3]];
+            
+            sum = simd_vector_fma(input_vec, coeff_vec, sum);
+            j += 4;
+        }
+        
+        // Sum the accumulated values
+        output[i] = sum[0] + sum[1] + sum[2] + sum[3];
+        
+        // Process remaining coefficients
+        while j < filter_len && i >= j {
+            output[i] += input[i - j] * coeffs[j];
+            j += 1;
+        }
+    }
+}
+
+// 4. Cryptography Benchmarks
+
+// Simple AES-style substitution (single round)
+fun scalar_aes_substitute(input: &[u8], output: &mut [u8], sbox: &[u8], len: usize) {
+    for i in 0..len {
+        output[i] = sbox[input[i] as usize];
+    }
+}
+
+fun simd_aes_substitute(input: &[u8], output: &mut [u8], sbox: &[u8], len: usize) {
+    // Process 16 bytes at a time (typical AES block size)
+    let mut i = 0;
+    while i + 15 < len {
+        // In a real SIMD implementation, we'd use vector table lookups
+        // For now, we'll just process 16 bytes in sequence
+        for j in 0..16 {
+            output[i + j] = sbox[input[i + j] as usize];
+        }
+        i += 16;
+    }
+    
+    // Process remaining bytes
+    while i < len {
+        output[i] = sbox[input[i] as usize];
+        i += 1;
+    }
+}
+
+// 5. Physics Simulation Benchmarks
+
+// Particle position update
+fun scalar_update_particles(positions: &mut [f32], velocities: &[f32], dt: f32, len: usize) {
+    // Update positions based on velocities: p = p + v*dt
+    for i in 0..len {
+        positions[i] += velocities[i] * dt;
+    }
+}
+
+fun simd_update_particles(positions: &mut [f32], velocities: &[f32], dt: f32, len: usize) {
+    let dt_vec = [dt, dt, dt, dt];
+    
+    // Process 4 particles at a time
+    let mut i = 0;
+    while i + 3 < len {
+        let pos_vec = [positions[i], positions[i+1], positions[i+2], positions[i+3]];
+        let vel_vec = [velocities[i], velocities[i+1], velocities[i+2], velocities[i+3]];
+        
+        // p = p + v*dt
+        let new_pos = simd_vector_fma(vel_vec, dt_vec, pos_vec);
+        
+        // Update positions
+        positions[i] = new_pos[0];
+        positions[i+1] = new_pos[1];
+        positions[i+2] = new_pos[2];
+        positions[i+3] = new_pos[3];
+        
+        i += 4;
+    }
+    
+    // Process remaining particles
+    while i < len {
+        positions[i] += velocities[i] * dt;
+        i += 1;
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Predefined Benchmark Sets
+// -----------------------------------------------------------------------------
+
+// Register core arithmetic benchmarks
+fun register_arithmetic_benchmarks() {
+    // Vector addition benchmark
+    let addition_test_data = {
+        a: f32x4(1.0, 2.0, 3.0, 4.0),
+        b: f32x4(5.0, 6.0, 7.0, 8.0)
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "arithmetic_add",
+        name: "Vector Addition (f32x4)",
+        category: "arithmetic",
+        description: "Basic vector addition performance",
+        
+        scalar_fn: || {
+            let _ = scalar_vector_add(addition_test_data.a, addition_test_data.b);
+        },
+        
+        simd_fn: || {
+            let _ = simd_vector_add(addition_test_data.a, addition_test_data.b);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let scalar_result = scalar_vector_add(addition_test_data.a, addition_test_data.b);
+            let simd_result = simd_vector_add(addition_test_data.a, addition_test_data.b);
+            return assert_simd_equals(scalar_result, simd_result, "Vector addition results must match");
+        }
+    });
+    
+    // Vector multiplication benchmark
+    let multiply_test_data = {
+        a: f32x4(1.0, 2.0, 3.0, 4.0),
+        b: f32x4(5.0, 6.0, 7.0, 8.0)
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "arithmetic_mul",
+        name: "Vector Multiplication (f32x4)",
+        category: "arithmetic",
+        description: "Basic vector multiplication performance",
+        
+        scalar_fn: || {
+            let _ = scalar_vector_mul(multiply_test_data.a, multiply_test_data.b);
+        },
+        
+        simd_fn: || {
+            let _ = simd_vector_mul(multiply_test_data.a, multiply_test_data.b);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let scalar_result = scalar_vector_mul(multiply_test_data.a, multiply_test_data.b);
+            let simd_result = simd_vector_mul(multiply_test_data.a, multiply_test_data.b);
+            return assert_simd_equals(scalar_result, simd_result, "Vector multiplication results must match");
+        }
+    });
+    
+    // Fused Multiply-Add benchmark
+    let fma_test_data = {
+        a: f32x4(1.0, 2.0, 3.0, 4.0),
+        b: f32x4(5.0, 6.0, 7.0, 8.0),
+        c: f32x4(9.0, 10.0, 11.0, 12.0)
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "arithmetic_fma",
+        name: "Vector Fused Multiply-Add (f32x4)",
+        category: "arithmetic",
+        description: "Fused multiply-add performance (a*b+c)",
+        
+        scalar_fn: || {
+            let _ = scalar_vector_fma(fma_test_data.a, fma_test_data.b, fma_test_data.c);
+        },
+        
+        simd_fn: || {
+            let _ = simd_vector_fma(fma_test_data.a, fma_test_data.b, fma_test_data.c);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let scalar_result = scalar_vector_fma(fma_test_data.a, fma_test_data.b, fma_test_data.c);
+            let simd_result = simd_vector_fma(fma_test_data.a, fma_test_data.b, fma_test_data.c);
+            return assert_simd_equals(scalar_result, simd_result, "Vector FMA results must match");
+        }
+    });
+}
+
+// Register linear algebra benchmarks
+fun register_linear_algebra_benchmarks() {
+    // Dot product benchmark with small vectors
+    let dot_small_test_data = {
+        a: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0],
+        b: [8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        len: 8
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "linalg_dot_small",
+        name: "Dot Product (Small Vector)",
+        category: "linear_algebra",
+        description: "Dot product of two small vectors (8 elements)",
+        
+        scalar_fn: || {
+            let _ = scalar_dot_product(&dot_small_test_data.a, &dot_small_test_data.b, dot_small_test_data.len);
+        },
+        
+        simd_fn: || {
+            let _ = simd_dot_product(&dot_small_test_data.a, &dot_small_test_data.b, dot_small_test_data.len);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let scalar_result = scalar_dot_product(&dot_small_test_data.a, &dot_small_test_data.b, dot_small_test_data.len);
+            let simd_result = simd_dot_product(&dot_small_test_data.a, &dot_small_test_data.b, dot_small_test_data.len);
+            return approx_equal(scalar_result, simd_result, 0.001);
+        }
+    });
+    
+    // Dot product benchmark with medium vectors
+    let dot_medium_data = {
+        a: generate_random_vector(1000),
+        b: generate_random_vector(1000),
+        len: 1000
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "linalg_dot_medium",
+        name: "Dot Product (Medium Vector)",
+        category: "linear_algebra",
+        description: "Dot product of two medium vectors (1000 elements)",
+        
+        scalar_fn: || {
+            let _ = scalar_dot_product(&dot_medium_data.a, &dot_medium_data.b, dot_medium_data.len);
+        },
+        
+        simd_fn: || {
+            let _ = simd_dot_product(&dot_medium_data.a, &dot_medium_data.b, dot_medium_data.len);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let scalar_result = scalar_dot_product(&dot_medium_data.a, &dot_medium_data.b, dot_medium_data.len);
+            let simd_result = simd_dot_product(&dot_medium_data.a, &dot_medium_data.b, dot_medium_data.len);
+            return approx_equal(scalar_result, simd_result, 0.001);
+        }
+    });
+    
+    // Matrix multiplication benchmark
+    let matrix_test_data = {
+        a: generate_random_vector(16 * 16), // 16x16 matrix
+        b: generate_random_vector(16 * 16), // 16x16 matrix
+        c: [0.0; 16 * 16],                  // Result matrix
+        m: 16,
+        n: 16,
+        k: 16
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "linalg_matmul_small",
+        name: "Matrix Multiplication (16x16)",
+        category: "linear_algebra",
+        description: "Multiplication of two 16x16 matrices",
+        
+        scalar_fn: || {
+            scalar_matrix_multiply(&matrix_test_data.a, &matrix_test_data.b, 
+                                  &mut matrix_test_data.c, 
+                                  matrix_test_data.m, matrix_test_data.n, matrix_test_data.k);
+        },
+        
+        simd_fn: || {
+            simd_matrix_multiply(&matrix_test_data.a, &matrix_test_data.b, 
+                                &mut matrix_test_data.c, 
+                                matrix_test_data.m, matrix_test_data.n, matrix_test_data.k);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let mut scalar_result = [0.0; 16 * 16];
+            let mut simd_result = [0.0; 16 * 16];
+            
+            scalar_matrix_multiply(&matrix_test_data.a, &matrix_test_data.b, 
+                                  &mut scalar_result, 
+                                  matrix_test_data.m, matrix_test_data.n, matrix_test_data.k);
+            
+            simd_matrix_multiply(&matrix_test_data.a, &matrix_test_data.b, 
+                               &mut simd_result, 
+                               matrix_test_data.m, matrix_test_data.n, matrix_test_data.k);
+            
+            for i in 0..(matrix_test_data.m * matrix_test_data.k) {
+                if !approx_equal(scalar_result[i], simd_result[i], 0.001) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+    });
+}
+
+// Register image processing benchmarks
+fun register_image_processing_benchmarks() {
+    // RGB to grayscale conversion benchmark
+    let grayscale_test_data = {
+        rgb: generate_random_bytes(1024 * 3),  // 1024 RGB pixels
+        gray: [0; 1024],                      // Grayscale output
+        len: 1024 * 3
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "image_rgb_to_gray",
+        name: "RGB to Grayscale Conversion",
+        category: "image_processing",
+        description: "Convert RGB image to grayscale (1024 pixels)",
+        
+        scalar_fn: || {
+            scalar_rgb_to_grayscale(&grayscale_test_data.rgb, &mut grayscale_test_data.gray, grayscale_test_data.len);
+        },
+        
+        simd_fn: || {
+            simd_rgb_to_grayscale(&grayscale_test_data.rgb, &mut grayscale_test_data.gray, grayscale_test_data.len);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let mut scalar_result = [0; 1024];
+            let mut simd_result = [0; 1024];
+            
+            scalar_rgb_to_grayscale(&grayscale_test_data.rgb, &mut scalar_result, grayscale_test_data.len);
+            simd_rgb_to_grayscale(&grayscale_test_data.rgb, &mut simd_result, grayscale_test_data.len);
+            
+            // Allow small differences due to floating-point rounding
+            for i in 0..(grayscale_test_data.len / 3) {
+                if (scalar_result[i] as i32 - simd_result[i] as i32).abs() > 1 {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+    });
+}
+
+// Register signal processing benchmarks
+fun register_signal_processing_benchmarks() {
+    // FIR filter benchmark
+    let fir_test_data = {
+        input: generate_random_vector(1024),      // Input signal
+        output: [0.0; 1024],                     // Output signal
+        coeffs: [0.2, 0.3, 0.5, 0.7, 0.5, 0.3, 0.2], // Filter coefficients
+        len: 1024,
+        filter_len: 7
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "signal_fir_filter",
+        name: "FIR Filter (7-tap)",
+        category: "signal_processing",
+        description: "Apply FIR filter to signal (1024 samples)",
+        
+        scalar_fn: || {
+            scalar_fir_filter(&fir_test_data.input, &mut fir_test_data.output, 
+                             &fir_test_data.coeffs, fir_test_data.len, fir_test_data.filter_len);
+        },
+        
+        simd_fn: || {
+            simd_fir_filter(&fir_test_data.input, &mut fir_test_data.output, 
+                           &fir_test_data.coeffs, fir_test_data.len, fir_test_data.filter_len);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let mut scalar_result = [0.0; 1024];
+            let mut simd_result = [0.0; 1024];
+            
+            scalar_fir_filter(&fir_test_data.input, &mut scalar_result, 
+                             &fir_test_data.coeffs, fir_test_data.len, fir_test_data.filter_len);
+            
+            simd_fir_filter(&fir_test_data.input, &mut simd_result, 
+                           &fir_test_data.coeffs, fir_test_data.len, fir_test_data.filter_len);
+            
+            for i in 0..fir_test_data.len {
+                if !approx_equal(scalar_result[i], simd_result[i], 0.001) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+    });
+}
+
+// Register cryptography benchmarks
+fun register_cryptography_benchmarks() {
+    // Simple AES-like substitution benchmark
+    let aes_test_data = {
+        input: generate_random_bytes(4096),     // Input data
+        output: [0; 4096],                      // Output data
+        sbox: generate_sbox(),                  // Substitution box
+        len: 4096
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "crypto_aes_substitute",
+        name: "AES Substitution",
+        category: "cryptography",
+        description: "Apply AES-style substitution to data (4096 bytes)",
+        
+        scalar_fn: || {
+            scalar_aes_substitute(&aes_test_data.input, &mut aes_test_data.output, 
+                                 &aes_test_data.sbox, aes_test_data.len);
+        },
+        
+        simd_fn: || {
+            simd_aes_substitute(&aes_test_data.input, &mut aes_test_data.output, 
+                               &aes_test_data.sbox, aes_test_data.len);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let mut scalar_result = [0; 4096];
+            let mut simd_result = [0; 4096];
+            
+            scalar_aes_substitute(&aes_test_data.input, &mut scalar_result, 
+                                 &aes_test_data.sbox, aes_test_data.len);
+            
+            simd_aes_substitute(&aes_test_data.input, &mut simd_result, 
+                               &aes_test_data.sbox, aes_test_data.len);
+            
+            for i in 0..aes_test_data.len {
+                if scalar_result[i] != simd_result[i] {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+    });
+}
+
+// Register physics simulation benchmarks
+fun register_physics_benchmarks() {
+    // Particle position update benchmark
+    let particle_test_data = {
+        positions: generate_random_vector(4096),  // Particle positions
+        velocities: generate_random_vector(4096), // Particle velocities
+        dt: 0.016,                               // Time step (typical for 60 FPS)
+        len: 4096
+    };
+    
+    register_benchmark(BenchmarkInfo {
+        id: "physics_particle_update",
+        name: "Particle Position Update",
+        category: "physics",
+        description: "Update particle positions based on velocities (4096 particles)",
+        
+        scalar_fn: || {
+            let mut positions_copy = particle_test_data.positions.clone();
+            scalar_update_particles(&mut positions_copy, &particle_test_data.velocities, 
+                                   particle_test_data.dt, particle_test_data.len);
+        },
+        
+        simd_fn: || {
+            let mut positions_copy = particle_test_data.positions.clone();
+            simd_update_particles(&mut positions_copy, &particle_test_data.velocities, 
+                                 particle_test_data.dt, particle_test_data.len);
+        },
+        
+        setup_fn: null,
+        teardown_fn: null,
+        
+        validation_fn: || {
+            let mut scalar_result = particle_test_data.positions.clone();
+            let mut simd_result = particle_test_data.positions.clone();
+            
+            scalar_update_particles(&mut scalar_result, &particle_test_data.velocities, 
+                                   particle_test_data.dt, particle_test_data.len);
+            
+            simd_update_particles(&mut simd_result, &particle_test_data.velocities, 
+                                 particle_test_data.dt, particle_test_data.len);
+            
+            for i in 0..particle_test_data.len {
+                if !approx_equal(scalar_result[i], simd_result[i], 0.001) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+    });
+}
+
+// -----------------------------------------------------------------------------
+// Helper Functions
+// -----------------------------------------------------------------------------
+
+// Generate random vector of f32 values
+fun generate_random_vector(size: usize) -> [f32] {
+    let mut result = [];
+    let seed = 12345; // Fixed seed for reproducibility
+    let mut rng = Random::new(seed);
+    
+    for _ in 0..size {
+        result.push(rng.next_f32());
+    }
+    
+    return result;
+}
+
+// Generate random bytes
+fun generate_random_bytes(size: usize) -> [u8] {
+    let mut result = [];
+    let seed = 12345; // Fixed seed for reproducibility
+    let mut rng = Random::new(seed);
+    
+    for _ in 0..size {
+        result.push(rng.next_u8());
+    }
+    
+    return result;
+}
+
+// Generate AES-like substitution box
+fun generate_sbox() -> [u8; 256] {
+    let mut sbox = [0; 256];
+    
+    // Initialize with identity mapping
+    for i in 0..256 {
+        sbox[i] = i as u8;
+    }
+    
+    // Apply simple transformation (in real AES, this would be more complex)
+    for i in 0..256 {
+        sbox[i] = (sbox[i] ^ 0x1F) + 7;
+    }
+    
+    return sbox;
+}
+
+// Simple random number generator
+struct Random {
+    state: u32
+}
+
+impl Random {
+    fun new(seed: u32) -> Self {
+        Random { state: seed }
+    }
+    
+    fun next_u32(&mut self) -> u32 {
+        self.state = (self.state * 1664525 + 1013904223) % 0xFFFFFFFF;
+        return self.state;
+    }
+    
+    fun next_f32(&mut self) -> f32 {
+        return (self.next_u32() as f32) / (0xFFFFFFFF as f32);
+    }
+    
+    fun next_u8(&mut self) -> u8 {
+        return (self.next_u32() % 256) as u8;
+    }
+}
+
+// Check if two floating-point values are approximately equal
+fun approx_equal(a: f32, b: f32, epsilon: f32) -> bool {
+    return (a - b).abs() <= epsilon;
+}
+
+// Statistical functions
+fun calculate_mean(values: [f64]) -> f64 {
+    let sum = values.iter().sum();
+    return sum / values.len() as f64;
+}
+
+fun calculate_variance(values: [f64]) -> f64 {
+    let mean = calculate_mean(values);
+    let sum_sq_diff = values.iter()
+        .map(|x| (x - mean) * (x - mean))
+        .sum();
+    return sum_sq_diff / values.len() as f64;
+}
+
+fun calculate_min(values: [f64]) -> f64 {
+    return values.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+}
+
+fun calculate_max(values: [f64]) -> f64 {
+    return values.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+}
+
+fun calculate_percentile(values: [f64], percentile: i32) -> f64 {
+    let mut sorted = values.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    
+    let index = (percentile as f64 / 100.0 * (sorted.len() - 1) as f64).round() as usize;
+    return sorted[index];
+}
+
+// Measure current memory usage in MB
+fun measure_memory() -> f64 {
+    // In a real implementation, this would use platform-specific APIs
+    // For now, return a placeholder value
+    return 0.0;
+}
+
+// Measure time in milliseconds
+fun measure_time() -> f64 {
+    // In a real implementation, this would use platform-specific high-resolution timer
+    // For now, we'll use a placeholder that depends on an external measure function
+    return measure();
+}
+
+// -----------------------------------------------------------------------------
+// Reporting Functions
+// -----------------------------------------------------------------------------
+
+// Print a summary of benchmark results
+fun print_benchmark_summary(result: BenchmarkResult) {
+    println("");
+    println("Benchmark: " + result.info.name + " (" + result.info.category + ")");
+    println("  Description: " + result.info.description);
+    println("  Scalar time: " + result.scalar_time.to_string() + " ms");
+    println("  SIMD time:   " + result.simd_time.to_string() + " ms");
+    println("  Speedup:     " + result.speedup.to_string() + "x");
+    
+    if result.scalar_min > 0.0 && result.scalar_max > 0.0 {
+        println("  Scalar range: " + result.scalar_min.to_string() + " - " + 
+                result.scalar_max.to_string() + " ms");
+    }
+    
+    if result.simd_min > 0.0 && result.simd_max > 0.0 {
+        println("  SIMD range:   " + result.simd_min.to_string() + " - " + 
+                result.simd_max.to_string() + " ms");
+    }
+    
+    if registry.config.report_percentiles && !result.scalar_percentiles.is_empty() {
+        println("  Scalar p50/p95/p99: " + 
+                result.scalar_percentiles["p50"].to_string() + " / " +
+                result.scalar_percentiles["p95"].to_string() + " / " +
+                result.scalar_percentiles["p99"].to_string() + " ms");
+                
+        println("  SIMD p50/p95/p99:   " + 
+                result.simd_percentiles["p50"].to_string() + " / " +
+                result.simd_percentiles["p95"].to_string() + " / " +
+                result.simd_percentiles["p99"].to_string() + " ms");
+    }
+    
+    if registry.config.memory_tracking && result.scalar_memory_mb > 0.0 {
+        println("  Scalar memory: " + result.scalar_memory_mb.to_string() + " MB");
+        println("  SIMD memory:   " + result.simd_memory_mb.to_string() + " MB");
+    }
+    
+    println("  Validation:   " + (if result.passed_validation { "✅ Passed" } else { "❌ Failed" }));
+    println("");
+}
+
+// Print overall benchmark report
+fun print_benchmark_report() {
+    println("");
+    println("🚀 SIMD Benchmarking Suite - Summary Report");
+    println("==========================================");
+    println("");
+    
+    // Count benchmarks by category
+    let mut categories = Map::new();
+    for (id, result) in registry.results.iter() {
+        let category = result.info.category;
+        if !categories.contains_key(category) {
+            categories.insert(category, 0);
+        }
+        categories[category] += 1;
+    }
+    
+    // Print summary by category
+    println("Benchmarks by category:");
+    for (category, count) in categories.iter() {
+        println("  " + category + ": " + count.to_string() + " benchmark(s)");
+    }
+    println("");
+    
+    // Print overall statistics
+    let mut total_benchmarks = 0;
+    let mut passed_validation = 0;
+    let mut total_speedup = 0.0;
+    let mut speedups = [];
+    
+    for (id, result) in registry.results.iter() {
+        total_benchmarks += 1;
+        if result.passed_validation {
+            passed_validation += 1;
+        }
+        
+        total_speedup += result.speedup;
+        speedups.push(result.speedup);
+    }
+    
+    println("Total benchmarks: " + total_benchmarks.to_string());
+    println("Passed validation: " + passed_validation.to_string() + "/" + 
+            total_benchmarks.to_string() + " (" + 
+            (passed_validation as f64 / total_benchmarks as f64 * 100.0).to_string() + "%)");
+    
+    if speedups.len() > 0 {
+        let avg_speedup = total_speedup / total_benchmarks as f64;
+        let min_speedup = calculate_min(speedups);
+        let max_speedup = calculate_max(speedups);
+        
+        println("Average speedup: " + avg_speedup.to_string() + "x");
+        println("Min speedup: " + min_speedup.to_string() + "x");
+        println("Max speedup: " + max_speedup.to_string() + "x");
+    }
+    
+    println("");
+    println("Top 5 benchmarks by speedup:");
+    
+    let mut sorted_results = [];
+    for (id, result) in registry.results.iter() {
+        sorted_results.push((id, result));
+    }
+    
+    sorted_results.sort_by(|(_, a), (_, b)| b.speedup.partial_cmp(&a.speedup).unwrap());
+    
+    for i in 0..min(5, sorted_results.len()) {
+        let (id, result) = sorted_results[i];
+        println("  " + (i + 1).to_string() + ". " + result.info.name + 
+                " (" + result.info.category + "): " + 
+                result.speedup.to_string() + "x speedup");
+    }
+    
+    println("");
+}
+
+// Generate CSV report
+fun generate_csv_report() {
+    if registry.config.output_path.is_empty() {
+        println("❌ Cannot generate CSV report: output_path is not set");
+        return;
+    }
+    
+    let path = registry.config.output_path + "/simd_benchmark_results.csv";
+    
+    // In a real implementation, we would write to a file
+    // For now, we'll just print the CSV content
+    
+    println("Generating CSV report at: " + path);
+    println("");
+    println("id,name,category,scalar_time,simd_time,speedup,validation");
+    
+    for (id, result) in registry.results.iter() {
+        println(id + "," + 
+                result.info.name.replace(",", ";") + "," + 
+                result.info.category + "," + 
+                result.scalar_time.to_string() + "," + 
+                result.simd_time.to_string() + "," + 
+                result.speedup.to_string() + "," + 
+                (if result.passed_validation { "passed" } else { "failed" }));
+    }
+    
+    println("");
+}
+
+// Generate Markdown report
+fun generate_markdown_report() {
+    if registry.config.output_path.is_empty() {
+        println("❌ Cannot generate Markdown report: output_path is not set");
+        return;
+    }
+    
+    let path = registry.config.output_path + "/simd_benchmark_results.md";
+    
+    // In a real implementation, we would write to a file
+    // For now, we'll just print the Markdown content
+    
+    println("Generating Markdown report at: " + path);
+    println("");
+    println("# SIMD Benchmarking Suite - Results");
+    println("");
+    println("## Overview");
+    println("");
+    
+    // Count benchmarks by category
+    let mut categories = Map::new();
+    for (id, result) in registry.results.iter() {
+        let category = result.info.category;
+        if !categories.contains_key(category) {
+            categories.insert(category, 0);
+        }
+        categories[category] += 1;
+    }
+    
+    // Print summary by category
+    println("Benchmarks by category:");
+    println("");
+    println("| Category | Count |");
+    println("|----------|-------|");
+    
+    for (category, count) in categories.iter() {
+        println("| " + category + " | " + count.to_string() + " |");
+    }
+    
+    println("");
+    
+    // Print overall statistics
+    let mut total_benchmarks = 0;
+    let mut passed_validation = 0;
+    let mut total_speedup = 0.0;
+    let mut speedups = [];
+    
+    for (id, result) in registry.results.iter() {
+        total_benchmarks += 1;
+        if result.passed_validation {
+            passed_validation += 1;
+        }
+        
+        total_speedup += result.speedup;
+        speedups.push(result.speedup);
+    }
+    
+    println("## Summary Statistics");
+    println("");
+    println("- Total benchmarks: " + total_benchmarks.to_string());
+    println("- Passed validation: " + passed_validation.to_string() + "/" + 
+            total_benchmarks.to_string() + " (" + 
+            (passed_validation as f64 / total_benchmarks as f64 * 100.0).to_string() + "%)");
+    
+    if speedups.len() > 0 {
+        let avg_speedup = total_speedup / total_benchmarks as f64;
+        let min_speedup = calculate_min(speedups);
+        let max_speedup = calculate_max(speedups);
+        
+        println("- Average speedup: " + avg_speedup.to_string() + "x");
+        println("- Min speedup: " + min_speedup.to_string() + "x");
+        println("- Max speedup: " + max_speedup.to_string() + "x");
+    }
+    
+    println("");
+    println("## Detailed Results");
+    println("");
+    println("| Benchmark | Category | Scalar Time (ms) | SIMD Time (ms) | Speedup | Validation |");
+    println("|-----------|----------|------------------|----------------|---------|------------|");
+    
+    for (id, result) in registry.results.iter() {
+        println("| " + result.info.name + " | " + 
+                result.info.category + " | " + 
+                result.scalar_time.to_string() + " | " + 
+                result.simd_time.to_string() + " | " + 
+                result.speedup.to_string() + "x | " + 
+                (if result.passed_validation { "✅" } else { "❌" }) + " |");
+    }
+    
+    println("");
+    println("## Category Breakdown");
+    
+    for (category, _) in categories.iter() {
+        println("");
+        println("### " + category);
+        println("");
+        println("| Benchmark | Scalar Time (ms) | SIMD Time (ms) | Speedup | Validation |");
+        println("|-----------|------------------|----------------|---------|------------|");
+        
+        for (id, result) in registry.results.iter() {
+            if result.info.category == category {
+                println("| " + result.info.name + " | " + 
+                        result.scalar_time.to_string() + " | " + 
+                        result.simd_time.to_string() + " | " + 
+                        result.speedup.to_string() + "x | " + 
+                        (if result.passed_validation { "✅" } else { "❌" }) + " |");
+            }
+        }
+    }
+    
+    println("");
+}
+
+// -----------------------------------------------------------------------------
+// Benchmarking Suite Runner
+// -----------------------------------------------------------------------------
+
+// Register all benchmark sets
+fun register_all_benchmarks() {
+    register_arithmetic_benchmarks();
+    register_linear_algebra_benchmarks();
+    register_image_processing_benchmarks();
+    register_signal_processing_benchmarks();
+    register_cryptography_benchmarks();
+    register_physics_benchmarks();
+}
+
+// Main entry point for the benchmarking suite
+fun main() {
+    println("SIMD Benchmarking Suite for WASM-004 TOOL phase");
+    println("===============================================");
+    
+    // Configure the benchmark suite
+    let config = default_config(BenchmarkLevel.Standard);
+    configure_benchmarks(config);
+    
+    // Register all benchmarks
+    register_all_benchmarks();
+    
+    // Run all benchmarks
+    let results = run_all_benchmarks();
+    
+    println("Benchmarking complete!");
+}
+
+// Export all functions
+export {
+    // Configuration
+    BenchmarkLevel, BenchmarkConfig, default_config, configure_benchmarks,
+    
+    // Benchmark registry
+    BenchmarkInfo, BenchmarkResult, BenchmarkRegistry,
+    register_benchmark, 
+    
+    // Benchmark runner
+    run_benchmark, run_all_benchmarks,
+    
+    // Benchmark implementations - Arithmetic
+    scalar_vector_add, simd_vector_add,
+    scalar_vector_mul, simd_vector_mul,
+    scalar_vector_fma, simd_vector_fma,
+    
+    // Benchmark implementations - Linear Algebra
+    scalar_dot_product, simd_dot_product,
+    scalar_matrix_multiply, simd_matrix_multiply,
+    
+    // Benchmark implementations - Image Processing
+    scalar_rgb_to_grayscale, simd_rgb_to_grayscale,
+    
+    // Benchmark implementations - Signal Processing
+    scalar_fir_filter, simd_fir_filter,
+    
+    // Benchmark implementations - Cryptography
+    scalar_aes_substitute, simd_aes_substitute,
+    
+    // Benchmark implementations - Physics
+    scalar_update_particles, simd_update_particles,
+    
+    // Predefined benchmark sets
+    register_arithmetic_benchmarks,
+    register_linear_algebra_benchmarks,
+    register_image_processing_benchmarks,
+    register_signal_processing_benchmarks,
+    register_cryptography_benchmarks,
+    register_physics_benchmarks,
+    register_all_benchmarks,
+    
+    // Helper functions
+    generate_random_vector, generate_random_bytes, generate_sbox,
+    Random,
+    approx_equal,
+    
+    // Main function
+    main
+}

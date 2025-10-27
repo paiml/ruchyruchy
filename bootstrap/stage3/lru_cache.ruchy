@@ -1,0 +1,474 @@
+// WASM-006: Incremental Compilation - LRU Cache
+//
+// Implements a Least Recently Used (LRU) cache with O(1) operations
+// Used for bounded memory caching with automatic eviction
+
+use std::collections::HashMap;
+use std::hash::Hash;
+
+// ============================================================================
+// LRU Cache Node
+// ============================================================================
+
+struct Node<K, V> {
+    key: K,
+    value: V,
+    prev: Option<usize>,  // Index in nodes vec
+    next: Option<usize>,  // Index in nodes vec
+}
+
+impl<K: Clone, V: Clone> Node<K, V> {
+    fun new(key: K, value: V) -> Self {
+        Node {
+            key,
+            value,
+            prev: None,
+            next: None,
+        }
+    }
+}
+
+// ============================================================================
+// LRU Cache
+// ============================================================================
+
+pub struct LRUCache<K, V> {
+    map: HashMap<K, usize>,      // Key -> index in nodes vec
+    nodes: Vec<Option<Node<K, V>>>,  // Storage for nodes
+    head: Option<usize>,         // Most recently used
+    tail: Option<usize>,         // Least recently used
+    capacity: usize,
+    size: usize,
+    free_list: Vec<usize>,       // Indices of freed nodes
+}
+
+impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
+    /// Create new LRU cache with specified capacity
+    pub fun new(capacity: usize) -> Self {
+        LRUCache {
+            map: HashMap::new(),
+            nodes: Vec::with_capacity(capacity),
+            head: None,
+            tail: None,
+            capacity,
+            size: 0,
+            free_list: Vec::new(),
+        }
+    }
+
+    /// Get value by key, updating LRU order
+    pub fun get(&mut self, key: &K) -> Option<&V> {
+        if let Some(&index) = self.map.get(key) {
+            // Move to head (most recently used)
+            self.move_to_head(index);
+
+            // Return value
+            if let Some(ref node) = self.nodes[index] {
+                return Some(&node.value);
+            }
+        }
+
+        None
+    }
+
+    /// Get mutable value by key, updating LRU order
+    pub fun get_mut(&mut self, key: &K) -> Option<&mut V> {
+        if let Some(&index) = self.map.get(key) {
+            // Move to head
+            self.move_to_head(index);
+
+            // Return mutable value
+            if let Some(ref mut node) = self.nodes[index] {
+                return Some(&mut node.value);
+            }
+        }
+
+        None
+    }
+
+    /// Insert or update key-value pair
+    pub fun put(&mut self, key: K, value: V) -> Option<V> {
+        // Check if key already exists
+        if let Some(&index) = self.map.get(&key) {
+            // Update existing entry
+            let old_value = if let Some(ref mut node) = self.nodes[index] {
+                let old = node.value.clone();
+                node.value = value;
+                Some(old)
+            } else {
+                None
+            };
+
+            // Move to head
+            self.move_to_head(index);
+
+            return old_value;
+        }
+
+        // Key doesn't exist, need to insert
+        if self.size >= self.capacity {
+            // Evict LRU entry
+            self.evict_tail();
+        }
+
+        // Insert new entry
+        let node = Node::new(key.clone(), value);
+        let index = self.allocate_node(node);
+
+        self.map.insert(key, index);
+        self.add_to_head(index);
+        self.size += 1;
+
+        None
+    }
+
+    /// Remove key from cache
+    pub fun remove(&mut self, key: &K) -> Option<V> {
+        if let Some(index) = self.map.remove(key) {
+            let value = self.remove_node(index)?;
+            self.size -= 1;
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    /// Check if key exists
+    pub fun contains_key(&self, key: &K) -> bool {
+        self.map.contains_key(key)
+    }
+
+    /// Get current size
+    pub fun len(&self) -> usize {
+        self.size
+    }
+
+    /// Check if empty
+    pub fun is_empty(&self) -> bool {
+        self.size == 0
+    }
+
+    /// Get capacity
+    pub fun capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Clear all entries
+    pub fun clear(&mut self) {
+        self.map.clear();
+        self.nodes.clear();
+        self.free_list.clear();
+        self.head = None;
+        self.tail = None;
+        self.size = 0;
+    }
+
+    /// Evict least recently used entry
+    pub fun evict_lru(&mut self) -> Option<(K, V)> {
+        self.evict_tail()
+    }
+
+    /// Get all keys in LRU order (most recent first)
+    pub fun keys_lru(&self) -> Vec<K> {
+        let mut keys = Vec::new();
+        let mut current = self.head;
+
+        while let Some(index) = current {
+            if let Some(ref node) = self.nodes[index] {
+                keys.push(node.key.clone());
+                current = node.next;
+            } else {
+                break;
+            }
+        }
+
+        keys
+    }
+
+    // ========================================================================
+    // Internal Helper Methods
+    // ========================================================================
+
+    /// Allocate a new node (reuse from free list or push new)
+    fun allocate_node(&mut self, node: Node<K, V>) -> usize {
+        if let Some(index) = self.free_list.pop() {
+            self.nodes[index] = Some(node);
+            index
+        } else {
+            let index = self.nodes.len();
+            self.nodes.push(Some(node));
+            index
+        }
+    }
+
+    /// Remove node and return its value
+    fun remove_node(&mut self, index: usize) -> Option<V> {
+        // Unlink from list
+        self.unlink_node(index);
+
+        // Take node and free the slot
+        if let Some(node) = self.nodes[index].take() {
+            self.free_list.push(index);
+            Some(node.value)
+        } else {
+            None
+        }
+    }
+
+    /// Unlink node from doubly-linked list
+    fun unlink_node(&mut self, index: usize) {
+        if let Some(ref node) = self.nodes[index] {
+            let prev = node.prev;
+            let next = node.next;
+
+            // Update prev node's next pointer
+            if let Some(prev_index) = prev {
+                if let Some(ref mut prev_node) = self.nodes[prev_index] {
+                    prev_node.next = next;
+                }
+            } else {
+                // This was head
+                self.head = next;
+            }
+
+            // Update next node's prev pointer
+            if let Some(next_index) = next {
+                if let Some(ref mut next_node) = self.nodes[next_index] {
+                    next_node.prev = prev;
+                }
+            } else {
+                // This was tail
+                self.tail = prev;
+            }
+        }
+    }
+
+    /// Move node to head (most recently used)
+    fun move_to_head(&mut self, index: usize) {
+        if Some(index) == self.head {
+            // Already at head
+            return;
+        }
+
+        // Unlink from current position
+        self.unlink_node(index);
+
+        // Add to head
+        self.add_to_head(index);
+    }
+
+    /// Add node to head of list
+    fun add_to_head(&mut self, index: usize) {
+        if let Some(ref mut node) = self.nodes[index] {
+            node.prev = None;
+            node.next = self.head;
+        }
+
+        // Update old head's prev pointer
+        if let Some(old_head) = self.head {
+            if let Some(ref mut old_head_node) = self.nodes[old_head] {
+                old_head_node.prev = Some(index);
+            }
+        }
+
+        self.head = Some(index);
+
+        // If list was empty, also set tail
+        if self.tail.is_none() {
+            self.tail = Some(index);
+        }
+    }
+
+    /// Evict tail node (least recently used)
+    fun evict_tail(&mut self) -> Option<(K, V)> {
+        if let Some(tail_index) = self.tail {
+            if let Some(node) = self.nodes[tail_index].take() {
+                let key = node.key.clone();
+                let value = node.value;
+
+                // Remove from map
+                self.map.remove(&key);
+
+                // Unlink from list
+                self.unlink_node(tail_index);
+
+                // Add to free list
+                self.free_list.push(tail_index);
+
+                self.size -= 1;
+
+                return Some((key, value));
+            }
+        }
+
+        None
+    }
+}
+
+// ============================================================================
+// LRU Cache Iterator
+// ============================================================================
+
+pub struct LRUCacheIter<'a, K, V> {
+    cache: &'a LRUCache<K, V>,
+    current: Option<usize>,
+}
+
+impl<'a, K: Clone, V: Clone> Iterator for LRUCacheIter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fun next(&mut self) -> Option<Self::Item> {
+        if let Some(index) = self.current {
+            if let Some(ref node) = self.cache.nodes[index] {
+                let key = &node.key;
+                let value = &node.value;
+                self.current = node.next;
+                return Some((key, value));
+            }
+        }
+
+        None
+    }
+}
+
+impl<K: Hash + Eq + Clone, V: Clone> LRUCache<K, V> {
+    /// Iterate over entries in LRU order (most recent first)
+    pub fun iter(&self) -> LRUCacheIter<K, V> {
+        LRUCacheIter {
+            cache: self,
+            current: self.head,
+        }
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    test test_lru_basic() {
+        let mut cache = LRUCache::new(2);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+
+        assert(cache.get(&1) == Some(&"one"), "Should get value for key 1");
+        assert(cache.get(&2) == Some(&"two"), "Should get value for key 2");
+    }
+
+    test test_lru_eviction() {
+        let mut cache = LRUCache::new(2);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.put(3, "three");  // Should evict 1 (LRU)
+
+        assert(cache.get(&1).is_none(), "Key 1 should be evicted");
+        assert(cache.get(&2) == Some(&"two"), "Key 2 should still exist");
+        assert(cache.get(&3) == Some(&"three"), "Key 3 should exist");
+    }
+
+    test test_lru_eviction_order() {
+        let mut cache = LRUCache::new(2);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.get(&1);  // Access 1, making it more recent than 2
+        cache.put(3, "three");  // Should evict 2 (LRU)
+
+        assert(cache.get(&1) == Some(&"one"), "Key 1 should still exist (recently used)");
+        assert(cache.get(&2).is_none(), "Key 2 should be evicted");
+        assert(cache.get(&3) == Some(&"three"), "Key 3 should exist");
+    }
+
+    test test_lru_update() {
+        let mut cache = LRUCache::new(2);
+
+        cache.put(1, "one");
+        let old = cache.put(1, "ONE");  // Update value
+
+        assert(old == Some("one"), "Should return old value");
+        assert(cache.get(&1) == Some(&"ONE"), "Should have new value");
+    }
+
+    test test_lru_capacity() {
+        let mut cache = LRUCache::new(3);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.put(3, "three");
+
+        assert(cache.len() == 3, "Size should be 3");
+        assert(cache.capacity() == 3, "Capacity should be 3");
+
+        cache.put(4, "four");  // Evict 1
+
+        assert(cache.len() == 3, "Size should still be 3 after eviction");
+    }
+
+    test test_lru_remove() {
+        let mut cache = LRUCache::new(3);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.put(3, "three");
+
+        let removed = cache.remove(&2);
+
+        assert(removed == Some("two"), "Should return removed value");
+        assert(cache.len() == 2, "Size should be 2 after removal");
+        assert(cache.get(&2).is_none(), "Key 2 should not exist");
+    }
+
+    test test_lru_clear() {
+        let mut cache = LRUCache::new(3);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+
+        cache.clear();
+
+        assert(cache.is_empty(), "Cache should be empty");
+        assert(cache.len() == 0, "Size should be 0");
+    }
+
+    test test_lru_keys_order() {
+        let mut cache = LRUCache::new(3);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.put(3, "three");
+        cache.get(&1);  // Make 1 most recent
+
+        let keys = cache.keys_lru();
+
+        assert(keys[0] == 1, "Most recent should be 1");
+        assert(keys[1] == 3, "Second should be 3");
+        assert(keys[2] == 2, "Least recent should be 2");
+    }
+
+    test test_lru_evict_lru() {
+        let mut cache = LRUCache::new(3);
+
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.put(3, "three");
+
+        let evicted = cache.evict_lru();
+
+        assert(evicted == Some((1, "one")), "Should evict LRU entry");
+        assert(cache.len() == 2, "Size should be 2");
+    }
+
+    test test_lru_contains() {
+        let mut cache = LRUCache::new(2);
+
+        cache.put(1, "one");
+
+        assert(cache.contains_key(&1), "Should contain key 1");
+        assert(!cache.contains_key(&2), "Should not contain key 2");
+    }
+}

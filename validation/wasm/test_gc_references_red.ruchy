@@ -1,0 +1,883 @@
+// WASM-005: GC Type References - RED Phase Tests
+//
+// This file contains failing tests for WebAssembly GC reference types 
+// implementation, validating that reference types, operations, and 
+// type checking correctly integrate with the Ruchy type system.
+
+fun test_suite() {
+    // Suite for testing GC reference types
+    test_reference_type_declaration();
+    test_reference_type_nullability();
+    test_reference_type_hierarchy();
+    test_reference_type_interfaces();
+    test_reference_type_operations();
+    test_parametric_references();
+    test_struct_references();
+    test_array_references();
+    test_function_references();
+    test_reference_type_integration();
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Declaration Tests
+//------------------------------------------------------------------------------
+
+fun test_reference_type_declaration() {
+    print("Test: Reference Type Declaration");
+    
+    // Test 1: Basic reference type declaration syntax
+    let code = "
+        type Person = ref {
+            name: string,
+            age: i32,
+        };
+        
+        fun create_person(name: string, age: i32) -> Person {
+            return new Person { name: name, age: age };
+        }
+        
+        fun main() {
+            let p = create_person(\"John\", 30);
+            assert(p.name == \"John\");
+            assert(p.age == 30);
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("Reference type"), "Error should mention reference types");
+    
+    // Test 2: Verify reference type equality comparison
+    let code2 = "
+        type Person = ref {
+            name: string,
+            age: i32,
+        };
+        
+        fun main() {
+            let p1 = new Person { name: \"John\", age: 30 };
+            let p2 = new Person { name: \"John\", age: 30 };
+            let p3 = p1;
+            
+            assert(p1 === p1);  // Identity comparison
+            assert(p1 !== p2);  // Different objects
+            assert(p1 === p3);  // Same reference
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("Reference equality"), 
+           "Error should mention reference equality comparison");
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Nullability Tests
+//------------------------------------------------------------------------------
+
+fun test_reference_type_nullability() {
+    print("Test: Reference Type Nullability");
+    
+    // Test 1: Non-nullable reference types
+    let code = "
+        type Person = ref {
+            name: string,
+            age: i32,
+        };
+        
+        fun main() {
+            let p: Person;      // Non-nullable reference must be initialized
+            p.name = \"John\";  // This should fail - p is not initialized
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("uninitialized"), 
+           "Error should mention uninitialized reference");
+    
+    // Test 2: Nullable reference types and null checks
+    let code2 = "
+        type Person = ref {
+            name: string,
+            age: i32,
+        };
+        
+        fun process_person(p: Person?) {
+            if (p != null) {
+                print(p.name);  // Safe access after null check
+            }
+            
+            print(p?.name);     // Null-safe access operator
+            
+            let name = p?.name ?? \"Unknown\";  // Null coalescing
+        }
+        
+        fun main() {
+            let p1: Person? = null;
+            let p2 = new Person { name: \"John\", age: 30 };
+            
+            process_person(p1);
+            process_person(p2);
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("Nullable reference"), 
+           "Error should mention nullable references");
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Hierarchy Tests
+//------------------------------------------------------------------------------
+
+fun test_reference_type_hierarchy() {
+    print("Test: Reference Type Hierarchy");
+    
+    // Test inheritance hierarchies with reference types
+    let code = "
+        type Animal = ref {
+            species: string,
+        };
+        
+        type Dog = ref extends Animal {
+            breed: string,
+        };
+        
+        type Cat = ref extends Animal {
+            color: string,
+        };
+        
+        fun describe_animal(a: Animal) {
+            print(\"Species: \" + a.species);
+            
+            // Dynamic type checking with is operator
+            if (a is Dog) {
+                let dog = a as Dog;  // Safe cast after 'is' check
+                print(\"Breed: \" + dog.breed);
+            } else if (a is Cat) {
+                let cat = a as Cat;
+                print(\"Color: \" + cat.color);
+            }
+        }
+        
+        fun main() {
+            let dog = new Dog { species: \"Canis lupus\", breed: \"Golden Retriever\" };
+            let cat = new Cat { species: \"Felis catus\", color: \"Orange\" };
+            
+            describe_animal(dog);
+            describe_animal(cat);
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("inheritance"), 
+           "Error should mention inheritance or type hierarchy");
+    
+    // Test covariant subtyping
+    let code2 = "
+        type Animal = ref { species: string };
+        type Dog = ref extends Animal { breed: string };
+        
+        fun test_covariance() {
+            let dogs: Dog[] = [
+                new Dog { species: \"Canis lupus\", breed: \"Labrador\" },
+                new Dog { species: \"Canis lupus\", breed: \"Poodle\" }
+            ];
+            
+            // Covariant subtyping: Dog[] is assignable to Animal[]
+            let animals: Animal[] = dogs;
+            
+            for (let a in animals) {
+                print(a.species);
+            }
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("covariance") || result2.error.contains("subtyping"), 
+           "Error should mention covariance or subtyping");
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Interfaces Tests
+//------------------------------------------------------------------------------
+
+fun test_reference_type_interfaces() {
+    print("Test: Reference Type Interfaces");
+    
+    // Test interface implementation by reference types
+    let code = "
+        interface Speakable {
+            fun speak() -> string;
+        }
+        
+        interface Movable {
+            fun move(distance: f32) -> void;
+        }
+        
+        type Person = ref implements Speakable, Movable {
+            name: string,
+            position: f32,
+            
+            // Interface implementations
+            fun speak() -> string {
+                return \"Hello, my name is \" + this.name;
+            }
+            
+            fun move(distance: f32) -> void {
+                this.position += distance;
+            }
+        };
+        
+        fun interact(s: Speakable) {
+            print(s.speak());
+            
+            if (s is Movable) {
+                let m = s as Movable;
+                m.move(10.0);
+            }
+        }
+        
+        fun main() {
+            let person = new Person { name: \"John\", position: 0.0 };
+            interact(person);
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("interface"), 
+           "Error should mention interfaces");
+    
+    // Test multiple interface implementations and dispatch
+    let code2 = "
+        interface Renderable {
+            fun render() -> string;
+        }
+        
+        interface Serializable {
+            fun serialize() -> string;
+        }
+        
+        type Widget = ref implements Renderable, Serializable {
+            id: i32,
+            name: string,
+            
+            fun render() -> string {
+                return \"Widget(\" + this.id + \"): \" + this.name;
+            }
+            
+            fun serialize() -> string {
+                return \"{\\\"id\\\": \" + this.id + \", \\\"name\\\": \\\"\" + this.name + \"\\\"}\"
+            }
+        };
+        
+        fun process(items: Renderable[]) {
+            for (let item in items) {
+                print(item.render());
+                
+                if (item is Serializable) {
+                    let s = item as Serializable;
+                    print(\"Serialized: \" + s.serialize());
+                }
+            }
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("interface"), 
+           "Error should mention interfaces");
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Operations Tests
+//------------------------------------------------------------------------------
+
+fun test_reference_type_operations() {
+    print("Test: Reference Type Operations");
+    
+    // Test type checking and casting operations
+    let code = "
+        type Animal = ref { species: string };
+        type Dog = ref extends Animal { breed: string };
+        type Cat = ref extends Animal { color: string };
+        
+        fun test_type_operations() {
+            let animal: Animal = new Dog { species: \"Canis lupus\", breed: \"Labrador\" };
+            
+            // Type checking with 'is' operator
+            if (animal is Dog) {
+                print(\"It's a dog!\");
+                let dog = animal as Dog;  // Safe downcasting
+                print(\"Breed: \" + dog.breed);
+            }
+            
+            // Unsafe direct cast (can fail at runtime)
+            try {
+                let cat = cast<Cat>(animal);  // Will throw exception
+                print(\"Color: \" + cat.color);
+            } catch (e) {
+                print(\"Cast exception: \" + e.message);
+            }
+            
+            // Runtime type information
+            print(\"Type: \" + typeof(animal));
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("type operation") || 
+           result.error.contains("is operator") || 
+           result.error.contains("cast"), 
+           "Error should mention type operations");
+    
+    // Test method dispatch and virtual calls
+    let code2 = "
+        type Animal = ref {
+            species: string,
+            
+            fun make_sound() -> string {
+                return \"Generic animal sound\";
+            }
+        };
+        
+        type Dog = ref extends Animal {
+            breed: string,
+            
+            // Override base method
+            fun make_sound() -> string {
+                return \"Woof!\";
+            }
+            
+            fun fetch() -> void {
+                print(\"Dog is fetching...\");
+            }
+        };
+        
+        fun animal_sounds(animals: Animal[]) {
+            for (let a in animals) {
+                // Virtual method call
+                print(a.make_sound());
+                
+                // Dynamic dispatch
+                if (a is Dog) {
+                    let dog = a as Dog;
+                    dog.fetch();
+                }
+            }
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("virtual") || 
+           result2.error.contains("override") || 
+           result2.error.contains("method dispatch"), 
+           "Error should mention virtual methods or method dispatch");
+}
+
+//------------------------------------------------------------------------------
+// Parametric References Tests
+//------------------------------------------------------------------------------
+
+fun test_parametric_references() {
+    print("Test: Parametric References");
+    
+    // Test generic reference types
+    let code = "
+        type Box<T> = ref {
+            value: T,
+            
+            fun get() -> T {
+                return this.value;
+            }
+            
+            fun set(val: T) -> void {
+                this.value = val;
+            }
+        };
+        
+        fun test_box() {
+            let int_box = new Box<i32> { value: 42 };
+            assert(int_box.get() == 42);
+            int_box.set(100);
+            assert(int_box.get() == 100);
+            
+            let string_box = new Box<string> { value: \"Hello\" };
+            assert(string_box.get() == \"Hello\");
+            string_box.set(\"World\");
+            assert(string_box.get() == \"World\");
+            
+            // Nested generic references
+            let nested_box = new Box<Box<i32>> { 
+                value: new Box<i32> { value: 99 }
+            };
+            assert(nested_box.get().get() == 99);
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("generic") || 
+           result.error.contains("parametric"), 
+           "Error should mention generics or parametric types");
+    
+    // Test generic constraints on reference types
+    let code2 = "
+        interface Comparable<T> {
+            fun compare_to(other: T) -> i32;
+        }
+        
+        type SortableList<T: Comparable<T>> = ref {
+            items: T[],
+            
+            fun sort() -> void {
+                // Bubble sort implementation using compare_to
+                let n = this.items.length;
+                for (let i = 0; i < n - 1; i++) {
+                    for (let j = 0; j < n - i - 1; j++) {
+                        if (this.items[j].compare_to(this.items[j + 1]) > 0) {
+                            // Swap items[j] and items[j+1]
+                            let temp = this.items[j];
+                            this.items[j] = this.items[j + 1];
+                            this.items[j + 1] = temp;
+                        }
+                    }
+                }
+            }
+        };
+        
+        type Person = ref implements Comparable<Person> {
+            name: string,
+            age: i32,
+            
+            fun compare_to(other: Person) -> i32 {
+                return this.age - other.age;
+            }
+        };
+        
+        fun test_sortable() {
+            let people = new SortableList<Person> {
+                items: [
+                    new Person { name: \"Alice\", age: 30 },
+                    new Person { name: \"Bob\", age: 25 },
+                    new Person { name: \"Charlie\", age: 35 }
+                ]
+            };
+            
+            people.sort();
+            assert(people.items[0].name == \"Bob\");
+            assert(people.items[1].name == \"Alice\");
+            assert(people.items[2].name == \"Charlie\");
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("generic constraint") || 
+           result2.error.contains("type bound"), 
+           "Error should mention generic constraints or type bounds");
+}
+
+//------------------------------------------------------------------------------
+// Struct References Tests
+//------------------------------------------------------------------------------
+
+fun test_struct_references() {
+    print("Test: Struct References");
+    
+    // Test references to struct types
+    let code = "
+        type Point = ref {
+            x: i32,
+            y: i32,
+            
+            fun distance_to(other: Point) -> f64 {
+                let dx = this.x - other.x;
+                let dy = this.y - other.y;
+                return Math.sqrt((dx * dx + dy * dy) as f64);
+            }
+        };
+        
+        type Circle = ref {
+            center: Point,
+            radius: f64,
+            
+            fun contains(p: Point) -> bool {
+                return this.center.distance_to(p) <= this.radius;
+            }
+        };
+        
+        fun test_geometry() {
+            let origin = new Point { x: 0, y: 0 };
+            let p1 = new Point { x: 3, y: 4 };
+            
+            assert(origin.distance_to(p1) == 5.0);
+            
+            let circle = new Circle {
+                center: new Point { x: 0, y: 0 },
+                radius: 10.0
+            };
+            
+            assert(circle.contains(p1));
+            
+            let p2 = new Point { x: 20, y: 20 };
+            assert(!circle.contains(p2));
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("struct reference") || 
+           result.error.contains("reference type"), 
+           "Error should mention struct references");
+    
+    // Test struct reference lifecycle
+    let code2 = "
+        type Person = ref {
+            name: string,
+            age: i32,
+        };
+        
+        fun test_lifecycle() {
+            // Creation
+            let p1 = new Person { name: \"John\", age: 30 };
+            
+            // Field mutation
+            p1.age += 1;
+            assert(p1.age == 31);
+            
+            // Reference assignment
+            let p2 = p1;
+            p2.name = \"John Doe\";
+            assert(p1.name == \"John Doe\");  // p1 and p2 reference same object
+            
+            // Garbage collection test (implicit)
+            {
+                let p3 = new Person { name: \"Temporary\", age: 25 };
+                // p3 goes out of scope here, should be GC'd eventually
+            }
+            
+            // Reference to null
+            p1 = null;  // Reference becomes null, object may be GC'd if p2 is also null
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("lifecycle") || 
+           result2.error.contains("garbage collection"), 
+           "Error should mention object lifecycle or garbage collection");
+}
+
+//------------------------------------------------------------------------------
+// Array References Tests
+//------------------------------------------------------------------------------
+
+fun test_array_references() {
+    print("Test: Array References");
+    
+    // Test array reference types
+    let code = "
+        type IntArray = ref array<i32>;
+        
+        fun test_array_refs() {
+            // Array reference creation
+            let arr = new IntArray(5);  // Create array of length 5
+            
+            // Array initialization
+            for (let i = 0; i < 5; i++) {
+                arr[i] = i * 10;
+            }
+            
+            // Array access
+            assert(arr[0] == 0);
+            assert(arr[1] == 10);
+            
+            // Array length
+            assert(arr.length == 5);
+            
+            // Array slicing
+            let slice = arr.slice(1, 3);
+            assert(slice.length == 2);
+            assert(slice[0] == 10);
+            assert(slice[1] == 20);
+            
+            // Array methods
+            arr.push(50);
+            assert(arr.length == 6);
+            assert(arr[5] == 50);
+            
+            let sum = arr.reduce((acc, val) => acc + val, 0);
+            assert(sum == 150);  // 0 + 10 + 20 + 30 + 40 + 50
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("array reference"), 
+           "Error should mention array references");
+    
+    // Test heterogeneous array with type hierarchy
+    let code2 = "
+        type Animal = ref { species: string };
+        type Dog = ref extends Animal { breed: string };
+        type Cat = ref extends Animal { color: string };
+        
+        fun test_heterogeneous_array() {
+            // Array of base type can contain subtypes
+            let animals: Animal[] = [
+                new Dog { species: \"Canis lupus\", breed: \"Labrador\" },
+                new Cat { species: \"Felis catus\", color: \"Orange\" }
+            ];
+            
+            // Process elements with dynamic type checking
+            for (let animal in animals) {
+                print(\"Species: \" + animal.species);
+                
+                if (animal is Dog) {
+                    print(\"Breed: \" + (animal as Dog).breed);
+                } else if (animal is Cat) {
+                    print(\"Color: \" + (animal as Cat).color);
+                }
+            }
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("heterogeneous array") || 
+           result2.error.contains("array of references"), 
+           "Error should mention heterogeneous arrays or arrays of references");
+}
+
+//------------------------------------------------------------------------------
+// Function References Tests
+//------------------------------------------------------------------------------
+
+fun test_function_references() {
+    print("Test: Function References");
+    
+    // Test function reference types
+    let code = "
+        type Transformer = ref function<i32, i32>;
+        
+        fun test_function_refs() {
+            // Create function references
+            let double: Transformer = (x: i32) => x * 2;
+            let square: Transformer = (x: i32) => x * x;
+            
+            // Call through references
+            assert(double(5) == 10);
+            assert(square(5) == 25);
+            
+            // Store in array
+            let transformers: Transformer[] = [double, square];
+            
+            // Apply from array
+            assert(transformers[0](5) == 10);
+            assert(transformers[1](5) == 25);
+            
+            // Higher-order function
+            fun apply_twice(f: Transformer, x: i32) -> i32 {
+                return f(f(x));
+            }
+            
+            assert(apply_twice(double, 5) == 20);  // double(double(5))
+            assert(apply_twice(square, 5) == 625); // square(square(5))
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("function reference") || 
+           result.error.contains("function type"), 
+           "Error should mention function references");
+    
+    // Test function reference closures
+    let code2 = "
+        fun test_function_closures() {
+            // Function that returns a function
+            fun make_adder(n: i32) -> function<i32, i32> {
+                return (x: i32) => x + n;
+            }
+            
+            let add5 = make_adder(5);
+            let add10 = make_adder(10);
+            
+            assert(add5(3) == 8);
+            assert(add10(3) == 13);
+            
+            // Closure capturing mutable variable
+            let counter = 0;
+            let increment = () => {
+                counter += 1;
+                return counter;
+            };
+            
+            assert(increment() == 1);
+            assert(increment() == 2);
+            assert(counter == 2);
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("closure") || 
+           result2.error.contains("function reference"), 
+           "Error should mention closures or function references");
+}
+
+//------------------------------------------------------------------------------
+// Reference Type Integration Tests
+//------------------------------------------------------------------------------
+
+fun test_reference_type_integration() {
+    print("Test: Reference Type Integration");
+    
+    // Test integration with existing value types
+    let code = "
+        type Box<T> = ref {
+            value: T,
+            
+            fun get() -> T {
+                return this.value;
+            }
+            
+            fun set(val: T) -> void {
+                this.value = val;
+            }
+        };
+        
+        fun test_integration() {
+            // Box containing value type
+            let int_box = new Box<i32> { value: 42 };
+            assert(int_box.get() == 42);
+            
+            // Box containing reference type
+            type Person = ref { name: string };
+            let person_box = new Box<Person> {
+                value: new Person { name: \"John\" }
+            };
+            assert(person_box.get().name == \"John\");
+            
+            // Box containing array
+            let array_box = new Box<i32[]> { value: [1, 2, 3] };
+            assert(array_box.get().length == 3);
+            
+            // Box containing function
+            let func_box = new Box<function<i32, i32>> {
+                value: (x: i32) => x * 2
+            };
+            assert(func_box.get()(5) == 10);
+        }
+    ";
+    
+    let result = compile_and_validate(code);
+    assert(!result.success, "Expected compilation to fail, but it succeeded");
+    assert(result.error.contains("integration") || 
+           result.error.contains("type system"), 
+           "Error should mention type system integration");
+    
+    // Test complex composition of types
+    let code2 = "
+        // Interface
+        interface Printable {
+            fun to_string() -> string;
+        }
+        
+        // Reference types
+        type Person = ref implements Printable {
+            name: string,
+            age: i32,
+            
+            fun to_string() -> string {
+                return this.name + \" (\" + this.age + \")\";
+            }
+        };
+        
+        type Team = ref implements Printable {
+            name: string,
+            members: Person[],
+            
+            fun to_string() -> string {
+                let result = \"Team \" + this.name + \" with members:\";
+                for (let member in this.members) {
+                    result += \"\\n  \" + member.to_string();
+                }
+                return result;
+            }
+            
+            fun add_member(person: Person) -> void {
+                this.members.push(person);
+            }
+        };
+        
+        // Function type using interfaces
+        type Printer = function<Printable, void>;
+        
+        fun test_composition() {
+            // Create object graph
+            let team = new Team {
+                name: \"Engineering\",
+                members: [
+                    new Person { name: \"Alice\", age: 30 },
+                    new Person { name: \"Bob\", age: 25 }
+                ]
+            };
+            
+            team.add_member(new Person { name: \"Charlie\", age: 35 });
+            
+            // Create function that works with interface
+            let print_item: Printer = (item: Printable) => {
+                print(item.to_string());
+            };
+            
+            // Print team (uses Team.to_string)
+            print_item(team);
+            
+            // Print individual person (uses Person.to_string)
+            print_item(team.members[0]);
+        }
+    ";
+    
+    let result2 = compile_and_validate(code2);
+    assert(!result2.success, "Expected compilation to fail, but it succeeded");
+    assert(result2.error.contains("complex") || 
+           result2.error.contains("composition") || 
+           result2.error.contains("integration"), 
+           "Error should mention complex type composition or integration");
+}
+
+//------------------------------------------------------------------------------
+// Helper function (this would be implemented in the test runner)
+//------------------------------------------------------------------------------
+
+fun compile_and_validate(code: string) -> struct { success: bool, error: string } {
+    // This function would:
+    // 1. Attempt to compile the provided Ruchy code targeting WASM with GC features
+    // 2. Check for compilation success/failure
+    // 3. Return the result
+    
+    // For RED phase, this would intentionally fail with appropriate error messages
+    return { 
+        success: false, 
+        error: "Reference type features not yet implemented: cannot compile Ruchy code with GC references to WebAssembly"
+    };
+}
+
+//------------------------------------------------------------------------------
+// Test Runner
+//------------------------------------------------------------------------------
+
+fun main() {
+    print("Running WASM GC Reference Types RED Phase Tests");
+    test_suite();
+    print("All tests complete - expected failures confirmed");
+}

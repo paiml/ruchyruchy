@@ -1,0 +1,337 @@
+// test_closure_compilation_red.ruchy
+// RED phase tests for WASM-002: Closure Compilation
+// These tests validate the compilation of Ruchy closures to WebAssembly
+
+// Import the WASM emitter implementation from WASM-001
+// import bootstrap::stage3::WasmEmitter
+// import bootstrap::stage3::RuchyWasmType
+
+// Import the closure compiler implementation (to be implemented)
+// import bootstrap::stage3::wasm_closure::ClosureCompiler
+// import bootstrap::stage3::wasm_closure::ClosureEnvironment
+
+// Basic closure tests
+fn test_counter_closure() {
+    // Create a counter closure in Ruchy
+    // let counter = make_counter();
+    // assert_eq(counter(), 1);
+    // assert_eq(counter(), 2);
+    // assert_eq(counter(), 3);
+    
+    // Test WASM compilation of counter closure
+    let emitter = WasmEmitter.new();
+    
+    // Add make_counter function that creates and returns a closure
+    emitter.add_function(
+        "make_counter", 
+        [], 
+        "Function<() -> i32>", 
+        "
+        let mut count = 0;
+        return () => {
+            count = count + 1;
+            count
+        };
+        "
+    );
+    
+    // Generate the module
+    let module = emitter.generate_module();
+    
+    // Verify the module contains necessary functions and code
+    assert(module.has_function("make_counter"), 
+           "Module should have make_counter function");
+    
+    // Check for closure implementation function
+    assert(module.has_function("closure_impl_0"), 
+           "Module should have closure implementation function");
+    
+    // Check the WAT output
+    let wat = emitter.emit_wat();
+    
+    // WAT should include memory allocation for closure
+    assert(wat.contains("call $alloc"), 
+           "WAT should include memory allocation for closure");
+           
+    // WAT should include storing function index in closure record
+    assert(wat.contains("i32.store"), 
+           "WAT should include storing function index in closure record");
+           
+    // WAT should include storing captured variable (count) in closure record
+    assert(wat.contains("i32.store offset=4"), 
+           "WAT should include storing captured variable in closure record");
+}
+
+// Nested closure tests
+fn test_nested_closures() {
+    // Create nested closures in Ruchy
+    // let make_adder = make_adder_factory();
+    // let add5 = make_adder(5);
+    // let add10 = make_adder(10);
+    // assert_eq(add5(2), 7);
+    // assert_eq(add10(2), 12);
+    
+    // Test WASM compilation of nested closures
+    let emitter = WasmEmitter.new();
+    
+    // Add make_adder_factory function that returns a closure that creates another closure
+    emitter.add_function(
+        "make_adder_factory", 
+        [], 
+        "Function<(i32) -> Function<(i32) -> i32>>", 
+        "
+        return (n) => {
+            return (x) => x + n;
+        };
+        "
+    );
+    
+    // Generate the module
+    let module = emitter.generate_module();
+    
+    // Verify the module contains necessary functions
+    assert(module.has_function("make_adder_factory"), 
+           "Module should have make_adder_factory function");
+           
+    // Check for outer closure implementation function
+    assert(module.has_function("closure_impl_0"), 
+           "Module should have outer closure implementation function");
+           
+    // Check for inner closure implementation function
+    assert(module.has_function("closure_impl_1"), 
+           "Module should have inner closure implementation function");
+    
+    // Check the WAT output
+    let wat = emitter.emit_wat();
+    
+    // WAT should include two closure allocations
+    assert(wat.match_count("call $alloc") >= 2, 
+           "WAT should include multiple memory allocations for nested closures");
+}
+
+// Multiple capture tests
+fn test_multiple_captures() {
+    // Test WASM compilation of closures that capture multiple variables
+    let emitter = WasmEmitter.new();
+    
+    // Add create_counter_pair function that returns a pair of closures
+    emitter.add_function(
+        "create_counter_pair", 
+        [["initial", "i32"], ["step", "i32"]], 
+        "Tuple<Function<() -> ()>, Function<() -> Tuple<i32, i32>>>", 
+        "
+        let mut count = initial;
+        
+        let increment = () => {
+            count = count + step;
+        };
+        
+        let get_values = () => {
+            return (count, step);
+        };
+        
+        return (increment, get_values);
+        "
+    );
+    
+    // Generate the module
+    let module = emitter.generate_module();
+    
+    // Verify the module contains necessary functions
+    assert(module.has_function("create_counter_pair"), 
+           "Module should have create_counter_pair function");
+           
+    // Check for closure implementation functions
+    assert(module.has_function("closure_impl_0"), 
+           "Module should have first closure implementation function");
+           
+    assert(module.has_function("closure_impl_1"), 
+           "Module should have second closure implementation function");
+    
+    // Check the WAT output
+    let wat = emitter.emit_wat();
+    
+    // WAT should include storing both captured variables
+    assert(wat.contains("i32.store offset=4"), 
+           "WAT should include storing first captured variable");
+           
+    assert(wat.contains("i32.store offset=8"), 
+           "WAT should include storing second captured variable");
+}
+
+// Closure as argument tests
+fn test_closure_as_argument() {
+    // Test WASM compilation of functions that take closures as arguments
+    let emitter = WasmEmitter.new();
+    
+    // Add apply_twice function that takes a function and applies it twice
+    emitter.add_function(
+        "apply_twice", 
+        [["f", "Function<(i32) -> i32>"], ["x", "i32"]], 
+        "i32", 
+        "
+        return f(f(x));
+        "
+    );
+    
+    // Generate the module
+    let module = emitter.generate_module();
+    
+    // Verify the module contains necessary functions
+    assert(module.has_function("apply_twice"), 
+           "Module should have apply_twice function");
+    
+    // Check the WAT output
+    let wat = emitter.emit_wat();
+    
+    // WAT should include indirect function calls
+    assert(wat.contains("call_indirect"), 
+           "WAT should include indirect function calls for closures");
+}
+
+// Closure in data structure tests
+fn test_closure_in_data_structure() {
+    // Test WASM compilation of closures stored in data structures
+    let emitter = WasmEmitter.new();
+    
+    // Add create_callbacks function that returns an array of closures
+    emitter.add_function(
+        "create_callbacks", 
+        [], 
+        "Array<Function<(i32) -> i32>>", 
+        "
+        return [
+            (x) => x * 2,
+            (x) => x + 10,
+            (x) => x * x
+        ];
+        "
+    );
+    
+    // Generate the module
+    let module = emitter.generate_module();
+    
+    // Verify the module contains necessary functions
+    assert(module.has_function("create_callbacks"), 
+           "Module should have create_callbacks function");
+           
+    // Check for closure implementation functions
+    assert(module.has_function("closure_impl_0"), 
+           "Module should have first closure implementation function");
+           
+    assert(module.has_function("closure_impl_1"), 
+           "Module should have second closure implementation function");
+           
+    assert(module.has_function("closure_impl_2"), 
+           "Module should have third closure implementation function");
+    
+    // Check the WAT output
+    let wat = emitter.emit_wat();
+    
+    // WAT should include array allocation and storing closures in the array
+    assert(wat.contains("call $alloc_array"), 
+           "WAT should include array allocation");
+           
+    assert(wat.match_count("i32.store") >= 3, 
+           "WAT should include storing multiple closures in the array");
+}
+
+// Test closure environment creation and manipulation
+fn test_closure_environment() {
+    // Test the creation and manipulation of closure environments
+    let compiler = ClosureCompiler.new();
+    
+    // Create a closure environment
+    let env = compiler.create_environment();
+    assert(env != null, "Should create a closure environment");
+    
+    // Add captured variables to the environment
+    compiler.add_capture(env, "count", "i32", 0);
+    compiler.add_capture(env, "step", "i32", 4);
+    
+    // Check environment properties
+    assert_eq(compiler.environment_size(env), 8, 
+              "Environment should have 8 bytes (two i32 variables)");
+              
+    assert_eq(compiler.capture_count(env), 2, 
+              "Environment should have 2 captured variables");
+              
+    assert_eq(compiler.capture_offset(env, "count"), 0, 
+              "First variable should be at offset 0");
+              
+    assert_eq(compiler.capture_offset(env, "step"), 4, 
+              "Second variable should be at offset 4");
+}
+
+// Test closure type mapping
+fn test_closure_type_mapping() {
+    // Test mapping closure types to WASM
+    let emitter = WasmEmitter.new();
+    
+    // Create a closure type with captures
+    let closure_type = RuchyWasmType.new_closure(
+        [RuchyWasmType.new("i32")],  // Parameters
+        RuchyWasmType.new("i32"),    // Return type
+        [                            // Captured variables
+            RuchyWasmType.new("i32"),
+            RuchyWasmType.new("f64")
+        ]
+    );
+    
+    // Check memory layout
+    let layout = closure_type.memory_layout();
+    
+    // Should have function index (4 bytes) + i32 (4 bytes) + f64 (8 bytes)
+    assert_eq(layout.size(), 16, 
+              "Closure size should be 16 bytes (4 + 4 + 8)");
+    
+    // Check WASM type (should be a pointer)
+    assert_eq(closure_type.wasm_type(), Type.I32, 
+              "Closure should map to i32 pointer in WASM");
+}
+
+// Test closure code generation
+fn test_closure_code_generation() {
+    // Test generating WASM code for closures
+    let compiler = ClosureCompiler.new();
+    
+    // Create closure environment
+    let env = compiler.create_environment();
+    compiler.add_capture(env, "count", "i32", 0);
+    
+    // Generate closure allocation code
+    let alloc_code = compiler.generate_allocation(env, 0);
+    
+    // Check generated code
+    assert(alloc_code.contains("call $alloc"), 
+           "Allocation code should include memory allocation");
+           
+    assert(alloc_code.contains("i32.store"), 
+           "Allocation code should include storing function index");
+    
+    // Generate closure call code
+    let call_code = compiler.generate_call(env, [Type.I32], Type.I32);
+    
+    // Check generated code
+    assert(call_code.contains("call_indirect"), 
+           "Call code should include indirect function call");
+}
+
+// Main function to run all tests
+fn main() {
+    // These tests will fail in the RED phase since the implementation doesn't exist yet
+    println("Running WASM-002: Closure Compilation RED phase tests");
+    println("These tests are expected to fail until the implementation is created");
+    
+    // Run all tests
+    test_counter_closure();
+    test_nested_closures();
+    test_multiple_captures();
+    test_closure_as_argument();
+    test_closure_in_data_structure();
+    test_closure_environment();
+    test_closure_type_mapping();
+    test_closure_code_generation();
+    
+    println("All tests completed successfully");
+}

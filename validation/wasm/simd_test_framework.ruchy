@@ -1,0 +1,401 @@
+// SIMD Test Framework for WASM-004 TOOL phase
+// This framework provides comprehensive testing utilities for SIMD operations
+// in Ruchy WebAssembly compilation targets.
+
+// Import core modules
+import { expect, assert, test_suite } from "../property/property_framework_extended.ruchy";
+import { fuzz, gen, shrink } from "../fuzz/fuzz_testing_harness.ruchy";
+import { measure, benchmark, compare } from "../benchmarks/test_statistical_framework_green.ruchy";
+
+// -----------------------------------------------------------------------------
+// SIMD Vector Types and Constants
+// -----------------------------------------------------------------------------
+
+// Define SIMD vector types that match WebAssembly's v128 representation
+type V128 = [u32; 4];  // 128-bit vector represented as 4 32-bit integers
+type F32x4 = [f32; 4]; // 4 32-bit floats
+type I32x4 = [i32; 4]; // 4 32-bit integers
+type I16x8 = [i16; 8]; // 8 16-bit integers
+type I8x16 = [i8; 16]; // 16 8-bit integers
+
+// Common test vectors
+fun zero_vector() -> V128 {
+    return [0, 0, 0, 0];
+}
+
+fun ones_vector() -> V128 {
+    return [0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF];
+}
+
+fun ascending_i32x4() -> I32x4 {
+    return [0, 1, 2, 3];
+}
+
+fun ascending_f32x4() -> F32x4 {
+    return [0.0, 1.0, 2.0, 3.0];
+}
+
+// -----------------------------------------------------------------------------
+// Vector Creation and Manipulation Utilities
+// -----------------------------------------------------------------------------
+
+// Create a f32x4 vector from individual float components
+fun f32x4(a: f32, b: f32, c: f32, d: f32) -> F32x4 {
+    return [a, b, c, d];
+}
+
+// Create an i32x4 vector from individual integer components
+fun i32x4(a: i32, b: i32, c: i32, d: i32) -> I32x4 {
+    return [a, b, c, d];
+}
+
+// Convert between vector types
+fun v128_as_i32x4(v: V128) -> I32x4 {
+    return [v[0] as i32, v[1] as i32, v[2] as i32, v[3] as i32];
+}
+
+fun v128_as_f32x4(v: V128) -> F32x4 {
+    // This is a simplification - in real implementation, would use bit reinterpretation
+    return [
+        bit_reinterpret_i32_as_f32(v[0] as i32),
+        bit_reinterpret_i32_as_f32(v[1] as i32),
+        bit_reinterpret_i32_as_f32(v[2] as i32),
+        bit_reinterpret_i32_as_f32(v[3] as i32)
+    ];
+}
+
+// Helper for bit reinterpretation (normally would be intrinsic)
+fun bit_reinterpret_i32_as_f32(i: i32) -> f32 {
+    // In real implementation, this would use WASM's reinterpret instructions
+    // This is a placeholder implementation
+    return i as f32;  // This doesn't do proper bit reinterpretation, just a cast
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Property Testing Utilities
+// -----------------------------------------------------------------------------
+
+// Property: Any SIMD operation followed by its inverse should yield the original value
+fun property_simd_operation_inverse<T, U>(
+    input: T, 
+    operation: fun(T) -> U,
+    inverse_operation: fun(U) -> T
+) -> bool {
+    let result = operation(input);
+    let restored = inverse_operation(result);
+    return simd_equals(input, restored);
+}
+
+// Property: SIMD operations should be equivalent to scalar operations applied to each lane
+fun property_simd_scalar_equivalence<T, U>(
+    input: T,
+    simd_operation: fun(T) -> U,
+    scalar_operation: fun(scalar) -> scalar,
+    extract_lanes: fun(T) -> [scalar],
+    combine_lanes: fun([scalar]) -> U
+) -> bool {
+    // Apply SIMD operation
+    let simd_result = simd_operation(input);
+    
+    // Apply scalar operation to each lane
+    let lanes = extract_lanes(input);
+    let scalar_results = [];
+    for lane in lanes {
+        scalar_results.push(scalar_operation(lane));
+    }
+    let scalar_result = combine_lanes(scalar_results);
+    
+    // Compare results
+    return simd_equals(simd_result, scalar_result);
+}
+
+// Property: Commutative SIMD operations should yield the same result regardless of operand order
+fun property_simd_commutativity<T>(
+    a: T,
+    b: T,
+    operation: fun(T, T) -> T
+) -> bool {
+    let result1 = operation(a, b);
+    let result2 = operation(b, a);
+    return simd_equals(result1, result2);
+}
+
+// Property: Associative SIMD operations should yield the same result regardless of grouping
+fun property_simd_associativity<T>(
+    a: T,
+    b: T,
+    c: T,
+    operation: fun(T, T) -> T
+) -> bool {
+    let result1 = operation(operation(a, b), c);
+    let result2 = operation(a, operation(b, c));
+    return simd_equals(result1, result2);
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Assertion Utilities
+// -----------------------------------------------------------------------------
+
+// Check if two SIMD vectors are approximately equal (for floating point)
+fun simd_approx_equals_f32x4(a: F32x4, b: F32x4, epsilon: f32) -> bool {
+    for i in 0..4 {
+        if abs(a[i] - b[i]) > epsilon {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Check if two SIMD vectors are exactly equal (for integer types)
+fun simd_equals<T>(a: T, b: T) -> bool {
+    // Implementation depends on vector type
+    if a is I32x4 && b is I32x4 {
+        let a_i32 = a as I32x4;
+        let b_i32 = b as I32x4;
+        for i in 0..4 {
+            if a_i32[i] != b_i32[i] {
+                return false;
+            }
+        }
+        return true;
+    } else if a is F32x4 && b is F32x4 {
+        return simd_approx_equals_f32x4(a as F32x4, b as F32x4, 0.000001);
+    }
+    
+    // Add more type checking as needed
+    
+    // Default case - exact memory equality
+    return a == b;
+}
+
+// Assert that two SIMD vectors are equal
+fun assert_simd_equals<T>(actual: T, expected: T, message: string) {
+    if !simd_equals(actual, expected) {
+        assert(false, message + ": expected " + expected.to_string() + ", got " + actual.to_string());
+    }
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Fuzz Testing Generators
+// -----------------------------------------------------------------------------
+
+// Generate random f32x4 vectors
+fun gen_f32x4() -> F32x4 {
+    return [
+        gen.float32(),
+        gen.float32(),
+        gen.float32(),
+        gen.float32()
+    ];
+}
+
+// Generate random i32x4 vectors
+fun gen_i32x4() -> I32x4 {
+    return [
+        gen.int32(),
+        gen.int32(),
+        gen.int32(),
+        gen.int32()
+    ];
+}
+
+// Generate random v128 vectors
+fun gen_v128() -> V128 {
+    return [
+        gen.uint32(),
+        gen.uint32(),
+        gen.uint32(),
+        gen.uint32()
+    ];
+}
+
+// Generate vectors with special patterns
+fun gen_special_patterns() -> V128 {
+    let patterns = [
+        zero_vector(),
+        ones_vector(),
+        [0, 0, 0, 1],
+        [1, 0, 0, 0],
+        [0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAA, 0xAAAAAAAA],  // 10101010...
+        [0x55555555, 0x55555555, 0x55555555, 0x55555555]    // 01010101...
+    ];
+    
+    let index = gen.int_range(0, patterns.length - 1);
+    return patterns[index];
+}
+
+// Generate pairs of vectors for binary operations
+fun gen_vector_pair<T>(generator: fun() -> T) -> [T, T] {
+    return [generator(), generator()];
+}
+
+// -----------------------------------------------------------------------------
+// SIMD Performance Measurement Utilities
+// -----------------------------------------------------------------------------
+
+// Measure and compare scalar vs SIMD implementations
+fun benchmark_scalar_vs_simd<T, U>(
+    input: T,
+    scalar_implementation: fun(T) -> U,
+    simd_implementation: fun(T) -> U,
+    iterations: i32
+) -> [f64, f64, f64] {  // Returns [scalar_time, simd_time, speedup_factor]
+    
+    let scalar_time = measure(fun() {
+        for i in 0..iterations {
+            let _ = scalar_implementation(input);
+        }
+    });
+    
+    let simd_time = measure(fun() {
+        for i in 0..iterations {
+            let _ = simd_implementation(input);
+        }
+    });
+    
+    let speedup = scalar_time / simd_time;
+    
+    return [scalar_time, simd_time, speedup];
+}
+
+// -----------------------------------------------------------------------------
+// Cross-Platform Compatibility Testing
+// -----------------------------------------------------------------------------
+
+// Enumeration of target platforms
+enum TargetPlatform {
+    Wasm32,
+    Wasm64,
+    WasmSIMD,
+    JavaScript,
+    Native
+}
+
+// Define expected results for different platforms
+struct CrossPlatformTestCase<T, U> {
+    input: T,
+    operation: fun(T) -> U,
+    expected_results: Map<TargetPlatform, U>
+}
+
+// Test function across different platforms
+fun test_cross_platform<T, U>(test_case: CrossPlatformTestCase<T, U>) {
+    // In real implementation, this would be platform-specific
+    // Here we'll just test against the current platform
+
+    let current_platform = detect_current_platform();
+    let expected = test_case.expected_results.get(current_platform);
+    
+    if expected == null {
+        assert(false, "No expected result defined for current platform: " + current_platform.to_string());
+        return;
+    }
+    
+    let actual = test_case.operation(test_case.input);
+    assert_simd_equals(actual, expected.unwrap(), "Cross-platform test failed for " + current_platform.to_string());
+}
+
+// Helper to detect current platform
+fun detect_current_platform() -> TargetPlatform {
+    // In real implementation, this would detect the actual platform
+    // For simplicity, we'll assume we're running on WebAssembly with SIMD
+    return TargetPlatform.WasmSIMD;
+}
+
+// -----------------------------------------------------------------------------
+// Test Suite Registration
+// -----------------------------------------------------------------------------
+
+// Register a SIMD test suite
+fun register_simd_test_suite(name: string, tests: [fun() -> bool]) {
+    test_suite.register(name, tests);
+}
+
+// Run all registered SIMD tests
+fun run_simd_tests() -> bool {
+    return test_suite.run_all();
+}
+
+// -----------------------------------------------------------------------------
+// Example SIMD Operations (for testing the framework)
+// -----------------------------------------------------------------------------
+
+// Example: Add two f32x4 vectors
+fun f32x4_add(a: F32x4, b: F32x4) -> F32x4 {
+    return [
+        a[0] + b[0],
+        a[1] + b[1],
+        a[2] + b[2],
+        a[3] + b[3]
+    ];
+}
+
+// Example: Multiply two f32x4 vectors
+fun f32x4_mul(a: F32x4, b: F32x4) -> F32x4 {
+    return [
+        a[0] * b[0],
+        a[1] * b[1],
+        a[2] * b[2],
+        a[3] * b[3]
+    ];
+}
+
+// Example: Absolute value of an i32x4 vector
+fun i32x4_abs(a: I32x4) -> I32x4 {
+    return [
+        abs(a[0]),
+        abs(a[1]),
+        abs(a[2]),
+        abs(a[3])
+    ];
+}
+
+// Helper for scalar absolute value
+fun abs(x: i32) -> i32 {
+    return if x < 0 { -x } else { x };
+}
+
+// Helper for scalar float absolute value
+fun abs(x: f32) -> f32 {
+    return if x < 0.0 { -x } else { x };
+}
+
+// Export all framework components
+export {
+    // Types
+    V128, F32x4, I32x4, I16x8, I8x16,
+    
+    // Vector creation and manipulation
+    zero_vector, ones_vector,
+    ascending_i32x4, ascending_f32x4,
+    f32x4, i32x4,
+    v128_as_i32x4, v128_as_f32x4,
+    
+    // Property testing
+    property_simd_operation_inverse,
+    property_simd_scalar_equivalence,
+    property_simd_commutativity,
+    property_simd_associativity,
+    
+    // Assertions
+    simd_approx_equals_f32x4,
+    simd_equals,
+    assert_simd_equals,
+    
+    // Fuzz generators
+    gen_f32x4, gen_i32x4, gen_v128,
+    gen_special_patterns, gen_vector_pair,
+    
+    // Performance measurements
+    benchmark_scalar_vs_simd,
+    
+    // Cross-platform testing
+    TargetPlatform, CrossPlatformTestCase,
+    test_cross_platform, detect_current_platform,
+    
+    // Test suite
+    register_simd_test_suite, run_simd_tests,
+    
+    // Example operations
+    f32x4_add, f32x4_mul, i32x4_abs
+}

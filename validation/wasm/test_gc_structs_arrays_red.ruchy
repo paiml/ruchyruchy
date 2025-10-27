@@ -1,0 +1,502 @@
+// test_gc_structs_arrays_red.ruchy
+// WASM-005: Struct and Array Types RED Phase
+// This file contains failing tests for struct and array types in WASM target
+
+// Import test framework
+import { test, expect, describe, before_each, after_each } from "../framework/test_runner.ruchy";
+import { wasm_compile, wasm_instantiate, wasm_execute } from "./wasm_test_utils.ruchy";
+
+describe("WASM Struct Type Implementation", fun() {
+    // Test basic struct declaration and instantiation
+    test("should support basic struct declaration and instantiation", fun() {
+        let source = `
+            fun main() -> i32 {
+                struct Point {
+                    x: i32,
+                    y: i32,
+                }
+                
+                let p = Point { x: 10, y: 20 };
+                return p.x + p.y; // Should return 30
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(30);
+    });
+    
+    // Test struct field access and mutation
+    test("should support field access and mutation", fun() {
+        let source = `
+            fun main() -> i32 {
+                struct Point {
+                    x: i32,
+                    y: i32,
+                }
+                
+                let mut p = Point { x: 5, y: 10 };
+                p.x = 15;
+                p.y = 25;
+                return p.x + p.y; // Should return 40
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(40);
+    });
+    
+    // Test methods on struct types
+    test("should support methods on struct types", fun() {
+        let source = `
+            struct Point {
+                x: i32,
+                y: i32,
+                
+                fun new(x: i32, y: i32) -> Point {
+                    return Point { x: x, y: y };
+                }
+                
+                fun sum(&self) -> i32 {
+                    return self.x + self.y;
+                }
+                
+                fun scale(&mut self, factor: i32) {
+                    self.x = self.x * factor;
+                    self.y = self.y * factor;
+                }
+            }
+            
+            fun main() -> i32 {
+                let mut p = Point::new(3, 4);
+                let initial_sum = p.sum();  // Should be 7
+                p.scale(2);
+                let final_sum = p.sum();    // Should be 14
+                
+                return final_sum - initial_sum;  // Should return 7
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(7);
+    });
+    
+    // Test complex struct with nested fields
+    test("should support nested struct types", fun() {
+        let source = `
+            struct Point {
+                x: i32,
+                y: i32,
+            }
+            
+            struct Rectangle {
+                top_left: Point,
+                bottom_right: Point,
+                
+                fun area(&self) -> i32 {
+                    let width = self.bottom_right.x - self.top_left.x;
+                    let height = self.bottom_right.y - self.top_left.y;
+                    return width * height;
+                }
+            }
+            
+            fun main() -> i32 {
+                let rect = Rectangle {
+                    top_left: Point { x: 0, y: 0 },
+                    bottom_right: Point { x: 10, y: 5 },
+                };
+                
+                return rect.area();  // Should return 50
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(50);
+    });
+    
+    // Test struct inheritance/extension
+    test("should support struct inheritance", fun() {
+        let source = `
+            struct Shape {
+                name: String,
+                
+                fun get_name(&self) -> String {
+                    return self.name;
+                }
+            }
+            
+            struct Circle extends Shape {
+                radius: f32,
+                
+                fun area(&self) -> f32 {
+                    return 3.14159 * self.radius * self.radius;
+                }
+            }
+            
+            fun main() -> i32 {
+                let c = Circle {
+                    name: "My Circle",
+                    radius: 2.0,
+                };
+                
+                // We'll convert the area to an integer for testing
+                return c.area() as i32;  // Should be around 12
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(12);
+    });
+    
+    // Test memory layout optimization
+    test("should optimize struct memory layout", fun() {
+        let source = `
+            struct AlignmentTest {
+                a: i8,   // 1 byte
+                b: i32,  // 4 bytes
+                c: i8,   // 1 byte
+            }
+            
+            fun main() -> i32 {
+                let size = sizeof(AlignmentTest);
+                return size;  // Should return 12 due to alignment
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(12);
+    });
+});
+
+describe("WASM Array Type Implementation", fun() {
+    // Test basic array declaration and instantiation
+    test("should support basic array declaration and access", fun() {
+        let source = `
+            fun main() -> i32 {
+                let numbers: [i32; 5] = [10, 20, 30, 40, 50];
+                return numbers[0] + numbers[4];  // Should return 60
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(60);
+    });
+    
+    // Test array element mutation
+    test("should support array element mutation", fun() {
+        let source = `
+            fun main() -> i32 {
+                let mut numbers: [i32; 3] = [1, 2, 3];
+                numbers[1] = 10;
+                return numbers[0] + numbers[1] + numbers[2];  // Should return 14
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(14);
+    });
+    
+    // Test array methods
+    test("should support array methods", fun() {
+        let source = `
+            fun main() -> i32 {
+                let mut numbers: [i32; 4] = [5, 10, 15, 20];
+                
+                let length = numbers.len();  // Should be 4
+                let sum = numbers.sum();     // Should be 50
+                
+                numbers.sort();  // No change since already sorted
+                
+                return length + sum;  // Should return 54
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(54);
+    });
+    
+    // Test multidimensional arrays
+    test("should support multidimensional arrays", fun() {
+        let source = `
+            fun main() -> i32 {
+                let matrix: [[i32; 3]; 2] = [
+                    [1, 2, 3],
+                    [4, 5, 6]
+                ];
+                
+                return matrix[0][0] + matrix[1][2];  // Should return 7
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(7);
+    });
+    
+    // Test arrays of structs
+    test("should support arrays of structs", fun() {
+        let source = `
+            struct Point {
+                x: i32,
+                y: i32,
+                
+                fun sum(&self) -> i32 {
+                    return self.x + self.y;
+                }
+            }
+            
+            fun main() -> i32 {
+                let points: [Point; 3] = [
+                    Point { x: 1, y: 2 },
+                    Point { x: 3, y: 4 },
+                    Point { x: 5, y: 6 }
+                ];
+                
+                return points[0].sum() + points[1].sum() + points[2].sum();  // Should return 21
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(21);
+    });
+    
+    // Test dynamic arrays
+    test("should support dynamic arrays", fun() {
+        let source = `
+            fun main() -> i32 {
+                let mut dynamic_array: Vec<i32> = Vec::new();
+                dynamic_array.push(10);
+                dynamic_array.push(20);
+                dynamic_array.push(30);
+                
+                let length = dynamic_array.len();  // Should be 3
+                let sum = dynamic_array[0] + dynamic_array[1] + dynamic_array[2];  // Should be 60
+                
+                return length + sum;  // Should return 63
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(63);
+    });
+});
+
+describe("WASM Struct and Array Iteration", fun() {
+    // Test array iteration
+    test("should support array iteration", fun() {
+        let source = `
+            fun main() -> i32 {
+                let numbers: [i32; 4] = [10, 20, 30, 40];
+                
+                let mut sum = 0;
+                for num in numbers {
+                    sum += num;
+                }
+                
+                return sum;  // Should return 100
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(100);
+    });
+    
+    // Test struct field iteration
+    test("should support struct field iteration", fun() {
+        let source = `
+            struct TestStruct {
+                a: i32,
+                b: i32,
+                c: i32,
+            }
+            
+            fun main() -> i32 {
+                let test = TestStruct { a: 10, b: 20, c: 30 };
+                
+                let mut sum = 0;
+                for field in test {
+                    sum += field as i32;
+                }
+                
+                return sum;  // Should return 60
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(60);
+    });
+});
+
+describe("WASM GC and Memory Management for Complex Types", fun() {
+    // Test GC for struct with complex types
+    test("should properly handle GC for complex struct types", fun() {
+        let source = `
+            struct Node {
+                value: i32,
+                next: Option<Box<Node>>,
+            }
+            
+            fun main() -> i32 {
+                // Create a linked list: 10 -> 20 -> 30
+                let mut head = Box::new(Node {
+                    value: 10,
+                    next: Some(Box::new(Node {
+                        value: 20,
+                        next: Some(Box::new(Node {
+                            value: 30,
+                            next: None,
+                        })),
+                    })),
+                });
+                
+                // Calculate sum of all node values
+                let mut sum = 0;
+                let mut current = &head;
+                
+                while let Some(node) = current {
+                    sum += node.value;
+                    current = &node.next;
+                }
+                
+                return sum;  // Should return 60
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(60);
+    });
+    
+    // Test GC for arrays with complex types
+    test("should properly handle GC for arrays with complex types", fun() {
+        let source = `
+            struct Person {
+                name: String,
+                age: i32,
+            }
+            
+            fun main() -> i32 {
+                // Create an array of boxed persons
+                let people: [Box<Person>; 3] = [
+                    Box::new(Person { name: "Alice".to_string(), age: 30 }),
+                    Box::new(Person { name: "Bob".to_string(), age: 25 }),
+                    Box::new(Person { name: "Charlie".to_string(), age: 35 }),
+                ];
+                
+                // Calculate sum of ages
+                let mut sum = 0;
+                for person in people {
+                    sum += person.age;
+                }
+                
+                return sum;  // Should return 90
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        let result = wasm_execute(instance, "main", []);
+        
+        expect(result).to_equal(90);
+    });
+});
+
+describe("WASM Struct and Array Integration with Foreign Interface", fun() {
+    // Test passing structs to JavaScript
+    test("should support passing structs to JavaScript", fun() {
+        let source = `
+            struct Point {
+                x: f64,
+                y: f64,
+            }
+            
+            #[wasm_bindgen]
+            fun create_point(x: f64, y: f64) -> Point {
+                return Point { x, y };
+            }
+            
+            fun main() -> i32 {
+                // This will be called from JS
+                return 42;
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        
+        // Simulate JS calling the exported function
+        let point = wasm_execute(instance, "create_point", [3.5, 7.5]);
+        
+        expect(point.x).to_equal(3.5);
+        expect(point.y).to_equal(7.5);
+    });
+    
+    // Test receiving arrays from JavaScript
+    test("should support receiving arrays from JavaScript", fun() {
+        let source = `
+            #[wasm_bindgen]
+            fun sum_array(numbers: &[i32]) -> i32 {
+                let mut sum = 0;
+                for num in numbers {
+                    sum += *num;
+                }
+                return sum;
+            }
+            
+            fun main() -> i32 {
+                // This will be called from JS
+                return 42;
+            }
+        `;
+        
+        let module = wasm_compile(source);
+        let instance = wasm_instantiate(module);
+        
+        // Simulate JS calling the exported function with an array
+        let result = wasm_execute(instance, "sum_array", [[10, 20, 30, 40]]);
+        
+        expect(result).to_equal(100);
+    });
+});

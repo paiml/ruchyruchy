@@ -1,0 +1,346 @@
+// WASM-006: Incremental Compilation - Thread Pool
+//
+// Implements a thread pool for parallel compilation
+// Provides work distribution and thread management
+
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
+
+// ============================================================================
+// Thread Pool Types
+// ============================================================================
+
+type Job = Box<dyn FnOnce() + Send + 'static>;
+
+enum Message {
+    NewJob(Job),
+    Terminate,
+}
+
+struct Worker {
+    id: usize,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl Worker {
+    fun new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Self {
+        let thread = thread::spawn(move || {
+            loop {
+                let message = receiver.lock().unwrap().recv().unwrap();
+
+                match message {
+                    Message::NewJob(job) => {
+                        // Execute job
+                        job();
+                    }
+                    Message::Terminate => {
+                        // Exit worker loop
+                        break;
+                    }
+                }
+            }
+        });
+
+        Worker {
+            id,
+            thread: Some(thread),
+        }
+    }
+}
+
+// ============================================================================
+// Thread Pool
+// ============================================================================
+
+pub struct ThreadPool {
+    workers: Vec<Worker>,
+    sender: mpsc::Sender<Message>,
+}
+
+impl ThreadPool {
+    /// Create new thread pool with specified number of threads
+    pub fun new(size: usize) -> Result<Self, String> {
+        if size == 0 {
+            return Err("Thread pool size must be greater than 0".to_string());
+        }
+
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+
+        let mut workers = Vec::with_capacity(size);
+
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&receiver)));
+        }
+
+        Ok(ThreadPool { workers, sender })
+    }
+
+    /// Execute a job on the thread pool
+    pub fun execute<F>(&self, f: F) -> Result<(), String>
+    where
+        F: FnOnce() + Send + 'static
+    {
+        let job = Box::new(f);
+
+        self.sender.send(Message::NewJob(job))
+            .map_err(|_| "Failed to send job to thread pool".to_string())
+    }
+
+    /// Get number of worker threads
+    pub fun size(&self) -> usize {
+        self.workers.len()
+    }
+
+    /// Shutdown thread pool and wait for all workers to finish
+    pub fun shutdown(&mut self) {
+        // Send terminate message to all workers
+        for _ in &self.workers {
+            let _ = self.sender.send(Message::Terminate);
+        }
+
+        // Wait for all workers to finish
+        for worker in &mut self.workers {
+            if let Some(thread) = worker.thread.take() {
+                let _ = thread.join();
+            }
+        }
+    }
+}
+
+impl Drop for ThreadPool {
+    fun drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+// ============================================================================
+// Parallel Task Executor
+// ============================================================================
+
+pub struct ParallelExecutor {
+    pool: ThreadPool,
+}
+
+impl ParallelExecutor {
+    pub fun new(num_threads: usize) -> Result<Self, String> {
+        let pool = ThreadPool::new(num_threads)?;
+
+        Ok(ParallelExecutor { pool })
+    }
+
+    /// Execute tasks in parallel and collect results
+    pub fun execute_all<T, F>(
+        &self,
+        tasks: Vec<F>
+    ) -> Result<Vec<T>, String>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> T + Send + 'static
+    {
+        let (sender, receiver) = mpsc::channel();
+        let num_tasks = tasks.len();
+
+        // Submit all tasks
+        for (index, task) in tasks.into_iter().enumerate() {
+            let sender = sender.clone();
+
+            self.pool.execute(move || {
+                let result = task();
+                let _ = sender.send((index, result));
+            })?;
+        }
+
+        // Drop original sender so receiver knows when all tasks are done
+        drop(sender);
+
+        // Collect results in order
+        let mut results = vec![None; num_tasks];
+        for _ in 0..num_tasks {
+            if let Ok((index, result)) = receiver.recv() {
+                results[index] = Some(result);
+            }
+        }
+
+        // Convert Option<T> to T
+        results.into_iter()
+            .map(|opt| opt.ok_or_else(|| "Task result missing".to_string()))
+            .collect()
+    }
+
+    /// Execute tasks in batches
+    pub fun execute_batches<T, F>(
+        &self,
+        batches: Vec<Vec<F>>
+    ) -> Result<Vec<Vec<T>>, String>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> T + Send + 'static
+    {
+        let mut all_results = Vec::new();
+
+        for batch in batches {
+            let results = self.execute_all(batch)?;
+            all_results.push(results);
+        }
+
+        Ok(all_results)
+    }
+}
+
+// ============================================================================
+// Work Stealing Queue (Future Enhancement)
+// ============================================================================
+
+// Work stealing queue for better load balancing
+// Currently a placeholder for future implementation
+
+pub struct WorkStealingQueue<T> {
+    items: Vec<T>,
+}
+
+impl<T> WorkStealingQueue<T> {
+    pub fun new() -> Self {
+        WorkStealingQueue {
+            items: Vec::new(),
+        }
+    }
+
+    pub fun push(&mut self, item: T) {
+        self.items.push(item);
+    }
+
+    pub fun pop(&mut self) -> Option<T> {
+        self.items.pop()
+    }
+
+    pub fun steal(&mut self) -> Option<T> {
+        if self.items.is_empty() {
+            None
+        } else {
+            Some(self.items.remove(0))
+        }
+    }
+
+    pub fun is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/// Get number of CPU cores
+pub fun num_cpus() -> usize {
+    // Try to get actual CPU count
+    match std::thread::available_parallelism() {
+        Ok(count) => count.get(),
+        Err(_) => 4,  // Default fallback
+    }
+}
+
+/// Get optimal thread count for compilation
+pub fun optimal_thread_count() -> usize {
+    // Leave one core for system/other tasks
+    let cpus = num_cpus();
+    if cpus > 1 {
+        cpus - 1
+    } else {
+        1
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    test test_thread_pool_creation() {
+        let pool = ThreadPool::new(4);
+        assert(pool.is_ok(), "Thread pool creation should succeed");
+
+        if let Ok(pool) = pool {
+            assert(pool.size() == 4, "Pool should have 4 workers");
+        }
+    }
+
+    test test_thread_pool_zero_size() {
+        let pool = ThreadPool::new(0);
+        assert(pool.is_err(), "Thread pool with size 0 should fail");
+    }
+
+    test test_thread_pool_execute() {
+        let pool = ThreadPool::new(2).unwrap();
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        // Execute 10 jobs
+        for _ in 0..10 {
+            let counter = Arc::clone(&counter);
+            pool.execute(move || {
+                counter.fetch_add(1, Ordering::SeqCst);
+            }).unwrap();
+        }
+
+        // Give threads time to complete
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        assert(counter.load(Ordering::SeqCst) == 10, "All jobs should execute");
+    }
+
+    test test_parallel_executor() {
+        let executor = ParallelExecutor::new(4).unwrap();
+
+        let tasks: Vec<_> = (0..10)
+            .map(|i| move || i * 2)
+            .collect();
+
+        let results = executor.execute_all(tasks).unwrap();
+
+        assert(results.len() == 10, "Should have 10 results");
+        assert(results[0] == 0, "First result should be 0");
+        assert(results[5] == 10, "Sixth result should be 10");
+    }
+
+    test test_parallel_executor_batches() {
+        let executor = ParallelExecutor::new(2).unwrap();
+
+        let batch1: Vec<_> = (0..5).map(|i| move || i).collect();
+        let batch2: Vec<_> = (5..10).map(|i| move || i).collect();
+
+        let batches = vec![batch1, batch2];
+        let results = executor.execute_batches(batches).unwrap();
+
+        assert(results.len() == 2, "Should have 2 batches");
+        assert(results[0].len() == 5, "First batch should have 5 results");
+        assert(results[1].len() == 5, "Second batch should have 5 results");
+    }
+
+    test test_work_stealing_queue() {
+        let mut queue = WorkStealingQueue::new();
+
+        queue.push(1);
+        queue.push(2);
+        queue.push(3);
+
+        assert(queue.pop() == Some(3), "Pop should return last item");
+        assert(queue.steal() == Some(1), "Steal should return first item");
+        assert(queue.pop() == Some(2), "Pop should return remaining item");
+        assert(queue.is_empty(), "Queue should be empty");
+    }
+
+    test test_num_cpus() {
+        let cpus = num_cpus();
+        assert(cpus > 0, "Should have at least 1 CPU");
+    }
+
+    test test_optimal_thread_count() {
+        let optimal = optimal_thread_count();
+        assert(optimal > 0, "Should have at least 1 thread");
+        assert(optimal <= num_cpus(), "Should not exceed CPU count");
+    }
+}
