@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- IDE-002: VS Code Extension Base (CYCLE 5)
+- vscode-extension/: Complete VS Code extension for Ruchy language support
+  - package.json: Extension manifest with dependencies and commands
+  - tsconfig.json: TypeScript configuration
+  - language-configuration.json: Auto-closing pairs, brackets, comments
+  - src/extension.ts: Main extension code with LSP client integration (~150 lines)
+  - syntaxes/ruchy.tmLanguage.json: Comprehensive TextMate grammar
+  - README.md: Extension documentation and usage guide
+- validation/ide/vscode_extension_test.ruchy: Pure Ruchy demo of VS Code extension
+- scripts/validate-ide-002.sh: VS Code extension validation script
 - IDE-001: LSP Base Protocol Implementation (CYCLE 5 - IDE Integration Start!)
 - src/lsp/: Language Server Protocol implementation modules
   - protocol.rs: LSP protocol types (Position, Range, Diagnostic, etc.)
@@ -893,7 +903,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## CYCLE 5: IDE Integration & Developer Tools (v1.1.0)
 
-**Status**: ✅ 1/5 tickets complete (IDE-001 complete)
+**Status**: ✅ 2/5 tickets complete (IDE-001, IDE-002 complete)
 **Focus**: Build comprehensive developer tooling to enhance IDE experience
 **Duration**: 6-8 weeks (estimated)
 
@@ -972,7 +982,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validation script: `scripts/validate-ide-001.sh` (all gates passing)
 
 **Next Tickets** (CYCLE 5):
-- IDE-002: VS Code extension base
+- IDE-002: VS Code extension base ✅ COMPLETE
+- IDE-003: Code completion
+- IDE-004: Go-to-definition & references
+- IDE-005: Integrated debugging (DAP + LSP)
+
+---
+
+### IDE-002: VS Code Extension Base ✅ COMPLETE
+
+**Purpose**: Create a fully functional VS Code extension with syntax highlighting, LSP client integration, and custom commands.
+
+**Extension Structure**:
+- `vscode-extension/package.json` - Extension manifest (name, version, dependencies, commands, configuration)
+- `vscode-extension/tsconfig.json` - TypeScript compiler configuration
+- `vscode-extension/language-configuration.json` - Language-specific editor behavior
+- `vscode-extension/src/extension.ts` - Main extension code with LSP client (~150 lines TypeScript)
+- `vscode-extension/syntaxes/ruchy.tmLanguage.json` - Comprehensive TextMate syntax grammar
+- `vscode-extension/README.md` - User-facing documentation and installation guide
+
+**Features Implemented**:
+
+1. **Syntax Highlighting** (TextMate Grammar):
+   - Keywords: `fun`, `let`, `if`, `else`, `match`, `loop`, `type`, `struct`, `enum`, `trait`, `impl`
+   - Control flow: `if`, `else`, `match`, `loop`, `while`, `for`, `in`, `break`, `continue`, `return`
+   - Types: Built-in types (`i8`-`i64`, `u8`-`u64`, `f32`, `f64`, `bool`, `String`) and custom types
+   - Functions: Definitions (`fun name()`) and calls with proper highlighting
+   - Strings: Double and single quoted with escape sequence support (`\n`, `\r`, `\t`, `\\`, `\x`, `\u`)
+   - Numbers: Decimal, hexadecimal (`0x`), binary (`0b`), octal (`0o`) literals
+   - Comments: Line comments (`//`) and block comments (`/* */`)
+   - Operators: Arithmetic, comparison, logical, assignment, and special operators
+
+2. **LSP Client Integration**:
+   - Uses `vscode-languageclient` npm package (v8.1.0)
+   - Connects to `ruchylsp` server binary (configurable path)
+   - Transport: stdio communication
+   - Document selector: `.ruchy` files with `file` scheme
+   - File watcher: Monitors `.ruchyrc` configuration files
+   - Graceful degradation: Shows warning if LSP server not found, continues with syntax highlighting
+
+3. **Extension Commands**:
+   - `ruchy.helloWorld` - Test command showing extension is active
+   - `ruchy.checkSyntax` - Runs `ruchy check` on current file via terminal
+   - `ruchy.format` - Runs `ruchy fmt` on current file via terminal
+
+4. **Language Configuration**:
+   - Auto-closing pairs: `{}`, `[]`, `()`, `""`, `''` (context-aware)
+   - Surrounding pairs: Wrap selection with brackets/quotes
+   - Code folding: Region markers (`// #region` / `// #endregion`)
+   - Indentation rules: Smart indent/dedent based on `{`, `}`, `(`, `)`
+   - Comment configuration: Line and block comment styles
+
+5. **Configuration Options**:
+   - `ruchy.lsp.path` - Path to LSP server binary (default: `"ruchylsp"`)
+   - `ruchy.trace.server` - LSP communication tracing (off/messages/verbose)
+
+**Quality Gates**:
+- ✅ Extension structure: All 6 required files present
+- ✅ package.json: Valid JSON, proper manifest structure
+- ✅ TextMate grammar: Valid JSON, scopeName `source.ruchy`
+- ✅ ruchy check: Syntax validation passed
+- ✅ ruchy fmt: Format validation passed (auto-applied)
+- ✅ ruchy run: Demo execution successful
+
+**Installation**:
+```bash
+cd vscode-extension
+npm install
+npm run compile
+npm run package
+code --install-extension ruchy-*.vsix
+```
+
+**Validation**:
+- Extension structure validation (6 files)
+- JSON validation (package.json, TextMate grammar)
+- TypeScript syntax check (warnings non-blocking, needs npm install)
+- Ruchy demo: `validation/ide/vscode_extension_test.ruchy` (execution successful)
+- Validation script: `scripts/validate-ide-002.sh` (all gates passing)
+
+**Next Tickets** (CYCLE 5):
 - IDE-003: Code completion
 - IDE-004: Go-to-definition & references
 - IDE-005: Integrated debugging (DAP + LSP)
