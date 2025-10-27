@@ -1,8 +1,9 @@
 // LSP Server
 // Main LSP server implementation
 
+use super::completion::CompletionProvider;
 use super::diagnostics::DiagnosticsProvider;
-use super::protocol::{Diagnostic, TextDocumentItem};
+use super::protocol::{CompletionItem, Diagnostic, Position, TextDocumentItem};
 use super::text_sync::TextDocumentManager;
 use std::sync::{Arc, Mutex};
 
@@ -10,6 +11,7 @@ use std::sync::{Arc, Mutex};
 pub struct LspServer {
     text_documents: Arc<Mutex<TextDocumentManager>>,
     diagnostics: DiagnosticsProvider,
+    completion: CompletionProvider,
     initialized: bool,
 }
 
@@ -19,6 +21,7 @@ impl LspServer {
         Self {
             text_documents: Arc::new(Mutex::new(TextDocumentManager::new())),
             diagnostics: DiagnosticsProvider::new(),
+            completion: CompletionProvider::new(),
             initialized: false,
         }
     }
@@ -83,6 +86,23 @@ impl LspServer {
     pub fn get_document_text(&self, uri: &str) -> Option<String> {
         let docs = self.text_documents.lock().unwrap();
         docs.get_text(uri).map(|s| s.to_string())
+    }
+
+    /// Get completion items at a position
+    pub fn get_completions(&self, uri: &str, position: Position) -> Vec<CompletionItem> {
+        if !self.initialized {
+            return vec![];
+        }
+
+        // Get document text
+        let docs = self.text_documents.lock().unwrap();
+        let text = match docs.get_text(uri) {
+            Some(t) => t,
+            None => return vec![],
+        };
+
+        // Get completions from provider
+        self.completion.get_completions(text, position)
     }
 
     /// Shutdown the server
@@ -195,5 +215,44 @@ mod tests {
 
         server.shutdown();
         assert!(!server.is_initialized());
+    }
+
+    #[test]
+    fn test_get_completions() {
+        let mut server = LspServer::new();
+        server.initialize();
+
+        let item = TextDocumentItem {
+            uri: "file:///test.ruchy".to_string(),
+            language_id: "ruchy".to_string(),
+            version: 1,
+            text: "fun main() {}".to_string(),
+        };
+
+        server.text_document_did_open(item);
+
+        let completions = server.get_completions("file:///test.ruchy", Position::new(0, 0));
+
+        // Should have keywords, types, and functions
+        assert!(completions.len() > 30);
+        assert!(completions.iter().any(|c| c.label == "fun"));
+        assert!(completions.iter().any(|c| c.label == "let"));
+        assert!(completions.iter().any(|c| c.label == "i32"));
+    }
+
+    #[test]
+    fn test_get_completions_before_initialize() {
+        let server = LspServer::new();
+        let completions = server.get_completions("file:///test.ruchy", Position::new(0, 0));
+        assert_eq!(completions.len(), 0);
+    }
+
+    #[test]
+    fn test_get_completions_nonexistent_document() {
+        let mut server = LspServer::new();
+        server.initialize();
+
+        let completions = server.get_completions("file:///nonexistent.ruchy", Position::new(0, 0));
+        assert_eq!(completions.len(), 0);
     }
 }
