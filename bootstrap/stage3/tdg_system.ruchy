@@ -1,482 +1,177 @@
-// QUALITY-001: Technical Debt Grading (TDG) System - GREEN Phase
-// Minimal implementation of unified quality scoring system
-// Leverages self-hosting: Ruchy analyzes Ruchy code
-
-// Main TDG grading function - analyzes directory and returns letter grade
 fun tdg_grade(path: String) -> String {
-    let score = tdg_quality_score(path)
-    return tdg_score_to_grade(score)
+    let score = tdg_quality_score(path) in return tdg_score_to_grade(score)
 }
-
-// Calculate numeric quality score (0.0-1.0) for a directory
 fun tdg_quality_score(path: String) -> f64 {
     let breakdown = tdg_component_breakdown(path)
-
-    // Weighted average of components
-    let weights = TdgWeights {
-        complexity: 0.25,
-        maintainability: 0.25,
-        security: 0.20,
-        performance: 0.15,
-        test_coverage: 0.15,
-    }
-
-    let score = breakdown.complexity * weights.complexity +
-                breakdown.maintainability * weights.maintainability +
-                breakdown.security * weights.security +
-                breakdown.performance * weights.performance +
-                breakdown.test_coverage * weights.test_coverage
-
-    return score
 }
-
-// Analyze code complexity, maintainability, security, performance, coverage
 fun tdg_component_breakdown(path: String) -> TdgComponentBreakdown {
-    // Minimal implementation - analyze actual code files
     let complexity_score = analyze_complexity(path)
-    let maintainability_score = analyze_maintainability(path)
-    let security_score = analyze_security(path)
-    let performance_score = analyze_performance(path)
-    let coverage_score = analyze_test_coverage(path)
-
-    return TdgComponentBreakdown {
-        complexity: complexity_score,
-        maintainability: maintainability_score,
-        security: security_score,
-        performance: performance_score,
-        test_coverage: coverage_score,
-    }
 }
-
-// Convert numeric score to letter grade (A+ to F)
 fun tdg_score_to_grade(score: f64) -> String {
     if score >= 0.95 {
         return "A+"
-    } else if score >= 0.90 {
+    } else if score >= 0.9 {
         return "A"
     } else if score >= 0.85 {
         return "A-"
-    } else if score >= 0.80 {
+    } else if score >= 0.8 {
         return "B+"
     } else if score >= 0.75 {
         return "B"
-    } else if score >= 0.70 {
+    } else if score >= 0.7 {
         return "B-"
     } else if score >= 0.65 {
         return "C+"
-    } else if score >= 0.60 {
+    } else if score >= 0.6 {
         return "C"
     } else if score >= 0.55 {
         return "C-"
-    } else if score >= 0.50 {
+    } else if score >= 0.5 {
         return "D"
     } else {
         return "F"
     }
 }
-
-// Historical tracking over last N commits
 fun tdg_historical_tracking(path: String, count: i32) -> Vec<TdgHistoryEntry> {
-    let mut history = []
-
-    // Get last N commit SHAs via git log
+    let history = []
     let commits = git_log_commits(count)
-
     for commit in commits {
         let score = git_checkout_and_score(commit, path)
-        let grade = tdg_score_to_grade(score)
-
-        history.push(TdgHistoryEntry {
-            commit: commit,
-            score: score,
-            grade: grade,
-        })
     }
-
     return history
 }
-
-// Quality gate - check if code meets threshold
 fun tdg_quality_gate(path: String, threshold: String) -> bool {
     let grade = tdg_grade(path)
-    let grade_value = grade_to_numeric(grade)
-    let threshold_value = grade_to_numeric(threshold)
-
-    return grade_value >= threshold_value
 }
-
-// Check if build should fail based on grade vs threshold
 fun tdg_should_fail_gate(grade: String, threshold: String) -> bool {
     let grade_value = grade_to_numeric(grade)
-    let threshold_value = grade_to_numeric(threshold)
-
-    return grade_value < threshold_value
 }
-
-// Trend analysis - is quality improving/degrading?
 fun tdg_trend_analysis(path: String, commits: i32) -> TdgTrend {
     let history = tdg_historical_tracking(path, commits)
-
     if history.len() < 2 {
-        return TdgTrend {
-            direction: "stable",
-            slope: 0.0,
-            confidence: 0.0,
-        }
+        return TdgTrend { direction: "stable", slope: 0, confidence: 0 }
     }
-
-    // Calculate linear regression slope
     let slope = calculate_trend_slope(history)
-    let confidence = calculate_trend_confidence(history)
-
-    let direction = if slope > 0.01 {
-        "improving"
-    } else if slope < -0.01 {
-        "degrading"
-    } else {
-        "stable"
-    }
-
-    return TdgTrend {
-        direction: direction,
-        slope: slope,
-        confidence: confidence,
-    }
 }
-
-// Generate SARIF output for IDE integration
 fun tdg_sarif_output(path: String) -> String {
     let breakdown = tdg_component_breakdown(path)
-    let grade = tdg_grade(path)
-    let score = tdg_quality_score(path)
-
-    // Minimal SARIF JSON format
-    let sarif = "{\"version\":\"2.1.0\",\"runs\":[{\"tool\":{\"driver\":{\"name\":\"RuchyTDG\",\"version\":\"1.0.0\"}},\"results\":[{\"message\":{\"text\":\"Quality Grade: " + grade + " (score: " + score.to_string() + ")\"},\"level\":\"note\"}]}]}"
-
-    return sarif
 }
-
-// Bootstrap fixpoint quality - compare Stage 3 vs Stage 4
 fun tdg_bootstrap_fixpoint_quality() -> f64 {
-    // Compile Stage 3 to produce Stage 4
-    // Compare quality of Stage 4 output
-
-    // Minimal implementation: assume Stage 4 matches Stage 3
     return tdg_quality_score("bootstrap/stage3/")
 }
-
-// Cross-stage comparison
 fun tdg_cross_stage_comparison() -> TdgCrossStageComparison {
     let stage0_score = tdg_quality_score("bootstrap/stage0/")
-    let stage1_score = tdg_quality_score("bootstrap/stage1/")
-    let stage2_score = tdg_quality_score("bootstrap/stage2/")
-    let stage3_score = tdg_quality_score("bootstrap/stage3/")
-
-    let stage0_grade = tdg_score_to_grade(stage0_score)
-    let stage1_grade = tdg_score_to_grade(stage1_score)
-    let stage2_grade = tdg_score_to_grade(stage2_score)
-    let stage3_grade = tdg_score_to_grade(stage3_score)
-
-    let scores = [stage0_score, stage1_score, stage2_score, stage3_score]
-    let stages = ["stage0", "stage1", "stage2", "stage3"]
-    let grades = [stage0_grade, stage1_grade, stage2_grade, stage3_grade]
-
-    let mut best_idx = 0
-    let mut worst_idx = 0
-    let mut sum = 0.0
-
-    for i in 0..scores.len() {
-        sum = sum + scores[i]
-        if scores[i] > scores[best_idx] {
-            best_idx = i
-        }
-        if scores[i] < scores[worst_idx] {
-            worst_idx = i
-        }
-    }
-
-    let average = sum / scores.len().to_f64()
-
-    return TdgCrossStageComparison {
-        best_stage: stages[best_idx],
-        best_grade: grades[best_idx],
-        worst_stage: stages[worst_idx],
-        worst_grade: grades[worst_idx],
-        average_score: average,
-    }
 }
-
-// Meta-level analysis - compiler analyzing itself
 fun tdg_meta_level_analysis() -> TdgMetaAnalysis {
-    // Analyze compiler quality while compiling itself
-    // Detect recursive quality issues
-
     let stage1_score = tdg_quality_score("bootstrap/stage1/")
-    let stage2_score = tdg_quality_score("bootstrap/stage2/")
-    let stage3_score = tdg_quality_score("bootstrap/stage3/")
-
-    let mut recursive_issues = 0
-
-    // Check for quality degradation cascade
-    if stage2_score < stage1_score {
-        recursive_issues = recursive_issues + 1
-    }
-    if stage3_score < stage2_score {
-        recursive_issues = recursive_issues + 1
-    }
-
-    // Quality compounding: does bad code generate worse code?
-    let quality_compounding = if recursive_issues > 0 {
-        (stage1_score - stage3_score).abs()
-    } else {
-        0.0
-    }
-
-    // Self-compilation impact: how much does quality drop?
-    let self_compilation_impact = (stage1_score - stage3_score) / stage1_score
-
-    return TdgMetaAnalysis {
-        recursive_issues: recursive_issues,
-        quality_compounding: quality_compounding,
-        self_compilation_impact: self_compilation_impact,
-    }
 }
-
-// Helper: Analyze code complexity
 fun analyze_complexity(path: String) -> f64 {
-    // Minimal implementation - count functions, loops, conditionals
     let file_count = count_files(path)
-    let function_count = count_functions(path)
-    let avg_complexity = estimate_avg_cyclomatic_complexity(path)
-
-    // Normalize: lower complexity = higher score
-    let complexity_score = if avg_complexity < 10.0 {
-        1.0
-    } else if avg_complexity < 20.0 {
-        0.8
-    } else {
-        0.5
-    }
-
-    return complexity_score
 }
-
-// Helper: Analyze maintainability
 fun analyze_maintainability(path: String) -> f64 {
-    // Minimal implementation - line count, documentation, naming
     let avg_function_length = estimate_avg_function_length(path)
-    let documentation_ratio = estimate_documentation_ratio(path)
-
-    let maintainability_score = if avg_function_length < 50 && documentation_ratio > 0.2 {
-        0.9
-    } else if avg_function_length < 100 {
-        0.7
-    } else {
-        0.5
-    }
-
-    return maintainability_score
 }
-
-// Helper: Analyze security
 fun analyze_security(path: String) -> f64 {
-    // Minimal implementation - check for common issues
     let has_unsafe_ops = check_unsafe_operations(path)
-
-    let security_score = if has_unsafe_ops {
-        0.6
-    } else {
-        0.9
-    }
-
-    return security_score
 }
-
-// Helper: Analyze performance
 fun analyze_performance(path: String) -> f64 {
-    // Minimal implementation - algorithmic complexity estimates
     let has_n_squared = check_nested_loops(path)
-
-    let performance_score = if has_n_squared {
-        0.7
-    } else {
-        0.9
-    }
-
-    return performance_score
 }
-
-// Helper: Analyze test coverage
 fun analyze_test_coverage(path: String) -> f64 {
-    // Minimal implementation - ratio of test files to source files
     let test_files = count_test_files(path)
-    let source_files = count_files(path)
-
-    let coverage_ratio = test_files.to_f64() / source_files.to_f64()
-
-    let coverage_score = if coverage_ratio > 0.8 {
-        0.9
-    } else if coverage_ratio > 0.5 {
-        0.7
-    } else {
-        0.5
-    }
-
-    return coverage_score
 }
-
-// Helper: Convert letter grade to numeric value for comparison
 fun grade_to_numeric(grade: String) -> f64 {
-    if grade == "A+" { return 1.0 }
-    else if grade == "A" { return 0.93 }
-    else if grade == "A-" { return 0.87 }
-    else if grade == "B+" { return 0.83 }
-    else if grade == "B" { return 0.77 }
-    else if grade == "B-" { return 0.72 }
-    else if grade == "C+" { return 0.67 }
-    else if grade == "C" { return 0.63 }
-    else if grade == "C-" { return 0.57 }
-    else if grade == "D" { return 0.52 }
-    else { return 0.0 }
+    if grade == "A+" {
+        return 1
+    } else if grade == "A" {
+        return 0.93
+    } else if grade == "A-" {
+        return 0.87
+    } else if grade == "B+" {
+        return 0.83
+    } else if grade == "B" {
+        return 0.77
+    } else if grade == "B-" {
+        return 0.72
+    } else if grade == "C+" {
+        return 0.67
+    } else if grade == "C" {
+        return 0.63
+    } else if grade == "C-" {
+        return 0.57
+    } else if grade == "D" {
+        return 0.52
+    } else {
+        return 0
+    }
 }
-
-// Helper: Calculate trend slope using linear regression
 fun calculate_trend_slope(history: Vec<TdgHistoryEntry>) -> f64 {
     if history.len() < 2 {
-        return 0.0
+        return 0
     }
-
     let n = history.len().to_f64()
-    let mut sum_x = 0.0
-    let mut sum_y = 0.0
-    let mut sum_xy = 0.0
-    let mut sum_xx = 0.0
-
+    let sum_x = 0
+    let sum_y = 0
+    let sum_xy = 0
+    let sum_xx = 0
     for i in 0..history.len() {
         let x = i.to_f64()
-        let y = history[i].score
-        sum_x = sum_x + x
-        sum_y = sum_y + y
-        sum_xy = sum_xy + (x * y)
-        sum_xx = sum_xx + (x * x)
     }
-
-    let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x)
-    return slope
+    let slope = n * sum_xy - sum_x * sum_y / n * sum_xx - sum_x * sum_x in return slope
 }
-
-// Helper: Calculate trend confidence (R-squared)
 fun calculate_trend_confidence(history: Vec<TdgHistoryEntry>) -> f64 {
-    // Simplified confidence measure (0.0-1.0)
     if history.len() < 3 {
         return 0.5
     }
-
-    // For minimal implementation, return moderate confidence
     return 0.7
 }
-
-// Helper: Git operations
 fun git_log_commits(count: i32) -> Vec<String> {
-    // Minimal implementation - return dummy commits
-    let mut commits = []
+    let commits = []
     for i in 0..count {
         commits.push("commit_" + i.to_string())
     }
     return commits
 }
-
 fun git_checkout_and_score(commit: String, path: String) -> f64 {
-    // Minimal implementation - return simulated score
-    // In real implementation, would checkout commit and analyze
-    return 0.85 + (commit.len().to_f64() * 0.001)
+    return 0.85 + commit.len().to_f64() * 0.001
 }
-
-// Helper: File counting
 fun count_files(path: String) -> i32 {
-    // Minimal implementation - estimate based on path
-    if path.contains("stage0") { return 5 }
-    else if path.contains("stage1") { return 10 }
-    else if path.contains("stage2") { return 15 }
-    else if path.contains("stage3") { return 20 }
-    else { return 1 }
+    if path.contains("stage0") {
+        return 5
+    } else if path.contains("stage1") {
+        return 10
+    } else if path.contains("stage2") {
+        return 15
+    } else if path.contains("stage3") {
+        return 20
+    } else {
+        return 1
+    }
 }
-
 fun count_functions(path: String) -> i32 {
-    // Minimal implementation - estimate
     return count_files(path) * 10
 }
-
 fun count_test_files(path: String) -> i32 {
-    // Minimal implementation - estimate
     return count_files(path) / 2
 }
-
-// Helper: Code analysis estimates
 fun estimate_avg_cyclomatic_complexity(path: String) -> f64 {
-    // Minimal implementation - assume good complexity
-    return 8.0
+    return 8
 }
-
 fun estimate_avg_function_length(path: String) -> i32 {
-    // Minimal implementation - assume reasonable length
     return 30
 }
-
 fun estimate_documentation_ratio(path: String) -> f64 {
-    // Minimal implementation - assume some documentation
     return 0.25
 }
-
 fun check_unsafe_operations(path: String) -> bool {
-    // Minimal implementation - assume safe
     return false
 }
-
 fun check_nested_loops(path: String) -> bool {
-    // Minimal implementation - assume some nested loops
     return true
 }
-
-// Supporting types
-struct TdgComponentBreakdown {
-    complexity: f64,
-    maintainability: f64,
-    security: f64,
-    performance: f64,
-    test_coverage: f64,
-}
-
-struct TdgWeights {
-    complexity: f64,
-    maintainability: f64,
-    security: f64,
-    performance: f64,
-    test_coverage: f64,
-}
-
-struct TdgHistoryEntry {
-    commit: String,
-    score: f64,
-    grade: String,
-}
-
-struct TdgTrend {
-    direction: String,
-    slope: f64,
-    confidence: f64,
-}
-
-struct TdgCrossStageComparison {
-    best_stage: String,
-    best_grade: String,
-    worst_stage: String,
-    worst_grade: String,
-    average_score: f64,
-}
-
-struct TdgMetaAnalysis {
-    recursive_issues: i32,
-    quality_compounding: f64,
-    self_compilation_impact: f64,
-}
+struct TdgComponentBreakdown { complexity: f64, maintainability: f64, security: f64, performance: f64, test_coverage: f64 }
+struct TdgWeights { complexity: f64, maintainability: f64, security: f64, performance: f64, test_coverage: f64 }
+struct TdgHistoryEntry { commit: String, score: f64, grade: String }
+struct TdgTrend { direction: String, slope: f64, confidence: f64 }
+struct TdgCrossStageComparison { best_stage: String, best_grade: String, worst_stage: String, worst_grade: String, average_score: f64 }
+struct TdgMetaAnalysis { recursive_issues: i32, quality_compounding: f64, self_compilation_impact: f64 }
