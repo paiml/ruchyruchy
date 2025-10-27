@@ -1587,14 +1587,349 @@ future_roadmap:
             Validation: ruchy check ✓, ruchy run ✓, bashrs lint ✓
             Impact: 97% lexer coverage, 93% parser line coverage, 91% parser branch coverage
 
+    - id: OPTION-6
+      name: "Quality Discovery & Static Analysis Tools (v1.2.0)"
+      description: "Advanced static analysis tools leveraging self-hosting (Ruchy compiles Ruchy)"
+      priority: critical
+      effort: 8-10_weeks
+      status: in_progress
+      cycle: cycle-6
+      features:
+        - "Technical Debt Grading (TDG) - unified quality scoring (A-F grades)"
+        - "Dead Code Detection - find unused code during self-compilation"
+        - "ML-based Defect Prediction - predict bug-prone code"
+        - "Duplicate Code Detection (MinHash + AST) - find semantic duplicates"
+        - "Code Churn Analysis - identify hot spots and unstable code"
+        - "Mutation Testing - verify test effectiveness"
+        - "Entropy Analysis - detect repetitive patterns"
+        - "Provability Analysis - formal verification support"
+        - "Big-O Complexity Analysis - algorithmic complexity detection"
+        - "Symbol Table Analysis - meta-level compiler analysis"
+      value: "Leverage self-hosting for meta-level quality discovery impossible for non-self-hosting projects"
+      self_hosting_advantages:
+        - "Analyze compiler quality while compiling itself"
+        - "Detect bugs that only appear in Stage 2+ (not Stage 0)"
+        - "Prove bootstrap fixpoint convergence (Stage 3 = Stage 4)"
+        - "Find cyclic bugs (bad code generates worse code)"
+        - "Profile compiler by compiling itself"
+      tickets:
+        - id: QUALITY-001
+          title: "Technical Debt Grading (TDG) System"
+          priority: critical
+          status: partial
+          phase: "RED✅-GREEN✅-REFACTOR🔴-TOOL⏳-MUTATION⏳-PROPERTY⏳-FUZZ⏳-PMAT⏳"
+          cycle: 6
+          progress: "3/8 phases complete (RED, GREEN, REFACTOR-blocked)"
+          blocker: "ruchy fmt bug - formats structs to invalid syntax"
+          files_created:
+            - "bootstrap/stage3/tdg_system.ruchy (~350 LOC)"
+            - "validation/quality/tdg_system_test.ruchy (~450 LOC)"
+            - "docs/QUALITY-001_PROGRESS.md (comprehensive report)"
+            - "docs/RUCHY_FMT_BUG_REPORT.md (blocker documentation)"
+          requirements:
+            - "Implement unified quality scoring (A-F grades)"
+            - "Component breakdown (complexity, maintainability, security)"
+            - "Historical tracking with trend analysis"
+            - "Quality gate enforcement in CI/CD"
+            - "Grade all 4 bootstrap stages (Stage 0-3)"
+          tests:
+            - "test_tdg_scoring_all_stages"
+            - "test_tdg_quality_degradation_detection"
+            - "test_tdg_historical_tracking"
+            - "test_tdg_quality_gates"
+          acceptance:
+            - "Grade all bootstrap stages with A-F scores"
+            - "Detect quality degradation: Stage 2 < Stage 1"
+            - "Historical tracking: quality improves over 10 commits"
+            - "CI/CD integration: fail builds below B+ grade"
+          extreme_tdd:
+            - "RED: Write 10+ failing tests for TDG scoring"
+            - "GREEN: Minimal implementation (~300 LOC)"
+            - "REFACTOR: Clean up, apply ruchy fmt/lint"
+            - "TOOL: Validate with all 16 Ruchy tools"
+            - "MUTATION: Achieve >95% mutation score"
+            - "PROPERTY: 10+ properties (monotonicity, composability)"
+            - "FUZZ: 100K+ inputs with grammar-based generation"
+            - "PMAT: Validate with pmat tdg, pmat quality-gate"
+
+        - id: QUALITY-002
+          title: "Dead Code Detection & Coverage Analysis"
+          priority: high
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Detect unused functions, variables, types"
+            - "Control flow analysis for unreachable code"
+            - "Self-compilation coverage tracking"
+            - "Parser rule usage profiling"
+          tests:
+            - "test_dead_code_detection_bootstrap"
+            - "test_unused_parser_rules"
+            - "test_self_compilation_coverage"
+            - "test_dead_codegen_paths"
+          acceptance:
+            - "Find >10% unused code in bootstrap stages"
+            - "Identify >5 unused parser rules"
+            - "Measure self-compilation code coverage >80%"
+          extreme_tdd:
+            - "RED: Write 8+ failing tests for dead code detection"
+            - "GREEN: Minimal implementation (~250 LOC)"
+            - "REFACTOR: Optimize performance"
+            - "TOOL: Validate with ruchy check, ruchy lint"
+            - "MUTATION: Achieve >90% mutation score"
+            - "PROPERTY: 8+ properties (completeness, correctness)"
+            - "FUZZ: 50K+ code samples"
+            - "PMAT: Validate with pmat analyze dead-code"
+
+        - id: QUALITY-003
+          title: "ML-based Defect Prediction"
+          priority: high
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Train ML model on git history bugs"
+            - "Predict bug probability per file/function"
+            - "Prioritize testing on risky code"
+            - "Bootstrap bug cascade prediction"
+          tests:
+            - "test_defect_prediction_training"
+            - "test_bug_probability_scoring"
+            - "test_bootstrap_cascade_prediction"
+            - "test_test_prioritization"
+          acceptance:
+            - "Train on >100 historical bugs from git log"
+            - "Achieve >70% precision (predicted bugs are real)"
+            - "Prioritize testing on top 20% risky files"
+          extreme_tdd:
+            - "RED: Write 10+ failing tests for ML model"
+            - "GREEN: Minimal ML implementation (~400 LOC)"
+            - "REFACTOR: Feature engineering optimization"
+            - "TOOL: Validate with ruchy test"
+            - "MUTATION: N/A (ML model, not deterministic)"
+            - "PROPERTY: 5+ properties (monotonicity, calibration)"
+            - "FUZZ: N/A (supervised learning)"
+            - "PMAT: Validate with pmat analyze defect-prediction"
+
+        - id: QUALITY-004
+          title: "Duplicate Code Detection (MinHash + AST)"
+          priority: medium
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Implement MinHash for similarity detection"
+            - "AST-based structural similarity"
+            - "Cross-stage duplicate detection"
+            - "Semantic similarity analysis"
+          tests:
+            - "test_minhash_similarity"
+            - "test_ast_structural_similarity"
+            - "test_cross_stage_duplicates"
+            - "test_semantic_similarity"
+          acceptance:
+            - "Find >50 duplicate blocks across stages"
+            - "Detect >10 semantic duplicates"
+            - "Generate refactoring suggestions"
+          extreme_tdd:
+            - "RED: Write 8+ failing tests for duplicate detection"
+            - "GREEN: Minimal implementation (~350 LOC)"
+            - "REFACTOR: Optimize MinHash performance"
+            - "TOOL: Validate with ruchy lint"
+            - "MUTATION: Achieve >85% mutation score"
+            - "PROPERTY: 6+ properties (transitivity, symmetry)"
+            - "FUZZ: 30K+ code samples"
+            - "PMAT: Validate with pmat analyze duplicates"
+
+        - id: QUALITY-005
+          title: "Code Churn Analysis"
+          priority: medium
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Track change frequency per file/function"
+            - "Identify hot spots (frequently changed)"
+            - "Correlate churn with bootstrap failures"
+            - "Detect cyclic changes across stages"
+          tests:
+            - "test_churn_frequency_tracking"
+            - "test_hotspot_identification"
+            - "test_churn_failure_correlation"
+            - "test_cyclic_change_detection"
+          acceptance:
+            - "Track churn for >100 commits"
+            - "Correlate churn with >80% of failures"
+            - "Identify >5 hot spot files"
+          extreme_tdd:
+            - "RED: Write 7+ failing tests for churn analysis"
+            - "GREEN: Minimal implementation (~200 LOC)"
+            - "REFACTOR: Git integration optimization"
+            - "TOOL: Validate with ruchy check"
+            - "MUTATION: Achieve >90% mutation score"
+            - "PROPERTY: 5+ properties (monotonicity, additivity)"
+            - "FUZZ: N/A (git history analysis)"
+            - "PMAT: Validate with pmat analyze churn"
+
+        - id: QUALITY-006
+          title: "Mutation Testing Engine"
+          priority: medium
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Generate mutants (code mutations)"
+            - "Execute tests against mutants"
+            - "Calculate mutation score (% killed)"
+            - "Bootstrap cascade testing"
+          tests:
+            - "test_mutant_generation"
+            - "test_mutation_execution"
+            - "test_mutation_score_calculation"
+            - "test_bootstrap_cascade"
+          acceptance:
+            - "Achieve >95% mutation score on lexer/parser"
+            - "Verify >90% mutations break self-compilation"
+            - "Identify weak tests (mutations not caught)"
+          extreme_tdd:
+            - "RED: Write 10+ failing tests for mutation engine"
+            - "GREEN: Minimal implementation (~500 LOC)"
+            - "REFACTOR: Parallelize mutation execution"
+            - "TOOL: Validate with ruchy test"
+            - "MUTATION: Meta-mutation (mutate the mutator!)"
+            - "PROPERTY: 8+ properties (completeness, soundness)"
+            - "FUZZ: Generate 10K+ mutants"
+            - "PMAT: Validate with pmat analyze mutate"
+
+        - id: QUALITY-007
+          title: "Entropy Analysis & Pattern Detection"
+          priority: low
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Calculate code entropy (Shannon entropy)"
+            - "Detect low-entropy (repetitive) code"
+            - "Identify missed abstraction opportunities"
+            - "Suggest refactoring patterns"
+          tests:
+            - "test_entropy_calculation"
+            - "test_low_entropy_detection"
+            - "test_pattern_identification"
+            - "test_refactoring_suggestions"
+          acceptance:
+            - "Calculate entropy for all bootstrap stages"
+            - "Detect >20 low-entropy patterns"
+            - "Suggest >10 refactoring opportunities"
+          extreme_tdd:
+            - "RED: Write 6+ failing tests for entropy analysis"
+            - "GREEN: Minimal implementation (~150 LOC)"
+            - "REFACTOR: Optimize entropy calculations"
+            - "TOOL: Validate with ruchy check"
+            - "MUTATION: Achieve >85% mutation score"
+            - "PROPERTY: 4+ properties (monotonicity, scale-invariance)"
+            - "FUZZ: 20K+ code samples"
+            - "PMAT: Validate with pmat analyze entropy"
+
+        - id: QUALITY-008
+          title: "Provability Analysis (Abstract Interpretation)"
+          priority: low
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Abstract interpretation framework"
+            - "Property verification (token preservation, AST validity)"
+            - "Bootstrap fixpoint proof"
+            - "Type system soundness verification"
+          tests:
+            - "test_abstract_interpretation"
+            - "test_property_verification"
+            - "test_fixpoint_proof"
+            - "test_type_soundness"
+          acceptance:
+            - "Prove 'lexer preserves token count'"
+            - "Prove 'parser produces valid AST'"
+            - "Prove bootstrap fixpoint (Stage 3 = Stage 4)"
+          extreme_tdd:
+            - "RED: Write 8+ failing tests for provability"
+            - "GREEN: Minimal implementation (~600 LOC)"
+            - "REFACTOR: Optimize proof search"
+            - "TOOL: Validate with ruchy prove"
+            - "MUTATION: N/A (proof verification)"
+            - "PROPERTY: 10+ properties (soundness, completeness)"
+            - "FUZZ: N/A (formal verification)"
+            - "PMAT: Validate with pmat analyze provability"
+
+        - id: QUALITY-009
+          title: "Big-O Complexity Analysis"
+          priority: low
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Detect O(n²), O(n log n), O(n) patterns"
+            - "Warn about inefficient algorithms"
+            - "Bootstrap performance compound analysis"
+            - "Suggest optimizations"
+          tests:
+            - "test_complexity_detection"
+            - "test_inefficiency_warnings"
+            - "test_bootstrap_compound_analysis"
+            - "test_optimization_suggestions"
+          acceptance:
+            - "Detect >5 O(n²) algorithms"
+            - "Verify parser is O(n)"
+            - "Measure bootstrap performance compound factor"
+          extreme_tdd:
+            - "RED: Write 7+ failing tests for Big-O analysis"
+            - "GREEN: Minimal implementation (~250 LOC)"
+            - "REFACTOR: Improve heuristics"
+            - "TOOL: Validate with ruchy runtime"
+            - "MUTATION: Achieve >80% mutation score"
+            - "PROPERTY: 5+ properties (monotonicity, scaling)"
+            - "FUZZ: 15K+ code samples"
+            - "PMAT: Validate with pmat analyze big-o"
+
+        - id: QUALITY-010
+          title: "Symbol Table Analysis & Call Graphs"
+          priority: low
+          status: pending
+          phase: "RED-GREEN-REFACTOR-TOOL-MUTATION-PROPERTY-FUZZ-PMAT"
+          cycle: 6
+          requirements:
+            - "Symbol usage analysis"
+            - "Cross-reference tracking"
+            - "Call graph generation"
+            - "Dependency graph visualization"
+          tests:
+            - "test_symbol_usage_analysis"
+            - "test_cross_reference_tracking"
+            - "test_call_graph_generation"
+            - "test_dependency_graph"
+          acceptance:
+            - "Analyze symbol tables for all stages"
+            - "Generate call graph for compiler"
+            - "Detect circular dependencies"
+          extreme_tdd:
+            - "RED: Write 6+ failing tests for symbol analysis"
+            - "GREEN: Minimal implementation (~300 LOC)"
+            - "REFACTOR: Optimize graph algorithms"
+            - "TOOL: Validate with ruchy check"
+            - "MUTATION: Achieve >85% mutation score"
+            - "PROPERTY: 6+ properties (transitivity, acyclicity)"
+            - "FUZZ: 10K+ symbol tables"
+            - "PMAT: Validate with pmat analyze symbol-table"
+
   recommendations:
-    primary: "CONTINUE Bug Discovery & Testing - Apply extreme testing to real codebase, find actual bugs"
-    secondary: "Enhance ruchydbg - Add more debugging features (time-travel, record-replay)"
-    tertiary: "Expand Testing Infrastructure - Property testing, fuzzing, validation"
-    deferred: "OPTION-3 (IDE Integration) - Deferred until debugging/testing mature"
-    deferred: "OPTION-4 (Educational Platform) - Deferred until debugging/testing mature"
-    deferred: "OPTION-1 (WebAssembly Extensions) - Deferred until debugging/testing mature"
-    note: "FOCUS: Debugging, Testing, Bug Discovery ONLY - Build world-class testing infrastructure first"
+    primary: "QUALITY DISCOVERY TOOLS (OPTION-6) - Implement TDG and static analysis tools leveraging self-hosting"
+    secondary: "Continue Educational Platform (OPTION-4) - Complete remaining tutorials (AST, Type Inference, CodeGen)"
+    tertiary: "Continue IDE Integration (OPTION-3) - IDE-005 (DAP debugging integration)"
+    completed: "OPTION-5 (Bug Discovery) - 10/10 discovery tools complete"
+    completed: "OPTION-3 (IDE Integration) - 4/5 tickets complete (LSP, VS Code, Completion, Navigation)"
+    note: "FOCUS: Quality Discovery & Static Analysis - Leverage self-hosting for meta-level analysis"
+    next_cycle: "CYCLE 6: Quality Discovery & Static Analysis Tools (10 tickets: QUALITY-001 through QUALITY-010)"
 
         - id: DISCOVERY-010
           title: "ruchydbg Enhancement: Auto-Detect Mode"
