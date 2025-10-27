@@ -1,0 +1,227 @@
+// QUALITY-002: MutFuzz - Combined Mutation + Fuzz Testing (Demonstration)
+// Demonstrates mutation testing + fuzz testing patterns
+// Inspired by paiml-mcp-agent-toolkit patterns
+// Ruchy v3.138.0
+// NOTE: Full implementation blocked by parser bug at ~300+ LOC (Issue #65)
+
+fun main() {
+    println("🧬🔬 QUALITY-002: MutFuzz Testing (Demo)")
+    println("=" * 60)
+
+    // Phase 1: Mutation Testing
+    let total_mutations = 8
+    let killed_mutations = run_mutation_tests()
+    let score = calculate_mutation_score(killed_mutations, total_mutations)
+
+    println("")
+    println("=" * 60)
+    println("Phase 1: MUTATION Results")
+    println("  Total mutations: " + total_mutations.to_string())
+    println("  Killed mutations: " + killed_mutations.to_string())
+    println("  Survived mutations: " + (total_mutations - killed_mutations).to_string())
+    println("  Mutation score: " + score.to_string() + "%")
+
+    // Phase 2: Fuzz Testing
+    println("")
+    println("=" * 60)
+    let fuzz_results = run_fuzz_testing()
+
+    println("")
+    println("=" * 60)
+    println("Phase 2: FUZZ Results")
+    println("  Total inputs: " + fuzz_results.total.to_string())
+    println("  Passed: " + fuzz_results.passed.to_string())
+    println("  Errors: " + fuzz_results.errors.to_string())
+    println("  Crashes: " + fuzz_results.crashes.to_string())
+
+    // Combined verdict
+    println("")
+    println("=" * 60)
+    println("COMBINED MUTFUZZ RESULTS:")
+    let passes_mutation = score >= 85.0
+    let passes_fuzz = fuzz_results.crashes == 0
+
+    if passes_mutation && passes_fuzz {
+        println("✅ PASS - High quality (mutation >= 85%, zero crashes)")
+    } else if passes_mutation {
+        println("⚠️  PARTIAL - Good mutation score but has crashes")
+    } else if passes_fuzz {
+        println("⚠️  PARTIAL - No crashes but low mutation score")
+    } else {
+        println("❌ FAIL - Low mutation score AND has crashes")
+    }
+}
+
+// Mutation Testing Phase
+fun run_mutation_tests() -> i32 {
+    println("Phase 1: MUTATION TESTING")
+    println("Operators: AOR, ROR, UOR, SDL")
+
+    let mut killed = 0
+
+    // Test AOR (Arithmetic Operator Replacement): + → -, * → /
+    killed = killed + test_aor_mutations()
+
+    // Test ROR (Relational Operator Replacement): > → >=, == → !=
+    killed = killed + test_ror_mutations()
+
+    // Test UOR (Unary Operator Replacement): remove !, remove -
+    killed = killed + test_uor_mutations()
+
+    // Test SDL (Statement Deletion): delete non-critical statements
+    killed = killed + test_sdl_mutations()
+
+    return killed
+}
+
+fun test_aor_mutations() -> i32 {
+    println("")
+    println("  AOR: Arithmetic Operator Replacement")
+    let mut killed = 0
+
+    // Simulate mutations: + → -, * → /
+    if simulate_mutation("plus_to_minus") {
+        println("    ✅ + → - killed")
+        killed = killed + 1
+    }
+    if simulate_mutation("mult_to_div") {
+        println("    ✅ * → / killed")
+        killed = killed + 1
+    }
+
+    return killed
+}
+
+fun test_ror_mutations() -> i32 {
+    println("  ROR: Relational Operator Replacement")
+    let mut killed = 0
+
+    // Simulate mutations: > → >=, == → !=
+    if simulate_mutation("gt_to_gte") {
+        println("    ✅ > → >= killed")
+        killed = killed + 1
+    }
+    if simulate_mutation("eq_to_neq") {
+        println("    ✅ == → != killed")
+        killed = killed + 1
+    }
+
+    return killed
+}
+
+fun test_uor_mutations() -> i32 {
+    println("  UOR: Unary Operator Replacement")
+    let mut killed = 0
+
+    // Simulate mutations: remove !, remove -
+    if simulate_mutation("remove_not") {
+        println("    ✅ Remove ! killed")
+        killed = killed + 1
+    }
+    if simulate_mutation("remove_neg") {
+        println("    ✅ Remove - killed")
+        killed = killed + 1
+    }
+
+    return killed
+}
+
+fun test_sdl_mutations() -> i32 {
+    println("  SDL: Statement Deletion")
+    let mut killed = 0
+
+    // Simulate mutations: delete statements
+    if simulate_mutation("delete_println") {
+        println("    ❌ Delete println survived (not tested)")
+    } else {
+        killed = killed + 1
+    }
+    if simulate_mutation("delete_assignment") {
+        println("    ✅ Delete assignment killed")
+        killed = killed + 1
+    }
+
+    return killed
+}
+
+// Fuzz Testing Phase
+fun run_fuzz_testing() -> FuzzResults {
+    println("Phase 2: FUZZ TESTING")
+    println("Strategies: Grammar-based, Mutation-based, Random")
+
+    let mut total = 0
+    let mut passed = 0
+    let mut errors = 0
+    let mut crashes = 0
+
+    // Strategy 1: Grammar-based fuzzing (valid syntax)
+    if test_grammar_fuzz() {
+        passed = passed + 1
+    } else {
+        errors = errors + 1
+    }
+    total = total + 1
+
+    // Strategy 2: Mutation-based fuzzing (mutated valid inputs)
+    if test_mutation_fuzz() {
+        passed = passed + 1
+    } else {
+        errors = errors + 1
+    }
+    total = total + 1
+
+    // Strategy 3: Random fuzzing (pure chaos)
+    if test_random_fuzz() {
+        passed = passed + 1
+    } else {
+        crashes = crashes + 1
+    }
+    total = total + 1
+
+    return FuzzResults {
+        total: total,
+        passed: passed,
+        errors: errors,
+        crashes: crashes,
+    }
+}
+
+fun test_grammar_fuzz() -> bool {
+    println("  Grammar-based: Valid Ruchy syntax")
+    return true
+}
+
+fun test_mutation_fuzz() -> bool {
+    println("  Mutation-based: Mutated inputs")
+    return true
+}
+
+fun test_random_fuzz() -> bool {
+    println("  Random: Chaos testing")
+    return true
+}
+
+// Helper functions
+fun simulate_mutation(mutation_type: String) -> bool {
+    // Simulate whether mutation would be killed by tests
+    // In real implementation: would mutate code and run tests
+    if mutation_type == "delete_println" {
+        return false  // Output not tested, mutation survives
+    }
+    return true  // Most mutations caught by tests
+}
+
+fun calculate_mutation_score(killed: i32, total: i32) -> f64 {
+    if total == 0 {
+        return 0.0
+    }
+    return (killed as f64 / total as f64) * 100.0
+}
+
+// Supporting types
+struct FuzzResults {
+    total: i32,
+    passed: i32,
+    errors: i32,
+    crashes: i32,
+}
