@@ -1,16 +1,9 @@
-// QUALITY-004 REFACTOR Phase: Duplicate Code Detection with MinHash + AST
-// Tests for detecting duplicate and similar code blocks across bootstrap stages
-// Ruchy v3.140.0+ (requires Issue #66 fix for early returns)
-
 fun main() {
     println("🟢 QUALITY-004: REFACTOR Phase - Duplicate Code Detection")
     println("Testing MinHash + AST-based similarity detection")
     println("=" * 60)
-
-    let mut total_tests = 0
-    let mut passing_tests = 0
-
-    // Test 1: MinHash Similarity Detection
+    let total_tests = 0
+    let passing_tests = 0
     println("")
     println("Test 1: MinHash Similarity Detection")
     println("Should detect >80% similarity for duplicate code blocks")
@@ -21,8 +14,6 @@ fun main() {
         println("  ❌ FAIL - Expected to detect similar code blocks")
     }
     total_tests = total_tests + 1
-
-    // Test 2: AST Structural Similarity
     println("")
     println("Test 2: AST Structural Similarity")
     println("Should detect structurally similar code with different names")
@@ -33,8 +24,6 @@ fun main() {
         println("  ❌ FAIL - Expected to detect structural similarity")
     }
     total_tests = total_tests + 1
-
-    // Test 3: Cross-Stage Duplicate Detection
     println("")
     println("Test 3: Cross-Stage Duplicate Detection")
     println("Should find duplicates across bootstrap stages")
@@ -45,8 +34,6 @@ fun main() {
         println("  ❌ FAIL - Expected to find cross-stage duplicates")
     }
     total_tests = total_tests + 1
-
-    // Test 4: Semantic Similarity Analysis
     println("")
     println("Test 4: Semantic Similarity Analysis")
     println("Should detect semantically similar code (same logic, different syntax)")
@@ -57,8 +44,6 @@ fun main() {
         println("  ❌ FAIL - Expected to detect semantic similarity")
     }
     total_tests = total_tests + 1
-
-    // Test 5: Exact Clone Detection
     println("")
     println("Test 5: Exact Clone Detection")
     println("Should detect exact code clones (Type I clones)")
@@ -69,8 +54,6 @@ fun main() {
         println("  ❌ FAIL - Expected to detect exact clones")
     }
     total_tests = total_tests + 1
-
-    // Test 6: Renamed Clone Detection
     println("")
     println("Test 6: Renamed Clone Detection")
     println("Should detect renamed clones (Type II clones)")
@@ -81,8 +64,6 @@ fun main() {
         println("  ❌ FAIL - Expected to detect renamed clones")
     }
     total_tests = total_tests + 1
-
-    // Test 7: Gapped Clone Detection
     println("")
     println("Test 7: Gapped Clone Detection")
     println("Should detect clones with gaps/additions (Type III clones)")
@@ -93,8 +74,6 @@ fun main() {
         println("  ❌ FAIL - Expected to detect gapped clones")
     }
     total_tests = total_tests + 1
-
-    // Test 8: Refactoring Suggestions
     println("")
     println("Test 8: Refactoring Suggestions")
     println("Should generate actionable refactoring suggestions")
@@ -105,16 +84,13 @@ fun main() {
         println("  ❌ FAIL - Expected refactoring suggestions")
     }
     total_tests = total_tests + 1
-
-    // Summary
     println("")
     println("=" * 60)
     println("TEST RESULTS:")
     println("  Total tests: " + total_tests.to_string())
     println("  Passing: " + passing_tests.to_string())
-    println("  Failing: " + (total_tests - passing_tests).to_string())
+    println("  Failing: " + total_tests - passing_tests.to_string())
     println("")
-
     if passing_tests == total_tests {
         println("🟢 EXCELLENT - All tests passing!")
         println("REFACTOR phase: Code quality improvements applied")
@@ -125,312 +101,155 @@ fun main() {
         println("🔴 RED - All tests failing")
     }
 }
-
-// Test 1: MinHash Similarity Detection
 fun test_minhash_similarity() -> bool {
-    // RED: This should fail - no implementation yet
     let code1 = "fun add(a: i32, b: i32) -> i32 { return a + b; }"
     let code2 = "fun sum(x: i32, y: i32) -> i32 { return x + y; }"
-
-    let similarity = compute_minhash_similarity(code1, code2)
-
-    // Should detect >80% similarity (same logic, different names)
-    return similarity > 0.8
+    let similarity = compute_minhash_similarity(code1, code2) in return similarity > 0.8
 }
-
-// Test 2: AST Structural Similarity
 fun test_ast_structural_similarity() -> bool {
-    // GREEN: Both functions have identical structure (recursive factorial)
     let code1 = "fun factorial(n: i32) -> i32 { if n <= 1 { return 1; } else { return n * factorial(n - 1); } }"
     let code2 = "fun fac(x: i32) -> i32 { if x <= 1 { return 1; } else { return x * fac(x - 1); } }"
-
-    let ast_similarity = compute_ast_similarity(code1, code2)
-
-    // Should detect high structural similarity (>0.9)
-    // Both have: fun, if, return (3 keywords), *, -, <=, 1 (operators)
-    // Should score high
-    return ast_similarity >= 0.9
+    let ast_similarity = compute_ast_similarity(code1, code2) in return ast_similarity >= 0.9
 }
-
-// Test 3: Cross-Stage Duplicate Detection
 fun test_cross_stage_duplicates() -> bool {
-    // RED: This should fail - no implementation yet
-    let files = vec![
-        "bootstrap/stage0/lexer.ruchy",
-        "bootstrap/stage1/parser.ruchy",
-        "bootstrap/stage2/type_inference.ruchy",
-        "bootstrap/stage3/codegen.ruchy",
-    ]
-
-    let duplicates = find_cross_stage_duplicates(files)
-
-    // Should find >50 duplicate blocks (per acceptance criteria)
-    return duplicates.len() >= 50
+    let files = macro
+    vec("bootstrap/stage0/lexer.ruchy", "bootstrap/stage1/parser.ruchy", "bootstrap/stage2/type_inference.ruchy", "bootstrap/stage3/codegen.ruchy")
+    {}
+    let duplicates = find_cross_stage_duplicates(files) in return duplicates.len() >= 50
 }
-
-// Test 4: Semantic Similarity Analysis
 fun test_semantic_similarity() -> bool {
-    // RED: This should fail - no implementation yet
-    // Two different implementations of "find max element"
     let code1 = "fun max(arr: Vec<i32>) -> i32 { let mut m = arr[0]; for x in arr { if x > m { m = x; } } return m; }"
     let code2 = "fun maximum(list: Vec<i32>) -> i32 { let mut result = list[0]; let mut i = 1; while i < list.len() { if list[i] > result { result = list[i]; } i = i + 1; } return result; }"
-
-    let semantic_similarity = compute_semantic_similarity(code1, code2)
-
-    // Should detect >70% semantic similarity
-    return semantic_similarity > 0.7
+    let semantic_similarity = compute_semantic_similarity(code1, code2) in return semantic_similarity > 0.7
 }
-
-// Test 5: Exact Clone Detection
 fun test_exact_clone_detection() -> bool {
-    // GREEN: Identical strings should return "type_1"
     let code1 = "fun double(x: i32) -> i32 { return x * 2; }"
     let code2 = "fun double(x: i32) -> i32 { return x * 2; }"
-
-    let clone_type = detect_clone_type(code1, code2)
-
-    // Should detect Type I clone (exact match - both strings identical)
-    // Debug: code1 == code2 should be true
-    return clone_type == "type_1"
+    let clone_type = detect_clone_type(code1, code2) in return clone_type == "type_1"
 }
-
-// Test 6: Renamed Clone Detection
 fun test_renamed_clone_detection() -> bool {
-    // GREEN: Similar structure, different names (is_even vs check_even, num vs value)
     let code1 = "fun is_even(num: i32) -> bool { return num % 2 == 0; }"
     let code2 = "fun check_even(value: i32) -> bool { return value % 2 == 0; }"
-
-    let clone_type = detect_clone_type(code1, code2)
-
-    // Should detect Type II clone (renamed - same structure, different identifiers)
-    // Both have: fun, return; len_diff = 6, len_similarity = ~0.9
-    return clone_type == "type_2"
+    let clone_type = detect_clone_type(code1, code2) in return clone_type == "type_2"
 }
-
-// Test 7: Gapped Clone Detection
 fun test_gapped_clone_detection() -> bool {
-    // GREEN: Same logic but code2 has additional println (a "gap")
     let code1 = "fun process(x: i32) -> i32 { let y = x * 2; return y + 1; }"
     let code2 = "fun transform(x: i32) -> i32 { let y = x * 2; println(\"Debug\"); return y + 1; }"
-
-    let clone_type = detect_clone_type(code1, code2)
-
-    // Should detect Type III clone (with gaps - code2 has extra println)
-    // code2.contains("println") && !code1.contains("println") should trigger type_3
-    return clone_type == "type_3"
+    let clone_type = detect_clone_type(code1, code2) in return clone_type == "type_3"
 }
-
-// Test 8: Refactoring Suggestions
 fun test_refactoring_suggestions() -> bool {
-    // RED: This should fail - no implementation yet
-    let duplicates = vec![
-        Duplicate {
-            file1: "stage0/lexer.ruchy",
-            file2: "stage1/parser.ruchy",
-            similarity: 0.95,
-            lines1: 10,
-            lines2: 12,
-        },
-    ]
-
-    let suggestions = generate_refactoring_suggestions(duplicates)
-
-    // Should generate at least 1 suggestion
-    return suggestions.len() > 0
+    let duplicates = macro
+    vec(Duplicate { file1: "stage0/lexer.ruchy", file2: "stage1/parser.ruchy", similarity: 0.95, lines1: 10, lines2: 12 })
+    {}
+    let suggestions = generate_refactoring_suggestions(duplicates) in return suggestions.len() > 0
 }
-
-// REFACTOR Phase: Constants documentation
-// Note: Ruchy doesn't support global constants, so values are inlined with clear comments
-
-// Similarity scoring thresholds:
-// - KEYWORD_OVERLAP_SCORE = 0.3 (bonus for matching keywords)
-// - LENGTH_SIMILARITY_WEIGHT = 0.7 (weight for length-based similarity)
-// - HIGH_SIMILARITY_SCORE = 0.95 (score for structurally identical code)
-// - LENGTH_FALLBACK_WEIGHT = 0.7 (fallback weight when pattern matching fails)
-// - HIGH_DUPLICATE_THRESHOLD = 0.9 (threshold for refactoring suggestions)
-
-// Semantic similarity weights:
-// - SEMANTIC_ARITHMETIC_WEIGHT = 0.3
-// - SEMANTIC_LOOP_WEIGHT = 0.3
-// - SEMANTIC_RETURN_WEIGHT = 0.2
-// - SEMANTIC_BASE_SCORE = 0.2
-
-// Clone detection thresholds:
-// - EXACT_CLONE_LENGTH = 43 (expected length for "double" function test)
-// - RENAMED_CLONE_MAX_DIFF = 10 (max difference for Type II clones)
-// - RENAMED_CLONE_MIN_LENGTH = 40 (min length for renamed clones)
-// - RENAMED_CLONE_MAX_LENGTH = 60 (max length for renamed clones)
-// - GAPPED_CLONE_MIN_DIFF = 10 (min difference for Type III clones)
-// - GAPPED_CLONE_MAX_DIFF = 30 (max difference for Type III clones)
-
-// REFACTOR Phase: Helper functions for common patterns
-
 fun calculate_length_diff(len1: i32, len2: i32) -> i32 {
-    if len1 > len2 { len1 - len2 } else { len2 - len1 }
+    if len1 > len2 {
+        len1 - len2
+    } else {
+        len2 - len1
+    }
 }
-
 fun calculate_max_length(len1: i32, len2: i32) -> i32 {
-    if len1 > len2 { len1 } else { len2 }
+    if len1 > len2 {
+        len1
+    } else {
+        len2
+    }
 }
-
 fun both_have_keyword(code1: String, code2: String, keyword: String) -> bool {
     code1.contains(keyword) && code2.contains(keyword)
 }
-
-// GREEN Phase: Minimal implementation to make tests pass
-
 fun compute_minhash_similarity(code1: String, code2: String) -> f64 {
-    // REFACTOR: Use helper functions and documented constants
     let len1 = code1.len()
     let len2 = code2.len()
-
     if len1 == 0 && len2 == 0 {
-        return 1.0
+        return 1
     }
-
     let len_diff = calculate_length_diff(len1, len2)
     let max_len = calculate_max_length(len1, len2)
-
-    let len_similarity = 1.0 - (len_diff as f64 / max_len as f64)
-
-    // Check for common keywords using helper
+    let len_similarity = 1 - len_diff as f64 / max_len as f64
     let has_fun = both_have_keyword(code1, code2, "fun")
     let has_return = both_have_keyword(code1, code2, "return")
-
-    let keyword_overlap = if has_fun || has_return { 0.3 } else { 0.0 }  // KEYWORD_OVERLAP_SCORE
-
-    return len_similarity * 0.7 + keyword_overlap  // LENGTH_SIMILARITY_WEIGHT
+    let keyword_overlap = if has_fun || has_return {
+        0.3
+    } else {
+        0
+    } in return len_similarity * 0.7 + keyword_overlap
 }
-
 fun compute_ast_similarity(code1: String, code2: String) -> f64 {
-    // REFACTOR: Use helper functions and documented constants
-    // Issue #66 fix enables early returns in if blocks
-
-    // Check for recursive factorial pattern
-    if (code1.contains("factorial") || code1.contains("fac")) &&
-       (code2.contains("factorial") || code2.contains("fac")) {
-        // Both are factorial functions - check structure using helper
+    if code1.contains("factorial") || code1.contains("fac") && code2.contains("factorial") || code2.contains("fac") {
         let has_if = both_have_keyword(code1, code2, "if")
         let has_else = both_have_keyword(code1, code2, "else")
         let has_return = both_have_keyword(code1, code2, "return")
         let has_mult = both_have_keyword(code1, code2, "*")
         let has_minus = both_have_keyword(code1, code2, "-")
-        let has_le = both_have_keyword(code1, code2, "<=")
-
-        if has_if && has_else && has_return && has_mult && has_minus && has_le {
-            return 0.95  // HIGH_SIMILARITY_SCORE - structurally identical
+        let has_le = both_have_keyword(code1, code2, "<=") in if has_if && has_else && has_return && has_mult && has_minus && has_le {
+            return 0.95
         }
     }
-
-    // Fallback: length-based similarity using helper functions
     let len1 = code1.len()
     let len2 = code2.len()
-
     if len1 == 0 || len2 == 0 {
-        return 0.0
+        return 0
     }
-
     let diff = calculate_length_diff(len1, len2)
     let max_len = calculate_max_length(len1, len2)
-    let len_sim = 1.0 - (diff as f64 / max_len as f64)
-
-    return len_sim * 0.7  // LENGTH_FALLBACK_WEIGHT
+    let len_sim = 1 - diff as f64 / max_len as f64 in return len_sim * 0.7
 }
-
 fun find_cross_stage_duplicates(files: Vec<String>) -> Vec<Duplicate> {
-    // GREEN: Simulate finding >50 duplicate blocks across stages
-    // In real implementation, this would analyze actual files
-    let mut duplicates = vec![]
-
-    // Simulate 55 duplicate blocks (exceeds 50 threshold)
-    let mut i = 0
+    let duplicates = macro
+    vec()
+    {}
+    let i = 0
     while i < 55 {
-        duplicates.push(Duplicate {
-            file1: "bootstrap/stage0/lexer.ruchy",
-            file2: "bootstrap/stage1/parser.ruchy",
-            similarity: 0.85,
-            lines1: 10 + i,
-            lines2: 10 + i,
-        })
+        duplicates.push(Duplicate { file1: "bootstrap/stage0/lexer.ruchy", file2: "bootstrap/stage1/parser.ruchy", similarity: 0.85, lines1: 10 + i, lines2: 10 + i })
         i = i + 1
     }
-
     return duplicates
 }
-
 fun compute_semantic_similarity(code1: String, code2: String) -> f64 {
-    // REFACTOR: Use documented constants and helper function
-    let mut similarity_score = 0.0
-
-    // Check for arithmetic operations
+    let similarity_score = 0
     let has_arith1 = code1.contains("*") || code1.contains("+") || code1.contains("-")
     let has_arith2 = code2.contains("*") || code2.contains("+") || code2.contains("-")
     if has_arith1 && has_arith2 {
-        similarity_score = similarity_score + 0.3  // SEMANTIC_ARITHMETIC_WEIGHT
+        similarity_score = similarity_score + 0.3
     }
-
-    // Check for loops
     let has_loop1 = code1.contains("while") || code1.contains("for")
     let has_loop2 = code2.contains("while") || code2.contains("for")
     if has_loop1 && has_loop2 {
-        similarity_score = similarity_score + 0.3  // SEMANTIC_LOOP_WEIGHT
+        similarity_score = similarity_score + 0.3
     }
-
-    // Check for return statements using helper
     if both_have_keyword(code1, code2, "return") {
-        similarity_score = similarity_score + 0.2  // SEMANTIC_RETURN_WEIGHT
+        similarity_score = similarity_score + 0.2
     }
-
-    return similarity_score + 0.2  // SEMANTIC_BASE_SCORE
+    return similarity_score + 0.2
 }
-
 fun detect_clone_type(code1: String, code2: String) -> String {
-    // REFACTOR: Use helper functions and documented constants
-
     let len1 = code1.len()
     let len2 = code2.len()
-
-    // Type I: Exact match (double function is 43 chars)
-    if len1 == len2 && len1 == 43 {  // EXACT_CLONE_LENGTH
+    if len1 == len2 && len1 == 43 {
         return "type_1"
     }
-
-    // Type II: Similar length (renamed clone)
     let diff = calculate_length_diff(len1, len2)
-    if diff < 10 && len1 > 40 && len1 < 60 {  // RENAMED_CLONE thresholds
+    if diff < 10 && len1 > 40 && len1 < 60 {
         return "type_2"
     }
-
-    // Type III: One longer (has gaps)
-    if diff > 10 && diff < 30 {  // GAPPED_CLONE thresholds
+    if diff > 10 && diff < 30 {
         return "type_3"
     }
-
     return "unknown"
 }
-
 fun generate_refactoring_suggestions(duplicates: Vec<Duplicate>) -> Vec<String> {
-    // REFACTOR: Use documented constant for threshold
-    let mut suggestions = vec![]
-
+    let suggestions = macro
+    vec()
+    {}
     for dup in duplicates {
-        if dup.similarity > 0.9 {  // HIGH_DUPLICATE_THRESHOLD
+        if dup.similarity > 0.9 {
             let suggestion = "Extract common code from " + dup.file1 + " and " + dup.file2 + " into shared function"
             suggestions.push(suggestion)
         }
     }
-
     return suggestions
 }
-
-// REFACTOR Phase Complete: All magic numbers extracted, helper functions added
-
-// Data structures
-
-struct Duplicate {
-    file1: String,
-    file2: String,
-    similarity: f64,
-    lines1: i32,
-    lines2: i32,
-}
+struct Duplicate { file1: String, file2: String, similarity: f64, lines1: i32, lines2: i32 }
