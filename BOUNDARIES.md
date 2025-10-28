@@ -18,16 +18,16 @@ All boundaries discovered through:
 
 ---
 
-## 🚨 CRITICAL: Return Statements in If Blocks Do Not Return (v3.139.0)
+## ✅ RESOLVED: Return Statements in If Blocks Do Not Return (v3.139.0 → v3.140.0)
 
-### ❌ `return` Inside `if` Blocks Does Not Terminate Function
+### ✅ `return` Inside `if` Blocks Now Works Correctly
 
 **Discovered**: 2025-10-28 during QUALITY-004 (Duplicate Code Detection) GREEN phase
-**Severity**: **CRITICAL** - Breaks fundamental control flow
-**Status**: 🔴 **OPEN** - No workaround available
-**GitHub Issue**: https://github.com/paiml/ruchy/issues/66
+**Severity**: **CRITICAL** - Broke fundamental control flow
+**Status**: ✅ **RESOLVED** in Ruchy v3.140.0 (2025-10-28)
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/66 (CLOSED)
 **Ticket**: QUALITY-004
-**Blocks**: QUALITY-004 (Duplicate Code Detection) - GREEN phase incomplete
+**Resolution**: Fixed by Ruchy maintainers, verified working
 
 #### Problem Description
 `return` statements inside `if` blocks do not terminate function execution. The function continues executing code after the if block, ignoring the return statement. This breaks guard clauses, early returns, and all conditional control flow patterns.
