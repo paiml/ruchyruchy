@@ -18,6 +18,75 @@ All boundaries discovered through:
 
 ---
 
+## 🚨 CRITICAL: ruchy lint Reports False Positives for Forward References (v3.140.0)
+
+### ❌ `ruchy lint` Reports "undefined variable" for Functions Defined Later
+
+**Discovered**: 2025-10-28 during QUALITY-004 (Duplicate Code Detection) TOOL phase
+**Severity**: **CRITICAL** - Blocks quality gates and EXTREME TDD workflow
+**Status**: 🔴 **OPEN** - No workaround available
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/69
+**Ticket**: QUALITY-004
+**Blocks**: QUALITY-004 (Duplicate Code Detection) - TOOL phase incomplete (3/8 phases)
+
+#### Problem Description
+`ruchy lint` reports "undefined variable" errors for functions that are called before they are defined in the file (forward references). The code passes `ruchy check` (syntax valid) and `ruchy run` (executes correctly), proving the linter's analysis is incorrect.
+
+#### Minimal Reproduction
+```ruchy
+fun main() {
+    let result = helper_function()  // lint error: "undefined variable: helper_function"
+    println("Result: " + result.to_string())
+}
+
+fun helper_function() -> i32 {
+    return 42
+}
+```
+
+**Expected**: `ruchy lint` should PASS (function is defined on line 6)
+**Actual**:
+```
+⚠ Found 1 issues in lint_bug_minimal.ruchy
+  lint_bug_minimal.ruchy:3: Error - undefined variable: helper_function
+Summary: 1 Error, 0 Warnings
+```
+
+Yet `ruchy check` passes and `ruchy run` outputs "Result: 42" correctly!
+
+#### Impact
+**CRITICAL - Blocks all development using:**
+- ✅ Forward function references (standard Ruchy pattern)
+- ✅ Quality gates requiring `ruchy lint` to pass
+- ✅ EXTREME TDD workflows with lint validation
+- ✅ Test-first development (tests often call functions defined later)
+
+**Blocks Tickets:**
+- QUALITY-004: Duplicate Code Detection (TOOL phase - 24 false positive errors)
+
+#### Root Cause
+The linter performs **single-pass analysis** and doesn't build a symbol table before analyzing references. It cannot resolve forward references to functions defined later in the file.
+
+`ruchy check` correctly uses **two-pass analysis** (builds symbol table first), which is why the code is valid.
+
+#### Workaround
+**None effective**. Cannot reorder functions because:
+1. Some functions have mutual dependencies (A calls B, B calls A)
+2. Logical code organization requires tests/main at top, helpers at bottom
+3. Ruchy standard pattern is `main()` first, helpers after
+
+#### Files
+- **Minimal reproduction**: `validation/quality/lint_bug_minimal.ruchy` (17 LOC)
+- **Real-world example**: `validation/quality/duplicate_code_test.ruchy` (436 LOC, 24 false positive errors)
+
+#### Resolution Required
+This bug must be fixed for `ruchy lint` to be usable in quality gates. Until fixed:
+- Cannot use `ruchy lint` in TOOL phase validation
+- Cannot enforce lint quality gates
+- Must skip TOOL phase lint validation (undermines EXTREME TDD)
+
+---
+
 ## ✅ RESOLVED: Return Statements in If Blocks Do Not Return (v3.139.0 → v3.140.0)
 
 ### ✅ `return` Inside `if` Blocks Now Works Correctly
