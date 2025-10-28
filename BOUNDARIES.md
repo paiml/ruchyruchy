@@ -18,15 +18,64 @@ All boundaries discovered through:
 
 ---
 
-## 🔴 CRITICAL: ruchy fmt Breaks vec! Macro Calls (BLOCKING)
+## 🔴 CRITICAL: Ruchy v3.144.0 - Multiple Breaking Bugs (BLOCKING)
 
-### 🚨 `ruchy fmt` Transforms Macro Calls into Macro Definitions [BLOCKING]
+### 🚨 v3.144.0 REGRESSION: vec! Macro Completely Broken [CRITICAL]
+
+**Discovered**: 2025-10-28 while testing v3.144.0 fix for Issue #72
+**Severity**: **CRITICAL** - Core language feature broken
+**Status**: 🔴 **BLOCKING** - Regression in v3.144.0
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/74 (OPEN)
+**Workaround**: Downgrade to v3.142.0
+**Current Version**: v3.142.0 (stable, working)
+
+#### Problem Description
+The `vec!` macro is completely broken in v3.144.0. Any code using `vec!` silently fails or hangs after the macro call - no errors, just silent failure.
+
+#### Minimal Reproduction
+```ruchy
+fun main() {
+    println("Before vec!")
+    let items = vec!["a", "b", "c"]
+    println("After vec!")  // NEVER executes in v3.144.0
+}
+
+// v3.142.0 output: Before vec! \n After vec!
+// v3.144.0 output: Before vec! \n <nothing>
+```
+
+#### Impact
+- **ALL code using vec! broken** in v3.144.0
+- **QUALITY-005 completely broken** (uses vec! extensively)
+- **Cannot upgrade** to v3.144.0
+- **Staying on v3.142.0** until fixed
+
+#### Verification Results
+```bash
+# v3.144.0 (BROKEN):
+$ ruchy run vec_macro_broken.ruchy
+Before vec!
+<exits silently>
+
+# v3.142.0 (WORKS):
+$ ruchy run vec_macro_broken.ruchy
+Before vec!
+After vec!
+Count: 3
+```
+
+#### Decision
+**Downgraded to v3.142.0** - will stay on this version until both Issue #72 and Issue #74 are fixed.
+
+---
+
+### 🚨 v3.142.0: `ruchy fmt` Transforms Macro Calls into Macro Definitions [BLOCKING]
 
 **Discovered**: 2025-10-28 during QUALITY-005 (Code Churn Analysis) TOOL phase
 **Severity**: **CRITICAL** - Formatter breaks working code
-**Status**: 🔴 **BLOCKING** - Awaiting fix from Ruchy team
+**Status**: 🔴 **BLOCKING** - Issue present in v3.142.0, attempted fix in v3.144.0 introduced Issue #74
 **GitHub Issue**: https://github.com/paiml/ruchy/issues/72 (OPEN)
-**Ticket**: QUALITY-005 - BLOCKED at TOOL phase (3/8 phases complete)
+**Ticket**: QUALITY-005 - Partial TOOL phase (3/4 tools passing, fmt skipped)
 
 #### Problem Description
 `ruchy fmt` incorrectly transforms `vec!` macro CALLS into macro DEFINITIONS, completely changing the code's semantics. The formatted code passes `ruchy check` but fails silently at runtime (produces no output).
