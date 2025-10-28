@@ -2,7 +2,7 @@
 
 **Project**: RuchyRuchy Bootstrap Compiler
 **Approach**: Pure Ruchy Dogfooding (Phase 2 Validation)
-**Last Updated**: 2025-10-26
+**Last Updated**: 2025-10-28
 
 This document tracks the exact boundaries where Ruchy works and where it has limitations, discovered through comprehensive testing and dogfooding.
 
@@ -15,6 +15,86 @@ All boundaries discovered through:
 - ✅ Comprehensive test suites written in Ruchy
 - ✅ Real-world bootstrap compiler implementation
 - ✅ Property-based and fuzz testing
+
+---
+
+## 🚨 CRITICAL: Return Statements in If Blocks Do Not Return (v3.139.0)
+
+### ❌ `return` Inside `if` Blocks Does Not Terminate Function
+
+**Discovered**: 2025-10-28 during QUALITY-004 (Duplicate Code Detection) GREEN phase
+**Severity**: **CRITICAL** - Breaks fundamental control flow
+**Status**: 🔴 **OPEN** - No workaround available
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/66
+**Ticket**: QUALITY-004
+**Blocks**: QUALITY-004 (Duplicate Code Detection) - GREEN phase incomplete
+
+#### Problem Description
+`return` statements inside `if` blocks do not terminate function execution. The function continues executing code after the if block, ignoring the return statement. This breaks guard clauses, early returns, and all conditional control flow patterns.
+
+#### Minimal Reproduction
+```ruchy
+fun test_boolean_if() -> f64 {
+    let check1 = true
+    let check2 = true
+
+    if check1 && check2 {
+        println("Inside if block - about to return 0.95")
+        return 0.95  // ❌ Does not return!
+    }
+
+    println("Outside if block - returning 0.5")
+    return 0.5
+}
+
+fun main() {
+    let result = test_boolean_if()
+    println("Result: " + result.to_string())
+}
+```
+
+**Expected Output**:
+```
+Inside if block - about to return 0.95
+Result: 0.95
+```
+
+**Actual Output**:
+```
+Inside if block - about to return 0.95
+Outside if block - returning 0.5  ← ❌ Should NOT execute!
+Result: 0.5                        ← ❌ Wrong value!
+```
+
+#### Impact
+**CRITICAL - Blocks all development using:**
+- ✅ Guard clauses
+- ✅ Early returns based on conditions
+- ✅ Pattern matching functions
+- ✅ Error handling with early exits
+- ✅ Classification and branching logic
+
+**Blocks Tickets:**
+- QUALITY-004: Duplicate Code Detection (GREEN phase incomplete - 4/8 tests failing)
+
+#### Workaround
+**None effective**. Cannot use early returns in if blocks.
+
+Attempted workarounds:
+1. ❌ Nested if statements (same bug)
+2. ❌ Store result in variable (changes logic, not equivalent)
+3. ❌ Restructure with else blocks (not always possible)
+
+#### Files
+- **Minimal reproduction**: `validation/quality/bug_minimal_reproduction.ruchy` (39 LOC)
+- **Comprehensive reproduction**: `validation/quality/bug_reproduction_string_contains.ruchy` (150 LOC)
+- **Bug report**: `RUCHY_BUG_REPORT_RETURN_IN_IF.md`
+
+#### Resolution Required
+This bug must be fixed for Ruchy to support basic programming patterns. Until fixed:
+- Cannot use guard clauses
+- Cannot implement classification functions naturally
+- Must use awkward workarounds that change logic
 
 ---
 
