@@ -1,6 +1,11 @@
-// QUALITY-003 RED Phase: ML-based Defect Prediction
+// QUALITY-003 REFACTOR Phase: ML-based Defect Prediction
 // Tests machine learning model for predicting bug probability
 // Ruchy v3.139.0
+//
+// Refactorings applied:
+// - Improved comments and documentation
+// - Better variable names for clarity
+// - Extracted magic numbers to named constants (inline comments)
 
 fun main() {
     println("🤖 QUALITY-003: ML-based Defect Prediction")
@@ -196,53 +201,80 @@ fun get_trained_model() -> DefectModel {
 }
 
 fun predict_bug_probability(model: DefectModel, file: FileInfo) -> f64 {
-    // GREEN phase: Minimal implementation using simple heuristic
+    // REFACTOR: Calculate bug probability using heuristic model
+    // Formula: average of normalized complexity, churn, and inverse experience
     // Higher complexity + higher churn + less experience = higher bug risk
-    let complexity_score = file.complexity as f64 / 100.0
-    let churn_score = file.churn as f64 / 200.0
-    let experience_score = 1.0 - (file.author_experience as f64 / 10.0)
 
-    let risk = (complexity_score + churn_score + experience_score) / 3.0
+    // Normalize features to [0.0, 1.0] range
+    let complexity_normalizer = 100.0  // Max expected complexity
+    let churn_normalizer = 200.0       // Max expected churn
+    let experience_normalizer = 10.0   // Max years experience
 
-    // Clamp to [0.0, 1.0]
-    if risk < 0.0 {
+    let normalized_complexity = file.complexity as f64 / complexity_normalizer
+    let normalized_churn = file.churn as f64 / churn_normalizer
+    let inverse_experience = 1.0 - (file.author_experience as f64 / experience_normalizer)
+
+    // Calculate average risk score
+    let risk_score = (normalized_complexity + normalized_churn + inverse_experience) / 3.0
+
+    // Clamp to valid probability range [0.0, 1.0]
+    if risk_score < 0.0 {
         return 0.0
-    } else if risk > 1.0 {
+    } else if risk_score > 1.0 {
         return 1.0
     } else {
-        return risk
+        return risk_score
     }
 }
 
 fun predict_bug_cascade(model: DefectModel, bug: BugReport) -> CascadeImpact {
-    // GREEN phase: Minimal implementation - simple cascade rules
-    // Lexer bugs heavily impact parser (stage1), less so on later stages
-    // Parser bugs impact type checker (stage2), etc.
+    // REFACTOR: Predict how bug cascades through bootstrap stages
+    // Rule-based model: earlier-stage bugs impact later stages more heavily
+    // Tokenization bugs ripple through all stages
+    // Parsing bugs heavily impact type checking
 
-    let base_impact = if bug.severity == "high" { 0.9 } else { 0.5 }
+    // Severity-based impact multipliers
+    let high_severity_multiplier = 0.9
+    let medium_severity_multiplier = 0.5
+
+    let base_impact = if bug.severity == "high" {
+        high_severity_multiplier
+    } else {
+        medium_severity_multiplier
+    }
+
+    // Component-specific cascade patterns
+    // Tokenization bugs: high stage1, medium stage2, low stage3
+    // Parsing bugs: medium stage1, high stage2, medium stage3
+    let tokenization_to_stage1 = 1.0
+    let tokenization_to_stage2 = 0.6
+    let tokenization_to_stage3 = 0.3
+    let parsing_to_stage1 = 0.5
+    let parsing_to_stage2 = 0.8
+    let parsing_to_stage3 = 0.5
 
     let stage1_impact = if bug.component == "tokenization" {
-        base_impact  // Lexer bugs heavily impact parser
+        base_impact * tokenization_to_stage1
     } else if bug.component == "parsing" {
-        base_impact * 0.5  // Parser bugs have moderate impact on itself
+        base_impact * parsing_to_stage1
     } else {
-        base_impact * 0.3
+        base_impact * 0.3  // Default fallback
     }
 
     let stage2_impact = if bug.component == "tokenization" {
-        base_impact * 0.6  // Lexer bugs moderately impact type checker
+        base_impact * tokenization_to_stage2
     } else if bug.component == "parsing" {
-        base_impact * 0.8  // Parser bugs heavily impact type checker
+        base_impact * parsing_to_stage2
     } else {
-        base_impact * 0.4
+        base_impact * 0.4  // Default fallback
     }
 
     let stage3_impact = if bug.component == "tokenization" {
-        base_impact * 0.3  // Lexer bugs have lower impact on codegen
+        base_impact * tokenization_to_stage3
     } else if bug.component == "parsing" {
-        base_impact * 0.5  // Parser bugs moderately impact codegen
+        base_impact * parsing_to_stage3
     } else {
-        base_impact * 0.6
+        base_impact * 0.6  // Default fallback
     }
 
     return CascadeImpact {
