@@ -158,65 +158,59 @@ fun test_cyclic_change_detection() -> bool {
            cycles[0].stage_count == 3
 }
 
-// GREEN phase: Minimal implementation
+// REFACTOR phase: Cleaned up implementation
 fun calculate_churn_frequency(commits: Vec<Commit>) -> Vec<ChurnMetric> {
     // Count changes per file+function combination
-    // First collect unique file+function pairs
-    let mut unique_pairs = vec![]
+    // Strategy: Build unique file::function keys, then count occurrences
+    let mut unique_keys = vec![]
 
+    // Collect unique file+function pairs
     let mut i = 0
     while i < commits.len() {
-        let commit = commits[i]
-        let key = commit.file + "::" + commit.function
+        let key = commits[i].file + "::" + commits[i].function
 
-        // Check if this pair already exists
-        let mut found = false
+        // Check if key already exists
+        let mut exists = false
         let mut j = 0
-        while j < unique_pairs.len() {
-            if unique_pairs[j] == key {
-                found = true
+        while j < unique_keys.len() {
+            if unique_keys[j] == key {
+                exists = true
             }
             j = j + 1
         }
 
-        if !found {
-            unique_pairs.push(key)
+        if !exists {
+            unique_keys.push(key)
         }
-
         i = i + 1
     }
 
-    // Now count occurrences for each unique pair
+    // Count occurrences for each unique key
     let mut metrics = vec![]
     let mut k = 0
-    while k < unique_pairs.len() {
-        let pair = unique_pairs[k]
+    while k < unique_keys.len() {
+        let target_key = unique_keys[k]
+        let mut occurrence_count = 0
+        let mut result_file = ""
+        let mut result_function = ""
 
-        // Split pair back into file and function
-        // For test data, we know format is "file.ruchy::function"
-        let parts = pair  // Simplified - just use pair to match
-        let mut file = ""
-        let mut function = ""
-
-        // Count occurrences
-        let mut count = 0
+        // Count matches and capture file/function names
         let mut m = 0
         while m < commits.len() {
-            let commit_key = commits[m].file + "::" + commits[m].function
-            if commit_key == pair {
-                count = count + 1
-                file = commits[m].file
-                function = commits[m].function
+            let current_key = commits[m].file + "::" + commits[m].function
+            if current_key == target_key {
+                occurrence_count = occurrence_count + 1
+                result_file = commits[m].file
+                result_function = commits[m].function
             }
             m = m + 1
         }
 
         metrics.push(ChurnMetric {
-            file: file,
-            function: function,
-            count: count,
+            file: result_file,
+            function: result_function,
+            count: occurrence_count,
         })
-
         k = k + 1
     }
 
@@ -294,59 +288,58 @@ fun calculate_churn_failure_correlation(churn: Vec<ChurnMetric>, failures: Vec<F
 }
 
 fun detect_cyclic_changes(changes: Vec<StageChange>) -> Vec<CyclicPattern> {
-    // Count how many different stages each file appears in
-    // First collect unique files
+    // Identify files that change across multiple bootstrap stages
+    // Strategy: Collect unique files, count appearances, filter multi-stage
     let mut unique_files = vec![]
 
+    // Collect unique file names
     let mut i = 0
     while i < changes.len() {
-        let file = changes[i].file
+        let current_file = changes[i].file
 
-        // Check if this file already exists
-        let mut found = false
+        // Check if file already tracked
+        let mut exists = false
         let mut j = 0
         while j < unique_files.len() {
-            if unique_files[j] == file {
-                found = true
+            if unique_files[j] == current_file {
+                exists = true
             }
             j = j + 1
         }
 
-        if !found {
-            unique_files.push(file)
+        if !exists {
+            unique_files.push(current_file)
         }
-
         i = i + 1
     }
 
-    // Now count stage appearances for each unique file
-    let mut cyclic = vec![]
+    // Count stage changes for each unique file
+    let mut cyclic_patterns = vec![]
     let mut k = 0
     while k < unique_files.len() {
-        let file = unique_files[k]
+        let target_file = unique_files[k]
 
-        // Count how many times this file appears
-        let mut count = 0
+        // Count appearances across stages
+        let mut appearance_count = 0
         let mut m = 0
         while m < changes.len() {
-            if changes[m].file == file {
-                count = count + 1
+            if changes[m].file == target_file {
+                appearance_count = appearance_count + 1
             }
             m = m + 1
         }
 
-        // Only include if appears in 2+ stages
-        if count >= 2 {
-            cyclic.push(CyclicPattern {
-                file: file,
-                stage_count: count,
+        // Include only files changed in 2+ stages (cyclic pattern)
+        if appearance_count >= 2 {
+            cyclic_patterns.push(CyclicPattern {
+                file: target_file,
+                stage_count: appearance_count,
             })
         }
-
         k = k + 1
     }
 
-    return cyclic
+    return cyclic_patterns
 }
 
 // Data structures
