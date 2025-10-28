@@ -18,6 +18,84 @@ All boundaries discovered through:
 
 ---
 
+## 🔴 CRITICAL: ruchy fmt Breaks vec! Macro Calls (BLOCKING)
+
+### 🚨 `ruchy fmt` Transforms Macro Calls into Macro Definitions [BLOCKING]
+
+**Discovered**: 2025-10-28 during QUALITY-005 (Code Churn Analysis) TOOL phase
+**Severity**: **CRITICAL** - Formatter breaks working code
+**Status**: 🔴 **BLOCKING** - Awaiting fix from Ruchy team
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/72 (OPEN)
+**Ticket**: QUALITY-005 - BLOCKED at TOOL phase (3/8 phases complete)
+
+#### Problem Description
+`ruchy fmt` incorrectly transforms `vec!` macro CALLS into macro DEFINITIONS, completely changing the code's semantics. The formatted code passes `ruchy check` but fails silently at runtime (produces no output).
+
+#### Minimal Reproduction
+```ruchy
+// Before formatting (WORKS):
+fun main() {
+    let items = vec!["item1", "item2", "item3"]
+    println("Items: " + items.len().to_string())
+}
+// Output: Items: 3
+
+// After `ruchy fmt` (BROKEN):
+fun main() {
+    let items = macro vec("item1", "item2", "item3") { }
+    println("Items: " + items.len().to_string())
+}
+// Output: <nothing> (silently fails)
+```
+
+**Expected**: Formatter should preserve macro call syntax:
+```ruchy
+let items = vec!["item1", "item2", "item3"]
+```
+
+**Actual**: Formatter transforms to macro definition:
+```ruchy
+let items = macro vec("item1", "item2", "item3") { }
+```
+
+#### Impact
+- **BLOCKS** QUALITY-005 TOOL phase (cannot complete 4-tool validation)
+- **BREAKS** working test suite (4/4 passing → hangs after formatting)
+- **PREVENTS** using `ruchy fmt` in quality gates or CI/CD
+- **VIOLATES** formatter "do no harm" principle
+
+#### Verification Results (v3.142.0)
+```bash
+# Original code works:
+$ ruchy run validation/quality/code_churn_test.ruchy
+✅ 4/4 tests passing
+
+# After formatting:
+$ ruchy fmt validation/quality/code_churn_test.ruchy
+$ ruchy run validation/quality/code_churn_test.ruchy
+<hangs indefinitely - no output>
+
+# Passes check but runtime broken:
+$ ruchy check validation/quality/code_churn_test.ruchy
+✓ Syntax is valid
+```
+
+#### Workaround
+**Current**: Skip `ruchy fmt` in TOOL phase validation (non-ideal, incomplete quality gates)
+**Needed**: Fix formatter to preserve macro call syntax
+
+#### Test Files
+- `validation/quality/fmt_bug_before.ruchy` - Original working version
+- `validation/quality/fmt_bug_minimal.ruchy` - Minimal reproduction (after formatting)
+- `validation/quality/code_churn_test.ruchy` - Main test suite (BLOCKED)
+
+#### Next Steps
+1. ✅ Filed comprehensive GitHub Issue #72
+2. ⏳ Awaiting Ruchy team fix (FORMATTER-001)
+3. ⏳ Will verify fix and resume QUALITY-005 TOOL phase
+
+---
+
 ## ✅ RESOLVED: ruchy lint Reports False Positives for Forward References (FIXED in v3.142.0)
 
 ### ✅ `ruchy lint` Reports "undefined variable" for Functions Defined Later [RESOLVED]
