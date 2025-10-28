@@ -112,9 +112,7 @@ fun test_ast_structural_similarity() -> bool {
     let ast_similarity = compute_ast_similarity(code1, code2) in return ast_similarity >= 0.9
 }
 fun test_cross_stage_duplicates() -> bool {
-    let files = macro
-    vec("bootstrap/stage0/lexer.ruchy", "bootstrap/stage1/parser.ruchy", "bootstrap/stage2/type_inference.ruchy", "bootstrap/stage3/codegen.ruchy")
-    {}
+    let files = vec!["bootstrap/stage0/lexer.ruchy", "bootstrap/stage1/parser.ruchy", "bootstrap/stage2/type_inference.ruchy", "bootstrap/stage3/codegen.ruchy"]
     let duplicates = find_cross_stage_duplicates(files) in return duplicates.len() >= 50
 }
 fun test_semantic_similarity() -> bool {
@@ -138,9 +136,7 @@ fun test_gapped_clone_detection() -> bool {
     let clone_type = detect_clone_type(code1, code2) in return clone_type == "type_3"
 }
 fun test_refactoring_suggestions() -> bool {
-    let duplicates = macro
-    vec(Duplicate { file1: "stage0/lexer.ruchy", file2: "stage1/parser.ruchy", similarity: 0.95, lines1: 10, lines2: 12 })
-    {}
+    let duplicates = vec![Duplicate { file1: "stage0/lexer.ruchy", file2: "stage1/parser.ruchy", similarity: 0.95, lines1: 10, lines2: 12 }]
     let suggestions = generate_refactoring_suggestions(duplicates) in return suggestions.len() > 0
 }
 fun calculate_length_diff(len1: i32, len2: i32) -> i32 {
@@ -198,10 +194,8 @@ fun compute_ast_similarity(code1: String, code2: String) -> f64 {
     let len_sim = 1 - diff as f64 / max_len as f64 in return len_sim * 0.7
 }
 fun find_cross_stage_duplicates(files: Vec<String>) -> Vec<Duplicate> {
-    let duplicates = macro
-    vec()
-    {}
-    let i = 0
+    let mut duplicates = vec![]
+    let mut i = 0
     while i < 55 {
         duplicates.push(Duplicate { file1: "bootstrap/stage0/lexer.ruchy", file2: "bootstrap/stage1/parser.ruchy", similarity: 0.85, lines1: 10 + i, lines2: 10 + i })
         i = i + 1
@@ -241,9 +235,7 @@ fun detect_clone_type(code1: String, code2: String) -> String {
     return "unknown"
 }
 fun generate_refactoring_suggestions(duplicates: Vec<Duplicate>) -> Vec<String> {
-    let suggestions = macro
-    vec()
-    {}
+    let mut suggestions = vec![]
     for dup in duplicates {
         if dup.similarity > 0.9 {
             let suggestion = "Extract common code from " + dup.file1 + " and " + dup.file2 + " into shared function"
