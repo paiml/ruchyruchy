@@ -1,0 +1,210 @@
+// QUALITY-005 RED Phase: Code Churn Analysis
+// Tests for tracking code change frequency and identifying hot spots
+// Ruchy v3.142.0
+
+fun main() {
+    println("🔴 QUALITY-005: RED Phase - Code Churn Analysis")
+    println("Testing churn tracking, hotspots, correlation, and cyclic changes")
+    println("=" * 60)
+
+    let mut total_tests = 0
+    let mut passing_tests = 0
+
+    println("")
+    println("Test 1: Churn Frequency Tracking")
+    println("Should track number of changes per file/function")
+    if test_churn_frequency_tracking() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected to track change frequency")
+    }
+    total_tests = total_tests + 1
+
+    println("")
+    println("Test 2: Hotspot Identification")
+    println("Should identify files/functions with highest churn")
+    if test_hotspot_identification() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected to identify hotspots")
+    }
+    total_tests = total_tests + 1
+
+    println("")
+    println("Test 3: Churn-Failure Correlation")
+    println("Should correlate high churn with bootstrap failures")
+    if test_churn_failure_correlation() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected to correlate churn with failures")
+    }
+    total_tests = total_tests + 1
+
+    println("")
+    println("Test 4: Cyclic Change Detection")
+    println("Should detect repeated edit patterns across stages")
+    if test_cyclic_change_detection() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected to detect cyclic changes")
+    }
+    total_tests = total_tests + 1
+
+    println("")
+    println("=" * 60)
+    println("TEST RESULTS:")
+    println("  Total tests: " + total_tests.to_string())
+    println("  Passing: " + passing_tests.to_string())
+    println("  Failing: " + (total_tests - passing_tests).to_string())
+    println("")
+
+    if passing_tests == total_tests {
+        println("🟢 EXCELLENT - All tests passing!")
+        println("GREEN phase: Implementation complete")
+        println("Ready for REFACTOR phase")
+    } else if passing_tests > 0 {
+        println("⚠️  PARTIAL - Some tests passing")
+    } else {
+        println("🔴 RED - All tests failing (expected for RED phase)")
+        println("Ready to implement GREEN phase")
+    }
+}
+
+// Test 1: Track change frequency per file/function
+fun test_churn_frequency_tracking() -> bool {
+    // Given: A simulated commit history
+    let commits = vec![
+        Commit { file: "lexer.ruchy", function: "tokenize", timestamp: 1 },
+        Commit { file: "lexer.ruchy", function: "tokenize", timestamp: 2 },
+        Commit { file: "parser.ruchy", function: "parse", timestamp: 3 },
+        Commit { file: "lexer.ruchy", function: "tokenize", timestamp: 4 },
+    ]
+
+    // When: Calculate churn frequency
+    let churn = calculate_churn_frequency(commits)
+
+    // Then: Should track frequency correctly
+    // lexer.ruchy::tokenize changed 3 times
+    // parser.ruchy::parse changed 1 time
+    let lexer_churn = get_churn_for_function(churn, "lexer.ruchy", "tokenize")
+    let parser_churn = get_churn_for_function(churn, "parser.ruchy", "parse")
+
+    return lexer_churn == 3 && parser_churn == 1
+}
+
+// Test 2: Identify hotspots (most frequently changed)
+fun test_hotspot_identification() -> bool {
+    // Given: Files with varying churn rates
+    let churn_data = vec![
+        ChurnMetric { file: "lexer.ruchy", function: "tokenize", count: 15 },
+        ChurnMetric { file: "parser.ruchy", function: "parse", count: 8 },
+        ChurnMetric { file: "typechecker.ruchy", function: "infer", count: 3 },
+        ChurnMetric { file: "codegen.ruchy", function: "emit", count: 2 },
+    ]
+
+    // When: Identify top hotspots (threshold: > 10 changes)
+    let hotspots = identify_hotspots(churn_data, 10)
+
+    // Then: Should return only high-churn items
+    // Only lexer.ruchy::tokenize (15) exceeds threshold of 10
+    return hotspots.len() == 1 &&
+           hotspots[0].file == "lexer.ruchy" &&
+           hotspots[0].count == 15
+}
+
+// Test 3: Correlate churn with bootstrap failures
+fun test_churn_failure_correlation() -> bool {
+    // Given: Churn data and failure history
+    let churn_data = vec![
+        ChurnMetric { file: "lexer.ruchy", function: "tokenize", count: 20 },
+        ChurnMetric { file: "parser.ruchy", function: "parse", count: 5 },
+    ]
+
+    let failures = vec![
+        Failure { file: "lexer.ruchy", stage: "stage1", count: 8 },
+        Failure { file: "parser.ruchy", stage: "stage1", count: 1 },
+    ]
+
+    // When: Calculate correlation
+    let correlation = calculate_churn_failure_correlation(churn_data, failures)
+
+    // Then: Should show positive correlation
+    // High churn (20) correlates with high failures (8)
+    // Correlation coefficient should be > 0.7
+    return correlation > 0.7
+}
+
+// Test 4: Detect cyclic changes (same file changed across multiple stages)
+fun test_cyclic_change_detection() -> bool {
+    // Given: Changes across bootstrap stages
+    let stage_changes = vec![
+        StageChange { file: "lexer.ruchy", stage: "stage0", timestamp: 1 },
+        StageChange { file: "lexer.ruchy", stage: "stage1", timestamp: 2 },
+        StageChange { file: "lexer.ruchy", stage: "stage2", timestamp: 3 },
+        StageChange { file: "parser.ruchy", stage: "stage1", timestamp: 4 },
+    ]
+
+    // When: Detect cyclic patterns
+    let cycles = detect_cyclic_changes(stage_changes)
+
+    // Then: Should identify lexer.ruchy as cyclic (changed in 3 stages)
+    // parser.ruchy is not cyclic (only 1 stage)
+    return cycles.len() == 1 &&
+           cycles[0].file == "lexer.ruchy" &&
+           cycles[0].stage_count == 3
+}
+
+// Stub functions (will fail until implemented)
+fun calculate_churn_frequency(commits: Vec<Commit>) -> Vec<ChurnMetric> {
+    return vec![]  // Empty - will fail test
+}
+
+fun get_churn_for_function(churn: Vec<ChurnMetric>, file: String, function: String) -> i32 {
+    return 0  // Wrong - will fail test
+}
+
+fun identify_hotspots(churn_data: Vec<ChurnMetric>, threshold: i32) -> Vec<ChurnMetric> {
+    return vec![]  // Empty - will fail test
+}
+
+fun calculate_churn_failure_correlation(churn: Vec<ChurnMetric>, failures: Vec<Failure>) -> f64 {
+    return 0.0  // Wrong - will fail test
+}
+
+fun detect_cyclic_changes(changes: Vec<StageChange>) -> Vec<CyclicPattern> {
+    return vec![]  // Empty - will fail test
+}
+
+// Data structures
+struct Commit {
+    file: String,
+    function: String,
+    timestamp: i32,
+}
+
+struct ChurnMetric {
+    file: String,
+    function: String,
+    count: i32,
+}
+
+struct Failure {
+    file: String,
+    stage: String,
+    count: i32,
+}
+
+struct StageChange {
+    file: String,
+    stage: String,
+    timestamp: i32,
+}
+
+struct CyclicPattern {
+    file: String,
+    stage_count: i32,
+}
