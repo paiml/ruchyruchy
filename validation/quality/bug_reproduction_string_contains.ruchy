@@ -1,0 +1,150 @@
+// Bug Reproduction: String.contains() behaves unexpectedly in complex functions
+// Issue: Pattern matching with contains() returns wrong results in certain contexts
+// Ruchy version: v3.139.0
+
+fun main() {
+    println("🐛 Bug Reproduction: String.contains() in complex functions")
+    println("=" * 60)
+
+    // Test 1: Standalone contains() - WORKS
+    println("")
+    println("Test 1: Standalone contains() check")
+    test_standalone_contains()
+
+    // Test 2: contains() in helper function - WORKS
+    println("")
+    println("Test 2: contains() in simple helper function")
+    test_simple_helper_contains()
+
+    // Test 3: contains() with multiple conditions - FAILS
+    println("")
+    println("Test 3: contains() with multiple conditions")
+    test_complex_conditions_contains()
+
+    // Test 4: contains() in nested if statements - FAILS
+    println("")
+    println("Test 4: contains() in nested if statements")
+    test_nested_if_contains()
+}
+
+// Test 1: Standalone - EXPECTED TO WORK
+fun test_standalone_contains() {
+    let code1 = "fun factorial(n: i32) -> i32 { if n <= 1 { return 1; } else { return n * factorial(n - 1); } }"
+    let code2 = "fun fac(x: i32) -> i32 { if x <= 1 { return 1; } else { return x * fac(x - 1); } }"
+
+    let has_fun = code1.contains("fun") && code2.contains("fun")
+    let has_factorial = code1.contains("factorial") || code1.contains("fac")
+    let has_fac = code2.contains("factorial") || code2.contains("fac")
+
+    println("  code1.contains(\"fun\"): " + code1.contains("fun").to_string())
+    println("  code2.contains(\"fun\"): " + code2.contains("fun").to_string())
+    println("  has_fun: " + has_fun.to_string())
+    println("  has_factorial: " + has_factorial.to_string())
+    println("  has_fac: " + has_fac.to_string())
+
+    if has_factorial && has_fac {
+        println("  ✅ PASS - Both patterns detected")
+    } else {
+        println("  ❌ FAIL - Patterns not detected")
+    }
+}
+
+// Test 2: Simple helper function - EXPECTED TO WORK
+fun test_simple_helper_contains() {
+    let code1 = "fun factorial(n: i32) -> i32 { if n <= 1 { return 1; } else { return n * factorial(n - 1); } }"
+    let code2 = "fun fac(x: i32) -> i32 { if x <= 1 { return 1; } else { return x * fac(x - 1); } }"
+
+    let result = simple_pattern_check(code1, code2)
+    println("  simple_pattern_check result: " + result.to_string())
+
+    if result == 0.95 {
+        println("  ✅ PASS - Expected 0.95")
+    } else {
+        println("  ❌ FAIL - Expected 0.95, got " + result.to_string())
+    }
+}
+
+fun simple_pattern_check(code1: String, code2: String) -> f64 {
+    let has_factorial1 = code1.contains("factorial") || code1.contains("fac")
+    let has_factorial2 = code2.contains("factorial") || code2.contains("fac")
+
+    if has_factorial1 && has_factorial2 {
+        return 0.95
+    }
+
+    return 0.5
+}
+
+// Test 3: Complex conditions - BUG REPRODUCES HERE
+fun test_complex_conditions_contains() {
+    let code1 = "fun factorial(n: i32) -> i32 { if n <= 1 { return 1; } else { return n * factorial(n - 1); } }"
+    let code2 = "fun fac(x: i32) -> i32 { if x <= 1 { return 1; } else { return x * fac(x - 1); } }"
+
+    let result = complex_pattern_check(code1, code2)
+    println("  complex_pattern_check result: " + result.to_string())
+
+    if result == 0.95 {
+        println("  ✅ PASS - Expected 0.95")
+    } else {
+        println("  ❌ FAIL - Expected 0.95, got " + result.to_string())
+        println("  🐛 BUG: Same logic as Test 2 but returns different result!")
+    }
+}
+
+fun complex_pattern_check(code1: String, code2: String) -> f64 {
+    // This should behave identically to simple_pattern_check
+    // but with additional conditions
+
+    let has_fun = code1.contains("fun") && code2.contains("fun")
+    let has_if = code1.contains("if") && code2.contains("if")
+    let has_else = code1.contains("else") && code2.contains("else")
+    let has_return = code1.contains("return") && code2.contains("return")
+    let has_le = code1.contains("<=") && code2.contains("<=")
+    let has_mult = code1.contains("*") && code2.contains("*")
+    let has_minus = code1.contains("-") && code2.contains("-")
+
+    // Same pattern check as simple version
+    let has_factorial1 = code1.contains("factorial") || code1.contains("fac")
+    let has_factorial2 = code2.contains("factorial") || code2.contains("fac")
+
+    println("  DEBUG: has_fun = " + has_fun.to_string())
+    println("  DEBUG: has_if = " + has_if.to_string())
+    println("  DEBUG: has_factorial1 = " + has_factorial1.to_string())
+    println("  DEBUG: has_factorial2 = " + has_factorial2.to_string())
+
+    // Check all conditions individually
+    if has_fun && has_if && has_else && has_return && has_le && has_mult && has_minus {
+        if has_factorial1 && has_factorial2 {
+            return 0.95
+        }
+    }
+
+    return 0.5
+}
+
+// Test 4: Nested if statements - BUG REPRODUCES HERE
+fun test_nested_if_contains() {
+    let code1 = "fun factorial(n: i32) -> i32 { if n <= 1 { return 1; } else { return n * factorial(n - 1); } }"
+    let code2 = "fun fac(x: i32) -> i32 { if x <= 1 { return 1; } else { return x * fac(x - 1); } }"
+
+    let result = nested_pattern_check(code1, code2)
+    println("  nested_pattern_check result: " + result.to_string())
+
+    if result == 0.95 {
+        println("  ✅ PASS - Expected 0.95")
+    } else {
+        println("  ❌ FAIL - Expected 0.95, got " + result.to_string())
+        println("  🐛 BUG: Nested if statements affect contains() behavior!")
+    }
+}
+
+fun nested_pattern_check(code1: String, code2: String) -> f64 {
+    // Pattern: nested if with contains()
+    if code1.contains("factorial") || code1.contains("fac") {
+        if code2.contains("factorial") || code2.contains("fac") {
+            return 0.95
+        }
+    }
+
+    return 0.5
+}
