@@ -1,0 +1,259 @@
+// QUALITY-003 RED Phase: ML-based Defect Prediction
+// Tests machine learning model for predicting bug probability
+// Ruchy v3.139.0
+
+fun main() {
+    println("🤖 QUALITY-003: ML-based Defect Prediction")
+    println("=" * 60)
+
+    let mut total_tests = 0
+    let mut passed_tests = 0
+
+    // Test 1: Train model on git history
+    println("")
+    println("Test 1: Train ML model on git history")
+    if test_defect_prediction_training() {
+        println("  ✅ PASS - Model trained on git history")
+        passed_tests = passed_tests + 1
+    } else {
+        println("  ❌ FAIL - Model training failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 2: Predict bug probability per file
+    println("")
+    println("Test 2: Bug probability scoring")
+    if test_bug_probability_scoring() {
+        println("  ✅ PASS - Bug probabilities calculated")
+        passed_tests = passed_tests + 1
+    } else {
+        println("  ❌ FAIL - Bug probability scoring failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 3: Bootstrap cascade prediction
+    println("")
+    println("Test 3: Bootstrap bug cascade prediction")
+    if test_bootstrap_cascade_prediction() {
+        println("  ✅ PASS - Cascade predictions working")
+        passed_tests = passed_tests + 1
+    } else {
+        println("  ❌ FAIL - Cascade prediction failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 4: Test prioritization
+    println("")
+    println("Test 4: Test prioritization based on risk")
+    if test_test_prioritization() {
+        println("  ✅ PASS - Tests prioritized by risk")
+        passed_tests = passed_tests + 1
+    } else {
+        println("  ❌ FAIL - Test prioritization failed")
+    }
+    total_tests = total_tests + 1
+
+    // Summary
+    let percentage = (passed_tests as f64 / total_tests as f64) * 100.0
+    println("")
+    println("==" * 30)
+    println("TEST RESULTS:")
+    println("  Total tests: " + total_tests.to_string())
+    println("  Passed: " + passed_tests.to_string())
+    println("  Failed: " + (total_tests - passed_tests).to_string())
+    println("  Success rate: " + percentage.to_string() + "%")
+    println("")
+
+    if passed_tests == total_tests {
+        println("✅ ALL TESTS PASSED")
+    } else {
+        println("❌ SOME TESTS FAILED")
+    }
+}
+
+// Test 1: Train ML model on git history
+fun test_defect_prediction_training() -> bool {
+    // Expected: Model trains on git commit history
+    // - Extract features: code churn, complexity, author experience, file size
+    // - Label: whether commit introduced bugs (from git blame + bug fixes)
+    // - Train: logistic regression or decision tree
+
+    let git_history = load_git_history()
+    let features = extract_features(git_history)
+    let labels = extract_bug_labels(git_history)
+
+    let model = train_defect_model(features, labels)
+
+    // Model should have reasonable accuracy (>70%)
+    let accuracy = evaluate_model(model, features, labels)
+    return accuracy >= 0.7
+}
+
+// Test 2: Predict bug probability per file/function
+fun test_bug_probability_scoring() -> bool {
+    // Expected: Given a file/function, predict bug probability [0.0, 1.0]
+
+    let model = get_trained_model()
+
+    // High-risk file (high complexity, frequent changes)
+    let high_risk_file = FileInfo {
+        path: "bootstrap/stage2/type_inference.ruchy",
+        complexity: 45,
+        churn: 150,
+        lines: 800,
+        author_experience: 2,
+    }
+    let high_risk_prob = predict_bug_probability(model, high_risk_file)
+
+    // Low-risk file (low complexity, stable)
+    let low_risk_file = FileInfo {
+        path: "validation/quality/simple_test.ruchy",
+        complexity: 5,
+        churn: 3,
+        lines: 50,
+        author_experience: 10,
+    }
+    let low_risk_prob = predict_bug_probability(model, low_risk_file)
+
+    // High risk should have higher probability than low risk
+    return high_risk_prob > low_risk_prob &&
+           high_risk_prob >= 0.0 && high_risk_prob <= 1.0 &&
+           low_risk_prob >= 0.0 && low_risk_prob <= 1.0
+}
+
+// Test 3: Bootstrap bug cascade prediction
+fun test_bootstrap_cascade_prediction() -> bool {
+    // Expected: If Stage 0 has bug, predict impact on Stage 1, 2, 3
+
+    let model = get_trained_model()
+
+    // Scenario: Bug in lexer (Stage 0)
+    let lexer_bug = BugReport {
+        file: "bootstrap/stage0/lexer.ruchy",
+        severity: "high",
+        component: "tokenization",
+    }
+
+    let cascade = predict_bug_cascade(model, lexer_bug)
+
+    // Should predict high impact on parser (Stage 1)
+    // Moderate impact on type checker (Stage 2)
+    // Lower impact on codegen (Stage 3)
+    return cascade.stage1_impact > 0.7 &&
+           cascade.stage2_impact > 0.4 &&
+           cascade.stage3_impact > 0.2
+}
+
+// Test 4: Test prioritization based on risk
+fun test_test_prioritization() -> bool {
+    // Expected: Prioritize testing high-risk files first
+
+    let model = get_trained_model()
+
+    let files = vec![
+        "bootstrap/stage0/lexer.ruchy",
+        "bootstrap/stage1/parser.ruchy",
+        "bootstrap/stage2/type_inference.ruchy",
+        "bootstrap/stage3/codegen.ruchy",
+        "validation/quality/simple_test.ruchy",
+    ]
+
+    let prioritized = prioritize_tests(model, files)
+
+    // High-risk files should come first
+    // Type inference (most complex) likely highest risk
+    // Simple test should be lowest priority
+    return prioritized.len() == files.len() &&
+           prioritized[prioritized.len() - 1] == "validation/quality/simple_test.ruchy"
+}
+
+// Stub functions (to be implemented in GREEN phase)
+
+fun load_git_history() -> GitHistory {
+    return GitHistory { commits: vec![] }
+}
+
+fun extract_features(history: GitHistory) -> Features {
+    return Features { data: vec![] }
+}
+
+fun extract_bug_labels(history: GitHistory) -> Labels {
+    return Labels { data: vec![] }
+}
+
+fun train_defect_model(features: Features, labels: Labels) -> DefectModel {
+    return DefectModel { weights: vec![] }
+}
+
+fun evaluate_model(model: DefectModel, features: Features, labels: Labels) -> f64 {
+    // RED phase: This should fail - not implemented yet
+    return 0.0  // Will fail the >= 0.7 check
+}
+
+fun get_trained_model() -> DefectModel {
+    return DefectModel { weights: vec![] }
+}
+
+fun predict_bug_probability(model: DefectModel, file: FileInfo) -> f64 {
+    // RED phase: This should fail - returns random
+    return 0.5
+}
+
+fun predict_bug_cascade(model: DefectModel, bug: BugReport) -> CascadeImpact {
+    // RED phase: This should fail - no real predictions
+    return CascadeImpact {
+        stage1_impact: 0.0,
+        stage2_impact: 0.0,
+        stage3_impact: 0.0,
+    }
+}
+
+fun prioritize_tests(model: DefectModel, files: Vec<String>) -> Vec<String> {
+    // RED phase: This should fail - no real prioritization
+    return files  // Just return original order
+}
+
+// Data structures
+
+struct GitHistory {
+    commits: Vec<Commit>,
+}
+
+struct Commit {
+    hash: String,
+    message: String,
+    files_changed: Vec<String>,
+    is_bug_fix: bool,
+}
+
+struct Features {
+    data: Vec<Vec<f64>>,
+}
+
+struct Labels {
+    data: Vec<i32>,
+}
+
+struct DefectModel {
+    weights: Vec<f64>,
+}
+
+struct FileInfo {
+    path: String,
+    complexity: i32,
+    churn: i32,
+    lines: i32,
+    author_experience: i32,
+}
+
+struct BugReport {
+    file: String,
+    severity: String,
+    component: String,
+}
+
+struct CascadeImpact {
+    stage1_impact: f64,
+    stage2_impact: f64,
+    stage3_impact: f64,
+}
