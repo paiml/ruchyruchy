@@ -1,0 +1,64 @@
+# Runtime Schema for Vec<T> (Issue #76)
+#
+# This schema models Vec operations that trigger Issue #76:
+# Vec::new() can hang in certain contexts
+#
+# Bug: Constructor or operations may hang
+#
+# Expected: All operations complete quickly (<100ms)
+# Actual: Occasional hangs
+
+type_name: Vec<i32>
+
+constructor:
+  name: new
+  parameters: []
+  timeout_ms: 100  # Vec::new() should be instant
+  returns: Vec<i32>
+
+operations:
+  - name: push
+    preconditions: []
+    parameters: ["42"]
+    timeout_ms: 100
+    returns: void
+
+  - name: pop
+    preconditions: ["!is_empty"]  # Can't pop from empty vec
+    parameters: []
+    timeout_ms: 100
+    returns: Option<i32>
+
+  - name: len
+    preconditions: []
+    parameters: []
+    timeout_ms: 100
+    returns: usize
+
+  - name: is_empty
+    preconditions: []
+    parameters: []
+    timeout_ms: 100
+    returns: bool
+
+  - name: clear
+    preconditions: []
+    parameters: []
+    timeout_ms: 100
+    returns: void
+
+max_sequence_length: 10
+
+# Generated test example:
+#
+# fun main() {
+#     let mut vec = Vec::new();  // Timeout: <100ms
+#     vec.push(42);               // Timeout: <100ms
+#     vec.push(43);               // Timeout: <100ms
+#     let len = vec.len();        // Timeout: <100ms
+#     let item = vec.pop();       // Timeout: <100ms
+#     vec.clear();                // Timeout: <100ms
+# }
+#
+# This generates 1000+ test cases with different operation sequences
+# to find edge cases where Vec operations hang.

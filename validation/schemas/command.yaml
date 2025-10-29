@@ -1,0 +1,58 @@
+# Runtime Schema for Command (Issue #75)
+#
+# This schema models Command operations that trigger Issue #75:
+# Command.output() can hang or crash
+#
+# Bug: .output() method may hang indefinitely
+#
+# Expected: command creation and execution complete quickly
+# Actual: Occasional hangs or crashes
+
+type_name: Command
+
+constructor:
+  name: new
+  parameters: ['"echo"']  # Simple echo command
+  timeout_ms: 100  # Command::new() should be instant
+  returns: Command
+
+operations:
+  - name: arg
+    preconditions: []
+    parameters: ['"hello"']
+    timeout_ms: 100
+    returns: "&mut Command"
+
+  - name: args
+    preconditions: []
+    parameters: ['["world", "!"]']
+    timeout_ms: 100
+    returns: "&mut Command"
+
+  - name: output
+    preconditions: []
+    parameters: []
+    timeout_ms: 1000  # Command execution: 1 second max
+    returns: "Result<Output>"
+
+  - name: status
+    preconditions: []
+    parameters: []
+    timeout_ms: 1000
+    returns: "Result<ExitStatus>"
+
+max_sequence_length: 5
+
+# Generated test example:
+#
+# use std::process::Command;
+#
+# fun main() {
+#     let mut cmd = Command::new("echo");  // Timeout: <100ms
+#     cmd.arg("hello");                     // Timeout: <100ms
+#     cmd.args(&["world", "!"]);            // Timeout: <100ms
+#     let output = cmd.output();            // Timeout: <1000ms (MAY HANG!)
+# }
+#
+# This generates test cases that exercise different Command
+# method call sequences to find hanging patterns.

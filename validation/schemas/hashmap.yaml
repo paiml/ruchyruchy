@@ -1,0 +1,74 @@
+# Runtime Schema for HashMap<K, V>
+#
+# This schema models HashMap operations for runtime fuzzing
+#
+# Goal: Test that all HashMap operations complete within timeout thresholds
+
+type_name: HashMap<String, i32>
+
+constructor:
+  name: new
+  parameters: []
+  timeout_ms: 100  # HashMap::new() should be instant
+  returns: HashMap<String, i32>
+
+operations:
+  - name: insert
+    preconditions: []
+    parameters: ['"key"', '42']
+    timeout_ms: 100
+    returns: "Option<i32>"
+
+  - name: get
+    preconditions: ["has_entries"]  # Only get if map has entries
+    parameters: ['"key"']
+    timeout_ms: 100
+    returns: "Option<&i32>"
+
+  - name: remove
+    preconditions: ["has_entries"]
+    parameters: ['"key"']
+    timeout_ms: 100
+    returns: "Option<i32>"
+
+  - name: len
+    preconditions: []
+    parameters: []
+    timeout_ms: 100
+    returns: usize
+
+  - name: is_empty
+    preconditions: []
+    parameters: []
+    timeout_ms: 100
+    returns: bool
+
+  - name: clear
+    preconditions: []
+    parameters: []
+    timeout_ms: 100
+    returns: void
+
+  - name: contains_key
+    preconditions: []
+    parameters: ['"key"']
+    timeout_ms: 100
+    returns: bool
+
+max_sequence_length: 15
+
+# Generated test example:
+#
+# use std::collections::HashMap;
+#
+# fun main() {
+#     let mut map = HashMap::new();      // Timeout: <100ms
+#     map.insert("key", 42);             // Timeout: <100ms
+#     let contains = map.contains_key("key");  // Timeout: <100ms
+#     let value = map.get("key");        // Timeout: <100ms
+#     map.remove("key");                 // Timeout: <100ms
+#     let len = map.len();               // Timeout: <100ms
+# }
+#
+# This generates 1000+ test cases with different HashMap operation
+# sequences to detect any runtime hangs or performance regressions.
