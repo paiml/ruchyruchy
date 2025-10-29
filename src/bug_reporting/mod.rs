@@ -14,6 +14,7 @@ pub mod tdd;
 pub mod report_generator;
 pub mod github_integration;
 pub mod issue_linking;
+pub mod validation;
 
 pub use metrics::{
     ComplexityMetrics, ChurnCorrelation, SatdDetector, SatdType, DependencyAnalyzer,
@@ -34,4 +35,8 @@ pub use github_integration::{
 pub use issue_linking::{
     BugIssue, SimilarityScore, SimilarityCalculator, IssueDeduplicator, DuplicateResult,
     RelatedIssue, DUPLICATE_THRESHOLD, RELATED_THRESHOLD,
+};
+pub use validation::{
+    HistoricalBug, BugCategory as ValidationBugCategory, DetectionResult, ValidationMetrics,
+    ValidationReport, BugCorpusValidator,
 };

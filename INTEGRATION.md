@@ -697,6 +697,30 @@
     - **2025-10-29**: Issue linking and deduplication complete
     - Research-grounded: Runeson et al. (2007) "Detection of Duplicate Defect Reports", Sun et al. (2010) "Discriminative Model for Duplicate Bug Reports"
     - **Status**: RED phase complete, ready for production validation
+
+### Phase 5: Validation & Documentation (Week 7) - IN PROGRESS
+
+  - **VALID-007 (Historical Bug Validation)**: RED Phase COMPLETE ⭐ **NEW**
+    - Historical bug corpus framework for validation
+    - HistoricalBug struct with issue number, title, body, category
+    - Bug category classification (Crash, Hang, WrongOutput, TypeError, ParserError, etc.)
+    - DetectionResult tracking (detected/missed, method, confidence, miss reason)
+    - ValidationMetrics calculation (detection rate, false positive rate)
+    - Target tracking: 95%+ detection rate, <5% false positive rate
+    - Critical bug detection tracking
+    - BugCorpusValidator with detection function callback
+    - ValidationReport with markdown generation
+    - Missed bug analysis with reasons
+    - False positive details tracking
+    - Meets target validation (detection >= 95%, FP < 5%)
+    - Bugs by category filtering
+    - Critical bugs filtering
+    - Comprehensive summary reporting
+    - 17 comprehensive tests (100% passing)
+    - Module: validation.rs (680+ LOC)
+    - **2025-10-29**: Historical bug validation framework complete
+    - Research-grounded: Kim et al. (2013) "Classifying Software Changes", D'Ambros et al. (2012) "Evaluating Defect Prediction Approaches"
+    - **Status**: RED phase complete, ready for actual historical bug corpus loading
   - **Aggregate Statistics**:
     - Total Tests: 60 core tests (6 per ticket × 10 tickets)
     - Total Mutations: 180 mutations (18 per ticket × 10 tickets)
