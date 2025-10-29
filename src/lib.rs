@@ -39,6 +39,8 @@ pub mod bug_discovery;
 pub mod bug_replication;
 /// Bug reporting module (REPORT-001 through REPORT-004)
 pub mod bug_reporting;
+/// Tracing infrastructure (DEBUGGER-014: Zero-cost compiler instrumentation)
+pub mod tracing;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
