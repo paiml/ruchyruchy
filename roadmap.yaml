@@ -3162,3 +3162,73 @@ future_roadmap:
       - "Files to GitHub automatically (<30s)"
       - "Confidence scoring prevents alert fatigue"
       - "All methods research-grounded (16 citations)"
+
+          - id: DEBUGGER-013
+            title: "Implement ruchydbg run Command with Timeout Detection"
+            status: completed
+            completed_date: 2025-10-29
+            priority: critical
+            description: |
+              CRITICAL: Documentation references non-existent command.
+              Implement `ruchydbg run <file> --timeout <ms>` command
+              to execute Ruchy code with timeout detection and reporting.
+            requirements:
+              - Command-line argument parsing (file path, timeout)
+              - Execute Ruchy code with timeout wrapper
+              - Detect timeout vs. success vs. crash
+              - Report execution time and status
+              - Show last line executed on timeout (if possible)
+            tests:
+              - test_ruchydbg_run_success ✅
+              - test_ruchydbg_run_timeout ✅
+              - test_ruchydbg_run_crash (blocked: Ruchy Issue #81)
+              - test_ruchydbg_run_invalid_file ✅
+              - test_ruchydbg_run_help ✅
+              - test_ruchydbg_run_default_timeout ✅
+              - test_ruchydbg_run_reports_execution_time ✅
+            deliverables:
+              - ✅ `ruchydbg run` command implemented
+              - ✅ Timeout detection working
+              - ✅ Exit codes (0=success, 124=timeout, other=crash)
+              - ✅ Help text updated
+              - ✅ Documentation corrected
+            acceptance:
+              - ✅ `ruchydbg run test.ruchy --timeout 1000` works
+              - ✅ Detects timeouts correctly (exit code 124)
+              - ✅ Reports execution status and time
+            github_issue: "https://github.com/paiml/ruchyruchy/issues/5"
+            ruchy_bugs_filed:
+              - "https://github.com/paiml/ruchy/issues/80 (stdin not supported)"
+              - "https://github.com/paiml/ruchy/issues/81 (panic returns exit code 0)"
+            notes: |
+              ✅ Implementation: Complete - src/bin/ruchydbg.rs
+              ✅ Tests: 6/7 passing (1 blocked by Ruchy #81)
+              ✅ Test Coverage: 86% (6/7 tests)
+              ✅ Exit Codes:
+                - 0: Success
+                - 124: Timeout (using Unix timeout command)
+                - 1+: Other errors
+              ✅ Features:
+                - Command-line argument parsing
+                - Timeout detection via Unix timeout command
+                - Execution time reporting (milliseconds)
+                - File existence validation
+                - Ruchy availability checking
+                - Help text with examples
+                - Default timeout (5000ms)
+
+              ⚠️ BLOCKED TEST:
+                - test_ruchydbg_run_crash marked #[ignore]
+                - Reason: Ruchy Issue #81 - panic!() returns exit code 0
+                - Will be enabled once Ruchy #81 is fixed
+
+              🔍 GENCHI GENBUTSU FINDINGS:
+                - Filed Ruchy Issue #80: stdin not supported (echo | ruchy run -)
+                - Filed Ruchy Issue #81: panic!() and undefined functions return exit code 0
+                - Both issues block comprehensive crash testing
+
+              📊 TDD PHASES:
+                - RED: 7 tests written, 6 failing
+                - GREEN: 6/6 tests passing
+                - REFACTOR: Constants extracted, code cleaned
+                - TOOL VALIDATION: 270 total tests passing
