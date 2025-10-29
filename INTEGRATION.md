@@ -549,6 +549,20 @@
     - Research-grounded: Nagappan & Ball (2005), Hassan (2009)
     - **Status**: RED phase complete, ready for git integration
   - **Phase 1 Complete**: All 4 discovery techniques implemented (DISC-001 through DISC-004) 🎉
+
+### Phase 2: Replication Module (Week 3) - IN PROGRESS
+
+  - **REPLIC-001 (Minimization System)**: RED Phase COMPLETE ⭐ **NEW**
+    - Delta debugging algorithm (ddmin with granularity control)
+    - 4 minimization strategies (line-based, token-based, character-based, semantic-aware)
+    - Test outcome tracking (Pass/Fail/Unresolved)
+    - Reduction metrics (original size, minimized size, reduction ratio, test runs)
+    - Caching to avoid redundant test executions
+    - 15 comprehensive tests (100% passing)
+    - Module: minimizer.rs (430+ LOC)
+    - **2025-10-29**: Delta debugging foundation complete
+    - Research-grounded: Zeller & Hildebrandt (2002), Regehr et al. (2012), Misherghi & Su (2006)
+    - **Status**: RED phase complete, ready for integration with bug discovery
   - **Aggregate Statistics**:
     - Total Tests: 60 core tests (6 per ticket × 10 tickets)
     - Total Mutations: 180 mutations (18 per ticket × 10 tickets)
