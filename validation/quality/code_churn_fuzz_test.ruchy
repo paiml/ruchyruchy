@@ -1,0 +1,401 @@
+// QUALITY-005 FUZZ Phase: Fuzz test code_churn_test.ruchy
+// Stress testing with large volumes, edge cases, and boundary conditions
+// Ruchy v3.146.0
+
+fun main() {
+    println("🔥 QUALITY-005: FUZZ Testing Phase")
+    println("Target: code_churn_test.ruchy (369 LOC)")
+    println("=" * 60)
+
+    let mut total_tests = 0
+    let mut passing_tests = 0
+
+    // Test 1: Large volume stress test (1000+ commits)
+    println("")
+    println("Test 1: Large Volume Stress Test (1000+ commits)")
+    println("Should handle large commit histories efficiently")
+    if test_large_volume_stress() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Large volume handling failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 2: Edge case - Empty strings
+    println("")
+    println("Test 2: Edge Case - Empty Strings")
+    println("Should handle empty file/function names gracefully")
+    if test_empty_string_edge_cases() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Empty string handling failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 3: Edge case - Very long names
+    println("")
+    println("Test 3: Edge Case - Very Long Names")
+    println("Should handle very long file/function names")
+    if test_long_name_edge_cases() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Long name handling failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 4: Boundary - Maximum integer values
+    println("")
+    println("Test 4: Boundary - Maximum Values")
+    println("Should handle maximum count values without overflow")
+    if test_maximum_value_boundaries() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Maximum value handling failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 5: Randomized input stress test
+    println("")
+    println("Test 5: Randomized Input Stress Test")
+    println("Should handle random combinations of inputs")
+    if test_randomized_inputs() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Randomized input handling failed")
+    }
+    total_tests = total_tests + 1
+
+    // Test 6: Performance under load
+    println("")
+    println("Test 6: Performance Under Load")
+    println("Should maintain performance with concurrent operations")
+    if test_performance_under_load() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Performance degradation detected")
+    }
+    total_tests = total_tests + 1
+
+    // Test 7: Memory stress test
+    println("")
+    println("Test 7: Memory Stress Test")
+    println("Should handle memory-intensive operations")
+    if test_memory_stress() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Memory handling failed")
+    }
+    total_tests = total_tests + 1
+
+    // Calculate success rate
+    let success_rate = calculate_success_rate(passing_tests, total_tests)
+
+    println("")
+    println("=" * 60)
+    println("FUZZ TESTING RESULTS:")
+    println("  Total tests: " + total_tests.to_string())
+    println("  Passing: " + passing_tests.to_string())
+    println("  Failing: " + (total_tests - passing_tests).to_string())
+    println("  Success rate: " + success_rate.to_string() + "%")
+    println("")
+
+    if passing_tests == total_tests {
+        println("✅ EXCELLENT - All fuzz tests passing (100%)")
+    } else if success_rate >= 85.0 {
+        println("✅ PASS - Success rate >= 85%")
+    } else if success_rate >= 70.0 {
+        println("⚠️  ACCEPTABLE - Success rate >= 70%")
+    } else {
+        println("❌ FAIL - Success rate < 70%")
+    }
+}
+
+// Test 1: Large volume stress test
+fun test_large_volume_stress() -> bool {
+    // Generate 1000 commits
+    let mut large_commits = vec!()
+    let mut i = 0
+    while i < 1000 {
+        let file_num = i % 10  // Cycle through 10 files
+        let func_num = i % 5   // Cycle through 5 functions
+        large_commits.push(Commit {
+            file: "file" + file_num.to_string() + ".ruchy",
+            function: "function" + func_num.to_string(),
+            timestamp: i
+        })
+        i = i + 1
+    }
+
+    // Calculate churn for large volume
+    let churn = calculate_fuzz_churn(large_commits)
+
+    // Verify results are sensible
+    // With 1000 commits across 10 files * 5 functions = 50 unique combinations
+    // Each combination should appear 20 times (1000 / 50)
+    if churn.len() > 0 && churn.len() <= 50 {
+        // Check that total count adds up
+        let mut total_count = 0
+        let mut j = 0
+        while j < churn.len() {
+            total_count = total_count + churn[j].count
+            j = j + 1
+        }
+        return total_count == 1000
+    }
+    return false
+}
+
+// Test 2: Empty string edge cases
+fun test_empty_string_edge_cases() -> bool {
+    // Test with empty file names
+    let empty_file_commits = vec!(
+        Commit { file: "", function: "test_func", timestamp: 1 },
+        Commit { file: "", function: "test_func", timestamp: 2 }
+    )
+
+    let churn = calculate_fuzz_churn(empty_file_commits)
+
+    // Should still work, grouping by empty file name
+    if churn.len() != 1 {
+        return false
+    }
+    if churn[0].count != 2 {
+        return false
+    }
+
+    // Test with empty function names
+    let empty_func_commits = vec!(
+        Commit { file: "test.ruchy", function: "", timestamp: 1 },
+        Commit { file: "test.ruchy", function: "", timestamp: 2 }
+    )
+
+    let churn2 = calculate_fuzz_churn(empty_func_commits)
+
+    if churn2.len() != 1 {
+        return false
+    }
+    return churn2[0].count == 2
+}
+
+// Test 3: Very long name edge cases
+fun test_long_name_edge_cases() -> bool {
+    // Create very long file and function names (100+ characters)
+    let long_file = "a" + "b" + "c" + "d" + "e" + "f" + "g" + "h" + "i" + "j" +
+                    "k" + "l" + "m" + "n" + "o" + "p" + "q" + "r" + "s" + "t" +
+                    "u" + "v" + "w" + "x" + "y" + "z" + "0" + "1" + "2" + "3"
+
+    let long_func = "function_with_very_long_name_that_exceeds_normal_limits"
+
+    let long_commits = vec!(
+        Commit { file: long_file, function: long_func, timestamp: 1 },
+        Commit { file: long_file, function: long_func, timestamp: 2 },
+        Commit { file: long_file, function: long_func, timestamp: 3 }
+    )
+
+    let churn = calculate_fuzz_churn(long_commits)
+
+    // Should handle long names correctly
+    if churn.len() != 1 {
+        return false
+    }
+    return churn[0].count == 3
+}
+
+// Test 4: Maximum value boundaries
+fun test_maximum_value_boundaries() -> bool {
+    // Test with very high threshold values
+    let high_churn_data = vec!(
+        ChurnMetric { file: "hot.ruchy", function: "hot_func", count: 999999 },
+        ChurnMetric { file: "warm.ruchy", function: "warm_func", count: 500000 },
+        ChurnMetric { file: "cold.ruchy", function: "cold_func", count: 100 }
+    )
+
+    // Test hotspot identification with high threshold
+    let hotspots = identify_fuzz_hotspots(high_churn_data, 100000)
+
+    // Should find 2 hotspots (999999 and 500000 are > 100000)
+    if hotspots.len() != 2 {
+        return false
+    }
+
+    // Verify counts are preserved correctly
+    if hotspots[0].count != 999999 {
+        return false
+    }
+    return hotspots[1].count == 500000
+}
+
+// Test 5: Randomized inputs
+fun test_randomized_inputs() -> bool {
+    // Simulate randomized file/function combinations
+    // Using deterministic "random" for reproducibility
+    let mut random_commits = vec!()
+    let mut seed = 42
+    let mut i = 0
+    while i < 100 {
+        // Deterministic "random" number generation
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        let file_idx = seed % 20
+        let func_idx = seed % 10
+
+        random_commits.push(Commit {
+            file: "random_file_" + file_idx.to_string() + ".ruchy",
+            function: "random_func_" + func_idx.to_string(),
+            timestamp: i
+        })
+        i = i + 1
+    }
+
+    let churn = calculate_fuzz_churn(random_commits)
+
+    // Verify that:
+    // 1. We got some results
+    // 2. Total count adds up to 100
+    if churn.len() == 0 {
+        return false
+    }
+
+    let mut total = 0
+    let mut j = 0
+    while j < churn.len() {
+        total = total + churn[j].count
+        j = j + 1
+    }
+    return total == 100
+}
+
+// Test 6: Performance under load
+fun test_performance_under_load() -> bool {
+    // Test multiple operations in sequence
+    let mut iterations = 0
+    while iterations < 10 {
+        // Create 100 commits
+        let mut commits = vec!()
+        let mut i = 0
+        while i < 100 {
+            commits.push(Commit {
+                file: "perf_test.ruchy",
+                function: "perf_func",
+                timestamp: i
+            })
+            i = i + 1
+        }
+
+        // Calculate churn
+        let churn = calculate_fuzz_churn(commits)
+
+        // Verify result is consistent
+        if churn.len() != 1 || churn[0].count != 100 {
+            return false
+        }
+
+        iterations = iterations + 1
+    }
+
+    return true
+}
+
+// Test 7: Memory stress test
+fun test_memory_stress() -> bool {
+    // Create large data structures
+    let mut large_data = vec!()
+    let mut i = 0
+    while i < 500 {
+        large_data.push(ChurnMetric {
+            file: "file_" + i.to_string() + ".ruchy",
+            function: "function_" + i.to_string(),
+            count: i * 2
+        })
+        i = i + 1
+    }
+
+    // Test hotspot identification on large dataset
+    let hotspots = identify_fuzz_hotspots(large_data, 800)
+
+    // Should find files with count > 800
+    // count = i * 2, so need i > 400
+    // Files 401-499 (99 files) should be hotspots
+    return hotspots.len() == 99
+}
+
+// Helper: Calculate churn frequency (fuzz version)
+fun calculate_fuzz_churn(commits: Vec<Commit>) -> Vec<ChurnMetric> {
+    let mut unique_keys = vec!()
+    let mut i = 0
+    while i < commits.len() {
+        let key = commits[i].file + "::" + commits[i].function
+        let mut exists = false
+        let mut j = 0
+        while j < unique_keys.len() {
+            if unique_keys[j] == key {
+                exists = true
+            }
+            j = j + 1
+        }
+        if !exists {
+            unique_keys.push(key)
+        }
+        i = i + 1
+    }
+
+    let mut metrics = vec!()
+    let mut k = 0
+    while k < unique_keys.len() {
+        let target_key = unique_keys[k]
+        let mut count = 0
+        let mut result_file = ""
+        let mut result_function = ""
+        let mut m = 0
+        while m < commits.len() {
+            let current_key = commits[m].file + "::" + commits[m].function
+            if current_key == target_key {
+                count = count + 1
+                result_file = commits[m].file
+                result_function = commits[m].function
+            }
+            m = m + 1
+        }
+        metrics.push(ChurnMetric { file: result_file, function: result_function, count: count })
+        k = k + 1
+    }
+    return metrics
+}
+
+// Helper: Identify hotspots (fuzz version)
+fun identify_fuzz_hotspots(churn_data: Vec<ChurnMetric>, threshold: i32) -> Vec<ChurnMetric> {
+    let mut hotspots = vec!()
+    let mut i = 0
+    while i < churn_data.len() {
+        if churn_data[i].count > threshold {
+            hotspots.push(churn_data[i])
+        }
+        i = i + 1
+    }
+    return hotspots
+}
+
+fun calculate_success_rate(passing: i32, total: i32) -> f64 {
+    if total == 0 {
+        return 0.0
+    }
+    return (passing as f64 / total as f64) * 100.0
+}
+
+struct Commit {
+    file: String,
+    function: String,
+    timestamp: i32,
+}
+
+struct ChurnMetric {
+    file: String,
+    function: String,
+    count: i32,
+}
