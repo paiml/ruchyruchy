@@ -2660,12 +2660,13 @@ future_roadmap:
               - <5% false positives
 
           - id: DISC-002
-            title: "Grammar-Based Fuzzing"
-            status: planned
+            title: "Grammar-Based Fuzzing (Syntax Level)"
+            status: completed
             priority: high
             description: |
               Implement grammar-based fuzzing for Ruchy compiler.
               Generate syntactically valid programs to find bugs.
+              Note: This finds SYNTAX bugs. For RUNTIME hangs, use DISC-002B.
             requirements:
               - Ruchy grammar specification
               - Random program generator
@@ -2681,11 +2682,60 @@ future_roadmap:
               - 10,000+ test cases
               - Crash/hang detector
               - Corpus manager
-            research: "Miller et al. (1990)"
+            research: "Miller et al. (1990), Holler et al. (2012)"
             acceptance:
               - >99% valid programs generated
               - 10,000+ cases in 10 minutes
-              - Detects all known hangs/crashes
+              - Detects syntax-level bugs
+            completed: "2025-10-29"
+
+          - id: DISC-002B
+            title: "Schema-Based Runtime Property Fuzzing"
+            status: planned
+            priority: critical
+            description: |
+              CRITICAL FOR RUNTIME HANGS (#76, #75, #74).
+              Move beyond syntax fuzzing to behavioral/semantic fuzzing.
+              Model valid states and transitions of runtime objects.
+              Generate sequences of operations with timeout detection.
+            requirements:
+              - Runtime schema (YAML/JSON format)
+              - Schema parser (YAML → Rust structs)
+              - Stateful test generator (operation sequences)
+              - Shadow state tracker
+              - Property injector (timeout checks, assertions)
+              - Test executor with timeout detection
+              - Delta debugging minimizer
+            tests:
+              - test_schema_parsing
+              - test_stateful_generation
+              - test_precondition_filtering
+              - test_shadow_state_tracking
+              - test_timeout_detection
+              - test_property_injection
+              - test_minimization
+            deliverables:
+              - Runtime schema for Vec, Command, HashMap
+              - Stateful fuzzing engine
+              - Timeout detection (100ms constructors, 1000ms operations)
+              - Test minimizer (delta debugging)
+              - 1,000+ behavioral test cases
+            research: "Zeller & Hildebrandt (2002), Pacheco et al. (2007) Randoop, Fraser & Arcuri (2011) EvoSuite"
+            acceptance:
+              - Detects Vec::new() hang (#76)
+              - Detects Command.output() hang (#75)
+              - Detects vec! macro hang (#74)
+              - >90% operation sequences valid
+              - Minimizes 100-line failing test to <10 lines
+              - <5% false positive timeout rate
+            kryptonite: |
+              This is the KRYPTONITE of Ruchy - runtime hangs that block all work.
+              Syntax fuzzing cannot detect these. We need behavioral fuzzing with:
+              1. Stateful object modeling
+              2. Valid operation sequences (preconditions)
+              3. Timeout detection on every operation
+              4. Shadow state tracking
+              5. Delta debugging minimization
 
           - id: DISC-003
             title: "Property-Based Testing"
