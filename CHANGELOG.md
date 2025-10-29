@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2025-10-29
+
+### 🔄 Compatibility Update: Ruchy v3.147.7
+
+**Theme**: Upstream bug fix validation and compatibility verification
+
+### Verified
+
+#### ✅ Ruchy Issue #80 Fixed: stdin support
+
+- **Status**: FIXED in Ruchy v3.147.7
+- **Filed**: https://github.com/paiml/ruchy/issues/80
+- **Verification**: `echo 'fun main() { }' | ruchy run -` now works
+- **Impact**: Future features can use stdin if needed
+
+#### ❌ Ruchy Issue #81 Still Open: panic exit codes
+
+- **Status**: Still open in Ruchy v3.147.7
+- **Filed**: https://github.com/paiml/ruchy/issues/81
+- **Issue**: `panic()` and undefined functions return exit code 0
+- **Impact**: `test_ruchydbg_run_crash` remains `#[ignore]`
+- **Workaround**: Use timeout detection for hangs
+
+### Tested
+
+- **All tests**: 270/270 passing with Ruchy v3.147.7
+- **ruchydbg run tests**: 6/7 passing (1 correctly ignored)
+- **Compatibility**: Fully compatible with Ruchy v3.147.7
+
+### Changed
+
+- Verified compatibility with Ruchy v3.147.7
+- No code changes required (all tests pass)
+- Test comments updated to reflect current Ruchy status
+
+### Notes
+
+This is a maintenance release verifying compatibility with the latest Ruchy version. The `ruchydbg run` command continues to work correctly with Ruchy v3.147.7, with one test case remaining blocked on upstream Ruchy Issue #81.
+
 ## [1.6.0] - 2025-10-29
 
 ### 🎉 Major Feature: ruchydbg run Command with Timeout Detection
