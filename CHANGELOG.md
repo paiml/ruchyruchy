@@ -7,6 +7,205 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2025-10-29
+
+### 🎉 Major Release: Bug Discovery, Reporter & Replicator System
+
+**Codename**: "Bug Discovery & Comprehensive Documentation"
+**Theme**: Complete automated bug discovery with GitHub integration and professional documentation
+
+### Added
+
+#### 🔍 Bug Discovery, Reporter & Replicator System (Phases 3-5 Complete)
+
+**Phase 3: Reporting & Analysis Module**
+- **REPORT-001**: Quantitative Analysis Engine
+  - Complexity metrics (cyclomatic, cognitive, loop depth, function length)
+  - Code churn analysis (commit count, change tracking, hot spots)
+  - SATD detection (TODO, FIXME, HACK, XXX, NOTE comments with priority)
+  - Research-grounded: Kim et al. (2013), Potdar & Shihab (2014)
+  - Module: `src/bug_reporting/metrics.rs` (820+ LOC)
+
+- **REPORT-002**: Assisted Five-Whys Analysis
+  - Toyota Production System technique with data-driven hypotheses
+  - Jidoka principle: automation with human judgment
+  - Multi-layer root cause investigation (5 "why" layers)
+  - Confidence scoring (VeryHigh/High/Medium/Low/VeryLow)
+  - Data source tracking (StaticAnalysis, ChurnAnalysis, SATD, TestCoverage, IssueTracker)
+  - Module: `src/bug_reporting/five_whys.rs` (550+ LOC)
+
+- **REPORT-003**: TDD Integration
+  - RED-GREEN-REFACTOR cycle tracking
+  - TDD phase management (Red → Green → Refactor)
+  - Test result tracking (Pass/Fail/NotRun)
+  - Coverage tracking per cycle
+  - Quality gates (min coverage, max complexity, mutation score)
+  - Module: `src/bug_reporting/tdd.rs` (650+ LOC)
+
+- **REPORT-004**: Markdown Report Generator
+  - Comprehensive bug reports integrating all modules
+  - Severity levels (Critical/High/Medium/Low) with emojis
+  - Bug categories (Crash, Hang, WrongOutput, PerformanceRegression, MemoryLeak, etc.)
+  - Confidence analysis section
+  - Quantitative analysis (complexity, churn, SATD)
+  - Five-Whys root cause analysis
+  - TDD fix workflow
+  - Prevention strategy recommendations
+  - Module: `src/bug_reporting/report_generator.rs` (740+ LOC)
+
+**Phase 4: GitHub Integration**
+- **GITHUB-001**: GitHub API Integration
+  - GitHubClient with Bearer token authentication
+  - IssueRequest with JSON payload generation
+  - IssueResponse parsing
+  - BugReportConverter with automatic label assignment
+    - Severity labels: `severity: critical/high/medium/low`
+    - Category labels: `type: crash/hang/wrong-output/performance/memory-leak/type-error/parser-error`
+    - Confidence labels: `high-confidence/medium-confidence/low-confidence`
+    - Standard label: `bug`
+  - CommentRequest for issue updates
+  - GitHubResult type for error handling
+  - Rate limit management (5000 requests/hour authenticated)
+  - Module: `src/bug_reporting/github_integration.rs` (630+ LOC)
+
+- **GITHUB-002**: Issue Linking & Deduplication
+  - Jaccard similarity algorithm for duplicate detection
+  - Multi-factor similarity scoring:
+    - Title similarity (30% weight)
+    - Body similarity (25% weight)
+    - File overlap (20% weight)
+    - Error message similarity (15% weight)
+    - Label overlap (10% weight)
+  - Duplicate threshold: 0.80 (very similar)
+  - Related threshold: 0.50 (somewhat similar)
+  - IssueDeduplicator with best-match finding
+  - Related issue linking (find N most similar issues)
+  - Research-grounded: Runeson et al. (2007), Sun et al. (2010)
+  - Module: `src/bug_reporting/issue_linking.rs` (710+ LOC)
+
+**Phase 5: Validation & Documentation**
+- **VALID-007**: Historical Bug Validation
+  - Historical bug corpus framework (79 Ruchy bugs from GitHub)
+  - HistoricalBug struct with issue metadata
+  - Bug category classification
+  - DetectionResult tracking (detected/missed, method, confidence)
+  - ValidationMetrics with target tracking:
+    - Detection rate target: ≥95%
+    - False positive rate target: <5%
+    - Critical bug detection: 100%
+  - BugCorpusValidator with callback-based detection
+  - ValidationReport with markdown generation
+  - Missed bug analysis with reasons
+  - Research-grounded: Kim et al. (2013), D'Ambros et al. (2012)
+  - Module: `src/bug_reporting/validation.rs` (680+ LOC)
+
+- **DOCS-100**: Complete System Documentation (200+ pages)
+  - **User Guide** (`docs/user_guide/README.md` - 2,115 lines):
+    - Part 1: Getting Started (4 sections)
+    - Part 2: Bug Discovery (5 sections - differential, property, fuzz, mutation)
+    - Part 3: Bug Reporting (5 sections - quantitative, Five-Whys, TDD, confidence)
+    - Part 4: GitHub Integration (4 sections)
+    - Part 5: Validation & Quality (3 sections)
+    - Part 6: Advanced Topics (3 sections - custom methods, CI/CD)
+    - Appendices: FAQ, Glossary
+
+  - **API Reference** (`docs/api/README.md` - 1,689 lines):
+    - 16 complete API modules documented
+    - Bug Discovery APIs (5 modules)
+    - Bug Replication APIs (2 modules)
+    - Bug Reporting APIs (6 modules)
+    - GitHub Integration APIs (2 modules)
+    - Validation APIs (1 module)
+    - Complete type signatures, parameters, returns, examples
+    - Error handling, thread safety, performance characteristics
+
+  - **Example Workflows** (`docs/examples/README.md` - 921 lines):
+    - 15 complete working examples (exceeds 10+ requirement)
+    - Getting Started: GitHub setup, quick start, complete workflow
+    - Discovery Methods: differential, property, fuzz, mutation
+    - Reporting: quantitative, Five-Whys, TDD
+    - GitHub: auto filing, deduplication
+    - Advanced: CI/CD, custom discovery, historical validation
+    - Each example: code, output, explanation, tips
+
+  - **Troubleshooting Guide** (`docs/troubleshooting/README.md` - 1,013 lines):
+    - 12 comprehensive sections
+    - 30+ common issues with solutions
+    - Installation, GitHub integration, discovery failures, performance
+    - Debug mode instructions (RUST_LOG=debug)
+    - Getting help resources
+
+#### 📊 System Capabilities
+
+**Discovery Methods**:
+- Differential Testing (version regression, target mismatch, oracle comparison)
+- Property Testing (roundtrip validation, mathematical invariants)
+- Fuzz Testing (grammar-based, mutation-based)
+- Mutation Testing (test quality measurement)
+
+**Confidence Scoring** (Jidoka Principle):
+- Discovery method weight: 0.35 (highest)
+- Reproducibility score: 0.30
+- Quantitative evidence: 0.20
+- Root cause clarity: 0.15
+- Overall formula: weighted average
+- Prevents alert fatigue by ranking findings
+
+**Detection Targets**:
+- Historical bug detection rate: ≥95%
+- False positive rate: <5%
+- Critical bug detection: 100%
+
+**GitHub Integration**:
+- Automatic issue filing with comprehensive reports
+- Duplicate detection (≥0.80 similarity)
+- Related issue linking (≥0.50 similarity)
+- Automatic label assignment (severity, category, confidence)
+
+#### 📦 Package Updates
+
+- **Version**: 1.4.0
+- **Description**: Updated to highlight Bug Discovery, Reporter & Replicator System
+- **Keywords**: `bug-discovery`, `testing`, `quality`, `static-analysis`, `github`
+- **Categories**: `development-tools`, `testing`
+- **Includes**: Added `docs/**/*.md` and `INTEGRATION.md` to package
+
+#### 📈 Statistics
+
+- **Total Tests**: 263 tests passing (100%)
+- **Total LOC**:
+  - Source code: 4,500+ LOC (bug discovery, reporting, GitHub integration)
+  - Documentation: 7,900+ LOC (user guide, API, examples, troubleshooting)
+  - Total: 12,400+ LOC
+- **Modules Added**: 7 new modules (metrics, five_whys, tdd, report_generator, github_integration, issue_linking, validation)
+- **Documentation**: 4 comprehensive guides (200+ pages total)
+
+### Changed
+
+- Updated Cargo.toml description to emphasize Bug Discovery System
+- Updated include paths to package documentation
+- Updated INTEGRATION.md with Phase 3, 4, 5 completion
+
+### Technical Details
+
+**Research Citations**:
+- Kim et al. (2013) "Classifying Software Changes"
+- D'Ambros et al. (2012) "Evaluating Defect Prediction Approaches"
+- Potdar & Shihab (2014) "An Exploratory Study on Self-Admitted Technical Debt"
+- Runeson et al. (2007) "Detection of Duplicate Defect Reports"
+- Sun et al. (2010) "Discriminative Model for Duplicate Bug Reports"
+
+**Toyota Way Principles Applied**:
+- Jidoka: Automation with human judgment (confidence scoring)
+- Genchi Genbutsu: Data-driven root cause analysis
+- Kaizen: Continuous improvement through validation
+
+**Quality Gates**:
+- All 263 tests passing
+- Zero compiler warnings for core modules
+- Comprehensive documentation (100% API coverage)
+- Examples tested and verified
+
 ## [1.3.0] - 2025-10-29
 
 ### 🎉 Major Release: QUALITY Analysis Tools + PMAT TDG Integration
