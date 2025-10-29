@@ -592,7 +592,7 @@
 
 ### Phase 3: Reporting & Analysis Module (Week 4-5) - IN PROGRESS
 
-  - **REPORT-001 (Quantitative Analysis Engine)**: RED Phase COMPLETE ⭐ **NEW**
+  - **REPORT-001 (Quantitative Analysis Engine)**: RED Phase COMPLETE ⭐
     - Complexity metrics (cyclomatic, cognitive, Halstead, parameters, nesting depth)
     - Complexity scoring (0.0-1.0 weighted combination of metrics)
     - Code churn correlation analysis (bugs per change)
@@ -607,6 +607,22 @@
     - **2025-10-29**: Quantitative analysis foundation complete
     - Research-grounded: Chidamber & Kemerer (1994), Campbell (2018), Potdar & Shihab (2014), Maldonado & Shihab (2015)
     - **Status**: RED phase complete, ready for integration with bug reports
+  - **REPORT-002 (Assisted Five-Whys Analysis)**: RED Phase COMPLETE ⭐ **NEW**
+    - ASSISTED (not automated) - human validation REQUIRED
+    - Data-driven hypothesis generation (complexity, churn, SATD)
+    - Confidence level scoring (High/Medium/Low)
+    - Five Why layers (5 questions: occurrence, vulnerability, prevention, process, root cause)
+    - Data point collection with relevance scoring (0.0-1.0)
+    - Hypothesis with supporting data and confidence
+    - Best hypothesis selection (confidence × data strength)
+    - Overall confidence calculation (average across layers)
+    - Human validation markers (all hypotheses require validation)
+    - Markdown report generation with validation warnings
+    - 15 comprehensive tests (100% passing)
+    - Module: five_whys.rs (570+ LOC)
+    - **2025-10-29**: Assisted Five-Whys foundation complete
+    - Research-grounded: Ohno (1988) Toyota Production System, Card (2017) Agile Development
+    - **Status**: RED phase complete, ready for integration with analysis engine
   - **Aggregate Statistics**:
     - Total Tests: 60 core tests (6 per ticket × 10 tickets)
     - Total Mutations: 180 mutations (18 per ticket × 10 tickets)
