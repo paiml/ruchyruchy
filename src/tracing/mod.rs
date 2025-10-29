@@ -20,7 +20,14 @@ pub mod output;
 
 /// eBPF syscall tracing (DEBUGGER-015)
 ///
+/// **Note**: Requires eBPF development setup and Linux 5.10+. Enable with `--features ebpf`.
+#[cfg(feature = "ebpf")]
+pub mod ebpf;
+
+/// eBPF placeholder (when feature is disabled)
+///
 /// **Note**: Requires eBPF development setup. See `docs/setup/EBPF_DEVELOPMENT_SETUP.md`
+#[cfg(not(feature = "ebpf"))]
 pub mod ebpf_placeholder;
 
 pub use events::{TraceEvent, FunctionEntry, FunctionExit, SourceLocation, TypedValue, TypeInfo};
