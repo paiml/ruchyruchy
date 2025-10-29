@@ -552,7 +552,7 @@
 
 ### Phase 2: Replication Module (Week 3) - IN PROGRESS
 
-  - **REPLIC-001 (Minimization System)**: RED Phase COMPLETE ⭐ **NEW**
+  - **REPLIC-001 (Minimization System)**: RED Phase COMPLETE ⭐
     - Delta debugging algorithm (ddmin with granularity control)
     - 4 minimization strategies (line-based, token-based, character-based, semantic-aware)
     - Test outcome tracking (Pass/Fail/Unresolved)
@@ -563,6 +563,18 @@
     - **2025-10-29**: Delta debugging foundation complete
     - Research-grounded: Zeller & Hildebrandt (2002), Regehr et al. (2012), Misherghi & Su (2006)
     - **Status**: RED phase complete, ready for integration with bug discovery
+  - **REPLIC-002 (Replication Harness)**: RED Phase COMPLETE ⭐ **NEW**
+    - Environment capture (compiler version, OS, arch, env vars, dependencies)
+    - Test execution with timeout detection (configurable, default: 5s)
+    - Execution result tracking (Success/Failure/Timeout/Crash with duration)
+    - Reproducibility verification (multiple attempts, consistency check)
+    - Reproducible test case generation (source + environment + steps)
+    - Markdown documentation generator (human-readable repro steps)
+    - 17 comprehensive tests (100% passing)
+    - Module: harness.rs (550+ LOC)
+    - **2025-10-29**: Replication harness foundation complete
+    - Research-grounded: Chen & Kim (2015), Jin et al. (2012)
+    - **Status**: RED phase complete, ready for integration with discovery/minimization
   - **Aggregate Statistics**:
     - Total Tests: 60 core tests (6 per ticket × 10 tickets)
     - Total Mutations: 180 mutations (18 per ticket × 10 tickets)

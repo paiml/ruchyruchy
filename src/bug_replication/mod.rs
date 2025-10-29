@@ -8,5 +8,9 @@
 // - REPLIC-003: Bisection Tool
 
 pub mod minimizer;
+pub mod harness;
 
 pub use minimizer::{DeltaDebugger, MinimizationStrategy, MinimizationResult, TestOutcome};
+pub use harness::{
+    Environment, ExecutionResult, ReproducibleTest, ReplicationHarness,
+};
