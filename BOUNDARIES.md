@@ -18,16 +18,16 @@ All boundaries discovered through:
 
 ---
 
-## 🔴 CRITICAL: Ruchy v3.144.0 - Multiple Breaking Bugs (BLOCKING)
+## ✅ RESOLVED: Ruchy v3.146.0 - Both Critical Issues Fixed!
 
-### 🚨 v3.144.0 REGRESSION: vec! Macro Completely Broken [CRITICAL]
+### ✅ v3.146.0: vec! Macro FIXED [RESOLVED]
 
 **Discovered**: 2025-10-28 while testing v3.144.0 fix for Issue #72
-**Severity**: **CRITICAL** - Core language feature broken
-**Status**: 🔴 **BLOCKING** - Regression in v3.144.0
-**GitHub Issue**: https://github.com/paiml/ruchy/issues/74 (OPEN)
-**Workaround**: Downgrade to v3.142.0
-**Current Version**: v3.142.0 (stable, working)
+**Severity**: **CRITICAL** - Core language feature was broken in v3.144.0
+**Status**: ✅ **RESOLVED** in Ruchy v3.146.0
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/74 (CLOSED)
+**Resolution Date**: 2025-10-29
+**Current Version**: v3.146.0 (stable, all issues fixed)
 
 #### Problem Description
 The `vec!` macro is completely broken in v3.144.0. Any code using `vec!` silently fails or hangs after the macro call - no errors, just silent failure.
@@ -69,79 +69,56 @@ Count: 3
 
 ---
 
-### 🚨 v3.142.0: `ruchy fmt` Transforms Macro Calls into Macro Definitions [BLOCKING]
+### ✅ v3.146.0: `ruchy fmt` Formatter FIXED [RESOLVED]
 
 **Discovered**: 2025-10-28 during QUALITY-005 (Code Churn Analysis) TOOL phase
-**Severity**: **CRITICAL** - Formatter breaks working code
-**Status**: 🔴 **BLOCKING** - Issue present in v3.142.0, attempted fix in v3.144.0 introduced Issue #74
-**GitHub Issue**: https://github.com/paiml/ruchy/issues/72 (OPEN)
-**Ticket**: QUALITY-005 - Partial TOOL phase (3/4 tools passing, fmt skipped)
+**Severity**: **CRITICAL** - Formatter was breaking working code in v3.142.0
+**Status**: ✅ **RESOLVED** in Ruchy v3.146.0
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/72 (CLOSED)
+**Resolution Date**: 2025-10-29
+**Ticket**: QUALITY-005 - TOOL phase NOW COMPLETE (4/4 tools passing)
 
-#### Problem Description
-`ruchy fmt` incorrectly transforms `vec!` macro CALLS into macro DEFINITIONS, completely changing the code's semantics. The formatted code passes `ruchy check` but fails silently at runtime (produces no output).
+#### Original Problem (v3.142.0)
+`ruchy fmt` incorrectly transformed `vec!` macro CALLS into macro DEFINITIONS. The formatted code passed `ruchy check` but failed silently at runtime.
 
-#### Minimal Reproduction
-```ruchy
-// Before formatting (WORKS):
+#### Verification Results (v3.146.0 - FIXED)
+```bash
+# Before formatting:
+$ cat test.ruchy
 fun main() {
     let items = vec!["item1", "item2", "item3"]
     println("Items: " + items.len().to_string())
 }
-// Output: Items: 3
 
-// After `ruchy fmt` (BROKEN):
+# After formatting (v3.146.0):
+$ ruchy fmt test.ruchy
+$ cat test.ruchy
 fun main() {
-    let items = macro vec("item1", "item2", "item3") { }
+    let items = vec!("item1", "item2", "item3")  // Changed [] to () but still valid!
     println("Items: " + items.len().to_string())
 }
-// Output: <nothing> (silently fails)
+
+# Running formatted code (v3.146.0):
+$ ruchy run test.ruchy
+Items: 3  ✅ WORKS!
 ```
 
-**Expected**: Formatter should preserve macro call syntax:
-```ruchy
-let items = vec!["item1", "item2", "item3"]
-```
+#### Fix Details
+- v3.142.0: `vec![...]` → `macro vec(...) {}` (BROKEN)
+- v3.146.0: `vec![...]` → `vec!(...)` (WORKS!)
 
-**Actual**: Formatter transforms to macro definition:
-```ruchy
-let items = macro vec("item1", "item2", "item3") { }
-```
+The formatter now correctly preserves macro CALL syntax, just normalizes brackets to parentheses.
 
-#### Impact
-- **BLOCKS** QUALITY-005 TOOL phase (cannot complete 4-tool validation)
-- **BREAKS** working test suite (4/4 passing → hangs after formatting)
-- **PREVENTS** using `ruchy fmt` in quality gates or CI/CD
-- **VIOLATES** formatter "do no harm" principle
-
-#### Verification Results (v3.142.0)
+#### QUALITY-005 Validation (v3.146.0)
 ```bash
-# Original code works:
-$ ruchy run validation/quality/code_churn_test.ruchy
-✅ 4/4 tests passing
+# All 4 tools now passing:
+✅ ruchy check: Pass (syntax valid)
+✅ ruchy run: Pass (4/4 tests passing)
+✅ ruchy fmt: Pass (formatted code works!)
+✅ ruchy lint: Pass (0 errors, 8 warnings non-blocking)
 
-# After formatting:
-$ ruchy fmt validation/quality/code_churn_test.ruchy
-$ ruchy run validation/quality/code_churn_test.ruchy
-<hangs indefinitely - no output>
-
-# Passes check but runtime broken:
-$ ruchy check validation/quality/code_churn_test.ruchy
-✓ Syntax is valid
+# TOOL phase: 4/4 tools (100%) - COMPLETE!
 ```
-
-#### Workaround
-**Current**: Skip `ruchy fmt` in TOOL phase validation (non-ideal, incomplete quality gates)
-**Needed**: Fix formatter to preserve macro call syntax
-
-#### Test Files
-- `validation/quality/fmt_bug_before.ruchy` - Original working version
-- `validation/quality/fmt_bug_minimal.ruchy` - Minimal reproduction (after formatting)
-- `validation/quality/code_churn_test.ruchy` - Main test suite (BLOCKED)
-
-#### Next Steps
-1. ✅ Filed comprehensive GitHub Issue #72
-2. ⏳ Awaiting Ruchy team fix (FORMATTER-001)
-3. ⏳ Will verify fix and resume QUALITY-005 TOOL phase
 
 ---
 
