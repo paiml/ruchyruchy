@@ -1,0 +1,253 @@
+// QUALITY-009 RED Phase: Big-O Complexity Analysis
+// Tests complexity detection and optimization suggestions
+// Ruchy v3.146.0
+
+fun main() {
+    println("🔴 QUALITY-009: RED Phase - Big-O Complexity Analysis")
+    println("Testing complexity detection and optimization")
+    println("=" * 60)
+
+    let total_tests = 0
+    let passing_tests = 0
+
+    // Test 1: O(n²) nested loop detection
+    println("")
+    println("Test 1: O(n²) Nested Loop Detection")
+    println("Should detect quadratic complexity")
+    if test_quadratic_detection() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected O(n²) detection")
+    }
+    total_tests = total_tests + 1
+
+    // Test 2: O(n log n) detection
+    println("")
+    println("Test 2: O(n log n) Detection")
+    println("Should detect linearithmic complexity")
+    if test_linearithmic_detection() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected O(n log n) detection")
+    }
+    total_tests = total_tests + 1
+
+    // Test 3: O(n) linear detection
+    println("")
+    println("Test 3: O(n) Linear Detection")
+    println("Should detect linear complexity")
+    if test_linear_detection() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected O(n) detection")
+    }
+    total_tests = total_tests + 1
+
+    // Test 4: Inefficiency warning
+    println("")
+    println("Test 4: Inefficiency Warning")
+    println("Should warn about inefficient patterns")
+    if test_inefficiency_warning() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected inefficiency warning")
+    }
+    total_tests = total_tests + 1
+
+    // Test 5: Bootstrap compound analysis
+    println("")
+    println("Test 5: Bootstrap Compound Analysis")
+    println("Should analyze compound complexity across stages")
+    if test_compound_analysis() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected compound analysis")
+    }
+    total_tests = total_tests + 1
+
+    // Test 6: Optimization suggestions
+    println("")
+    println("Test 6: Optimization Suggestions")
+    println("Should suggest algorithmic improvements")
+    if test_optimization_suggestions() {
+        println("  ✅ PASS")
+        passing_tests = passing_tests + 1
+    } else {
+        println("  ❌ FAIL - Expected optimization suggestions")
+    }
+    total_tests = total_tests + 1
+
+    println("")
+    println("=" * 60)
+    println("TEST RESULTS:")
+    println("  Total tests: " + total_tests.to_string())
+    println("  Passing: " + passing_tests.to_string())
+    println("  Failing: " + (total_tests - passing_tests).to_string())
+    println("")
+
+    if passing_tests == total_tests {
+        println("🟢 EXCELLENT - All tests passing!")
+        println("GREEN phase: Implementation complete")
+        println("Ready for REFACTOR phase")
+    } else if passing_tests > 0 {
+        println("⚠️  PARTIAL - Some tests passing")
+    } else {
+        println("🔴 RED - All tests failing (expected for RED phase)")
+        println("Ready to implement GREEN phase")
+    }
+}
+
+// Test 1: O(n²) nested loop detection
+fun test_quadratic_detection() -> bool {
+    // Code with nested loops: O(n²)
+    let code = "
+        let mut i = 0
+        while i < n {
+            let mut j = 0
+            while j < n {
+                process(i, j)
+                j = j + 1
+            }
+            i = i + 1
+        }
+    "
+
+    let complexity = analyze_complexity(code)
+
+    // Should detect O(n²)
+    return complexity.order == "O(n²)" || complexity.order == "O(n^2)"
+}
+
+// Test 2: O(n log n) detection
+fun test_linearithmic_detection() -> bool {
+    // Code with divide-and-conquer pattern: O(n log n)
+    let code = "
+        fun merge_sort(arr, n) {
+            if n <= 1 { return arr }
+            let mid = n / 2
+            let left = merge_sort(arr, mid)
+            let right = merge_sort(arr, n - mid)
+            return merge(left, right, n)
+        }
+    "
+
+    let complexity = analyze_complexity(code)
+
+    // Should detect O(n log n)
+    return complexity.order == "O(n log n)"
+}
+
+// Test 3: O(n) linear detection
+fun test_linear_detection() -> bool {
+    // Code with single loop: O(n)
+    let code = "
+        let mut i = 0
+        let mut sum = 0
+        while i < n {
+            sum = sum + arr[i]
+            i = i + 1
+        }
+    "
+
+    let complexity = analyze_complexity(code)
+
+    // Should detect O(n)
+    return complexity.order == "O(n)"
+}
+
+// Test 4: Inefficiency warning
+fun test_inefficiency_warning() -> bool {
+    // Code with inefficient pattern (repeated linear search)
+    let code = "
+        let mut i = 0
+        while i < n {
+            let found = linear_search(arr, target)
+            process(found)
+            i = i + 1
+        }
+    "
+
+    let warnings = detect_inefficiencies(code)
+
+    // Should warn about repeated O(n) operation inside loop
+    return warnings.count > 0
+}
+
+// Test 5: Bootstrap compound analysis
+fun test_compound_analysis() -> bool {
+    // Analyze compound complexity across bootstrap stages
+    // Stage 0: O(n) lexer
+    // Stage 1: O(n²) parser (naive)
+    // Stage 2: O(n log n) type checker
+    // Compound: O(n²)
+
+    let stage0 = "O(n)"
+    let stage1 = "O(n²)"
+    let stage2 = "O(n log n)"
+
+    let compound = analyze_compound_complexity(stage0, stage1, stage2)
+
+    // Compound should be dominated by worst case: O(n²)
+    return compound.order == "O(n²)" || compound.order == "O(n^2)"
+}
+
+// Test 6: Optimization suggestions
+fun test_optimization_suggestions() -> bool {
+    // Code with suboptimal algorithm
+    let code = "
+        // Bubble sort: O(n²)
+        let mut i = 0
+        while i < n {
+            let mut j = 0
+            while j < n - 1 {
+                if arr[j] > arr[j + 1] {
+                    swap(arr, j, j + 1)
+                }
+                j = j + 1
+            }
+            i = i + 1
+        }
+    "
+
+    let suggestions = suggest_optimizations(code)
+
+    // Should suggest better algorithm (e.g., merge sort O(n log n))
+    return suggestions.count > 0
+}
+
+// Stub implementations (will fail until GREEN phase)
+
+fun analyze_complexity(code: String) -> ComplexityResult {
+    return ComplexityResult { order: "O(1)" }  // RED: Wrong
+}
+
+fun detect_inefficiencies(code: String) -> WarningResult {
+    return WarningResult { count: 0 }  // RED: Not implemented
+}
+
+fun analyze_compound_complexity(stage0: String, stage1: String, stage2: String) -> ComplexityResult {
+    return ComplexityResult { order: "O(1)" }  // RED: Wrong
+}
+
+fun suggest_optimizations(code: String) -> SuggestionResult {
+    return SuggestionResult { count: 0 }  // RED: Not implemented
+}
+
+// Data structures
+
+struct ComplexityResult {
+    order: String,
+}
+
+struct WarningResult {
+    count: i32,
+}
+
+struct SuggestionResult {
+    count: i32,
+}
