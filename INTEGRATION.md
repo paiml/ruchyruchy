@@ -679,6 +679,24 @@
     - **2025-10-29**: GitHub API integration foundation complete
     - Research-grounded: GitHub REST API v3 documentation
     - **Status**: RED phase complete, ready for actual GitHub issue creation
+  - **GITHUB-002 (Issue Linking & Deduplication)**: RED Phase COMPLETE ⭐ **NEW**
+    - Intelligent issue similarity calculation using Jaccard index
+    - Text tokenization and normalization for comparison
+    - Multi-factor similarity scoring (title, body, files, error, labels)
+    - Weighted similarity formula (title 30%, body 25%, files 20%, error 15%, labels 10%)
+    - Duplicate detection with configurable threshold (default: 0.80)
+    - Related issue finding with configurable threshold (default: 0.50)
+    - Issue deduplicator with existing issue corpus
+    - Best match finding for duplicates
+    - Related issues ranked by similarity score
+    - Set overlap calculation (Jaccard for sets)
+    - Error message similarity comparison
+    - BugIssue data structure with files, errors, labels
+    - 21 comprehensive tests (100% passing)
+    - Module: issue_linking.rs (710+ LOC)
+    - **2025-10-29**: Issue linking and deduplication complete
+    - Research-grounded: Runeson et al. (2007) "Detection of Duplicate Defect Reports", Sun et al. (2010) "Discriminative Model for Duplicate Bug Reports"
+    - **Status**: RED phase complete, ready for production validation
   - **Aggregate Statistics**:
     - Total Tests: 60 core tests (6 per ticket × 10 tickets)
     - Total Mutations: 180 mutations (18 per ticket × 10 tickets)

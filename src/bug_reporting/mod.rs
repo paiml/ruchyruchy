@@ -13,6 +13,7 @@ pub mod five_whys;
 pub mod tdd;
 pub mod report_generator;
 pub mod github_integration;
+pub mod issue_linking;
 
 pub use metrics::{
     ComplexityMetrics, ChurnCorrelation, SatdDetector, SatdType, DependencyAnalyzer,
@@ -29,4 +30,8 @@ pub use report_generator::{
 };
 pub use github_integration::{
     GitHubClient, IssueRequest, IssueResponse, BugReportConverter, CommentRequest, GitHubResult,
+};
+pub use issue_linking::{
+    BugIssue, SimilarityScore, SimilarityCalculator, IssueDeduplicator, DuplicateResult,
+    RelatedIssue, DUPLICATE_THRESHOLD, RELATED_THRESHOLD,
 };
