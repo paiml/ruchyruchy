@@ -85,18 +85,17 @@ fun main() {
 }
 
 #[test]
-#[ignore] // BLOCKED: Ruchy Issue #81 - panic!() and undefined functions return exit code 0
 fn test_ruchydbg_run_crash() {
-    // BLOCKED BY: https://github.com/paiml/ruchy/issues/81
-    // Ruchy returns exit code 0 for crashes, making crash detection impossible
-    // This test will be enabled once Ruchy #81 is fixed
+    // FIXED: Ruchy Issue #81 closed in v3.147.7
+    // Runtime errors now return non-zero exit codes
+    // https://github.com/paiml/ruchy/issues/81
 
-    // Create test file with invalid code (should crash)
+    // Create test file with runtime error (division by zero)
     let test_file = "/tmp/test_ruchydbg_crash.ruchy";
     fs::write(test_file, r#"
 fun main() {
-    // Invalid syntax - undefined function
-    undefined_function_that_does_not_exist();
+    // Runtime error: division by zero
+    let x = 1 / 0;
 }
 "#).unwrap();
 
