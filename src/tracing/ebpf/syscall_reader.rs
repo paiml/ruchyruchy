@@ -1,13 +1,16 @@
 //! Userspace eBPF loader and ring buffer reader
 
-use aya::{Ebpf, maps::RingBuf, programs::TracePoint, include_bytes_aligned};
+use aya::{Ebpf, maps::{MapData, RingBuf}, programs::TracePoint, include_bytes_aligned};
 use std::error::Error;
 use std::fmt;
-use tokio::task;
 
 /// Include the compiled eBPF program binary
+///
+/// Note: This path is relative to the crate root during compilation.
+/// The eBPF program must be built first using:
+/// `cd ruchyruchy-ebpf && cargo +nightly build --release -Z build-std=core`
 const EBPF_PROGRAM: &[u8] = include_bytes_aligned!(
-    "../../../target/bpfel-unknown-none/release/syscall_tracer"
+    concat!(env!("CARGO_MANIFEST_DIR"), "/target/bpfel-unknown-none/release/syscall_tracer")
 );
 
 /// Syscall event structure (must match eBPF definition)
@@ -53,8 +56,7 @@ impl Error for EbpfError {}
 ///
 /// Loads eBPF programs and reads syscall events from the kernel.
 pub struct SyscallTracer {
-    _ebpf: Ebpf,
-    ring_buf: RingBuf<Vec<u8>>,
+    ebpf: Ebpf,
 }
 
 impl SyscallTracer {
@@ -77,19 +79,20 @@ impl SyscallTracer {
     /// ```no_run
     /// use ruchyruchy::tracing::ebpf::SyscallTracer;
     ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let tracer = SyscallTracer::new().await?;
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let tracer = SyscallTracer::new()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn new() -> Result<Self, EbpfError> {
+    pub fn new() -> Result<Self, EbpfError> {
         // Load eBPF program
         let mut ebpf = Ebpf::load(EBPF_PROGRAM)
             .map_err(|e| {
-                if e.to_string().contains("Permission denied") || e.to_string().contains("EPERM") {
-                    EbpfError::PermissionDenied(e.to_string())
+                let err_str = e.to_string();
+                if err_str.contains("Permission denied") || err_str.contains("EPERM") {
+                    EbpfError::PermissionDenied(err_str)
                 } else {
-                    EbpfError::LoadFailed(e.to_string())
+                    EbpfError::LoadFailed(err_str)
                 }
             })?;
 
@@ -98,36 +101,29 @@ impl SyscallTracer {
             .program_mut("sys_enter")
             .ok_or_else(|| EbpfError::LoadFailed("sys_enter program not found".to_string()))?
             .try_into()
-            .map_err(|e: aya::EbpfError| EbpfError::LoadFailed(e.to_string()))?;
+            .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
         program_enter.load()
-            .map_err(|e| EbpfError::LoadFailed(e.to_string()))?;
+            .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
         program_enter.attach("raw_syscalls", "sys_enter")
-            .map_err(|e| EbpfError::AttachFailed(format!("sys_enter: {}", e)))?;
+            .map_err(|e: aya::programs::ProgramError| EbpfError::AttachFailed(format!("sys_enter: {}", e)))?;
 
         // Attach to sys_exit tracepoint
         let program_exit: &mut TracePoint = ebpf
             .program_mut("sys_exit")
             .ok_or_else(|| EbpfError::LoadFailed("sys_exit program not found".to_string()))?
             .try_into()
-            .map_err(|e: aya::EbpfError| EbpfError::LoadFailed(e.to_string()))?;
+            .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
         program_exit.load()
-            .map_err(|e| EbpfError::LoadFailed(e.to_string()))?;
+            .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
         program_exit.attach("raw_syscalls", "sys_exit")
-            .map_err(|e| EbpfError::AttachFailed(format!("sys_exit: {}", e)))?;
-
-        // Open ring buffer
-        let ring_buf: RingBuf<Vec<u8>> = RingBuf::try_from(
-            ebpf.take_map("EVENTS")
-                .ok_or_else(|| EbpfError::LoadFailed("EVENTS ring buffer not found".to_string()))?
-        ).map_err(|e| EbpfError::LoadFailed(e.to_string()))?;
+            .map_err(|e: aya::programs::ProgramError| EbpfError::AttachFailed(format!("sys_exit: {}", e)))?;
 
         Ok(Self {
-            _ebpf: ebpf,
-            ring_buf,
+            ebpf,
         })
     }
 
@@ -139,56 +135,36 @@ impl SyscallTracer {
     ///
     /// ```no_run
     /// # use ruchyruchy::tracing::ebpf::SyscallTracer;
-    /// # async fn example(mut tracer: SyscallTracer) -> Result<(), Box<dyn std::error::Error>> {
-    /// let events = tracer.read_events().await?;
+    /// # fn example(mut tracer: SyscallTracer) -> Result<(), Box<dyn std::error::Error>> {
+    /// let events = tracer.read_events()?;
     /// println!("Read {} syscall events", events.len());
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn read_events(&mut self) -> Result<Vec<SyscallEvent>, EbpfError> {
+    pub fn read_events(&mut self) -> Result<Vec<SyscallEvent>, EbpfError> {
         let mut events = Vec::new();
-        let ring_buf = &mut self.ring_buf;
 
-        // Spawn blocking task to read from ring buffer
-        task::spawn_blocking(move || {
-            while let Some(item) = ring_buf.next() {
-                if item.len() != std::mem::size_of::<SyscallEvent>() {
-                    eprintln!("Warning: Unexpected event size: {} bytes", item.len());
-                    continue;
-                }
+        // Get ring buffer from map
+        let map = self.ebpf.map_mut("EVENTS")
+            .ok_or_else(|| EbpfError::ReadFailed("EVENTS ring buffer not found".to_string()))?;
 
-                // Safety: We verified the size matches SyscallEvent
-                let event: SyscallEvent = unsafe {
-                    std::ptr::read(item.as_ptr() as *const SyscallEvent)
-                };
-                events.push(event);
+        let mut ring_buf = RingBuf::try_from(map)
+            .map_err(|e| EbpfError::ReadFailed(e.to_string()))?;
+
+        while let Some(item) = ring_buf.next() {
+            if item.len() != std::mem::size_of::<SyscallEvent>() {
+                eprintln!("Warning: Unexpected event size: {} bytes", item.len());
+                continue;
             }
-            Ok::<Vec<SyscallEvent>, EbpfError>(events)
-        }).await
-        .map_err(|e| EbpfError::ReadFailed(e.to_string()))?
-    }
 
-    /// Read syscall events with a timeout
-    ///
-    /// Waits for events up to the specified duration.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use ruchyruchy::tracing::ebpf::SyscallTracer;
-    /// # use std::time::Duration;
-    /// # async fn example(mut tracer: SyscallTracer) -> Result<(), Box<dyn std::error::Error>> {
-    /// let events = tracer.read_events_timeout(Duration::from_secs(1)).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn read_events_timeout(
-        &mut self,
-        timeout: std::time::Duration,
-    ) -> Result<Vec<SyscallEvent>, EbpfError> {
-        tokio::time::timeout(timeout, self.read_events())
-            .await
-            .map_err(|_| EbpfError::ReadFailed("Timeout reading events".to_string()))?
+            // Safety: We verified the size matches SyscallEvent
+            let event: SyscallEvent = unsafe {
+                std::ptr::read(item.as_ptr() as *const SyscallEvent)
+            };
+            events.push(event);
+        }
+
+        Ok(events)
     }
 }
 
@@ -196,11 +172,11 @@ impl SyscallTracer {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[test]
     #[ignore] // Requires root privileges
-    async fn test_syscall_tracer_load() {
+    fn test_syscall_tracer_load() {
         // This test verifies we can load and attach the eBPF program
-        let result = SyscallTracer::new().await;
+        let result = SyscallTracer::new();
 
         match result {
             Ok(_tracer) => {
