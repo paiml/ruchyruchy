@@ -3232,3 +3232,145 @@ future_roadmap:
                 - GREEN: 6/6 tests passing
                 - REFACTOR: Constants extracted, code cleaned
                 - TOOL VALIDATION: 270 total tests passing
+
+          - id: DEBUGGER-014
+            title: "Phase 1: Zero-Cost Compiler Instrumentation"
+            status: planned
+            priority: high
+            timeline: 3 months
+            description: |
+              Implement compile-time tracing that is zero-cost when disabled.
+              This is our unique advantage: leverage Ruchy's self-hosted compiler
+              to provide rich, type-aware tracing with zero overhead when tracing
+              is not enabled.
+            requirements:
+              - Conditional compilation based on --trace flag
+              - Zero-cost when tracing disabled (verified with benchmarks)
+              - Type-aware tracing (leverage Ruchy type system)
+              - Per-thread lock-free buffers (SPSC ring buffer)
+              - JSON output with source maps
+              - Sampling support (1/N function calls)
+              - Filtering support (by function pattern)
+            tests:
+              - test_zero_cost_when_disabled (must prove 0% overhead)
+              - test_type_aware_tracing (serialize with type info)
+              - test_function_tracing (entry/exit with args/returns)
+              - test_sampling (1/1000 sampling)
+              - test_filtering (match function patterns)
+              - test_per_thread_buffers (multi-threaded traces)
+              - test_source_map_integration (map events to source)
+            deliverables:
+              - Compiler pass to inject tracing hooks
+              - Runtime tracing library (pure Ruchy)
+              - Zero-cost conditional compilation
+              - Benchmarks proving overhead claims
+              - Documentation with examples
+            acceptance:
+              - Zero overhead when disabled (benchmarked)
+              - <2x overhead for large functions with full logging
+              - <1.1x overhead with sampling (1/1000)
+              - Type information preserved in traces
+              - Source maps accurate (1:1 mapping)
+            benchmarks:
+              - Tiny function (1-5 LOC): Measure worst-case overhead
+              - Large function (100+ LOC): Measure best-case overhead
+              - Multi-threaded: No contention with per-thread buffers
+              - Sampling: Verify overhead reduction
+            specification: "docs/specifications/ruchydbg-run-deep-tracing-ADDENDUM-REALITY-CHECK.md"
+            notes: |
+              Based on realistic assessment from addendum. Focus on our
+              unique advantage: compiler-based instrumentation with zero cost
+              when disabled.
+
+              Key Insight: Use Ruchy's type system for intelligent tracing.
+              Unlike strace or perf, we can serialize rich type information.
+
+              Performance Targets (Honest):
+              - Tiny functions: 100x-1000x with full logging, 1.1x with sampling
+              - Large functions: 1.2x-2x with full logging, 1.001x with sampling
+
+              Mitigation: Always use sampling or filtering for tiny functions.
+
+          - id: DEBUGGER-015
+            title: "Phase 2: eBPF Syscall Tracing"
+            status: planned
+            priority: medium
+            timeline: 2 months
+            description: |
+              Low-overhead syscall tracing using eBPF (not ptrace).
+              Use modern kernel facilities for <1% overhead syscall tracing.
+            requirements:
+              - BCC/eBPF integration (use existing BPF tooling)
+              - Attach to raw_syscalls:sys_enter/exit tracepoints
+              - Decode syscall arguments (50+ common syscalls)
+              - Correlate with function traces (by PID + timestamp)
+              - strace-compatible text output
+              - JSON output for machine processing
+            tests:
+              - test_ebpf_syscall_capture
+              - test_syscall_decoding (open, read, write, etc.)
+              - test_correlation_with_functions
+              - test_overhead_under_1_percent
+              - test_strace_compatible_output
+            deliverables:
+              - eBPF programs for syscall tracing
+              - Syscall decoder (50+ syscalls)
+              - Correlation engine (syscall ↔ function)
+              - strace-compatible output formatter
+            acceptance:
+              - <1% overhead (verified with syscall-heavy benchmarks)
+              - Accurate syscall decoding (50+ common syscalls)
+              - Correlation with function traces works
+            specification: "docs/specifications/ruchydbg-run-deep-tracing-ADDENDUM-REALITY-CHECK.md"
+            notes: |
+              Use eBPF, NOT ptrace. ptrace has 2-5x overhead, eBPF has <1%.
+
+              Reference: Gregg (2019) "BPF Performance Tools"
+
+              Why eBPF:
+              - No process stops (unlike ptrace)
+              - Kernel aggregates data
+              - <1% overhead for most workloads
+              - Production-safe
+
+          - id: DEBUGGER-016
+            title: "Phase 3: Statistical Profiling (perf_event_open)"
+            status: planned
+            priority: medium
+            timeline: 2 months
+            description: |
+              Low-overhead sampling profiler using hardware counters.
+              Use perf_event_open (not signals) for accurate profiling.
+            requirements:
+              - perf_event_open integration
+              - Hardware counter sampling (CPU_CYCLES)
+              - DWARF stack unwinding (kernel + userspace)
+              - Flame graph generation
+              - <1% overhead at 1000Hz sampling
+            tests:
+              - test_perf_event_setup
+              - test_hardware_counter_sampling
+              - test_stack_unwinding
+              - test_flame_graph_generation
+              - test_overhead_under_1_percent
+              - test_hotspot_identification
+            deliverables:
+              - perf_event_open wrapper
+              - Stack unwinder (DWARF-based)
+              - Flame graph generator
+              - Hotspot analyzer (top N functions by time)
+            acceptance:
+              - <1% overhead at 1000Hz sampling
+              - Accurate hotspot identification (95% confidence)
+              - Flame graphs compatible with brendangregg/FlameGraph
+            specification: "docs/specifications/ruchydbg-run-deep-tracing-ADDENDUM-REALITY-CHECK.md"
+            notes: |
+              Use perf_event_open, NOT signals (setitimer/SIGPROF).
+
+              Why perf_event_open:
+              - Accurate sampling using hardware counters
+              - Kernel + userspace stack traces
+              - No signal delivery delays
+              - <1% overhead
+
+              Reference: de Melo (2010) "The New Linux 'perf' Tools"
