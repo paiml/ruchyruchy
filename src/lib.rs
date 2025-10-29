@@ -37,6 +37,8 @@ pub mod lsp;
 pub mod bug_discovery;
 /// Bug replication module (REPLIC-001 through REPLIC-003)
 pub mod bug_replication;
+/// Bug reporting module (REPORT-001 through REPORT-004)
+pub mod bug_reporting;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
