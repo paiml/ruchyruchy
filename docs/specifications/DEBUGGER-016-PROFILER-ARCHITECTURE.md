@@ -239,12 +239,32 @@ std::fs::write("flamegraph.svg", svg)?;
 
 **Goal**: Minimal implementation (make tests pass)
 
-**Tasks**:
-1. Add `perf-event2`, `perf-event-data` dependencies
-2. Implement `Profiler::new()` - Initialize perf_event_open
-3. Implement `Profiler::collect_samples()` - Read ring buffer
-4. Implement basic stack unwinding (no DWARF, just IPs)
-5. All 6 tests passing
+**Status**: PARTIAL - Basic initialization working, sampling not yet implemented
+
+**Completed**:
+1. ✅ Added `perf-event` dependency (v0.4)
+2. ✅ Implemented `Profiler::new()` - Initialize perf_event_open
+3. ✅ Implemented `start()`, `stop()`, `collect_samples()` methods
+4. ✅ All tests compile (291 passing, 6 profiler tests ignored)
+5. ✅ Proper error handling with permission detection
+
+**Limitation Discovered**:
+- `perf-event` crate v0.4 does NOT support sampling
+- Crate only provides counting-mode events
+- No API for sample_frequency, sample_ip, sample_stack, etc.
+- Architecture document referenced `perf-event2` which doesn't exist on crates.io
+
+**Path Forward (REFACTOR Phase)**:
+Three options identified:
+1. **Use perf-event-open crate** (v2.0+) - Has sampling support
+2. **Raw syscalls** - Implement perf_event_open(2) directly
+3. **Alternative approach** - Use Linux perf tool or eBPF
+
+**Tasks for REFACTOR**:
+1. Research and implement proper sampling crate/approach
+2. Implement ring buffer reading (mmap)
+3. Implement basic stack unwinding (no DWARF, just IPs)
+4. Make all 6 tests pass
 
 ### REFACTOR Phase
 
