@@ -9,8 +9,12 @@
 
 pub mod minimizer;
 pub mod harness;
+pub mod bisect;
 
 pub use minimizer::{DeltaDebugger, MinimizationStrategy, MinimizationResult, TestOutcome};
 pub use harness::{
     Environment, ExecutionResult, ReproducibleTest, ReplicationHarness,
+};
+pub use bisect::{
+    CommitId, Commit, TestResult, BisectionState, BisectionResult, GitBisector,
 };
