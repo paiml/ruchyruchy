@@ -12,6 +12,7 @@ pub mod metrics;
 pub mod five_whys;
 pub mod tdd;
 pub mod report_generator;
+pub mod github_integration;
 
 pub use metrics::{
     ComplexityMetrics, ChurnCorrelation, SatdDetector, SatdType, DependencyAnalyzer,
@@ -25,4 +26,7 @@ pub use tdd::{
 };
 pub use report_generator::{
     BugReport, Severity, BugCategory,
+};
+pub use github_integration::{
+    GitHubClient, IssueRequest, IssueResponse, BugReportConverter, CommentRequest, GitHubResult,
 };
