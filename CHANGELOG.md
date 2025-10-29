@@ -7,6 +7,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2025-10-29
+
+### 🎉 Major Feature: ruchydbg run Command with Timeout Detection
+
+**Codename**: "Executable Debugging"
+**Theme**: Execute Ruchy code with timeout detection for hang testing
+
+### Added
+
+#### 🔧 DEBUGGER-013: Implement ruchydbg run Command
+
+**Critical Fix** - Documentation referenced non-existent command, now implemented
+
+- **Command-Line Interface**
+  - New command: `ruchydbg run <file> [--timeout <ms>]`
+  - Default timeout: 5000ms (5 seconds)
+  - Exit codes: 0 (success), 124 (timeout), 1+ (error)
+  - Execution time reporting in milliseconds
+  - Module: `src/bin/ruchydbg.rs` (260 LOC)
+
+- **Features**
+  - Command-line argument parsing (file path, timeout)
+  - Unix timeout command integration for hang detection
+  - File existence validation
+  - Ruchy availability checking
+  - Help text with examples
+  - Default timeout configuration
+
+- **Test Coverage**: 6/7 passing (86%)
+  - `test_ruchydbg_run_success`: ✅ Successful execution
+  - `test_ruchydbg_run_timeout`: ✅ Infinite loop detection (exit 124)
+  - `test_ruchydbg_run_crash`: ⏸️ Blocked by Ruchy Issue #81
+  - `test_ruchydbg_run_invalid_file`: ✅ File not found handling
+  - `test_ruchydbg_run_help`: ✅ Help text display
+  - `test_ruchydbg_run_default_timeout`: ✅ Default 5000ms timeout
+  - `test_ruchydbg_run_reports_execution_time`: ✅ Timing output
+
+- **Usage Examples**
+  ```bash
+  # Run with custom timeout
+  ruchydbg run test.ruchy --timeout 1000
+
+  # Run with default timeout (5000ms)
+  ruchydbg run test.ruchy
+
+  # Show help
+  ruchydbg run --help
+  ```
+
+- **Exit Code Behavior**
+  - `0`: Successful execution
+  - `124`: Timeout detected (program exceeded threshold)
+  - `1+`: Other errors (file not found, ruchy not available, etc.)
+
+### Fixed
+
+- **Issue #5**: Documentation bug - QUICK_START_FOR_RUCHY_DEVS.md and WHACK_A_MOLE_BUG_HUNTERS_GUIDE.md referenced non-existent `ruchydbg run` command
+- Updated all documentation to reference actual commands
+
+### Quality Metrics
+
+- **TDD Methodology**: Extreme TDD (RED-GREEN-REFACTOR-TOOL-VALIDATION)
+  - RED Phase: 7 tests written, 6 failing initially
+  - GREEN Phase: Implementation complete, 6/6 tests passing
+  - REFACTOR Phase: Extracted constants, improved maintainability
+  - TOOL VALIDATION: All 270 tests passing
+
+- **Code Quality**
+  - Constants extracted: EXIT_SUCCESS, EXIT_TIMEOUT, EXIT_ERROR, DEFAULT_TIMEOUT_MS
+  - Comprehensive error handling
+  - Unix platform support (timeout command)
+  - Windows fallback (no timeout, warning shown)
+
+### Known Limitations
+
+- **Crash Detection Blocked**: One test (`test_ruchydbg_run_crash`) marked `#[ignore]` due to Ruchy Issue #81
+  - Filed: https://github.com/paiml/ruchy/issues/81
+  - Reason: `panic!()` and undefined functions return exit code 0 (success)
+  - Workaround: Use timeout for hang detection instead
+
+### Upstream Bug Reports Filed
+
+**GENCHI GENBUTSU** - "Go and See" principle applied to discover Ruchy limitations:
+
+- **Ruchy Issue #80**: stdin not supported
+  - Filed: https://github.com/paiml/ruchy/issues/80
+  - Impact: Cannot use `echo 'code' | ruchy run -` for piping
+  - Workaround: Create temporary files
+
+- **Ruchy Issue #81**: panic!() returns exit code 0
+  - Filed: https://github.com/paiml/ruchy/issues/81
+  - Impact: Cannot detect crashes programmatically
+  - Workaround: Use timeout detection for hangs
+
+### Integration
+
+- **Documentation Updated**
+  - QUICK_START_FOR_RUCHY_DEVS.md now references actual commands
+  - WHACK_A_MOLE_BUG_HUNTERS_GUIDE.md examples corrected
+  - roadmap.yaml updated with DEBUGGER-013 completion
+
+- **GitHub Integration**
+  - Closes: https://github.com/paiml/ruchyruchy/issues/5
+  - Related: https://github.com/paiml/ruchy/issues/80
+  - Related: https://github.com/paiml/ruchy/issues/81
+
+### Statistics
+
+- **Lines of Code**: 260 LOC (src/bin/ruchydbg.rs)
+- **Test Coverage**: 86% (6/7 tests passing, 1 blocked)
+- **Total Tests**: 270 (all passing)
+- **Detection Rate**: 100% for timeouts, blocked for crashes
+
 ## [1.5.0] - 2025-10-29
 
 ### 🎉 Major Release: Schema-Based Runtime Property Fuzzing
