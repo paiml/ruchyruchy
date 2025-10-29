@@ -35,6 +35,8 @@ pub mod stage3_real_codegen;
 pub mod lsp;
 /// Bug discovery, replication, and reporting system (DISC-001 through DISC-004)
 pub mod bug_discovery;
+/// Bug replication module (REPLIC-001 through REPLIC-003)
+pub mod bug_replication;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
