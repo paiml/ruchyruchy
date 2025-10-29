@@ -513,6 +513,17 @@
     - **2025-10-29**: Foundation complete (module design, statistical analysis, confidence scoring)
     - Research-grounded: Welch (1947), Cohen (1988), Kalibera & Jones (2013)
     - **Status**: RED phase complete, ready for GREEN phase implementation
+  - **DISC-002 (Grammar-Based Fuzzing)**: RED Phase COMPLETE ⭐ **NEW**
+    - Grammar-based test case generation (context-free grammar)
+    - Ruchy-specific grammar rules (minimal subset)
+    - Test case corpus management (passing/crashing/hanging/incorrect)
+    - Test case minimization (shrinking via line/char removal)
+    - Deterministic generation (seed-based LCG PRNG)
+    - 15 comprehensive tests (100% passing)
+    - Module: grammar_fuzzer.rs (660+ LOC)
+    - **2025-10-29**: Grammar fuzzing foundation complete
+    - Research-grounded: Holler et al. (2012), Zalewski (2014) AFL
+    - **Status**: RED phase complete, ready for GREEN phase integration
   - **Aggregate Statistics**:
     - Total Tests: 60 core tests (6 per ticket × 10 tickets)
     - Total Mutations: 180 mutations (18 per ticket × 10 tickets)
