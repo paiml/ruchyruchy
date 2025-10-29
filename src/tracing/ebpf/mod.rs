@@ -21,12 +21,12 @@
 //! ```no_run
 //! use ruchyruchy::tracing::ebpf::SyscallTracer;
 //!
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! // Load and attach eBPF programs
-//! let mut tracer = SyscallTracer::new().await?;
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Load and attach eBPF programs (requires root or CAP_BPF)
+//! let mut tracer = SyscallTracer::new()?;
 //!
-//! // Read syscall events
-//! let events = tracer.read_events().await?;
+//! // Read syscall events (non-blocking)
+//! let events = tracer.read_events()?;
 //! for event in events {
 //!     println!("PID {} syscall {} at {}ns",
 //!         event.pid, event.syscall_nr, event.timestamp_ns);
