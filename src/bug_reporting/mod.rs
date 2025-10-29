@@ -10,6 +10,7 @@
 
 pub mod metrics;
 pub mod five_whys;
+pub mod tdd;
 
 pub use metrics::{
     ComplexityMetrics, ChurnCorrelation, SatdDetector, SatdType, DependencyAnalyzer,
@@ -17,4 +18,7 @@ pub use metrics::{
 };
 pub use five_whys::{
     ConfidenceLevel, DataPoint, Hypothesis, WhyLayer, FiveWhysAnalysis, FiveWhysAnalyzer,
+};
+pub use tdd::{
+    TddPhase, TestResult, TddCycle, TddHistory, QualityGate, QualityGates,
 };
