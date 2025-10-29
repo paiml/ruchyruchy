@@ -9,8 +9,12 @@
 // - REPORT-004: Markdown Report Generator
 
 pub mod metrics;
+pub mod five_whys;
 
 pub use metrics::{
     ComplexityMetrics, ChurnCorrelation, SatdDetector, SatdType, DependencyAnalyzer,
     DependencyNode, QuantitativeAnalysis,
+};
+pub use five_whys::{
+    ConfidenceLevel, DataPoint, Hypothesis, WhyLayer, FiveWhysAnalysis, FiveWhysAnalyzer,
 };
