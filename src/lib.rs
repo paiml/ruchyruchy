@@ -33,6 +33,8 @@ pub mod performance_benchmark;
 pub mod stage3_real_codegen;
 /// Language Server Protocol (LSP) implementation
 pub mod lsp;
+/// Bug discovery, replication, and reporting system (DISC-001 through DISC-004)
+pub mod bug_discovery;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
