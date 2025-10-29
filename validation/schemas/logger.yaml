@@ -1,0 +1,53 @@
+# Runtime Schema for Logger (Issue #79)
+#
+# This schema models the Logger type that triggers Issue #79:
+# Enum field cast via &self causes runtime hang
+#
+# Bug: `self.level as i32` hangs indefinitely
+#
+# Expected: Should complete in <1000ms
+# Actual: Infinite loop (timeout)
+
+type_name: Logger
+
+constructor:
+  name: create
+  parameters: []
+  timeout_ms: 100  # Constructors should be fast
+  returns: Logger
+
+operations:
+  - name: test
+    preconditions: []
+    parameters: []
+    timeout_ms: 1000  # 1 second max for operation
+    returns: void
+
+max_sequence_length: 5
+
+# Generated test will look like:
+#
+# enum LogLevel {
+#     Debug = 0,
+#     Info = 1,
+# }
+#
+# struct Logger {
+#     level: LogLevel,
+# }
+#
+# impl Logger {
+#     fun create() -> Logger {
+#         Logger { level: LogLevel::Info }
+#     }
+#
+#     fun test(&self) {
+#         let val = self.level as i32;  // HANGS HERE
+#         println!("Value: {}", val);
+#     }
+# }
+#
+# fun main() {
+#     let logger = Logger::create();  // Timeout: <100ms
+#     logger.test();                   // Timeout: <1000ms (FAILS!)
+# }
