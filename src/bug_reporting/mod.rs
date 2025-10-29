@@ -11,6 +11,7 @@
 pub mod metrics;
 pub mod five_whys;
 pub mod tdd;
+pub mod report_generator;
 
 pub use metrics::{
     ComplexityMetrics, ChurnCorrelation, SatdDetector, SatdType, DependencyAnalyzer,
@@ -21,4 +22,7 @@ pub use five_whys::{
 };
 pub use tdd::{
     TddPhase, TestResult, TddCycle, TddHistory, QualityGate, QualityGates,
+};
+pub use report_generator::{
+    BugReport, Severity, BugCategory,
 };
