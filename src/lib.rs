@@ -41,6 +41,8 @@ pub mod bug_replication;
 pub mod bug_reporting;
 /// Tracing infrastructure (DEBUGGER-014: Zero-cost compiler instrumentation)
 pub mod tracing;
+/// Statistical profiling (DEBUGGER-016: perf_event_open-based profiler)
+pub mod profiling;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
