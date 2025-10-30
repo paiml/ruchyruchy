@@ -1,10 +1,11 @@
 // INTERP-001: AST Parser Integration
-// GREEN Phase: Minimal implementation to make tests pass
+// REFACTOR Phase: Clean up implementation while keeping tests green
 //
 // Research: Aho et al. (2006) Chapter 4: Syntax Analysis
 //
-// This is the GREEN phase - minimal recursive descent parser
-// Goal: Make 12 tests pass with simplest possible implementation
+// This is a recursive descent parser with operator precedence
+// for Ruchy language syntax. Supports functions, structs, control
+// flow, expressions, and data structures.
 
 /// Parser for Ruchy source code
 pub struct Parser {
@@ -82,13 +83,12 @@ impl Parser {
 
     /// Parse the source code into an AST
     ///
-    /// GREEN Phase: Minimal implementation
+    /// Tokenizes the source and parses top-level declarations (functions and structs)
     pub fn parse(&mut self) -> Result<Ast, ParseError> {
-        // GREEN: Minimal implementation
         // Step 1: Tokenize
         self.tokenize()?;
 
-        // Step 2: Parse top-level items
+        // Step 2: Parse top-level declarations
         let mut nodes = Vec::new();
 
         while !self.is_at_end() {
@@ -105,7 +105,10 @@ impl Parser {
         Ok(Ast { nodes })
     }
 
-    /// Tokenize the source code
+    /// Tokenize the source code into a vector of tokens
+    ///
+    /// Handles whitespace, comments, string literals, numbers, identifiers,
+    /// keywords, and operators/delimiters
     fn tokenize(&mut self) -> Result<(), ParseError> {
         let mut chars = self.source.chars().peekable();
         let mut tokens = Vec::new();
@@ -407,12 +410,7 @@ impl Parser {
     fn parse_let(&mut self) -> Result<AstNode, ParseError> {
         self.consume(&Token::Let)?;
 
-        let name = if let Some(Token::Identifier(n)) = self.current().cloned() {
-            self.advance();
-            n
-        } else {
-            String::new()
-        };
+        let name = self.expect_identifier();
 
         self.consume(&Token::Equal)?;
         let value = Box::new(self.parse_expression()?);
@@ -477,12 +475,7 @@ impl Parser {
     fn parse_for(&mut self) -> Result<AstNode, ParseError> {
         self.consume(&Token::For)?;
 
-        let var = if let Some(Token::Identifier(v)) = self.current().cloned() {
-            self.advance();
-            v
-        } else {
-            String::new()
-        };
+        let var = self.expect_identifier();
 
         self.consume(&Token::In)?;
 
@@ -719,13 +712,7 @@ impl Parser {
                 // Check for field access
                 else if self.check(&Token::Dot) {
                     self.advance();
-                    let field = if let Some(Token::Identifier(f)) = self.current() {
-                        let f = f.clone();
-                        self.advance();
-                        f
-                    } else {
-                        String::new()
-                    };
+                    let field = self.expect_identifier();
                     Ok(AstNode::FieldAccess {
                         expr: Box::new(AstNode::Identifier(id)),
                         field,
@@ -828,6 +815,16 @@ impl Parser {
 
     fn is_at_end(&self) -> bool {
         matches!(self.current(), Some(Token::Eof) | None) || self.pos >= self.tokens.len()
+    }
+
+    /// Extract an identifier token and advance, or return empty string
+    fn expect_identifier(&mut self) -> String {
+        if let Some(Token::Identifier(name)) = self.current().cloned() {
+            self.advance();
+            name
+        } else {
+            String::new()
+        }
     }
 }
 
