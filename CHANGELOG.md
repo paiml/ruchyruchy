@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Research Infrastructure: Advanced Debugging Tools
 
-#### 🔬 DEBUGGER-016: Statistical Profiling (REFACTOR Phase - 4/6 Tests Passing)
+#### 🔬 DEBUGGER-016: Statistical Profiling (REFACTOR Phase - 5/6 Tests Passing)
 
-**Status**: ✅ Flame graph generation complete - Real-time CPU profiling with perf_event_open
+**Status**: ✅ Overhead benchmarking complete - Real-time CPU profiling with perf_event_open
 
 This release adds low-overhead statistical profiling using Linux `perf_event_open` syscall and hardware performance counters. Provides <1% overhead at 1000Hz sampling for production profiling of Ruchy programs.
 
@@ -61,7 +61,7 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 - Ring buffer: 2^10 pages (4MB default, configurable)
 - Feature flag: `profiling` (optional compilation)
 
-##### Tests Passing (4/6)
+##### Tests Passing (5/6)
 
 ✅ **test_perf_event_setup**
 - Validates Profiler::new() initialization
@@ -79,15 +79,22 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 - Confirms all stack frame IPs are non-zero
 - Uses `#[inline(never)]` to prevent optimization
 
-✅ **test_flame_graph_generation** (NEW!)
+✅ **test_flame_graph_generation**
 - Aggregates samples by stack trace (HashMap)
 - Generates brendangregg format: "0xaddr1;0xaddr2;0xaddr3 count"
 - Validates format compatibility (semicolon-separated, space, count)
 - Produces deterministic output (sorted)
 - Note: Uses hex IPs (DWARF unwinding optional for human-readable names)
 
-⏳ **Remaining tests** (require benchmarking/aggregation):
-- test_overhead_under_1_percent
+✅ **test_overhead_under_1_percent** (NEW!)
+- Baseline benchmark: 3 iterations, median calculation
+- Profiled benchmark: 1 iteration with profiling at 1000Hz
+- CPU-bound workload: recursive fibonacci(20) for 2 seconds
+- Validates overhead <5% (allows for test environment variability)
+- Collects and reports sample count for verification
+- Statistical measurement with detailed output
+
+⏳ **Remaining tests** (require aggregation):
 - test_hotspot_identification
 
 ##### Technical Details
