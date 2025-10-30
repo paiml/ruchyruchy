@@ -210,6 +210,94 @@ impl FlameGraph {
     }
 }
 
+/// Hotspot analysis entry
+///
+/// Represents a single hotspot (instruction pointer) with its sample count and percentage.
+#[derive(Debug, Clone)]
+pub struct HotspotEntry {
+    /// Function identifier (instruction pointer as hex string)
+    /// Note: Use DWARF unwinding for human-readable function names
+    pub function: String,
+    /// Number of samples at this instruction pointer
+    pub count: usize,
+    /// Percentage of total samples
+    pub percentage: f64,
+}
+
+/// Hotspot analyzer for identifying top N functions by CPU time
+///
+/// Aggregates profiling samples by instruction pointer and identifies
+/// the functions consuming the most CPU time.
+pub struct Hotspot;
+
+impl Hotspot {
+    /// Analyze samples and return top N hotspots
+    ///
+    /// Aggregates samples by instruction pointer (IP), calculates percentages,
+    /// and returns the top N entries sorted by sample count (descending).
+    ///
+    /// # Arguments
+    ///
+    /// * `samples` - Profiling samples to analyze
+    /// * `top_n` - Number of top hotspots to return (e.g., 10 for top 10)
+    ///
+    /// # Returns
+    ///
+    /// Vector of HotspotEntry sorted by sample count (descending).
+    /// Each entry contains: function (hex IP), count, percentage.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ruchyruchy::profiling::{Profiler, Hotspot};
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut profiler = Profiler::new()?;
+    /// profiler.start()?;
+    /// // ... run workload ...
+    /// profiler.stop()?;
+    /// let samples = profiler.collect_samples()?;
+    ///
+    /// let hotspots = Hotspot::analyze(&samples, 10);  // Top 10
+    /// for (i, entry) in hotspots.iter().enumerate() {
+    ///     println!("#{}: {} ({:.2}% - {} samples)",
+    ///         i + 1, entry.function, entry.percentage, entry.count);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn analyze(samples: &[Sample], top_n: usize) -> Vec<HotspotEntry> {
+        if samples.is_empty() {
+            return Vec::new();
+        }
+
+        // Aggregate samples by instruction pointer
+        let mut ip_counts: std::collections::HashMap<u64, usize> =
+            std::collections::HashMap::new();
+
+        for sample in samples {
+            *ip_counts.entry(sample.ip).or_insert(0) += 1;
+        }
+
+        let total_samples = samples.len() as f64;
+
+        // Convert to HotspotEntry with percentages
+        let mut hotspots: Vec<HotspotEntry> = ip_counts
+            .iter()
+            .map(|(ip, count)| HotspotEntry {
+                function: format!("0x{:x}", ip),
+                count: *count,
+                percentage: (*count as f64 / total_samples) * 100.0,
+            })
+            .collect();
+
+        // Sort by count (descending)
+        hotspots.sort_by(|a, b| b.count.cmp(&a.count));
+
+        // Return top N
+        hotspots.into_iter().take(top_n).collect()
+    }
+}
+
 /// Statistical profiler using perf_event_open
 ///
 /// GREEN Phase implementation: Basic sampling with hardware counters.
