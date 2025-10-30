@@ -437,7 +437,12 @@ impl Evaluator {
             return Err(EvalError::StackOverflow);
         }
 
-        // 2. Look up function in registry
+        // 2. Check for built-in functions first (read_file, write_file, println, etc.)
+        if let Some(result) = self.try_call_builtin(name, args)? {
+            return Ok(result);
+        }
+
+        // 3. Look up function in user-defined registry
         let (params, body) =
             self.functions
                 .get(name)
@@ -446,7 +451,7 @@ impl Evaluator {
                     name: name.to_string(),
                 })?;
 
-        // 3. Check argument count matches parameter count (arity check)
+        // 4. Check argument count matches parameter count (arity check)
         if args.len() != params.len() {
             return Err(EvalError::ArgumentCountMismatch {
                 function: name.to_string(),
@@ -455,13 +460,13 @@ impl Evaluator {
             });
         }
 
-        // 4. Evaluate all arguments eagerly (call-by-value semantics)
+        // 5. Evaluate all arguments eagerly (call-by-value semantics)
         let mut arg_values = Vec::new();
         for arg in args {
             arg_values.push(self.eval(arg)?);
         }
 
-        // 5. Create new scope and bind parameters to argument values
+        // 6. Create new scope and bind parameters to argument values
         let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
         for (param, value) in params.iter().zip(arg_values.iter()) {
             self.scope
@@ -479,7 +484,7 @@ impl Evaluator {
         // Increment call depth for recursion tracking
         self.call_depth += 1;
 
-        // 6. Execute function body, handling early returns
+        // 7. Execute function body, handling early returns
         let mut result = Value::nil();
         for stmt in &body {
             match self.eval_internal(stmt) {
@@ -518,12 +523,94 @@ impl Evaluator {
             }
         }
 
-        // 7. Restore previous scope, call depth, and call stack
+        // 8. Restore previous scope, call depth, and call stack
         self.call_depth -= 1;
         self.call_stack.pop();
         self.scope = saved_scope;
 
         Ok(result)
+    }
+
+    /// Try to call a built-in function
+    ///
+    /// Returns Some(Value) if the function is a built-in and was executed successfully.
+    /// Returns None if the function is not a built-in (allowing fallback to user-defined).
+    /// Returns Err if the built-in function call failed.
+    fn try_call_builtin(
+        &mut self,
+        name: &str,
+        args: &[AstNode],
+    ) -> Result<Option<Value>, EvalError> {
+        match name {
+            "read_file" => {
+                // read_file(path: String) -> String
+                if args.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "read_file".to_string(),
+                        expected: 1,
+                        actual: args.len(),
+                    });
+                }
+
+                let path_val = self.eval(&args[0])?;
+                let path = path_val.as_string()?;
+
+                match std::fs::read_to_string(path) {
+                    Ok(content) => Ok(Some(Value::string(content))),
+                    Err(e) => Err(EvalError::ValueError(ValueError::InvalidOperation {
+                        operation: "read_file".to_string(),
+                        message: format!("Failed to read file: {}", e),
+                    })),
+                }
+            }
+
+            "write_file" => {
+                // write_file(path: String, content: String) -> nil
+                if args.len() != 2 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "write_file".to_string(),
+                        expected: 2,
+                        actual: args.len(),
+                    });
+                }
+
+                let path_val = self.eval(&args[0])?;
+                let path = path_val.as_string()?;
+
+                let content_val = self.eval(&args[1])?;
+                let content = content_val.as_string()?;
+
+                match std::fs::write(path, content) {
+                    Ok(_) => Ok(Some(Value::nil())),
+                    Err(e) => Err(EvalError::ValueError(ValueError::InvalidOperation {
+                        operation: "write_file".to_string(),
+                        message: format!("Failed to write file: {}", e),
+                    })),
+                }
+            }
+
+            "println" => {
+                // println(msg: String) -> nil
+                if args.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "println".to_string(),
+                        expected: 1,
+                        actual: args.len(),
+                    });
+                }
+
+                let msg_val = self.eval(&args[0])?;
+                let msg = msg_val.as_string()?;
+
+                println!("{}", msg);
+                Ok(Some(Value::nil()))
+            }
+
+            _ => {
+                // Not a built-in function, return None to try user-defined functions
+                Ok(None)
+            }
+        }
     }
 
     /// Evaluate if expression with conditional branching
