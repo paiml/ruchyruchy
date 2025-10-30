@@ -58,7 +58,9 @@ fn test_read_file_success() {
     cleanup_temp_file(&path);
 
     assert!(result.is_ok(), "read_file should succeed");
-    let value = eval.eval(&AstNode::Identifier("content".to_string())).unwrap();
+    let value = eval
+        .eval(&AstNode::Identifier("content".to_string()))
+        .unwrap();
     assert_eq!(
         value.as_string().unwrap(),
         "Hello from file!",
@@ -88,7 +90,9 @@ fn test_read_file_multiline() {
 
     cleanup_temp_file(&path);
 
-    let value = eval.eval(&AstNode::Identifier("content".to_string())).unwrap();
+    let value = eval
+        .eval(&AstNode::Identifier("content".to_string()))
+        .unwrap();
     assert_eq!(
         value.as_string().unwrap(),
         "Line 1\nLine 2\nLine 3",
@@ -216,7 +220,10 @@ fn test_read_file_not_found() {
         args: vec![AstNode::StringLiteral("/nonexistent/file.txt".to_string())],
     });
 
-    assert!(result.is_err(), "read_file should fail for non-existent file");
+    assert!(
+        result.is_err(),
+        "read_file should fail for non-existent file"
+    );
 }
 
 #[test]
@@ -259,7 +266,10 @@ fn test_builtin_wrong_arg_count() {
         name: "write_file".to_string(),
         args: vec![AstNode::StringLiteral("/path".to_string())],
     });
-    assert!(result2.is_err(), "write_file should fail with only one argument");
+    assert!(
+        result2.is_err(),
+        "write_file should fail with only one argument"
+    );
 
     // println with no args
     let result3 = eval.eval(&AstNode::FunctionCall {
