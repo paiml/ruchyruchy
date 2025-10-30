@@ -256,6 +256,56 @@ impl Evaluator {
                 Ok(ControlFlow::Value(Value::vector(values)))
             }
 
+            // HashMap literal - create hashmap value
+            AstNode::HashMapLiteral { pairs } => {
+                use std::collections::HashMap;
+                let mut map = HashMap::new();
+                for (key_node, val_node) in pairs {
+                    // Evaluate key expression - must be a string
+                    let key_val = self.eval(key_node)?;
+                    let key_str = key_val.as_string()?.to_string();
+                    // Evaluate value expression
+                    let value = self.eval(val_node)?;
+                    map.insert(key_str, value);
+                }
+                Ok(ControlFlow::Value(Value::HashMap(map)))
+            }
+
+            // Index access - vec[i], map[key]
+            AstNode::IndexAccess { expr, index } => {
+                let container = self.eval(expr)?;
+                let index_val = self.eval(index)?;
+
+                match &container {
+                    Value::Vector(_) => {
+                        // Vector indexing requires integer index
+                        let idx = index_val.as_integer()?;
+                        if idx < 0 {
+                            return Err(EvalError::ValueError(
+                                crate::interpreter::value::ValueError::InvalidOperation {
+                                    operation: "vector index".to_string(),
+                                    message: "index cannot be negative".to_string(),
+                                },
+                            ));
+                        }
+                        let result = container.index(idx as usize)?.clone();
+                        Ok(ControlFlow::Value(result))
+                    }
+                    Value::HashMap(_) => {
+                        // HashMap indexing requires string key
+                        let result = container.get(&index_val)?.clone();
+                        Ok(ControlFlow::Value(result))
+                    }
+                    _ => Err(EvalError::ValueError(
+                        crate::interpreter::value::ValueError::TypeMismatch {
+                            expected: "Vector or HashMap".to_string(),
+                            found: container.type_name().to_string(),
+                            operation: "index access".to_string(),
+                        },
+                    )),
+                }
+            }
+
             // Unsupported nodes
             _ => Err(EvalError::UnsupportedOperation {
                 operation: format!("{:?}", node),
