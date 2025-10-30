@@ -624,11 +624,55 @@ jobs:
 # Execute Ruchy code with timeout detection
 ruchydbg run test.ruchy --timeout 5000
 
+# NEW in v3.149.0: Type-aware tracing (shows argument/return types)
+ruchydbg run test.ruchy --trace
+
+# Combined: timeout + tracing
+ruchydbg run test.ruchy --timeout 5000 --trace
+
 # Validate debugging tools (source maps, time-travel)
 ruchydbg validate
 
 # Show version
 ruchydbg --version
+```
+
+**Type-Aware Tracing (Ruchy v3.149.0+)**:
+
+The `--trace` flag enables type-aware execution tracing, showing the types of function arguments and return values:
+
+```bash
+$ ruchydbg run examples/type_aware_tracing_demo.ruchy --trace
+🔍 Running: examples/type_aware_tracing_demo.ruchy
+⏱️  Timeout: 5000ms
+🔍 Type-aware tracing: enabled
+
+Type-Aware Tracing Demo
+========================
+
+Integer operations:
+TRACE: → square(5: integer)
+TRACE: ← square = 25: integer
+  Result:  25
+TRACE: → add(10: integer, 20: integer)
+TRACE: ← add = 30: integer
+  Result:  30
+
+String operations:
+TRACE: → greet("World": string)
+TRACE: ← greet = "Hello, World!": string
+  Hello, World!
+
+✅ All operations completed successfully!
+```
+
+**Environment Variable Support**:
+
+You can also enable tracing via the `RUCHY_TRACE` environment variable (set automatically by `ruchydbg --trace`):
+
+```bash
+export RUCHY_TRACE=1
+ruchy run test.ruchy
 ```
 
 #### Source Maps
