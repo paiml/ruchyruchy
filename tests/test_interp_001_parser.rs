@@ -9,7 +9,7 @@
 // 3. Handle syntax errors gracefully
 // 4. Validate AST structure correctness
 
-use ruchyruchy::interpreter::parser::{Parser, ParseError, Ast, AstNode};
+use ruchyruchy::interpreter::parser::{Ast, AstNode, ParseError, Parser};
 
 // ===== RED PHASE TEST 1: Parse Simple Hello World =====
 
@@ -25,7 +25,11 @@ fn test_parse_simple_hello_world() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse hello world: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse hello world: {:?}",
+        result.err()
+    );
 
     let ast = result.unwrap();
     assert_eq!(ast.nodes().len(), 1, "Expected 1 function definition");
@@ -57,7 +61,11 @@ fn test_parse_variables_and_types() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse variables: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse variables: {:?}",
+        result.err()
+    );
 
     let ast = result.unwrap();
     // Verify variable declarations are parsed
@@ -83,7 +91,11 @@ fn test_parse_function_calls() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse functions: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse functions: {:?}",
+        result.err()
+    );
 
     let ast = result.unwrap();
     assert_eq!(ast.nodes().len(), 2, "Expected 2 function definitions");
@@ -115,7 +127,11 @@ fn test_parse_control_flow() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse control flow: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse control flow: {:?}",
+        result.err()
+    );
 }
 
 // ===== RED PHASE TEST 5: Parse Data Structures =====
@@ -136,7 +152,11 @@ fn test_parse_data_structures() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse data structures: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse data structures: {:?}",
+        result.err()
+    );
 }
 
 // ===== RED PHASE TEST 6: Error Recovery =====
@@ -194,7 +214,10 @@ fn test_ast_structure_validity() {
                 assert!(!name.is_empty(), "Function name cannot be empty");
             }
             AstNode::IfExpr { condition, .. } => {
-                assert!(condition.as_ref() != &AstNode::Empty, "Condition cannot be empty");
+                assert!(
+                    condition.as_ref() != &AstNode::Empty,
+                    "Condition cannot be empty"
+                );
             }
             _ => {}
         }
@@ -216,7 +239,11 @@ fn test_parse_expression_precedence() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse expressions: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse expressions: {:?}",
+        result.err()
+    );
 
     let ast = result.unwrap();
     // Verify expression trees respect precedence
@@ -265,10 +292,17 @@ fn test_parse_struct_definitions() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse structs: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse structs: {:?}",
+        result.err()
+    );
 
     let ast = result.unwrap();
-    assert!(ast.nodes().len() >= 2, "Expected struct and function definitions");
+    assert!(
+        ast.nodes().len() >= 2,
+        "Expected struct and function definitions"
+    );
 }
 
 // ===== RED PHASE TEST 11: Integration with ruchy check =====
@@ -290,7 +324,10 @@ fn test_integration_with_ruchy_compiler() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Parser must be compatible with Ruchy syntax");
+    assert!(
+        result.is_ok(),
+        "Parser must be compatible with Ruchy syntax"
+    );
 }
 
 // ===== RED PHASE TEST 12: Parse Comments =====
@@ -309,7 +346,11 @@ fn test_parse_with_comments() {
     let mut parser = Parser::new(source);
     let result = parser.parse();
 
-    assert!(result.is_ok(), "Failed to parse with comments: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to parse with comments: {:?}",
+        result.err()
+    );
 }
 
 // ===== RED PHASE META TEST: Count Test Coverage =====

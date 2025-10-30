@@ -234,7 +234,9 @@ impl RuntimeTestCase {
             code.push_str("        Logger { level: LogLevel::Info }\n");
             code.push_str("    }\n\n");
             code.push_str("    fun test(&self) {\n");
-            code.push_str("        let val = self.level as i32;  // RUNTIME CHECK: Must not hang!\n");
+            code.push_str(
+                "        let val = self.level as i32;  // RUNTIME CHECK: Must not hang!\n",
+            );
             code.push_str("        println!(\"Value: {}\", val);\n");
             code.push_str("    }\n");
             code.push_str("}\n\n");
@@ -243,9 +245,9 @@ impl RuntimeTestCase {
         code.push_str("fun main() {\n");
 
         // Constructor
-        code.push_str(&format!("    let obj = {}::{}(",
-            self.schema.type_name,
-            self.schema.constructor.name
+        code.push_str(&format!(
+            "    let obj = {}::{}(",
+            self.schema.type_name, self.schema.constructor.name
         ));
         for (i, param) in self.schema.constructor.parameters.iter().enumerate() {
             if i > 0 {
@@ -253,7 +255,10 @@ impl RuntimeTestCase {
             }
             code.push_str(param);
         }
-        code.push_str(&format!(");  // Timeout: <{}ms\n", self.schema.constructor.timeout_ms));
+        code.push_str(&format!(
+            ");  // Timeout: <{}ms\n",
+            self.schema.constructor.timeout_ms
+        ));
 
         // Operations
         for op_call in &self.operations {
@@ -415,7 +420,11 @@ impl SchemaFuzzer {
                 Some(TimeoutDetection {
                     test_id: test.id,
                     elapsed_ms: elapsed.as_millis() as u64,
-                    expected_max_ms: test.operations.first().map(|op| op.timeout_ms).unwrap_or(1000),
+                    expected_max_ms: test
+                        .operations
+                        .first()
+                        .map(|op| op.timeout_ms)
+                        .unwrap_or(1000),
                     operation_sequence: test
                         .operations
                         .iter()

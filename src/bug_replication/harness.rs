@@ -26,11 +26,7 @@ pub struct Environment {
 
 impl Environment {
     /// Create a new environment
-    pub fn new(
-        compiler_version: String,
-        os: String,
-        arch: String,
-    ) -> Self {
+    pub fn new(compiler_version: String, os: String, arch: String) -> Self {
         Environment {
             compiler_version,
             os,
@@ -76,10 +72,7 @@ impl Environment {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionResult {
     /// Test passed
-    Success {
-        output: String,
-        duration: Duration,
-    },
+    Success { output: String, duration: Duration },
     /// Test failed with error
     Failure {
         error: String,
@@ -146,11 +139,7 @@ pub struct ReproducibleTest {
 
 impl ReproducibleTest {
     /// Create a new reproducible test
-    pub fn new(
-        source: String,
-        expected: ExecutionResult,
-        environment: Environment,
-    ) -> Self {
+    pub fn new(source: String, expected: ExecutionResult, environment: Environment) -> Self {
         ReproducibleTest {
             source,
             expected,
@@ -173,7 +162,10 @@ impl ReproducibleTest {
 
         // Environment section
         md.push_str("## Environment\n\n");
-        md.push_str(&format!("- **Compiler**: {}\n", self.environment.compiler_version));
+        md.push_str(&format!(
+            "- **Compiler**: {}\n",
+            self.environment.compiler_version
+        ));
         md.push_str(&format!("- **OS**: {}\n", self.environment.os));
         md.push_str(&format!("- **Arch**: {}\n", self.environment.arch));
 
@@ -206,20 +198,31 @@ impl ReproducibleTest {
                 md.push_str(output);
                 md.push_str("\n```\n");
             }
-            ExecutionResult::Failure { error, output, duration } => {
+            ExecutionResult::Failure {
+                error,
+                output,
+                duration,
+            } => {
                 md.push_str(&format!("**Status**: Failure ({:?})\n\n", duration));
                 md.push_str(&format!("**Error**: {}\n\n", error));
                 md.push_str("**Output**:\n```\n");
                 md.push_str(output);
                 md.push_str("\n```\n");
             }
-            ExecutionResult::Timeout { timeout_ms, partial_output } => {
+            ExecutionResult::Timeout {
+                timeout_ms,
+                partial_output,
+            } => {
                 md.push_str(&format!("**Status**: Timeout (>{}ms)\n\n", timeout_ms));
                 md.push_str("**Partial Output**:\n```\n");
                 md.push_str(partial_output);
                 md.push_str("\n```\n");
             }
-            ExecutionResult::Crash { signal, output, duration } => {
+            ExecutionResult::Crash {
+                signal,
+                output,
+                duration,
+            } => {
                 md.push_str(&format!("**Status**: Crash ({:?})\n\n", duration));
                 md.push_str(&format!("**Signal**: {}\n\n", signal));
                 md.push_str("**Output**:\n```\n");
@@ -292,10 +295,14 @@ impl ReplicationHarness {
             }
         } else if source.contains("// ERROR:") {
             // Simulate failure
-            let error_line = source.lines()
+            let error_line = source
+                .lines()
                 .find(|line| line.contains("// ERROR:"))
                 .unwrap_or("// ERROR: unknown");
-            let error = error_line.trim_start_matches("// ERROR:").trim().to_string();
+            let error = error_line
+                .trim_start_matches("// ERROR:")
+                .trim()
+                .to_string();
 
             ExecutionResult::Failure {
                 error,
@@ -333,7 +340,9 @@ impl ReplicationHarness {
 
         // Check if all results have the same outcome type
         let first_type = std::mem::discriminant(&results[0]);
-        results.iter().all(|r| std::mem::discriminant(r) == first_type)
+        results
+            .iter()
+            .all(|r| std::mem::discriminant(r) == first_type)
     }
 
     /// Create a reproducible test case from source
@@ -347,7 +356,9 @@ impl ReplicationHarness {
 
         // Check consistency
         let first_type = std::mem::discriminant(&results[0]);
-        let is_consistent = results.iter().all(|r| std::mem::discriminant(r) == first_type);
+        let is_consistent = results
+            .iter()
+            .all(|r| std::mem::discriminant(r) == first_type);
 
         if !is_consistent {
             // Non-deterministic bug - harder to reproduce
@@ -455,11 +466,7 @@ mod tests {
             duration: Duration::from_millis(100),
         };
 
-        let test = ReproducibleTest::new(
-            "fun main() {}".to_string(),
-            expected,
-            env,
-        );
+        let test = ReproducibleTest::new("fun main() {}".to_string(), expected, env);
 
         assert_eq!(test.source, "fun main() {}");
         assert!(test.steps.is_empty());
@@ -478,13 +485,9 @@ mod tests {
             duration: Duration::from_millis(100),
         };
 
-        let test = ReproducibleTest::new(
-            "fun main() {}".to_string(),
-            expected,
-            env,
-        )
-        .add_step("Step 1".to_string())
-        .add_step("Step 2".to_string());
+        let test = ReproducibleTest::new("fun main() {}".to_string(), expected, env)
+            .add_step("Step 1".to_string())
+            .add_step("Step 2".to_string());
 
         assert_eq!(test.steps.len(), 2);
     }
@@ -502,11 +505,7 @@ mod tests {
             duration: Duration::from_millis(100),
         };
 
-        let test = ReproducibleTest::new(
-            "fun main() {}".to_string(),
-            expected,
-            env,
-        );
+        let test = ReproducibleTest::new("fun main() {}".to_string(), expected, env);
 
         let markdown = test.to_markdown();
         assert!(markdown.contains("# Reproducible Test Case"));

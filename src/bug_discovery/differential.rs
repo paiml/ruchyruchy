@@ -20,10 +20,7 @@ pub enum TestStatus {
     Hang(Duration),
     Crash(String),
     WrongOutput(String),
-    PerfRegression {
-        slowdown_factor: f64,
-        p_value: f64,
-    },
+    PerfRegression { slowdown_factor: f64, p_value: f64 },
 }
 
 /// Result from running a single test
@@ -139,8 +136,14 @@ impl DifferentialTester {
     ) -> Option<RegressionBug> {
         // Run test on both versions
         let results = vec![
-            (baseline.clone(), self.run_multiple_times(baseline, test_case, self.statistical_samples)),
-            (current.clone(), self.run_multiple_times(current, test_case, self.statistical_samples)),
+            (
+                baseline.clone(),
+                self.run_multiple_times(baseline, test_case, self.statistical_samples),
+            ),
+            (
+                current.clone(),
+                self.run_multiple_times(current, test_case, self.statistical_samples),
+            ),
         ];
 
         // Check for functional regression
@@ -162,7 +165,8 @@ impl DifferentialTester {
         test_case: &str,
     ) -> Option<PerformanceRegression> {
         // Run test on both versions
-        let baseline_results = self.run_multiple_times(baseline, test_case, self.statistical_samples);
+        let baseline_results =
+            self.run_multiple_times(baseline, test_case, self.statistical_samples);
         let current_results = self.run_multiple_times(current, test_case, self.statistical_samples);
 
         // Extract execution times
@@ -278,15 +282,14 @@ impl DifferentialTester {
         use std::hash::BuildHasher;
 
         // Generate pseudo-random variance using timestamp
-        
-        
+
         let hash = RandomState::new().hash_one(Instant::now());
         let variance = ((hash % 10) as i64) - 5; // -5 to +5 ms
 
         let base_time_ms = if version.version == "v3.147" {
-            (130 + variance) as u64  // 30% regression (100 -> 130ms)
+            (130 + variance) as u64 // 30% regression (100 -> 130ms)
         } else {
-            (100 + variance) as u64  // baseline
+            (100 + variance) as u64 // baseline
         };
 
         // Simulate work (use busy loop instead of sleep for more realistic timing)
@@ -426,7 +429,10 @@ impl DifferentialTester {
     }
 
     /// Calculate confidence for performance regressions
-    fn calculate_perf_regression_confidence(&self, regression: &PerformanceRegression) -> ConfidenceScore {
+    fn calculate_perf_regression_confidence(
+        &self,
+        regression: &PerformanceRegression,
+    ) -> ConfidenceScore {
         // Higher confidence for:
         // - Lower p-values (more significant)
         // - Larger effect sizes (more noticeable)
@@ -474,8 +480,7 @@ mod tests {
     #[test]
     fn test_statistical_params_configuration() {
         let versions = create_test_versions();
-        let tester = DifferentialTester::new(versions)
-            .with_statistical_params(50, 0.01, 1.5);
+        let tester = DifferentialTester::new(versions).with_statistical_params(50, 0.01, 1.5);
 
         assert_eq!(tester.statistical_samples, 50);
         assert_eq!(tester.significance_level, 0.01);

@@ -72,9 +72,7 @@ pub fn record_event(event: TraceEvent) {
 
 /// Drain all events from current thread's buffer
 pub fn drain_thread_events() -> Vec<TraceEvent> {
-    THREAD_BUFFER.with(|buf| {
-        buf.borrow_mut().drain()
-    })
+    THREAD_BUFFER.with(|buf| buf.borrow_mut().drain())
 }
 
 /// Get statistics for current thread's buffer

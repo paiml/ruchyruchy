@@ -3,7 +3,7 @@
 //! Formats trace events for various output formats (JSON, text, Chrome Trace).
 
 use super::events::TraceEvent;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 
 /// Trace file metadata
@@ -79,7 +79,9 @@ impl TextFormatter {
     pub fn format_event(event: &TraceEvent) -> String {
         match event {
             TraceEvent::FunctionEnter(entry) => {
-                let args_str = entry.args.iter()
+                let args_str = entry
+                    .args
+                    .iter()
                     .map(|arg| format!("{}={}", arg.type_info.name, arg.value))
                     .collect::<Vec<_>>()
                     .join(", ");
@@ -108,7 +110,9 @@ impl TextFormatter {
                 )
             }
             TraceEvent::Syscall(syscall) => {
-                let args_str = syscall.args.iter()
+                let args_str = syscall
+                    .args
+                    .iter()
                     .map(|arg| format!("{}", arg))
                     .collect::<Vec<_>>()
                     .join(", ");
@@ -126,7 +130,8 @@ impl TextFormatter {
 
     /// Format all events as text
     pub fn format(events: &[TraceEvent]) -> String {
-        events.iter()
+        events
+            .iter()
             .map(Self::format_event)
             .collect::<Vec<_>>()
             .join("\n")
@@ -136,7 +141,9 @@ impl TextFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tracing::events::{function_enter, function_exit, SourceLocation, TypedValue, TypeInfo};
+    use crate::tracing::events::{
+        function_enter, function_exit, SourceLocation, TypeInfo, TypedValue,
+    };
 
     #[test]
     fn test_json_formatter() {
@@ -149,17 +156,15 @@ mod tests {
                 ruchy_version: "3.147.7".to_string(),
                 ruchyruchy_version: "1.6.1".to_string(),
             },
-            events: vec![
-                function_enter(
-                    "test_fn",
-                    vec![],
-                    SourceLocation {
-                        file: "test.ruchy".to_string(),
-                        line: 10,
-                        column: 1,
-                    },
-                ),
-            ],
+            events: vec![function_enter(
+                "test_fn",
+                vec![],
+                SourceLocation {
+                    file: "test.ruchy".to_string(),
+                    line: 10,
+                    column: 1,
+                },
+            )],
             stats: TraceStats {
                 total_events: 1,
                 dropped_events: 0,
@@ -177,15 +182,13 @@ mod tests {
     fn test_text_formatter_function_enter() {
         let event = function_enter(
             "compute",
-            vec![
-                TypedValue {
-                    type_info: TypeInfo {
-                        name: "i64".to_string(),
-                        fields: None,
-                    },
-                    value: serde_json::json!(42),
+            vec![TypedValue {
+                type_info: TypeInfo {
+                    name: "i64".to_string(),
+                    fields: None,
                 },
-            ],
+                value: serde_json::json!(42),
+            }],
             SourceLocation {
                 file: "test.ruchy".to_string(),
                 line: 10,

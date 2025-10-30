@@ -48,10 +48,20 @@ fn test_perf_event_setup() {
     };
 
     // Verify it's configured correctly
-    assert_eq!(profiler.sampling_frequency(), 1000, "Should default to 1000Hz");
-    assert!(profiler.is_sampling_enabled(), "Sampling should be enabled after creation");
+    assert_eq!(
+        profiler.sampling_frequency(),
+        1000,
+        "Should default to 1000Hz"
+    );
+    assert!(
+        profiler.is_sampling_enabled(),
+        "Sampling should be enabled after creation"
+    );
 
-    println!("✅ Profiler initialized successfully at {}Hz", profiler.sampling_frequency());
+    println!(
+        "✅ Profiler initialized successfully at {}Hz",
+        profiler.sampling_frequency()
+    );
 }
 
 /// Test 2: Sample CPU_CYCLES at 1000Hz
@@ -102,9 +112,15 @@ fn test_hardware_counter_sampling() {
     profiler.stop().expect("Failed to stop profiling");
 
     // Collect samples
-    let samples = profiler.collect_samples().expect("Failed to collect samples");
+    let samples = profiler
+        .collect_samples()
+        .expect("Failed to collect samples");
 
-    println!("Collected {} samples in 1 second (work: sum={})", samples.len(), sum);
+    println!(
+        "Collected {} samples in 1 second (work: sum={})",
+        samples.len(),
+        sum
+    );
 
     // At 1000Hz, should get ~1000 samples in 1 second (allow ±10% variance)
     assert!(
@@ -131,7 +147,12 @@ fn test_hardware_counter_sampling() {
         samples.len()
     );
 
-    println!("✅ {}/{} samples have valid data ({:.1}%)", valid_samples, samples.len(), valid_percentage);
+    println!(
+        "✅ {}/{} samples have valid data ({:.1}%)",
+        valid_samples,
+        samples.len(),
+        valid_percentage
+    );
 }
 
 /// Test 3: Stack Unwinding (User Space)
@@ -199,9 +220,14 @@ fn test_stack_unwinding() {
     profiler.stop().expect("Failed to stop profiling");
 
     // Collect samples
-    let samples = profiler.collect_samples().expect("Failed to collect samples");
+    let samples = profiler
+        .collect_samples()
+        .expect("Failed to collect samples");
 
-    println!("Collected {} samples from nested function calls", samples.len());
+    println!(
+        "Collected {} samples from nested function calls",
+        samples.len()
+    );
 
     // Find samples with deep stacks (5+ frames)
     let deep_samples: Vec<_> = samples.iter().filter(|s| s.stack.len() >= 5).collect();
@@ -224,7 +250,11 @@ fn test_stack_unwinding() {
     // Verify stack traces contain valid IPs (non-zero)
     for sample in &samples {
         for ip in &sample.stack {
-            assert!(*ip > 0, "Stack frame IP should be non-zero, got: 0x{:x}", ip);
+            assert!(
+                *ip > 0,
+                "Stack frame IP should be non-zero, got: 0x{:x}",
+                ip
+            );
         }
     }
 
@@ -436,8 +466,7 @@ fn test_overhead_under_1_percent() {
     println!("  Collected {} samples", samples.len());
 
     // Calculate overhead percentage
-    let overhead_ratio =
-        profiled_time.as_micros() as f64 / baseline_median.as_micros() as f64;
+    let overhead_ratio = profiled_time.as_micros() as f64 / baseline_median.as_micros() as f64;
     let overhead_percent = (overhead_ratio - 1.0) * 100.0;
 
     println!(

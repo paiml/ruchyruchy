@@ -194,56 +194,117 @@ impl Parser {
                 }
 
                 // Operators and delimiters
-                '+' => { chars.next(); tokens.push(Token::Plus); }
-                '-' => { chars.next(); tokens.push(Token::Minus); }
-                '*' => { chars.next(); tokens.push(Token::Star); }
-                '/' => { chars.next(); tokens.push(Token::Slash); }
-                '%' => { chars.next(); tokens.push(Token::Percent); }
-                '(' => { chars.next(); tokens.push(Token::LeftParen); }
-                ')' => { chars.next(); tokens.push(Token::RightParen); }
-                '{' => { chars.next(); tokens.push(Token::LeftBrace); }
-                '}' => { chars.next(); tokens.push(Token::RightBrace); }
-                '[' => { chars.next(); tokens.push(Token::LeftBracket); }
-                ']' => { chars.next(); tokens.push(Token::RightBracket); }
-                ',' => { chars.next(); tokens.push(Token::Comma); }
-                ';' => { chars.next(); tokens.push(Token::Semicolon); }
-                ':' => { chars.next(); tokens.push(Token::Colon); }
-                '.' => { chars.next(); tokens.push(Token::Dot); }
+                '+' => {
+                    chars.next();
+                    tokens.push(Token::Plus);
+                }
+                '-' => {
+                    chars.next();
+                    tokens.push(Token::Minus);
+                }
+                '*' => {
+                    chars.next();
+                    tokens.push(Token::Star);
+                }
+                '/' => {
+                    chars.next();
+                    tokens.push(Token::Slash);
+                }
+                '%' => {
+                    chars.next();
+                    tokens.push(Token::Percent);
+                }
+                '(' => {
+                    chars.next();
+                    tokens.push(Token::LeftParen);
+                }
+                ')' => {
+                    chars.next();
+                    tokens.push(Token::RightParen);
+                }
+                '{' => {
+                    chars.next();
+                    tokens.push(Token::LeftBrace);
+                }
+                '}' => {
+                    chars.next();
+                    tokens.push(Token::RightBrace);
+                }
+                '[' => {
+                    chars.next();
+                    tokens.push(Token::LeftBracket);
+                }
+                ']' => {
+                    chars.next();
+                    tokens.push(Token::RightBracket);
+                }
+                ',' => {
+                    chars.next();
+                    tokens.push(Token::Comma);
+                }
+                ';' => {
+                    chars.next();
+                    tokens.push(Token::Semicolon);
+                }
+                ':' => {
+                    chars.next();
+                    tokens.push(Token::Colon);
+                }
+                '.' => {
+                    chars.next();
+                    tokens.push(Token::Dot);
+                }
 
                 '=' if chars.clone().nth(1) == Some('=') => {
-                    chars.next(); chars.next();
+                    chars.next();
+                    chars.next();
                     tokens.push(Token::EqualEqual);
                 }
                 '=' if chars.clone().nth(1) == Some('>') => {
-                    chars.next(); chars.next();
+                    chars.next();
+                    chars.next();
                     tokens.push(Token::FatArrow);
                 }
-                '=' => { chars.next(); tokens.push(Token::Equal); }
+                '=' => {
+                    chars.next();
+                    tokens.push(Token::Equal);
+                }
 
                 '!' if chars.clone().nth(1) == Some('=') => {
-                    chars.next(); chars.next();
+                    chars.next();
+                    chars.next();
                     tokens.push(Token::NotEqual);
                 }
 
                 '<' if chars.clone().nth(1) == Some('=') => {
-                    chars.next(); chars.next();
+                    chars.next();
+                    chars.next();
                     tokens.push(Token::LessEqual);
                 }
-                '<' => { chars.next(); tokens.push(Token::LessThan); }
+                '<' => {
+                    chars.next();
+                    tokens.push(Token::LessThan);
+                }
 
                 '>' if chars.clone().nth(1) == Some('=') => {
-                    chars.next(); chars.next();
+                    chars.next();
+                    chars.next();
                     tokens.push(Token::GreaterEqual);
                 }
-                '>' => { chars.next(); tokens.push(Token::GreaterThan); }
+                '>' => {
+                    chars.next();
+                    tokens.push(Token::GreaterThan);
+                }
 
                 '&' if chars.clone().nth(1) == Some('&') => {
-                    chars.next(); chars.next();
+                    chars.next();
+                    chars.next();
                     tokens.push(Token::AndAnd);
                 }
 
                 '|' if chars.clone().nth(1) == Some('|') => {
-                    chars.next(); chars.next();
+                    chars.next();
+                    chars.next();
                     tokens.push(Token::OrOr);
                 }
 
@@ -681,11 +742,12 @@ impl Parser {
                 else if self.check(&Token::LeftBrace) {
                     // Look ahead to see if this is a struct literal
                     // by checking if we have: { identifier : ...
-                    let is_struct_literal = if let Some(Token::Identifier(_)) = self.tokens.get(self.pos + 1) {
-                        self.tokens.get(self.pos + 2) == Some(&Token::Colon)
-                    } else {
-                        false
-                    };
+                    let is_struct_literal =
+                        if let Some(Token::Identifier(_)) = self.tokens.get(self.pos + 1) {
+                            self.tokens.get(self.pos + 2) == Some(&Token::Colon)
+                        } else {
+                            false
+                        };
 
                     if is_struct_literal {
                         self.advance();
@@ -877,22 +939,13 @@ pub enum AstNode {
     },
 
     /// Variable declaration: let name = expr
-    LetDecl {
-        name: String,
-        value: Box<AstNode>,
-    },
+    LetDecl { name: String, value: Box<AstNode> },
 
     /// Assignment: name = expr
-    Assignment {
-        name: String,
-        value: Box<AstNode>,
-    },
+    Assignment { name: String, value: Box<AstNode> },
 
     /// Function call: name(args)
-    FunctionCall {
-        name: String,
-        args: Vec<AstNode>,
-    },
+    FunctionCall { name: String, args: Vec<AstNode> },
 
     /// If expression: if condition { then_branch } else { else_branch }
     IfExpr {
@@ -933,20 +986,13 @@ pub enum AstNode {
     },
 
     /// Field access: expr.field
-    FieldAccess {
-        expr: Box<AstNode>,
-        field: String,
-    },
+    FieldAccess { expr: Box<AstNode>, field: String },
 
     /// Vector literal: [elem1, elem2, ...]
-    VectorLiteral {
-        elements: Vec<AstNode>,
-    },
+    VectorLiteral { elements: Vec<AstNode> },
 
     /// HashMap literal: {key1: val1, key2: val2, ...}
-    HashMapLiteral {
-        pairs: Vec<(AstNode, AstNode)>,
-    },
+    HashMapLiteral { pairs: Vec<(AstNode, AstNode)> },
 
     /// Index access: expr[index]
     IndexAccess {
@@ -968,9 +1014,7 @@ pub enum AstNode {
     },
 
     /// Return statement: return expr
-    Return {
-        value: Option<Box<AstNode>>,
-    },
+    Return { value: Option<Box<AstNode>> },
 
     /// Identifier reference
     Identifier(String),
@@ -1051,27 +1095,27 @@ impl AstNode {
 /// Binary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
-    Add,       // +
-    Subtract,  // -
-    Multiply,  // *
-    Divide,    // /
-    Modulo,    // %
-    Equal,     // ==
-    NotEqual,  // !=
-    LessThan,  // <
-    GreaterThan, // >
-    LessEqual, // <=
+    Add,          // +
+    Subtract,     // -
+    Multiply,     // *
+    Divide,       // /
+    Modulo,       // %
+    Equal,        // ==
+    NotEqual,     // !=
+    LessThan,     // <
+    GreaterThan,  // >
+    LessEqual,    // <=
     GreaterEqual, // >=
-    And,       // &&
-    Or,        // ||
+    And,          // &&
+    Or,           // ||
 }
 
 /// Unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOperator {
-    Negate,  // - (unary minus)
-    Not,     // ! (logical not)
-    Plus,    // + (unary plus, identity)
+    Negate, // - (unary minus)
+    Not,    // ! (logical not)
+    Plus,   // + (unary plus, identity)
 }
 
 /// Match arm in match expression
@@ -1084,9 +1128,9 @@ pub struct MatchArm {
 /// Pattern in match arm
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
-    Wildcard,              // _
-    Literal(AstNode),      // 0, "hello", true
-    Identifier(String),    // x (binds variable)
+    Wildcard,           // _
+    Literal(AstNode),   // 0, "hello", true
+    Identifier(String), // x (binds variable)
 }
 
 /// Struct field definition
@@ -1178,6 +1222,9 @@ mod tests {
         // REFACTOR: Verify parse() works (was RED phase test expecting panic)
         let mut parser = Parser::new("fun main() {}");
         let result = parser.parse();
-        assert!(result.is_ok(), "Parser should successfully parse simple function");
+        assert!(
+            result.is_ok(),
+            "Parser should successfully parse simple function"
+        );
     }
 }

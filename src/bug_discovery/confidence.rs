@@ -75,13 +75,13 @@ pub enum Priority {
 /// Discovery method types with their confidence weights
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DiscoveryMethod {
-    DifferentialTestVersionRegression,  // 1.0
-    DifferentialTestTargetMismatch,     // 0.9
-    PropertyTestViolation,              // 0.95
-    GrammarFuzzCrashHang,               // 0.85
-    GrammarFuzzIncorrectOutput,         // 0.70
-    MutationFuzzCrash,                  // 0.75
-    CodeChurnHotSpot,                   // 0.60
+    DifferentialTestVersionRegression, // 1.0
+    DifferentialTestTargetMismatch,    // 0.9
+    PropertyTestViolation,             // 0.95
+    GrammarFuzzCrashHang,              // 0.85
+    GrammarFuzzIncorrectOutput,        // 0.70
+    MutationFuzzCrash,                 // 0.75
+    CodeChurnHotSpot,                  // 0.60
 }
 
 impl DiscoveryMethod {
@@ -102,11 +102,11 @@ impl DiscoveryMethod {
 /// Reproducibility levels
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Reproducibility {
-    Always,                // 1.0
-    AlwaysLargeTestCase,   // 0.9
-    IntermittentHigh,      // 0.7 (>50% failure rate)
-    IntermittentLow,       // 0.5 (<50% failure rate)
-    NonDeterministic,      // 0.3
+    Always,              // 1.0
+    AlwaysLargeTestCase, // 0.9
+    IntermittentHigh,    // 0.7 (>50% failure rate)
+    IntermittentLow,     // 0.5 (<50% failure rate)
+    NonDeterministic,    // 0.3
 }
 
 impl Reproducibility {
@@ -124,10 +124,10 @@ impl Reproducibility {
 /// Quantitative evidence completeness
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EvidenceLevel {
-    Complete,    // 1.0 - All metrics collected
-    Partial,     // 0.8 - Missing 1-2 categories
-    Limited,     // 0.6 - Only complexity or churn
-    None,        // 0.4 - No quantitative data
+    Complete, // 1.0 - All metrics collected
+    Partial,  // 0.8 - Missing 1-2 categories
+    Limited,  // 0.6 - Only complexity or churn
+    None,     // 0.4 - No quantitative data
 }
 
 impl EvidenceLevel {
@@ -144,11 +144,11 @@ impl EvidenceLevel {
 /// Root cause clarity
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RootCauseClarity {
-    SingleObviousCause,     // 1.0
-    PrimaryWithSecondary,   // 0.8
-    MultiplePlausible,      // 0.6
-    UnclearHypothesis,      // 0.4
-    NoRootCause,            // 0.2
+    SingleObviousCause,   // 1.0
+    PrimaryWithSecondary, // 0.8
+    MultiplePlausible,    // 0.6
+    UnclearHypothesis,    // 0.4
+    NoRootCause,          // 0.2
 }
 
 impl RootCauseClarity {
@@ -265,10 +265,7 @@ mod tests {
             DiscoveryMethod::PropertyTestViolation.confidence_weight(),
             0.95
         );
-        assert_eq!(
-            DiscoveryMethod::CodeChurnHotSpot.confidence_weight(),
-            0.60
-        );
+        assert_eq!(DiscoveryMethod::CodeChurnHotSpot.confidence_weight(), 0.60);
     }
 
     #[test]

@@ -6,7 +6,7 @@
 
 use std::env;
 use std::path::PathBuf;
-use std::process::{Command, exit};
+use std::process::{exit, Command};
 use std::time::Instant;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -100,9 +100,7 @@ fn run_ruchy_file(args: &[String]) {
     }
 
     // Check if ruchy is available
-    let ruchy_check = Command::new("ruchy")
-        .arg("--version")
-        .output();
+    let ruchy_check = Command::new("ruchy").arg("--version").output();
 
     if ruchy_check.is_err() {
         eprintln!("❌ Error: 'ruchy' command not found in PATH");
@@ -228,9 +226,7 @@ fn run_validation() {
     let script_path = find_validation_script();
 
     // Check if ruchy is available
-    let ruchy_check = Command::new("ruchy")
-        .arg("--version")
-        .output();
+    let ruchy_check = Command::new("ruchy").arg("--version").output();
 
     if ruchy_check.is_err() {
         eprintln!("❌ Error: 'ruchy' command not found in PATH");
@@ -241,10 +237,7 @@ fn run_validation() {
     // Run the validation script
     println!("🔍 Running RuchyRuchy debugging tools validation...");
 
-    let status = Command::new("ruchy")
-        .arg("run")
-        .arg(&script_path)
-        .status();
+    let status = Command::new("ruchy").arg("run").arg(&script_path).status();
 
     match status {
         Ok(exit_status) => {
@@ -298,7 +291,9 @@ fn print_help() {
     println!("    ruchydbg [COMMAND]");
     println!();
     println!("COMMANDS:");
-    println!("    run <file>        Execute Ruchy code with timeout detection and type-aware tracing");
+    println!(
+        "    run <file>        Execute Ruchy code with timeout detection and type-aware tracing"
+    );
     println!("    validate, test    Run debugging tools validation (default)");
     println!("    version, -v       Print version information");
     println!("    help, -h          Print this help message");

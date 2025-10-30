@@ -277,11 +277,7 @@ pub struct PropertyBug {
 
 impl PropertyBug {
     /// Create a new property bug
-    pub fn new(
-        property: Property,
-        counterexample: String,
-        shrunk_example: Option<String>,
-    ) -> Self {
+    pub fn new(property: Property, counterexample: String, shrunk_example: Option<String>) -> Self {
         let confidence = ConfidenceScorer::from_components(
             DiscoveryMethod::PropertyTestViolation,
             Reproducibility::Always,

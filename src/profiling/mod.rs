@@ -271,8 +271,7 @@ impl Hotspot {
         }
 
         // Aggregate samples by instruction pointer
-        let mut ip_counts: std::collections::HashMap<u64, usize> =
-            std::collections::HashMap::new();
+        let mut ip_counts: std::collections::HashMap<u64, usize> = std::collections::HashMap::new();
 
         for sample in samples {
             *ip_counts.entry(sample.ip).or_insert(0) += 1;
@@ -471,12 +470,7 @@ impl Profiler {
                 let ip = sample.code_addr.map(|(addr, _exact)| addr).unwrap_or(0);
 
                 // Extract thread ID from task info
-                let tid = sample
-                    .record_id
-                    .task
-                    .as_ref()
-                    .map(|t| t.tid)
-                    .unwrap_or(0);
+                let tid = sample.record_id.task.as_ref().map(|t| t.tid).unwrap_or(0);
 
                 // Extract timestamp
                 let time = sample.record_id.time.unwrap_or(0);
@@ -500,7 +494,12 @@ impl Profiler {
                     })
                     .unwrap_or_default();
 
-                samples.push(Sample { ip, tid, time, stack });
+                samples.push(Sample {
+                    ip,
+                    tid,
+                    time,
+                    stack,
+                });
             }
         }
 

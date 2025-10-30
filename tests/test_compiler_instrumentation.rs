@@ -10,9 +10,9 @@
 // - Per-thread buffers (no contention)
 // - Source map integration (events map to source lines)
 
-use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::Instant;
 
 fn get_ruchy_path() -> PathBuf {
@@ -32,7 +32,9 @@ fn test_zero_cost_when_disabled() {
 
     // Create test file with many function calls
     let test_file = "/tmp/test_zero_cost.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun fibonacci(n: i64) -> i64 {
     if n <= 1 {
         return n;
@@ -44,7 +46,9 @@ fun main() {
     let result = fibonacci(20);
     println(result);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run multiple times to get stable measurements
     let mut baseline_times = Vec::new();
@@ -85,7 +89,8 @@ fun main() {
     };
 
     // Calculate overhead
-    let overhead_percent = ((traced_median.as_micros() as f64 / baseline_median.as_micros() as f64) - 1.0) * 100.0;
+    let overhead_percent =
+        ((traced_median.as_micros() as f64 / baseline_median.as_micros() as f64) - 1.0) * 100.0;
 
     // Allow 10% measurement error (timing variance is real)
     assert!(overhead_percent.abs() < 10.0,
@@ -101,7 +106,9 @@ fn test_type_aware_tracing() {
     // information because we control the compiler.
 
     let test_file = "/tmp/test_type_aware.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 struct User {
     id: i64,
     name: String,
@@ -116,7 +123,9 @@ fun main() {
     let name = process_user(user);
     println(name);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with type-aware tracing
     let output = Command::new(get_ruchy_path())
@@ -141,7 +150,9 @@ fn test_function_entry_exit_tracing() {
     // RED: This test WILL FAIL because function tracing doesn't exist yet
 
     let test_file = "/tmp/test_function_trace.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun add(x: i64, y: i64) -> i64 {
     return x + y;
 }
@@ -150,7 +161,9 @@ fun main() {
     let result = add(10, 20);
     println(result);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with function tracing
     let output = Command::new(get_ruchy_path())
@@ -180,7 +193,9 @@ fn test_sampling_reduces_overhead() {
     // we get 1.1x overhead by tracing only 1/1000 calls.
 
     let test_file = "/tmp/test_sampling.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun tiny(x: i64) -> i64 {
     return x + 1;
 }
@@ -194,7 +209,9 @@ fun main() {
     }
     println(sum);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run without tracing (baseline)
     let start = Instant::now();
@@ -224,9 +241,13 @@ fun main() {
     let overhead_factor = sampled_time.as_micros() as f64 / baseline_time.as_micros() as f64;
 
     // With 1/1000 sampling, overhead should be <1.2x (target: <1.1x)
-    assert!(overhead_factor < 1.2,
+    assert!(
+        overhead_factor < 1.2,
         "Sampling overhead too high: {:.2}x (baseline: {:?}, sampled: {:?})",
-        overhead_factor, baseline_time, sampled_time);
+        overhead_factor,
+        baseline_time,
+        sampled_time
+    );
 }
 
 #[test]
@@ -234,7 +255,9 @@ fn test_filtering_by_function_pattern() {
     // RED: This test WILL FAIL because filtering doesn't exist yet
 
     let test_file = "/tmp/test_filtering.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun important_function(x: i64) -> i64 {
     return x * 2;
 }
@@ -248,7 +271,9 @@ fun main() {
     let b = helper_function(20);
     println(a + b);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with function pattern filter (only trace "important_*")
     let output = Command::new(get_ruchy_path())
@@ -276,7 +301,9 @@ fn test_per_thread_buffers_no_contention() {
     // Each thread has its own lock-free SPSC buffer.
 
     let test_file = "/tmp/test_multi_thread.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun worker(id: i64) -> i64 {
     let mut sum = 0;
     let mut i = 0;
@@ -293,7 +320,9 @@ fun main() {
     let result = worker(1);
     println(result);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = Command::new(get_ruchy_path())
         .arg("run")
@@ -314,7 +343,9 @@ fn test_source_map_integration() {
     // Every trace event should map to exact source code location.
 
     let test_file = "/tmp/test_source_map.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun compute(x: i64) -> i64 {
     return x * 2;
 }
@@ -323,7 +354,9 @@ fun main() {
     let result = compute(21);
     println(result);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = Command::new(get_ruchy_path())
         .arg("run")

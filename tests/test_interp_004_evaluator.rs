@@ -10,7 +10,7 @@
 // 4. Operator precedence - 10 tests
 // Total: 55 tests
 
-use ruchyruchy::interpreter::evaluator::{Evaluator, EvalError};
+use ruchyruchy::interpreter::evaluator::{EvalError, Evaluator};
 use ruchyruchy::interpreter::parser::{AstNode, BinaryOperator, UnaryOperator};
 use ruchyruchy::interpreter::value::Value;
 
@@ -95,7 +95,7 @@ fn test_eval_division_by_zero() {
     let result = eval.eval(&node);
     assert!(result.is_err());
     match result.err().unwrap() {
-        EvalError::ValueError(_) => {}, // Expected
+        EvalError::ValueError(_) => {} // Expected
         _ => panic!("Expected ValueError for division by zero"),
     }
 }

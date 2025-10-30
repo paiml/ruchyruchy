@@ -54,13 +54,17 @@ fn test_version_regression_detection() {
 
     // Simulate test case that regressed in v3.147
     // In real implementation, this would run actual Ruchy code
-    let test_code = "fun fib(n: i32) -> i32 { if n <= 1 { n } else { fib(n-1) + fib(n-2) } } fib(20)";
+    let test_code =
+        "fun fib(n: i32) -> i32 { if n <= 1 { n } else { fib(n-1) + fib(n-2) } } fib(20)";
 
     // RED: detect_regression() doesn't exist yet - this will fail to compile
     let bug = tester.detect_regression(&v146, &v147, test_code);
 
     // Verify regression detected
-    assert!(bug.is_some(), "Should detect regression between v3.146 and v3.147");
+    assert!(
+        bug.is_some(),
+        "Should detect regression between v3.146 and v3.147"
+    );
 
     let bug = bug.unwrap();
     assert_eq!(bug.working_version, v146);
@@ -117,15 +121,13 @@ fn test_performance_regression_statistical() {
     let tester = DifferentialTester::new(vec![v146.clone(), v147.clone()])
         .with_statistical_params(30, 0.05, 1.2);
 
-    let test_code = "fun sum(n: i32) -> i32 { let mut s = 0; for i in 0..n { s += i; } s } sum(1000)";
+    let test_code =
+        "fun sum(n: i32) -> i32 { let mut s = 0; for i in 0..n { s += i; } s } sum(1000)";
 
     // RED: analyze_performance() doesn't exist - will fail to compile
     let regression = tester.analyze_performance(&v146, &v147, test_code);
 
-    assert!(
-        regression.is_some(),
-        "Should detect performance regression"
-    );
+    assert!(regression.is_some(), "Should detect performance regression");
 
     let regression = regression.unwrap();
 
@@ -260,7 +262,11 @@ fn test_effect_size_calculation() {
         t_stat.abs() > 2.0,
         "t-statistic should be large for clear difference"
     );
-    assert!(p_value < 0.05, "Should be statistically significant: p={}", p_value);
+    assert!(
+        p_value < 0.05,
+        "Should be statistically significant: p={}",
+        p_value
+    );
 
     // Now test with DifferentialTester integration
     // RED: This will fail because analyze_performance() doesn't exist
@@ -356,9 +362,8 @@ fn test_multiple_version_comparison() {
         target: CompilationTarget::Release,
     };
 
-    let tester =
-        DifferentialTester::new(vec![v146.clone(), v147.clone(), v148.clone()])
-            .with_statistical_params(30, 0.05, 1.2);
+    let tester = DifferentialTester::new(vec![v146.clone(), v147.clone(), v148.clone()])
+        .with_statistical_params(30, 0.05, 1.2);
 
     let test_code = "fun test() -> i32 { let x = 10; x * 2 } test()";
 
@@ -379,7 +384,10 @@ fn test_multiple_version_comparison() {
     for regression in &regressions {
         match &regression.failure_mode {
             FailureMode::PerformanceRegression { regression: perf } => {
-                assert!(perf.p_value < 0.05, "All regressions must be statistically significant");
+                assert!(
+                    perf.p_value < 0.05,
+                    "All regressions must be statistically significant"
+                );
             }
             _ => {}
         }

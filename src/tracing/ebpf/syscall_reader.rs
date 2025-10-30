@@ -1,6 +1,11 @@
 //! Userspace eBPF loader and ring buffer reader
 
-use aya::{Ebpf, maps::{MapData, RingBuf}, programs::TracePoint, include_bytes_aligned};
+use aya::{
+    include_bytes_aligned,
+    maps::{MapData, RingBuf},
+    programs::TracePoint,
+    Ebpf,
+};
 use std::error::Error;
 use std::fmt;
 
@@ -9,9 +14,10 @@ use std::fmt;
 /// Note: This path is relative to the crate root during compilation.
 /// The eBPF program must be built first using:
 /// `cd ruchyruchy-ebpf && cargo +nightly build --release -Z build-std=core`
-const EBPF_PROGRAM: &[u8] = include_bytes_aligned!(
-    concat!(env!("CARGO_MANIFEST_DIR"), "/target/bpfel-unknown-none/release/syscall_tracer")
-);
+const EBPF_PROGRAM: &[u8] = include_bytes_aligned!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/target/bpfel-unknown-none/release/syscall_tracer"
+));
 
 /// Syscall event structure (must match eBPF definition)
 #[repr(C)]
@@ -20,7 +26,7 @@ pub struct SyscallEvent {
     pub pid: u32,
     pub syscall_nr: i64,
     pub timestamp_ns: u64,
-    pub is_enter: u8,  // 1 for enter, 0 for exit
+    pub is_enter: u8, // 1 for enter, 0 for exit
     pub _padding: [u8; 7],
 }
 
@@ -44,7 +50,11 @@ impl fmt::Display for EbpfError {
             EbpfError::AttachFailed(msg) => write!(f, "Failed to attach eBPF program: {}", msg),
             EbpfError::ReadFailed(msg) => write!(f, "Failed to read eBPF events: {}", msg),
             EbpfError::PermissionDenied(msg) => {
-                write!(f, "Permission denied: {}. Run with sudo or grant CAP_BPF capability.", msg)
+                write!(
+                    f,
+                    "Permission denied: {}. Run with sudo or grant CAP_BPF capability.",
+                    msg
+                )
             }
         }
     }
@@ -86,15 +96,14 @@ impl SyscallTracer {
     /// ```
     pub fn new() -> Result<Self, EbpfError> {
         // Load eBPF program
-        let mut ebpf = Ebpf::load(EBPF_PROGRAM)
-            .map_err(|e| {
-                let err_str = e.to_string();
-                if err_str.contains("Permission denied") || err_str.contains("EPERM") {
-                    EbpfError::PermissionDenied(err_str)
-                } else {
-                    EbpfError::LoadFailed(err_str)
-                }
-            })?;
+        let mut ebpf = Ebpf::load(EBPF_PROGRAM).map_err(|e| {
+            let err_str = e.to_string();
+            if err_str.contains("Permission denied") || err_str.contains("EPERM") {
+                EbpfError::PermissionDenied(err_str)
+            } else {
+                EbpfError::LoadFailed(err_str)
+            }
+        })?;
 
         // Attach to sys_enter tracepoint
         let program_enter: &mut TracePoint = ebpf
@@ -103,11 +112,13 @@ impl SyscallTracer {
             .try_into()
             .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
-        program_enter.load()
+        program_enter
+            .load()
             .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
-        program_enter.attach("raw_syscalls", "sys_enter")
-            .map_err(|e: aya::programs::ProgramError| EbpfError::AttachFailed(format!("sys_enter: {}", e)))?;
+        program_enter.attach("raw_syscalls", "sys_enter").map_err(
+            |e: aya::programs::ProgramError| EbpfError::AttachFailed(format!("sys_enter: {}", e)),
+        )?;
 
         // Attach to sys_exit tracepoint
         let program_exit: &mut TracePoint = ebpf
@@ -116,15 +127,15 @@ impl SyscallTracer {
             .try_into()
             .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
-        program_exit.load()
+        program_exit
+            .load()
             .map_err(|e: aya::programs::ProgramError| EbpfError::LoadFailed(e.to_string()))?;
 
-        program_exit.attach("raw_syscalls", "sys_exit")
-            .map_err(|e: aya::programs::ProgramError| EbpfError::AttachFailed(format!("sys_exit: {}", e)))?;
+        program_exit.attach("raw_syscalls", "sys_exit").map_err(
+            |e: aya::programs::ProgramError| EbpfError::AttachFailed(format!("sys_exit: {}", e)),
+        )?;
 
-        Ok(Self {
-            ebpf,
-        })
+        Ok(Self { ebpf })
     }
 
     /// Read syscall events from the ring buffer
@@ -145,11 +156,13 @@ impl SyscallTracer {
         let mut events = Vec::new();
 
         // Get ring buffer from map
-        let map = self.ebpf.map_mut("EVENTS")
+        let map = self
+            .ebpf
+            .map_mut("EVENTS")
             .ok_or_else(|| EbpfError::ReadFailed("EVENTS ring buffer not found".to_string()))?;
 
-        let mut ring_buf = RingBuf::try_from(map)
-            .map_err(|e| EbpfError::ReadFailed(e.to_string()))?;
+        let mut ring_buf =
+            RingBuf::try_from(map).map_err(|e| EbpfError::ReadFailed(e.to_string()))?;
 
         while let Some(item) = ring_buf.next() {
             if item.len() != std::mem::size_of::<SyscallEvent>() {
@@ -158,9 +171,8 @@ impl SyscallTracer {
             }
 
             // Safety: We verified the size matches SyscallEvent
-            let event: SyscallEvent = unsafe {
-                std::ptr::read(item.as_ptr() as *const SyscallEvent)
-            };
+            let event: SyscallEvent =
+                unsafe { std::ptr::read(item.as_ptr() as *const SyscallEvent) };
             events.push(event);
         }
 
@@ -198,7 +210,7 @@ mod tests {
         // Verify SyscallEvent matches the eBPF definition
         assert_eq!(
             std::mem::size_of::<SyscallEvent>(),
-            32,  // 4 (pid) + 8 (syscall_nr) + 8 (timestamp) + 1 (is_enter) + 7 (padding) + 4 (alignment)
+            32, // 4 (pid) + 8 (syscall_nr) + 8 (timestamp) + 1 (is_enter) + 7 (padding) + 4 (alignment)
             "SyscallEvent size must match eBPF definition"
         );
     }

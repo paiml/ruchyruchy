@@ -13,13 +13,13 @@
 // Architecture: Tree-walking AST interpreter
 // Goal: Discover 50+ runtime bugs, >90% path coverage
 
-pub mod parser;
-pub mod value;
-pub mod scope;
 pub mod evaluator;
+pub mod parser;
+pub mod scope;
+pub mod value;
 
 // Re-export main types for convenience
-pub use parser::{Parser, ParseError, Ast, AstNode};
-pub use value::{Value, ValueError};
+pub use evaluator::{EvalError, Evaluator};
+pub use parser::{Ast, AstNode, ParseError, Parser};
 pub use scope::{Scope, ScopeError};
-pub use evaluator::{Evaluator, EvalError};
+pub use value::{Value, ValueError};

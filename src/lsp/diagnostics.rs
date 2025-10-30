@@ -15,10 +15,7 @@ impl DiagnosticsProvider {
     /// Run ruchy check and parse diagnostics
     pub fn check_file(&self, file_path: &str, _content: &str) -> Vec<Diagnostic> {
         // Run ruchy check on the file
-        let output = Command::new("ruchy")
-            .arg("check")
-            .arg(file_path)
-            .output();
+        let output = Command::new("ruchy").arg("check").arg(file_path).output();
 
         match output {
             Ok(result) => {

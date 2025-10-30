@@ -47,13 +47,24 @@ fn test_required_documentation_files_exist() {
     // In a real implementation, we would check std::path::Path::new(file).exists()
     // For testing purposes, we'll validate the structure of the check
     for file in &required_files {
-        assert!(file.ends_with(".md"), "Documentation file should be markdown: {}", file);
-        assert!(file.starts_with("docs/"), "Documentation should be in docs/ directory: {}", file);
+        assert!(
+            file.ends_with(".md"),
+            "Documentation file should be markdown: {}",
+            file
+        );
+        assert!(
+            file.starts_with("docs/"),
+            "Documentation should be in docs/ directory: {}",
+            file
+        );
     }
 
     // Verify examples directory structure
     let examples_dir = "examples/";
-    assert!(examples_dir.ends_with("/"), "Examples should be a directory");
+    assert!(
+        examples_dir.ends_with("/"),
+        "Examples should be a directory"
+    );
 }
 
 /// Test: Example Code Extraction
@@ -126,11 +137,17 @@ fn test_api_documentation_coverage() {
     ];
 
     // Verify module list structure
-    assert!(documented_modules.len() >= 5, "Should have at least 5 major modules");
+    assert!(
+        documented_modules.len() >= 5,
+        "Should have at least 5 major modules"
+    );
 
     for module in &documented_modules {
         assert!(!module.is_empty(), "Module name should not be empty");
-        assert!(!module.contains('/'), "Module name should not contain path separators");
+        assert!(
+            !module.contains('/'),
+            "Module name should not contain path separators"
+        );
     }
 }
 
@@ -163,14 +180,23 @@ fn test_example_workflow_completeness() {
     ];
 
     // Verify we have at least 10 examples
-    assert!(required_examples.len() >= 10, "Should have at least 10 example workflows");
+    assert!(
+        required_examples.len() >= 10,
+        "Should have at least 10 example workflows"
+    );
 
     // Verify naming convention
     for (i, example) in required_examples.iter().enumerate() {
-        assert!(example.starts_with(&format!("examples/{:02}_", i + 1)),
-               "Example {} should follow naming convention", i + 1);
-        assert!(example.ends_with(".rs"),
-               "Example should be a Rust file: {}", example);
+        assert!(
+            example.starts_with(&format!("examples/{:02}_", i + 1)),
+            "Example {} should follow naming convention",
+            i + 1
+        );
+        assert!(
+            example.ends_with(".rs"),
+            "Example should be a Rust file: {}",
+            example
+        );
     }
 }
 
@@ -193,10 +219,16 @@ assert!(score.overall > 0.85);
 
     // Basic syntax validation
     assert!(example.contains("use "), "Example should have imports");
-    assert!(example.contains("let "), "Example should have variable declarations");
+    assert!(
+        example.contains("let "),
+        "Example should have variable declarations"
+    );
     assert!(!example.contains("TODO"), "Example should not have TODOs");
     assert!(!example.contains("FIXME"), "Example should not have FIXMEs");
-    assert!(!example.contains("XXX"), "Example should not have placeholder XXX");
+    assert!(
+        !example.contains("XXX"),
+        "Example should not have placeholder XXX"
+    );
 
     // Verify proper formatting
     let lines: Vec<&str> = example.trim().lines().collect();
@@ -223,13 +255,19 @@ fn test_troubleshooting_guide_structure() {
     ];
 
     // Verify section count
-    assert!(required_sections.len() >= 5, "Should have at least 5 troubleshooting sections");
+    assert!(
+        required_sections.len() >= 5,
+        "Should have at least 5 troubleshooting sections"
+    );
 
     // Verify section naming
     for section in &required_sections {
         assert!(!section.is_empty(), "Section name should not be empty");
-        assert!(section.chars().next().unwrap().is_ascii_uppercase(),
-               "Section should start with uppercase: {}", section);
+        assert!(
+            section.chars().next().unwrap().is_ascii_uppercase(),
+            "Section should start with uppercase: {}",
+            section
+        );
     }
 }
 
@@ -298,9 +336,18 @@ fn main() {
 
     // Verify metadata sections
     assert!(example.contains("# "), "Should have title");
-    assert!(example.contains("## Dependencies"), "Should have dependencies section");
-    assert!(example.contains("## Expected Output"), "Should have expected output section");
-    assert!(example.contains("## Last Updated"), "Should have last updated date");
+    assert!(
+        example.contains("## Dependencies"),
+        "Should have dependencies section"
+    );
+    assert!(
+        example.contains("## Expected Output"),
+        "Should have expected output section"
+    );
+    assert!(
+        example.contains("## Last Updated"),
+        "Should have last updated date"
+    );
 
     // Verify content structure
     assert!(example.contains("fn main()"), "Should have main function");
@@ -352,7 +399,10 @@ pub fn new(title: String, description: String, severity: Severity) -> Self {
     assert!(doc.contains("BugReport::new"), "Example should show usage");
 
     // Verify parameter documentation
-    assert!(doc.contains("* `"), "Should document parameters with backticks");
+    assert!(
+        doc.contains("* `"),
+        "Should document parameters with backticks"
+    );
 }
 
 /// Test: Documentation Completeness Score
@@ -372,14 +422,26 @@ fn test_documentation_completeness_score() {
 
     // Verify completeness thresholds
     assert_eq!(api_docs_percent, 100, "All public APIs must be documented");
-    assert_eq!(module_docs_percent, 100, "All modules must have documentation");
+    assert_eq!(
+        module_docs_percent, 100,
+        "All modules must have documentation"
+    );
     assert_eq!(working_examples_percent, 100, "All examples must work");
-    assert!(feature_coverage_percent >= 90, "At least 90% feature coverage in user guide");
+    assert!(
+        feature_coverage_percent >= 90,
+        "At least 90% feature coverage in user guide"
+    );
 
     // Calculate overall completeness score
-    let overall_score = (api_docs_percent + module_docs_percent +
-                        working_examples_percent + feature_coverage_percent) / 4;
-    assert!(overall_score >= 95, "Overall documentation completeness should be ≥95%");
+    let overall_score = (api_docs_percent
+        + module_docs_percent
+        + working_examples_percent
+        + feature_coverage_percent)
+        / 4;
+    assert!(
+        overall_score >= 95,
+        "Overall documentation completeness should be ≥95%"
+    );
 }
 
 /// Test: Example Output Validation
@@ -408,12 +470,18 @@ Confidence: 0.92
 "#;
 
     // Verify output matches
-    assert_eq!(expected_output.trim(), actual_output.trim(),
-              "Example output should match documentation");
+    assert_eq!(
+        expected_output.trim(),
+        actual_output.trim(),
+        "Example output should match documentation"
+    );
 
     // Verify no error markers in output
     assert!(!actual_output.contains("Error:"), "Should not have errors");
-    assert!(!actual_output.contains("Warning:"), "Should not have warnings");
+    assert!(
+        !actual_output.contains("Warning:"),
+        "Should not have warnings"
+    );
     assert!(!actual_output.contains("panic"), "Should not panic");
 }
 
@@ -431,20 +499,28 @@ fn test_documentation_consistency() {
     let version_in_examples = "1.8.0";
     let version_in_api_docs = "1.8.0";
 
-    assert_eq!(version_in_user_guide, version_in_examples,
-              "Version should be consistent between user guide and examples");
-    assert_eq!(version_in_user_guide, version_in_api_docs,
-              "Version should be consistent between user guide and API docs");
+    assert_eq!(
+        version_in_user_guide, version_in_examples,
+        "Version should be consistent between user guide and examples"
+    );
+    assert_eq!(
+        version_in_user_guide, version_in_api_docs,
+        "Version should be consistent between user guide and API docs"
+    );
 
     // Terminology consistency (use same terms throughout)
     let terms = vec![
-        "bug report",    // not "bug-report" or "bugreport"
+        "bug report",       // not "bug-report" or "bugreport"
         "confidence score", // not "confidence-score" or "confidence_score"
         "property testing", // not "property-based-testing"
     ];
 
     for term in &terms {
-        assert!(!term.contains('_'), "Terms should use spaces, not underscores: {}", term);
+        assert!(
+            !term.contains('_'),
+            "Terms should use spaces, not underscores: {}",
+            term
+        );
         assert!(!term.is_empty(), "Terms should not be empty");
     }
 }
@@ -477,12 +553,22 @@ fn test_troubleshooting_guide_coverage() {
     ];
 
     // Verify coverage counts
-    assert!(compilation_errors.len() >= 5, "Should cover at least 5 compilation errors");
-    assert!(runtime_errors.len() >= 5, "Should cover at least 5 runtime errors");
+    assert!(
+        compilation_errors.len() >= 5,
+        "Should cover at least 5 compilation errors"
+    );
+    assert!(
+        runtime_errors.len() >= 5,
+        "Should cover at least 5 runtime errors"
+    );
 
     // Verify error descriptions are meaningful
     for error in compilation_errors.iter().chain(runtime_errors.iter()) {
         assert!(!error.is_empty(), "Error description should not be empty");
-        assert!(error.len() >= 5, "Error description should be meaningful: {}", error);
+        assert!(
+            error.len() >= 5,
+            "Error description should be meaningful: {}",
+            error
+        );
     }
 }

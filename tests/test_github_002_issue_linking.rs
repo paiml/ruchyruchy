@@ -24,8 +24,8 @@
 // - Verify thresholds (80% duplicate, 50% related)
 
 use ruchyruchy::bug_reporting::issue_linking::{
-    BugIssue, IssueDeduplicator, SimilarityCalculator,
-    SimilarityScore, DUPLICATE_THRESHOLD, RELATED_THRESHOLD,
+    BugIssue, IssueDeduplicator, SimilarityCalculator, SimilarityScore, DUPLICATE_THRESHOLD,
+    RELATED_THRESHOLD,
 };
 
 /// Test: Duplicate Detection - Identical Issues
@@ -42,7 +42,8 @@ fn test_duplicate_detection_identical_issues() {
     let mut existing = BugIssue::new(
         1,
         "Parser crashes on nested expressions".to_string(),
-        "The parser encounters a stack overflow when processing deeply nested expressions.".to_string(),
+        "The parser encounters a stack overflow when processing deeply nested expressions."
+            .to_string(),
     );
     existing.add_file("src/parser.rs".to_string());
     existing.set_error_message("thread 'main' panicked at 'stack overflow'".to_string());
@@ -55,7 +56,8 @@ fn test_duplicate_detection_identical_issues() {
     let mut new_issue = BugIssue::new(
         2,
         "Parser crashes on nested expressions".to_string(),
-        "The parser encounters a stack overflow when processing deeply nested expressions.".to_string(),
+        "The parser encounters a stack overflow when processing deeply nested expressions."
+            .to_string(),
     );
     new_issue.add_file("src/parser.rs".to_string());
     new_issue.set_error_message("thread 'main' panicked at 'stack overflow'".to_string());
@@ -178,9 +180,7 @@ fn test_find_related_issues() {
     assert!(related.len() >= 1);
 
     // Check that parser issues are in results
-    let parser_related = related
-        .iter()
-        .any(|r| r.issue_id == 1 || r.issue_id == 2);
+    let parser_related = related.iter().any(|r| r.issue_id == 1 || r.issue_id == 2);
     assert!(parser_related, "Should find parser-related issues");
 
     // Verify scores are in related range
@@ -245,20 +245,12 @@ fn test_related_issues_sorted() {
 /// - Overall score is weighted average
 #[test]
 fn test_similarity_score_weighted_components() {
-    let mut issue1 = BugIssue::new(
-        1,
-        "Same title".to_string(),
-        "Same body".to_string(),
-    );
+    let mut issue1 = BugIssue::new(1, "Same title".to_string(), "Same body".to_string());
     issue1.add_file("file.rs".to_string());
     issue1.set_error_message("Error occurred".to_string());
     issue1.add_label("bug".to_string());
 
-    let mut issue2 = BugIssue::new(
-        2,
-        "Same title".to_string(),
-        "Same body".to_string(),
-    );
+    let mut issue2 = BugIssue::new(2, "Same title".to_string(), "Same body".to_string());
     issue2.add_file("file.rs".to_string());
     issue2.set_error_message("Error occurred".to_string());
     issue2.add_label("bug".to_string());
@@ -287,11 +279,7 @@ fn test_similarity_score_weighted_components() {
 /// - File overlap contributes 20% to overall score
 #[test]
 fn test_file_overlap_matching() {
-    let mut issue1 = BugIssue::new(
-        1,
-        "Bug in parser".to_string(),
-        "Description".to_string(),
-    );
+    let mut issue1 = BugIssue::new(1, "Bug in parser".to_string(), "Description".to_string());
     issue1.add_file("src/parser.rs".to_string());
     issue1.add_file("src/ast.rs".to_string());
 
@@ -364,10 +352,7 @@ fn test_jaccard_similarity() {
     assert!(sim2 > 0.0 && sim2 < 1.0); // Some overlap
 
     // Test 3: No overlap
-    let sim3 = SimilarityCalculator::jaccard_similarity(
-        "parser crashes",
-        "type checker fails",
-    );
+    let sim3 = SimilarityCalculator::jaccard_similarity("parser crashes", "type checker fails");
     assert!(sim3 < 0.5); // Low similarity
 
     // Test 4: Empty strings
@@ -434,21 +419,13 @@ fn test_edge_case_empty_corpus() {
 fn test_edge_case_single_existing_issue() {
     let mut dedup = IssueDeduplicator::new();
 
-    let existing = BugIssue::new(
-        1,
-        "Parser bug".to_string(),
-        "Parser has a bug".to_string(),
-    );
+    let existing = BugIssue::new(1, "Parser bug".to_string(), "Parser has a bug".to_string());
     dedup.add_issue(existing);
 
     assert_eq!(dedup.issue_count(), 1);
 
     // Test with duplicate
-    let duplicate = BugIssue::new(
-        2,
-        "Parser bug".to_string(),
-        "Parser has a bug".to_string(),
-    );
+    let duplicate = BugIssue::new(2, "Parser bug".to_string(), "Parser has a bug".to_string());
 
     let dup_result = dedup.check_duplicate(&duplicate);
     assert!(dup_result.is_duplicate);

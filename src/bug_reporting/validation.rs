@@ -180,7 +180,13 @@ pub struct ValidationMetrics {
 
 impl ValidationMetrics {
     /// Create new metrics
-    pub fn new(total_bugs: usize, detected: usize, false_positives: usize, critical_detected: usize, critical_total: usize) -> Self {
+    pub fn new(
+        total_bugs: usize,
+        detected: usize,
+        false_positives: usize,
+        critical_detected: usize,
+        critical_total: usize,
+    ) -> Self {
         let missed = total_bugs - detected;
         let detection_rate = if total_bugs > 0 {
             detected as f64 / total_bugs as f64
@@ -279,28 +285,44 @@ impl ValidationReport {
         md.push_str("\n\n");
 
         md.push_str("## Detection Rate Analysis\n\n");
-        md.push_str(&format!("- **Total Historical Bugs**: {}\n", self.metrics.total_bugs));
-        md.push_str(&format!("- **Bugs Detected**: {} ({:.1}%)\n",
+        md.push_str(&format!(
+            "- **Total Historical Bugs**: {}\n",
+            self.metrics.total_bugs
+        ));
+        md.push_str(&format!(
+            "- **Bugs Detected**: {} ({:.1}%)\n",
             self.metrics.detected,
             self.metrics.detection_rate * 100.0
         ));
-        md.push_str(&format!("- **Bugs Missed**: {} ({:.1}%)\n",
+        md.push_str(&format!(
+            "- **Bugs Missed**: {} ({:.1}%)\n",
             self.metrics.missed,
             (self.metrics.missed as f64 / self.metrics.total_bugs as f64) * 100.0
         ));
         md.push_str("- **Target**: 95%+ detection rate\n");
-        md.push_str(&format!("- **Status**: {}\n\n",
-            if self.metrics.detection_rate >= 0.95 { "✅ PASS" } else { "❌ FAIL" }
+        md.push_str(&format!(
+            "- **Status**: {}\n\n",
+            if self.metrics.detection_rate >= 0.95 {
+                "✅ PASS"
+            } else {
+                "❌ FAIL"
+            }
         ));
 
         md.push_str("## False Positive Analysis\n\n");
-        md.push_str(&format!("- **False Positives**: {} ({:.1}%)\n",
+        md.push_str(&format!(
+            "- **False Positives**: {} ({:.1}%)\n",
             self.metrics.false_positives,
             self.metrics.false_positive_rate * 100.0
         ));
         md.push_str("- **Target**: <5% false positive rate\n");
-        md.push_str(&format!("- **Status**: {}\n\n",
-            if self.metrics.false_positive_rate < 0.05 { "✅ PASS" } else { "❌ FAIL" }
+        md.push_str(&format!(
+            "- **Status**: {}\n\n",
+            if self.metrics.false_positive_rate < 0.05 {
+                "✅ PASS"
+            } else {
+                "❌ FAIL"
+            }
         ));
 
         if !self.false_positive_details.is_empty() {
@@ -315,7 +337,10 @@ impl ValidationReport {
         if self.missed_bugs.is_empty() {
             md.push_str("✅ **No bugs missed!**\n\n");
         } else {
-            md.push_str(&format!("❌ **{} bugs missed:**\n\n", self.missed_bugs.len()));
+            md.push_str(&format!(
+                "❌ **{} bugs missed:**\n\n",
+                self.missed_bugs.len()
+            ));
             for bug_number in &self.missed_bugs {
                 if let Some(result) = self.results.get(bug_number) {
                     let reason = result.miss_reason.as_deref().unwrap_or("Unknown");
@@ -326,13 +351,17 @@ impl ValidationReport {
         }
 
         md.push_str("## Critical Bugs\n\n");
-        md.push_str(&format!("- **Critical Bugs Detected**: {} / {}\n",
-            self.metrics.critical_detected,
-            self.metrics.critical_total
+        md.push_str(&format!(
+            "- **Critical Bugs Detected**: {} / {}\n",
+            self.metrics.critical_detected, self.metrics.critical_total
         ));
         if self.metrics.critical_total > 0 {
-            let critical_rate = self.metrics.critical_detected as f64 / self.metrics.critical_total as f64;
-            md.push_str(&format!("- **Critical Detection Rate**: {:.1}%\n", critical_rate * 100.0));
+            let critical_rate =
+                self.metrics.critical_detected as f64 / self.metrics.critical_total as f64;
+            md.push_str(&format!(
+                "- **Critical Detection Rate**: {:.1}%\n",
+                critical_rate * 100.0
+            ));
         }
         md.push('\n');
 
@@ -367,7 +396,10 @@ impl BugCorpusValidator {
 
     /// Get bugs by category
     pub fn bugs_by_category(&self, category: &BugCategory) -> Vec<&HistoricalBug> {
-        self.bugs.iter().filter(|b| &b.category == category).collect()
+        self.bugs
+            .iter()
+            .filter(|b| &b.category == category)
+            .collect()
     }
 
     /// Get critical bugs
@@ -447,7 +479,12 @@ mod tests {
 
     #[test]
     fn test_historical_bug_add_file() {
-        let mut bug = HistoricalBug::new(1, "Test".to_string(), "Desc".to_string(), BugCategory::Crash);
+        let mut bug = HistoricalBug::new(
+            1,
+            "Test".to_string(),
+            "Desc".to_string(),
+            BugCategory::Crash,
+        );
         bug.add_file("parser.rs".to_string());
 
         assert_eq!(bug.files.len(), 1);
@@ -456,7 +493,12 @@ mod tests {
 
     #[test]
     fn test_historical_bug_set_critical() {
-        let mut bug = HistoricalBug::new(1, "Test".to_string(), "Desc".to_string(), BugCategory::Crash);
+        let mut bug = HistoricalBug::new(
+            1,
+            "Test".to_string(),
+            "Desc".to_string(),
+            BugCategory::Crash,
+        );
         bug.set_critical(true);
 
         assert!(bug.critical);
@@ -562,7 +604,12 @@ mod tests {
     #[test]
     fn test_bug_corpus_validator_add_bug() {
         let mut validator = BugCorpusValidator::new();
-        let bug = HistoricalBug::new(1, "Test".to_string(), "Desc".to_string(), BugCategory::Crash);
+        let bug = HistoricalBug::new(
+            1,
+            "Test".to_string(),
+            "Desc".to_string(),
+            BugCategory::Crash,
+        );
 
         validator.add_bug(bug);
         assert_eq!(validator.bug_count(), 1);
@@ -572,9 +619,19 @@ mod tests {
     fn test_bug_corpus_validator_by_category() {
         let mut validator = BugCorpusValidator::new();
 
-        let bug1 = HistoricalBug::new(1, "Crash".to_string(), "Desc".to_string(), BugCategory::Crash);
+        let bug1 = HistoricalBug::new(
+            1,
+            "Crash".to_string(),
+            "Desc".to_string(),
+            BugCategory::Crash,
+        );
         let bug2 = HistoricalBug::new(2, "Hang".to_string(), "Desc".to_string(), BugCategory::Hang);
-        let bug3 = HistoricalBug::new(3, "Another crash".to_string(), "Desc".to_string(), BugCategory::Crash);
+        let bug3 = HistoricalBug::new(
+            3,
+            "Another crash".to_string(),
+            "Desc".to_string(),
+            BugCategory::Crash,
+        );
 
         validator.add_bug(bug1);
         validator.add_bug(bug2);
@@ -588,10 +645,20 @@ mod tests {
     fn test_bug_corpus_validator_critical_bugs() {
         let mut validator = BugCorpusValidator::new();
 
-        let mut bug1 = HistoricalBug::new(1, "Critical".to_string(), "Desc".to_string(), BugCategory::Crash);
+        let mut bug1 = HistoricalBug::new(
+            1,
+            "Critical".to_string(),
+            "Desc".to_string(),
+            BugCategory::Crash,
+        );
         bug1.set_critical(true);
 
-        let bug2 = HistoricalBug::new(2, "Normal".to_string(), "Desc".to_string(), BugCategory::Hang);
+        let bug2 = HistoricalBug::new(
+            2,
+            "Normal".to_string(),
+            "Desc".to_string(),
+            BugCategory::Hang,
+        );
 
         validator.add_bug(bug1);
         validator.add_bug(bug2);
@@ -605,7 +672,12 @@ mod tests {
     fn test_bug_corpus_validator_validate() {
         let mut validator = BugCorpusValidator::new();
 
-        let mut bug1 = HistoricalBug::new(1, "Crash".to_string(), "Desc".to_string(), BugCategory::Crash);
+        let mut bug1 = HistoricalBug::new(
+            1,
+            "Crash".to_string(),
+            "Desc".to_string(),
+            BugCategory::Crash,
+        );
         bug1.set_critical(true);
 
         let bug2 = HistoricalBug::new(2, "Hang".to_string(), "Desc".to_string(), BugCategory::Hang);
@@ -645,9 +717,8 @@ mod tests {
         }
 
         // Perfect detector
-        let detector = |_: &HistoricalBug| {
-            DetectionResult::detected("Perfect detector".to_string(), 1.0)
-        };
+        let detector =
+            |_: &HistoricalBug| DetectionResult::detected("Perfect detector".to_string(), 1.0);
 
         let report = validator.validate(detector);
 

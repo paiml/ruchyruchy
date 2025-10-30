@@ -193,7 +193,8 @@ impl BugReport {
         let mut report = String::new();
 
         // Title
-        report.push_str(&format!("# {} {}: {}\n\n",
+        report.push_str(&format!(
+            "# {} {}: {}\n\n",
             self.severity.to_emoji(),
             self.severity.as_str(),
             self.title
@@ -202,13 +203,22 @@ impl BugReport {
         // Executive Summary
         report.push_str("## Executive Summary\n\n");
         report.push_str(&format!("**Category**: {}\n", self.category.as_str()));
-        report.push_str(&format!("**Severity**: {} {}\n", self.severity.to_emoji(), self.severity.as_str()));
-        report.push_str(&format!("**Confidence Score**: {:.2} / 1.0\n\n", self.confidence.overall));
+        report.push_str(&format!(
+            "**Severity**: {} {}\n",
+            self.severity.to_emoji(),
+            self.severity.as_str()
+        ));
+        report.push_str(&format!(
+            "**Confidence Score**: {:.2} / 1.0\n\n",
+            self.confidence.overall
+        ));
         report.push_str(&format!("{}\n\n", self.description));
 
         // Impact statement
         let impact = match self.severity {
-            Severity::Critical => "Impact: Critical system functionality affected. Immediate attention required.",
+            Severity::Critical => {
+                "Impact: Critical system functionality affected. Immediate attention required."
+            }
             Severity::High => "Impact: Major functionality impaired. High priority fix needed.",
             Severity::Medium => "Impact: Moderate functionality affected. Workaround may exist.",
             Severity::Low => "Impact: Minor issue with limited user impact.",
@@ -231,41 +241,63 @@ impl BugReport {
 
         // Confidence Breakdown (collapsible)
         report.push_str("<details>\n<summary>\n\n## Confidence Analysis\n\n</summary>\n\n");
-        report.push_str(&format!("**Overall Confidence**: {:.2} / 1.0\n\n", self.confidence.overall));
+        report.push_str(&format!(
+            "**Overall Confidence**: {:.2} / 1.0\n\n",
+            self.confidence.overall
+        ));
         report.push_str("### Confidence Factors\n\n");
-        report.push_str(&format!("- **Discovery Method**: {:.2} (weight: {})\n",
-            self.confidence.discovery_method_weight,
-            "35%"
+        report.push_str(&format!(
+            "- **Discovery Method**: {:.2} (weight: {})\n",
+            self.confidence.discovery_method_weight, "35%"
         ));
-        report.push_str(&format!("- **Reproducibility**: {:.2} (weight: {})\n",
-            self.confidence.reproducibility_score,
-            "30%"
+        report.push_str(&format!(
+            "- **Reproducibility**: {:.2} (weight: {})\n",
+            self.confidence.reproducibility_score, "30%"
         ));
-        report.push_str(&format!("- **Quantitative Evidence**: {:.2} (weight: {})\n",
-            self.confidence.quantitative_evidence,
-            "20%"
+        report.push_str(&format!(
+            "- **Quantitative Evidence**: {:.2} (weight: {})\n",
+            self.confidence.quantitative_evidence, "20%"
         ));
-        report.push_str(&format!("- **Root Cause Clarity**: {:.2} (weight: {})\n\n",
-            self.confidence.root_cause_clarity,
-            "15%"
+        report.push_str(&format!(
+            "- **Root Cause Clarity**: {:.2} (weight: {})\n\n",
+            self.confidence.root_cause_clarity, "15%"
         ));
         report.push_str("</details>\n\n");
 
         // Quantitative Analysis (REPORT-001) (collapsible)
         if let Some(ref analysis) = self.quantitative_analysis {
             report.push_str("<details>\n<summary>\n\n## Quantitative Analysis\n\n</summary>\n\n");
-            report.push_str(&format!("**Overall Risk Score**: {:.2} / 1.0 ({:?})\n\n",
+            report.push_str(&format!(
+                "**Overall Risk Score**: {:.2} / 1.0 ({:?})\n\n",
                 analysis.risk_score,
                 analysis.risk_level()
             ));
 
             report.push_str("### Complexity Metrics\n\n");
-            report.push_str(&format!("- **Lines of Code**: {}\n", analysis.complexity.loc));
-            report.push_str(&format!("- **Cyclomatic Complexity**: {}\n", analysis.complexity.cyclomatic));
-            report.push_str(&format!("- **Cognitive Complexity**: {}\n", analysis.complexity.cognitive));
-            report.push_str(&format!("- **Halstead Difficulty**: {:.2}\n", analysis.complexity.halstead_difficulty));
-            report.push_str(&format!("- **Parameters**: {}\n", analysis.complexity.parameters));
-            report.push_str(&format!("- **Nesting Depth**: {}\n\n", analysis.complexity.nesting_depth));
+            report.push_str(&format!(
+                "- **Lines of Code**: {}\n",
+                analysis.complexity.loc
+            ));
+            report.push_str(&format!(
+                "- **Cyclomatic Complexity**: {}\n",
+                analysis.complexity.cyclomatic
+            ));
+            report.push_str(&format!(
+                "- **Cognitive Complexity**: {}\n",
+                analysis.complexity.cognitive
+            ));
+            report.push_str(&format!(
+                "- **Halstead Difficulty**: {:.2}\n",
+                analysis.complexity.halstead_difficulty
+            ));
+            report.push_str(&format!(
+                "- **Parameters**: {}\n",
+                analysis.complexity.parameters
+            ));
+            report.push_str(&format!(
+                "- **Nesting Depth**: {}\n\n",
+                analysis.complexity.nesting_depth
+            ));
 
             if let Some(ref churn) = analysis.churn {
                 report.push_str("### Code Churn Analysis\n\n");
@@ -276,12 +308,21 @@ impl BugReport {
                 } else {
                     0.0
                 };
-                report.push_str(&format!("- **Bugs per Change**: {:.3}\n\n", bugs_per_change));
+                report.push_str(&format!(
+                    "- **Bugs per Change**: {:.3}\n\n",
+                    bugs_per_change
+                ));
             }
 
             report.push_str("### Technical Debt (SATD)\n\n");
-            report.push_str(&format!("- **Total SATD Comments**: {}\n", analysis.satd_count));
-            report.push_str(&format!("- **Severity Score**: {:.2} / 1.0\n\n", analysis.satd_severity));
+            report.push_str(&format!(
+                "- **Total SATD Comments**: {}\n",
+                analysis.satd_count
+            ));
+            report.push_str(&format!(
+                "- **Severity Score**: {:.2} / 1.0\n\n",
+                analysis.satd_severity
+            ));
 
             report.push_str("### Dependency Analysis\n\n");
             report.push_str(&format!("- **Coupling**: {}\n\n", analysis.coupling));
@@ -290,7 +331,9 @@ impl BugReport {
 
         // Five-Whys Analysis (REPORT-002) (collapsible)
         if let Some(ref five_whys) = self.five_whys {
-            report.push_str("<details>\n<summary>\n\n## Five-Whys Root Cause Analysis\n\n</summary>\n\n");
+            report.push_str(
+                "<details>\n<summary>\n\n## Five-Whys Root Cause Analysis\n\n</summary>\n\n",
+            );
             report.push_str(&five_whys.to_markdown());
             report.push_str("\n</details>\n\n");
         }
@@ -419,11 +462,10 @@ mod tests {
 
         let complexity = ComplexityMetrics::new(100);
         let analysis = QuantitativeAnalysis::new(
-            complexity,
-            None, // churn
-            5, // satd_count
-            0.5, // satd_severity
-            3, // coupling
+            complexity, None, // churn
+            5,    // satd_count
+            0.5,  // satd_severity
+            3,    // coupling
         );
 
         let report = BugReport::new(
@@ -455,10 +497,7 @@ mod tests {
         };
 
         let mut five_whys = FiveWhysAnalysis::new("Test bug".to_string());
-        five_whys.add_layer(WhyLayer::new(
-            1,
-            "Why did the bug occur?".to_string(),
-        ));
+        five_whys.add_layer(WhyLayer::new(1, "Why did the bug occur?".to_string()));
 
         let report = BugReport::new(
             "Test bug".to_string(),
@@ -641,9 +680,7 @@ mod tests {
 
         let complexity = ComplexityMetrics::new(250);
         let analysis = QuantitativeAnalysis::new(
-            complexity,
-            None,
-            10,  // satd_count
+            complexity, None, 10,  // satd_count
             0.8, // satd_severity
             5,   // coupling
         );
@@ -689,18 +726,13 @@ mod tests {
 
         let complexity = ComplexityMetrics::new(180);
         let analysis = QuantitativeAnalysis::new(
-            complexity,
-            None,
-            8,  // satd_count
+            complexity, None, 8,   // satd_count
             0.6, // satd_severity
-            4,  // coupling
+            4,   // coupling
         );
 
         let mut five_whys = FiveWhysAnalysis::new("Bug occurred".to_string());
-        five_whys.add_layer(WhyLayer::new(
-            1,
-            "Why occurred?".to_string(),
-        ));
+        five_whys.add_layer(WhyLayer::new(1, "Why occurred?".to_string()));
 
         let mut tdd = TddHistory::new();
         let mut cycle = TddCycle::new(
@@ -768,11 +800,9 @@ mod tests {
 
         let complexity = ComplexityMetrics::new(200);
         let analysis = QuantitativeAnalysis::new(
-            complexity,
-            None,
-            10, // satd_count
+            complexity, None, 10,  // satd_count
             0.7, // satd_severity
-            5,  // coupling
+            5,   // coupling
         );
 
         let mut five_whys = FiveWhysAnalysis::new("Performance regression detected".to_string());

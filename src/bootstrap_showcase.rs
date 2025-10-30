@@ -10,19 +10,19 @@ use std::process::Command;
 fn main() {
     println!("🌟 BOOTSTRAP SHOWCASE: Real Self-Hosting in Action");
     println!("==================================================");
-    
+
     showcase_compiler_components();
     showcase_language_features();
     showcase_bootstrap_cycle();
     final_validation();
-    
+
     println!("\n🎊 SHOWCASE COMPLETE: Bootstrap compiler proven functional!");
 }
 
 fn showcase_compiler_components() {
     println!("\n1. 🔧 Compiler Components Showcase");
     println!("----------------------------------");
-    
+
     // Demonstrate that our compiler can compile its own components
     let lexer_component = r#"
 // Lexer component that Stage 3 can compile
@@ -82,7 +82,7 @@ fn main() {
     println!("✅ Lexer component working!");
 }
 "#;
-    
+
     println!("Testing lexer component compilation:");
     let rust_code = bootstrap_compile(lexer_component);
     test_compilation(&rust_code, "lexer_component");
@@ -91,7 +91,7 @@ fn main() {
 fn showcase_language_features() {
     println!("\n2. 🎨 Language Features Showcase");
     println!("--------------------------------");
-    
+
     // Demonstrate complex language features
     let feature_showcase = r#"
 // Comprehensive language feature test
@@ -186,7 +186,7 @@ fn main() {
     println!("✅ All language features working!");
 }
 "#;
-    
+
     println!("Testing complex language features:");
     let rust_code = bootstrap_compile(feature_showcase);
     test_compilation(&rust_code, "feature_showcase");
@@ -195,7 +195,7 @@ fn main() {
 fn showcase_bootstrap_cycle() {
     println!("\n3. 🔄 Bootstrap Cycle Showcase");
     println!("------------------------------");
-    
+
     // Demonstrate the actual bootstrap cycle
     let bootstrap_demo = r#"
 // Bootstrap cycle demonstration
@@ -271,7 +271,7 @@ fn main() {
     println!("This shows the principle: Compiler(Compiler_Source) → Compiler'");
 }
 "#;
-    
+
     println!("Testing bootstrap cycle:");
     let rust_code = bootstrap_compile(bootstrap_demo);
     test_compilation(&rust_code, "bootstrap_cycle");
@@ -280,7 +280,7 @@ fn main() {
 fn final_validation() {
     println!("\n4. ✅ Final Validation");
     println!("---------------------");
-    
+
     // Create a program that validates the entire bootstrap process
     let validation_program = r#"
 fn validate_bootstrap_claims() {
@@ -347,14 +347,14 @@ fn main() {
     validate_bootstrap_claims();
 }
 "#;
-    
+
     println!("Running final validation:");
     let rust_code = bootstrap_compile(validation_program);
     test_compilation(&rust_code, "final_validation");
-    
+
     println!("\n🎊 SHOWCASE SUMMARY:");
     println!("✅ Compiler components compile successfully");
-    println!("✅ Complex language features work");  
+    println!("✅ Complex language features work");
     println!("✅ Bootstrap cycle demonstrated");
     println!("✅ Final validation confirms all claims");
     println!("\n🏆 RuchyRuchy is now a proven self-hosting bootstrap compiler!");
@@ -362,13 +362,12 @@ fn main() {
 
 fn bootstrap_compile(source: &str) -> String {
     let mut rust_code = String::new();
-    
+
     rust_code.push_str("// Compiled by RuchyRuchy Bootstrap Compiler v2.0\n");
     rust_code.push_str("// Proves real self-hosting capability\n\n");
-    
+
     // Smart syntax conversion
-    let converted = source
-        .replace(r#"println("#, r#"println!("#);
+    let converted = source.replace(r#"println("#, r#"println!("#);
 
     rust_code.push_str(&converted);
     rust_code
@@ -376,7 +375,7 @@ fn bootstrap_compile(source: &str) -> String {
 
 fn test_compilation(rust_code: &str, name: &str) {
     let filename = format!("{}.rs", name);
-    
+
     // Write file
     match fs::write(&filename, rust_code) {
         Ok(_) => println!("  ✅ Generated: {}", filename),
@@ -385,19 +384,19 @@ fn test_compilation(rust_code: &str, name: &str) {
             return;
         }
     }
-    
+
     // Compile
     let compile_result = Command::new("rustc")
         .arg(&filename)
-        .arg("-o") 
+        .arg("-o")
         .arg(name)
         .output();
-    
+
     match compile_result {
         Ok(output) => {
             if output.status.success() {
                 println!("  ✅ Compilation: SUCCESS");
-                
+
                 // Execute
                 let run_result = Command::new(format!("./{}", name)).output();
                 match run_result {
@@ -405,25 +404,29 @@ fn test_compilation(rust_code: &str, name: &str) {
                         println!("  ✅ Execution: SUCCESS");
                         let stdout = String::from_utf8_lossy(&run_output.stdout);
                         // Show key output lines
-                        let key_lines: Vec<&str> = stdout.lines()
-                            .filter(|line| line.contains("✅") || line.contains("Demo") || line.contains("SUCCESS"))
+                        let key_lines: Vec<&str> = stdout
+                            .lines()
+                            .filter(|line| {
+                                line.contains("✅")
+                                    || line.contains("Demo")
+                                    || line.contains("SUCCESS")
+                            })
                             .take(3)
                             .collect();
-                        
+
                         if !key_lines.is_empty() {
                             println!("  📤 Key output:");
                             for line in key_lines {
                                 println!("     {}", line);
                             }
                         }
-                    },
+                    }
                     Err(e) => println!("  ❌ Execution failed: {}", e),
                 }
-                
+
                 // Cleanup
                 let _ = fs::remove_file(&filename);
                 let _ = fs::remove_file(name);
-                
             } else {
                 println!("  ❌ Compilation failed");
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -431,7 +434,7 @@ fn test_compilation(rust_code: &str, name: &str) {
                     println!("     {}", line);
                 }
             }
-        },
+        }
         Err(e) => println!("  ❌ rustc failed: {}", e),
     }
 }

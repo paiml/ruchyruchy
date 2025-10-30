@@ -43,8 +43,8 @@ fn test_basic_churn_calculation() {
     analyzer.add_change(FileChange::new(
         "src/parser.rs".to_string(),
         "commit1".to_string(),
-        50,  // +50 lines
-        20,  // -20 lines
+        50, // +50 lines
+        20, // -20 lines
         "alice".to_string(),
         1000,
     ));
@@ -52,8 +52,8 @@ fn test_basic_churn_calculation() {
     analyzer.add_change(FileChange::new(
         "src/parser.rs".to_string(),
         "commit2".to_string(),
-        30,  // +30 lines
-        10,  // -10 lines
+        30, // +30 lines
+        10, // -10 lines
         "bob".to_string(),
         2000,
     ));
@@ -61,8 +61,8 @@ fn test_basic_churn_calculation() {
     analyzer.add_change(FileChange::new(
         "src/parser.rs".to_string(),
         "commit3".to_string(),
-        20,  // +20 lines
-        5,   // -5 lines
+        20, // +20 lines
+        5,  // -5 lines
         "alice".to_string(),
         3000,
     ));
@@ -133,9 +133,18 @@ fn test_multiple_file_churn_analysis() {
     assert_eq!(metrics.len(), 3);
 
     // Find each file's metrics
-    let lexer = metrics.iter().find(|m| m.file_path == "src/lexer.rs").unwrap();
-    let ast = metrics.iter().find(|m| m.file_path == "src/ast.rs").unwrap();
-    let utils = metrics.iter().find(|m| m.file_path == "src/utils.rs").unwrap();
+    let lexer = metrics
+        .iter()
+        .find(|m| m.file_path == "src/lexer.rs")
+        .unwrap();
+    let ast = metrics
+        .iter()
+        .find(|m| m.file_path == "src/ast.rs")
+        .unwrap();
+    let utils = metrics
+        .iter()
+        .find(|m| m.file_path == "src/utils.rs")
+        .unwrap();
 
     // Verify lexer has highest churn
     assert!(lexer.total_churn > ast.total_churn);
@@ -211,7 +220,9 @@ fn test_hotspot_detection() {
     assert!(hotspots.len() >= 2);
 
     // Find critical file
-    let critical = hotspots.iter().find(|h| h.metrics.file_path == "critical_file.rs");
+    let critical = hotspots
+        .iter()
+        .find(|h| h.metrics.file_path == "critical_file.rs");
     assert!(critical.is_some());
 
     let critical = critical.unwrap();
@@ -219,7 +230,9 @@ fn test_hotspot_detection() {
     assert!(critical.metrics.risk_score() >= 0.8);
 
     // Verify high risk file is included
-    let high = hotspots.iter().find(|h| h.metrics.file_path == "high_risk.rs");
+    let high = hotspots
+        .iter()
+        .find(|h| h.metrics.file_path == "high_risk.rs");
     assert!(high.is_some());
 }
 
@@ -258,10 +271,10 @@ fn test_top_n_hotspots() {
 
     // Add 5 files with different risk levels
     let files = vec![
-        ("low.rs", 1, 10, 5),      // Low risk
-        ("medium.rs", 3, 50, 25),  // Medium risk
-        ("high.rs", 5, 100, 50),   // High risk
-        ("higher.rs", 7, 150, 75), // Higher risk
+        ("low.rs", 1, 10, 5),          // Low risk
+        ("medium.rs", 3, 50, 25),      // Medium risk
+        ("high.rs", 5, 100, 50),       // High risk
+        ("higher.rs", 7, 150, 75),     // Higher risk
         ("critical.rs", 10, 200, 100), // Critical risk
     ];
 
@@ -491,16 +504,14 @@ fn test_edge_case_massive_churn() {
 #[test]
 fn test_confidence_score_generation() {
     // Test 1: Low confidence (few changes)
-    let low_changes = vec![
-        FileChange::new(
-            "low_conf.rs".to_string(),
-            "c1".to_string(),
-            50,
-            25,
-            "alice".to_string(),
-            1000,
-        ),
-    ];
+    let low_changes = vec![FileChange::new(
+        "low_conf.rs".to_string(),
+        "c1".to_string(),
+        50,
+        25,
+        "alice".to_string(),
+        1000,
+    )];
     let low_metrics = ChurnMetrics::from_changes("low_conf.rs".to_string(), &low_changes, 30);
     let low_hotspot = ChurnHotspot::new(low_metrics);
 

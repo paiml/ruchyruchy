@@ -311,21 +311,32 @@ fn test_ast_generator_determinism() {
     let output1 = gen1.generate();
     let output2 = gen2.generate();
 
-    assert_eq!(output1, output2, "Same seed should produce identical output");
+    assert_eq!(
+        output1, output2,
+        "Same seed should produce identical output"
+    );
 
     // Test 2: Different seeds produce different output (probabilistically)
     let mut gen3 = AstGenerator::new(54321);
     let output3 = gen3.generate();
 
-    assert_ne!(output1, output3, "Different seeds should (usually) produce different output");
+    assert_ne!(
+        output1, output3,
+        "Different seeds should (usually) produce different output"
+    );
 
     // Test 3: Generated code has structure
     assert!(!output1.is_empty());
     // AstGenerator produces statements, which typically contain keywords or operators
-    let has_structure = output1.contains("let") || output1.contains("if") ||
-                       output1.contains("+") || output1.contains("-") ||
-                       output1.contains(";");
-    assert!(has_structure, "Generated code should have syntactic structure");
+    let has_structure = output1.contains("let")
+        || output1.contains("if")
+        || output1.contains("+")
+        || output1.contains("-")
+        || output1.contains(";");
+    assert!(
+        has_structure,
+        "Generated code should have syntactic structure"
+    );
 }
 
 /// Test: AST Generator Depth Control
@@ -347,21 +358,26 @@ fn test_ast_generator_depth_control() {
     let mut deep_gen = AstGenerator::new(100).with_max_depth(5);
 
     // Generate many expressions and check if at least some have nesting
-    let deep_exprs: Vec<String> = (0..50)
-        .map(|_| deep_gen.generate_expr(0))
-        .collect();
+    let deep_exprs: Vec<String> = (0..50).map(|_| deep_gen.generate_expr(0)).collect();
 
     // With deeper max_depth and enough samples, should see some parentheses
     let has_nested = deep_exprs.iter().any(|expr| expr.contains('('));
-    assert!(has_nested, "Deep generator should produce some nested expressions");
+    assert!(
+        has_nested,
+        "Deep generator should produce some nested expressions"
+    );
 
     // Verify we got reasonable variety of expressions
-    let total_parens: usize = deep_exprs.iter()
+    let total_parens: usize = deep_exprs
+        .iter()
         .map(|expr| expr.chars().filter(|c| *c == '(').count())
         .sum();
 
     // With 50 expressions and max_depth=5, should generate some nested structures
-    assert!(total_parens > 0, "Generator should produce some nested expressions");
+    assert!(
+        total_parens > 0,
+        "Generator should produce some nested expressions"
+    );
 }
 
 /// Test: PropertyBug Confidence Scoring
@@ -384,8 +400,10 @@ fn test_property_bug_confidence() {
     assert_eq!(bug.shrunk_example, shrunk);
 
     // Verify high confidence for property violations
-    assert!(bug.confidence.overall > 0.85,
-           "Property violations should have high confidence score");
+    assert!(
+        bug.confidence.overall > 0.85,
+        "Property violations should have high confidence score"
+    );
 }
 
 /// Test: Performance - Large Scale Property Checking
@@ -412,7 +430,10 @@ fn test_performance_large_scale() {
         PropertyResult::Success { cases_tested } => {
             assert_eq!(cases_tested, 50_000);
         }
-        PropertyResult::Violation { cases_until_failure, .. } => {
+        PropertyResult::Violation {
+            cases_until_failure,
+            ..
+        } => {
             // Violation is OK, just verify it was detected
             assert!(cases_until_failure > 0);
             assert!(cases_until_failure <= 50_000);

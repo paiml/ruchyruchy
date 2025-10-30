@@ -291,11 +291,15 @@ fn test_precondition_filtering() {
 
     // If implementation enforces preconditions, tests with pop should have push first
     // For now, just verify that SOME tests have push (showing generator works)
-    let tests_with_push: usize = tests.iter().filter(|t| {
-        t.operations.iter().any(|op| op.operation == "push")
-    }).count();
+    let tests_with_push: usize = tests
+        .iter()
+        .filter(|t| t.operations.iter().any(|op| op.operation == "push"))
+        .count();
 
-    assert!(tests_with_push > 0, "Should generate at least some tests with 'push'");
+    assert!(
+        tests_with_push > 0,
+        "Should generate at least some tests with 'push'"
+    );
 
     // If precondition filtering is implemented, uncomment this:
     // if tests_with_pop > 0 {
@@ -369,15 +373,9 @@ fn test_shadow_state_tracking() {
     effect.insert("has_capacity".to_string(), true);
     state.update("reserve(10)", effect);
 
-    assert!(state.check_preconditions(&[
-        "!is_empty".to_string(),
-        "has_capacity".to_string()
-    ]));
+    assert!(state.check_preconditions(&["!is_empty".to_string(), "has_capacity".to_string()]));
     assert!(
-        !state.check_preconditions(&[
-            "is_empty".to_string(),
-            "has_capacity".to_string()
-        ]),
+        !state.check_preconditions(&["is_empty".to_string(), "has_capacity".to_string()]),
         "Should fail if any precondition is not satisfied"
     );
 }
@@ -434,15 +432,9 @@ fn test_timeout_detection() {
 
         for op in &test.operations {
             if op.operation == "fast_op" {
-                assert_eq!(
-                    op.timeout_ms, 100,
-                    "fast_op should have 100ms timeout"
-                );
+                assert_eq!(op.timeout_ms, 100, "fast_op should have 100ms timeout");
             } else if op.operation == "slow_op" {
-                assert_eq!(
-                    op.timeout_ms, 5000,
-                    "slow_op should have 5000ms timeout"
-                );
+                assert_eq!(op.timeout_ms, 5000, "slow_op should have 5000ms timeout");
             }
         }
     }
@@ -500,8 +492,14 @@ fn test_property_injection() {
     let code = test_case.to_ruchy_code();
 
     // Verify generated code structure
-    assert!(code.contains("enum LogLevel"), "Should define LogLevel enum");
-    assert!(code.contains("struct Logger"), "Should define Logger struct");
+    assert!(
+        code.contains("enum LogLevel"),
+        "Should define LogLevel enum"
+    );
+    assert!(
+        code.contains("struct Logger"),
+        "Should define Logger struct"
+    );
     assert!(
         code.contains("fun create()"),
         "Should define create constructor"
@@ -516,10 +514,7 @@ fn test_property_injection() {
     // Verify timeout comments are present (property injection)
     // The implementation includes timeout thresholds in the schema,
     // which are checked during execution
-    assert!(
-        code.contains("Logger::create"),
-        "Constructor call present"
-    );
+    assert!(code.contains("Logger::create"), "Constructor call present");
 }
 
 /// Test: Minimization (Delta Debugging)
@@ -639,7 +634,10 @@ fn test_minimization() {
     println!("Generated code:\n{}", code);
 
     // Check for constructor call (format may vary)
-    assert!(code.contains("Vec") && code.contains("new"), "Should contain Vec constructor");
+    assert!(
+        code.contains("Vec") && code.contains("new"),
+        "Should contain Vec constructor"
+    );
     assert!(code.contains("push"));
     assert!(code.contains("pop"));
 }

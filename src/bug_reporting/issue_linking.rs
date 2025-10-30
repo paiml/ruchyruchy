@@ -263,9 +263,7 @@ pub struct IssueDeduplicator {
 impl IssueDeduplicator {
     /// Create new deduplicator
     pub fn new() -> Self {
-        Self {
-            issues: Vec::new(),
-        }
+        Self { issues: Vec::new() }
     }
 
     /// Add existing issue
