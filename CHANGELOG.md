@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enterprise code quality improvements (280+ clippy errors fixed)
   - Updated version references in README.md and INTEGRATION.md
 
+### Added
+- **Type-Aware Tracing Integration** (Ruchy v3.149.0+)
+  - ruchydbg CLI: Added `--trace` flag for type-aware execution tracing
+  - Shows argument types on function entry (e.g., `square(5: integer)`)
+  - Shows return value types on function exit (e.g., `square = 25: integer`)
+  - Automatic RUCHY_TRACE environment variable support
+  - New example: `examples/type_aware_tracing_demo.ruchy`
+  - Updated INTEGRATION_GUIDE.md with comprehensive tracing documentation
+  - Files: src/bin/ruchydbg.rs, examples/type_aware_tracing_demo.ruchy, INTEGRATION_GUIDE.md
+
 ## [1.9.0] - 2025-10-30
 
 ### 🎉 Phase 2 Completion: Validation & Robustness - 101 New Integration Tests

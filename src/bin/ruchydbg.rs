@@ -49,7 +49,7 @@ fn main() {
 }
 
 fn run_ruchy_file(args: &[String]) {
-    // Parse arguments: ruchydbg run <file> [--timeout <ms>]
+    // Parse arguments: ruchydbg run <file> [--timeout <ms>] [--trace]
 
     // Check for help first
     if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
@@ -59,18 +59,39 @@ fn run_ruchy_file(args: &[String]) {
 
     if args.len() < 3 {
         eprintln!("Error: Missing file argument");
-        eprintln!("Usage: ruchydbg run <file> [--timeout <ms>]");
+        eprintln!("Usage: ruchydbg run <file> [--timeout <ms>] [--trace]");
         exit(EXIT_ERROR);
     }
 
     let file_path = &args[2];
 
-    // Parse timeout (default: 5000ms = 5 seconds)
-    let timeout_ms = if args.len() >= 5 && args[3] == "--timeout" {
-        args[4].parse::<u64>().unwrap_or(DEFAULT_TIMEOUT_MS)
-    } else {
-        DEFAULT_TIMEOUT_MS
-    };
+    // Parse timeout and trace flags
+    let mut timeout_ms = DEFAULT_TIMEOUT_MS;
+    let mut enable_trace = false;
+
+    let mut i = 3;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--timeout" => {
+                if i + 1 < args.len() {
+                    timeout_ms = args[i + 1].parse::<u64>().unwrap_or(DEFAULT_TIMEOUT_MS);
+                    i += 2;
+                } else {
+                    eprintln!("Error: --timeout requires a value");
+                    exit(EXIT_ERROR);
+                }
+            }
+            "--trace" => {
+                enable_trace = true;
+                i += 1;
+            }
+            _ => {
+                eprintln!("Error: Unknown flag: {}", args[i]);
+                print_run_help();
+                exit(EXIT_ERROR);
+            }
+        }
+    }
 
     // Check if file exists
     if !PathBuf::from(file_path).exists() {
@@ -92,6 +113,9 @@ fn run_ruchy_file(args: &[String]) {
     // Run with timeout
     println!("🔍 Running: {}", file_path);
     println!("⏱️  Timeout: {}ms", timeout_ms);
+    if enable_trace {
+        println!("🔍 Type-aware tracing: enabled");
+    }
     println!();
 
     let start = Instant::now();
@@ -105,6 +129,9 @@ fn run_ruchy_file(args: &[String]) {
         let timeout_secs = (timeout_ms as f64) / 1000.0;
         cmd.arg(format!("{}", timeout_secs));
         cmd.arg("ruchy");
+        if enable_trace {
+            cmd.arg("--trace");
+        }
         cmd.arg("run");
         cmd.arg(file_path);
     }
@@ -114,8 +141,16 @@ fn run_ruchy_file(args: &[String]) {
     let mut cmd = Command::new("ruchy");
     #[cfg(not(unix))]
     {
+        if enable_trace {
+            cmd.arg("--trace");
+        }
         cmd.arg("run");
         cmd.arg(file_path);
+    }
+
+    // Set RUCHY_TRACE environment variable if tracing is enabled
+    if enable_trace {
+        cmd.env("RUCHY_TRACE", "1");
     }
 
     let status = cmd.status();
@@ -152,14 +187,17 @@ fn run_ruchy_file(args: &[String]) {
 }
 
 fn print_run_help() {
-    println!("ruchydbg run - Execute Ruchy code with timeout detection");
+    println!("ruchydbg run - Execute Ruchy code with timeout detection and type-aware tracing");
     println!();
     println!("USAGE:");
-    println!("    ruchydbg run <file> [--timeout <ms>]");
+    println!("    ruchydbg run <file> [OPTIONS]");
     println!();
     println!("ARGUMENTS:");
     println!("    <file>           Path to .ruchy file to execute");
+    println!();
+    println!("OPTIONS:");
     println!("    --timeout <ms>   Timeout in milliseconds (default: 5000ms)");
+    println!("    --trace          Enable type-aware tracing (shows argument/return types)");
     println!();
     println!("EXIT CODES:");
     println!("    0    Success");
@@ -167,9 +205,22 @@ fn print_run_help() {
     println!("    1+   Other error");
     println!();
     println!("EXAMPLES:");
+    println!("    # Basic execution with timeout detection");
     println!("    ruchydbg run test.ruchy");
+    println!();
+    println!("    # With custom timeout");
     println!("    ruchydbg run test.ruchy --timeout 1000");
-    println!("    ruchydbg run test.ruchy --timeout 5000");
+    println!();
+    println!("    # With type-aware tracing (Ruchy v3.149.0+)");
+    println!("    ruchydbg run test.ruchy --trace");
+    println!();
+    println!("    # Combined: timeout + tracing");
+    println!("    ruchydbg run test.ruchy --timeout 5000 --trace");
+    println!();
+    println!("TYPE-AWARE TRACING (Ruchy v3.149.0+):");
+    println!("    Shows types of function arguments and return values:");
+    println!("      TRACE: → square(5: integer)");
+    println!("      TRACE: ← square = 25: integer");
 }
 
 fn run_validation() {
@@ -247,18 +298,20 @@ fn print_help() {
     println!("    ruchydbg [COMMAND]");
     println!();
     println!("COMMANDS:");
-    println!("    run <file>        Execute Ruchy code with timeout detection");
+    println!("    run <file>        Execute Ruchy code with timeout detection and type-aware tracing");
     println!("    validate, test    Run debugging tools validation (default)");
     println!("    version, -v       Print version information");
     println!("    help, -h          Print this help message");
     println!();
-    println!("VALIDATION CHECKS:");
+    println!("DEBUGGING FEATURES:");
+    println!("    - Timeout detection for infinite loops and hangs");
+    println!("    - Type-aware tracing (Ruchy v3.149.0+)");
     println!("    - Source map generation and mapping");
-    println!("    - Record-replay engine smoke test");
+    println!("    - Record-replay engine for time-travel debugging");
     println!("    - Performance benchmarking");
     println!();
     println!("EXAMPLES:");
-    println!("    ruchydbg run test.ruchy --timeout 1000");
+    println!("    ruchydbg run test.ruchy --timeout 1000 --trace");
     println!("    ruchydbg validate     # Run all validations");
     println!("    ruchydbg --version    # Show version");
     println!();
