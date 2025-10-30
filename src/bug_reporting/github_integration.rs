@@ -17,7 +17,6 @@
 // Rate limits: 5000 requests/hour for authenticated requests
 
 use crate::bug_reporting::report_generator::{BugReport, Severity};
-use std::collections::HashMap;
 
 /// GitHub API client
 #[derive(Debug, Clone)]

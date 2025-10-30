@@ -167,6 +167,7 @@ pub struct TddHistory {
     /// Current cycle number
     current_cycle: usize,
     /// Start time
+    #[allow(dead_code)]
     start_time: SystemTime,
 }
 

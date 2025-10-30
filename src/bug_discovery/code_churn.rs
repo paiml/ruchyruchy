@@ -224,7 +224,7 @@ impl ChurnAnalyzer {
         for change in &self.changes {
             file_changes
                 .entry(change.file_path.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(change.clone());
         }
 
@@ -459,7 +459,7 @@ mod tests {
 
         let hotspots = analyzer.identify_hotspots(0.3);
         // Should identify risky.rs as hotspot
-        assert!(hotspots.len() >= 1);
+        assert!(!hotspots.is_empty());
         assert!(hotspots.iter().any(|h| h.metrics.file_path == "risky.rs"));
     }
 

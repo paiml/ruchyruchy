@@ -250,7 +250,7 @@ impl FiveWhysAnalysis {
                         data.relevance * 100.0
                     ));
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
 
             if !layer.hypotheses.is_empty() {
@@ -279,7 +279,7 @@ impl FiveWhysAnalysis {
                         md.push_str("   - ⚠️  **Requires human validation**\n");
                     }
 
-                    md.push_str("\n");
+                    md.push('\n');
                 }
             }
         }
@@ -310,7 +310,7 @@ impl FiveWhysAnalyzer {
     pub fn add_data_point(&mut self, category: String, data: DataPoint) {
         self.data_points
             .entry(category)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(data);
     }
 
@@ -376,19 +376,17 @@ impl FiveWhysAnalyzer {
         let mut analysis = FiveWhysAnalysis::new(bug_description);
 
         // Generate 5 layers
-        let questions = vec![
-            "Why did the bug occur?",
+        let questions = ["Why did the bug occur?",
             "Why was the system vulnerable to this issue?",
             "Why was this vulnerability not caught earlier?",
             "Why are our processes not preventing this?",
-            "Why is the root cause not addressed?",
-        ];
+            "Why is the root cause not addressed?"];
 
         for (i, question) in questions.iter().enumerate() {
             let mut layer = WhyLayer::new(i + 1, question.to_string());
 
             // Add relevant data points to layer
-            for (category, data_points) in &self.data_points {
+            for data_points in self.data_points.values() {
                 for data in data_points {
                     if data.is_highly_relevant() {
                         layer.add_data_point(data.clone());

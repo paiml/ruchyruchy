@@ -166,15 +166,12 @@ impl ShadowState {
     pub fn check_preconditions(&self, preconditions: &[String]) -> bool {
         for precond in preconditions {
             // Handle negation
-            if precond.starts_with('!') {
-                let pred = &precond[1..];
+            if let Some(pred) = precond.strip_prefix('!') {
                 if *self.predicates.get(pred).unwrap_or(&false) {
                     return false; // Negated predicate is true, precondition fails
                 }
-            } else {
-                if !*self.predicates.get(precond.as_str()).unwrap_or(&false) {
-                    return false; // Predicate is false, precondition fails
-                }
+            } else if !*self.predicates.get(precond.as_str()).unwrap_or(&false) {
+                return false; // Predicate is false, precondition fails
             }
         }
         true

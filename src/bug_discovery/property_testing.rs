@@ -84,6 +84,7 @@ pub trait Generator {
 
 /// Simple AST generator for property testing
 pub struct AstGenerator {
+    #[allow(dead_code)]
     seed: u64,
     state: u64,
     max_depth: usize,
@@ -153,7 +154,7 @@ impl AstGenerator {
     }
 
     fn random_bool(&mut self) -> bool {
-        self.next_random() % 2 == 0
+        self.next_random().is_multiple_of(2)
     }
 
     fn random_int(&mut self, min: i32, max: i32) -> i32 {
@@ -204,7 +205,7 @@ impl PropertyChecker {
     }
 
     /// Check a property with a predicate function
-    pub fn check<F>(&self, property: &Property, mut predicate: F) -> PropertyResult
+    pub fn check<F>(&self, _property: &Property, mut predicate: F) -> PropertyResult
     where
         F: FnMut(&str) -> bool,
     {

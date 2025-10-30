@@ -13,7 +13,7 @@
 // - Runeson et al. (2007): "Detection of Duplicate Defect Reports Using Natural Language Processing"
 // - Sun et al. (2010): "A Discriminative Model Approach for Accurate Duplicate Bug Report Retrieval"
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Similarity threshold for duplicate detection (0.0-1.0)
 pub const DUPLICATE_THRESHOLD: f64 = 0.80;
@@ -604,7 +604,7 @@ mod tests {
         let related = dedup.find_related(&new_issue, 5);
 
         // Should find issue1 and issue2 as related (both about parser and nesting)
-        assert!(related.len() >= 1);
+        assert!(!related.is_empty());
         assert!(related.iter().any(|r| r.issue_id == 1 || r.issue_id == 2));
     }
 

@@ -140,19 +140,6 @@ fn transform_basic_syntax(code: String) -> String {
         .replace(r#"println("#, r#"println!("#)
         .replace(r#"print("#, r#"print!("#)
         .replace(r#"format("#, r#"format!("#)
-        
-        // Collection types
-        .replace("Vec<Token>", "Vec<Token>")
-        .replace("Vec<String>", "Vec<String>")
-        .replace("HashMap<", "HashMap<")
-        .replace("HashSet<", "HashSet<")
-        
-        // String methods that need ! in Rust
-        .replace(".len()", ".len()")
-        .replace(".is_empty()", ".is_empty()")
-        
-        // Convert let mut to proper Rust syntax
-        .replace("let mut ", "let mut ")
 }
 
 fn transform_advanced_features(code: String) -> String {
@@ -228,8 +215,7 @@ fn transform_enum_variants(code: String) -> String {
             result.push_str(line);
         } else if in_enum && trimmed.contains("(") && !trimmed.starts_with("//") {
             // Transform enum variant with data
-            let enhanced = line.replace("(", "(");
-            result.push_str(&enhanced);
+            result.push_str(line);
         } else {
             result.push_str(line);
         }
@@ -276,16 +262,9 @@ fn transform_type_system(code: String) -> String {
     
     // Enhanced type annotations
     result = result
-        .replace("Option<", "Option<")
-        .replace("Result<", "Result<")
-        .replace("Box<", "Box<")
         .replace("Rc<", "std::rc::Rc<")
-        .replace("Arc<", "std::sync::Arc<")
-        
-        // Transform generic constraints
-        .replace("where T:", "where T:")
-        .replace("impl ", "impl ");
-    
+        .replace("Arc<", "std::sync::Arc<");
+
     result
 }
 
@@ -501,15 +480,14 @@ fn validate_generated_code(rust_code: &str) -> CodeGenResult<()> {
         }
         
         // Check for obviously malformed lines
-        if line.trim().ends_with("{") && !line.trim().starts_with("//") {
-            if !line.contains("fn ") && !line.contains("struct ") && 
+        if line.trim().ends_with("{") && !line.trim().starts_with("//")
+            && !line.contains("fn ") && !line.contains("struct ") && 
                !line.contains("enum ") && !line.contains("impl ") &&
                !line.contains("if ") && !line.contains("match ") &&
                !line.contains("loop") && !line.contains("while ") &&
                !line.contains("for ") {
                 return Err(CodeGenError::Syntax(format!("Line {}: Suspicious opening brace: {}", line_no + 1, line.trim())));
             }
-        }
     }
     
     if brace_count != 0 {
