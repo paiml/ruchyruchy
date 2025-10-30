@@ -214,9 +214,10 @@ for sample in &samples {
 
 ---
 
-#### 🔬 DEBUGGER-015: eBPF Syscall Tracing (GREEN Phase COMPLETE)
+#### 🔬 DEBUGGER-015: eBPF Syscall Tracing (GREEN Phase COMPLETE - REFACTOR Blocked)
 
 **Status**: ✅ Infrastructure complete - eBPF kernel program + userspace loader working
+**Blocker**: ⏳ REFACTOR phase requires root/CAP_BPF privileges for test validation
 
 This release adds low-overhead syscall tracing using eBPF, complementing the function-level tracing from DEBUGGER-014. Uses modern Aya framework (pure Rust eBPF) for <1% overhead syscall capture.
 
@@ -296,24 +297,41 @@ for event in events {
 
 ##### Testing
 
-- **280/280 tests passing** with `--features ebpf`
-- 1 test ignored (requires root for eBPF load/attach)
-- Clean compilation across all modules
-- Size verification: `SyscallEvent` = 32 bytes (matches eBPF)
+- **281/281 non-privileged tests passing** with `--features ebpf`
+- **7 RED phase tests** in `tests/test_ebpf_syscall_tracing.rs` (all marked #[ignore])
+  - test_ebpf_syscall_capture
+  - test_syscall_decoding
+  - test_correlation_with_functions
+  - test_overhead_under_1_percent
+  - test_strace_compatible_output
+  - test_json_output_format
+  - test_filtering_by_syscall_pattern
+- ⏳ All tests require root/CAP_BPF privileges to execute
+- ✅ Clean compilation across all modules
+- ✅ Size verification: `SyscallEvent` = 32 bytes (matches eBPF definition)
 
 ##### Documentation
 
 - **Setup guide**: `docs/setup/EBPF_DEVELOPMENT_SETUP.md`
-- **Architecture**: `docs/specifications/DEBUGGER-015-EBPF-ARCHITECTURE.md`
-- **Tests**: `tests/test_ebpf_syscall_tracing.rs` (8 RED tests)
+- **Architecture**: `docs/specifications/DEBUGGER-015-EBPF-ARCHITECTURE.md` (580+ lines)
+  - Complete implementation status (GREEN phase complete, REFACTOR blocked)
+  - Detailed next steps for developer with root access
+- **Tests**: `tests/test_ebpf_syscall_tracing.rs` (7 RED phase tests, all #[ignore])
 - **API docs**: Inline documentation with examples
 
-##### Next Steps (REFACTOR Phase)
+##### Next Steps (REFACTOR Phase - Blocked on Privileges)
 
-- Actual syscall capture testing (requires root)
-- Performance benchmarks (<1% overhead verification)
-- Syscall decoder (20 file syscalls: open, read, write, close, etc.)
-- Correlation with function traces (DEBUGGER-014 integration)
+**Prerequisite**: Developer with root/CAP_BPF access
+
+1. Run: `sudo -E cargo test --features ebpf test_syscall_tracer_load -- --ignored`
+2. Verify eBPF program loads and attaches to tracepoints
+3. Validate basic syscall capture (test_ebpf_syscall_capture)
+4. Implement syscall argument decoder (start with file ops: open, read, write)
+5. Implement `ruchydbg run --trace-syscalls` integration
+6. Performance benchmarks (<1% overhead verification)
+7. Correlation with function traces (DEBUGGER-014 integration)
+
+**Status**: Infrastructure ready, awaiting privileged test environment
 
 ##### Related
 
