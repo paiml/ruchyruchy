@@ -135,6 +135,81 @@ pub struct Sample {
     pub stack: Vec<u64>,
 }
 
+/// Flame graph data in brendangregg format
+///
+/// Aggregates profiling samples by stack trace and generates
+/// flame graph data compatible with brendangregg/FlameGraph tools.
+///
+/// Format: Each line is "frame1;frame2;frame3 count"
+/// where frames are semicolon-separated and count is the number of samples.
+#[derive(Debug)]
+pub struct FlameGraph {
+    /// Aggregated stack traces with counts
+    /// Key: semicolon-separated stack trace
+    /// Value: number of samples with this stack
+    stacks: std::collections::HashMap<String, usize>,
+}
+
+impl FlameGraph {
+    /// Create a flame graph from profiling samples
+    ///
+    /// Aggregates samples by stack trace (using instruction pointers as hex strings).
+    /// Note: For human-readable output, use DWARF unwinding to resolve function names.
+    ///
+    /// # Arguments
+    ///
+    /// * `samples` - Profiling samples to aggregate
+    ///
+    /// # Returns
+    ///
+    /// FlameGraph with aggregated stack traces
+    pub fn from_samples(samples: &[Sample]) -> Self {
+        let mut stacks = std::collections::HashMap::new();
+
+        for sample in samples {
+            // Build stack trace string from instruction pointers
+            // Format each IP as hex: 0x7ffff7a1b2c3
+            let stack_trace = if sample.stack.is_empty() {
+                // Use IP if no stack trace available
+                format!("0x{:x}", sample.ip)
+            } else {
+                // Reverse stack so deepest frame is last (flame graph convention)
+                sample
+                    .stack
+                    .iter()
+                    .rev()
+                    .map(|ip| format!("0x{:x}", ip))
+                    .collect::<Vec<_>>()
+                    .join(";")
+            };
+
+            // Increment count for this stack trace
+            *stacks.entry(stack_trace).or_insert(0) += 1;
+        }
+
+        FlameGraph { stacks }
+    }
+
+    /// Generate brendangregg format flame graph data
+    ///
+    /// Returns a string where each line is:
+    /// "frame1;frame2;frame3 count"
+    ///
+    /// This format can be rendered by inferno or brendangregg/FlameGraph tools.
+    pub fn to_string(&self) -> String {
+        let mut lines: Vec<String> = self
+            .stacks
+            .iter()
+            .map(|(stack, count)| format!("{} {}", stack, count))
+            .collect();
+
+        // Sort for deterministic output
+        lines.sort();
+
+        lines.join("\n")
+    }
+}
+
 /// Statistical profiler using perf_event_open
 ///
 /// GREEN Phase implementation: Basic sampling with hardware counters.
