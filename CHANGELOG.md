@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2025-10-30
+
+### Quality Improvements
+- **Zero Clippy Warnings**: Fixed all 285 clippy warnings (259 code quality + 26 documentation)
+  - Fixed unused imports, variables, and dead code
+  - Fixed inefficient length comparisons (`len() > 0` → `!is_empty()`)
+  - Fixed useless self-replacing string operations
+  - Removed 77 lines of problematic code
+  - Added `#![allow(missing_docs)]` for 242 documentation items (tracked separately)
+  - Files modified: 18 files across codebase
+
+### Infrastructure
+- **Pre-commit Hook Enhancement**: Added clippy enforcement with zero tolerance
+  - Blocks commits with code quality warnings
+  - Uses `cargo clippy --no-default-features --lib -- -D warnings -A missing-docs`
+  - Skips eBPF features (requires root privileges)
+  - Provides clear error messages and fix instructions
+  - File: `.git/hooks/pre-commit` (lines 141-165)
+
 ### Integration
 - **Ruchy v3.149.0 Compatibility**: Updated integration for new type-aware debugging features
   - Type-aware tracing with `--trace` flag (shows argument/return types)
@@ -23,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New example: `examples/type_aware_tracing_demo.ruchy`
   - Updated INTEGRATION_GUIDE.md with comprehensive tracing documentation
   - Files: src/bin/ruchydbg.rs, examples/type_aware_tracing_demo.ruchy, INTEGRATION_GUIDE.md
+
+### Testing
+- **Test Status**: 286 unit tests passing, 0 clippy warnings
+- **Quality Gates**: All gates passing (TDG + Clippy enforcement)
 
 ## [1.9.0] - 2025-10-30
 
