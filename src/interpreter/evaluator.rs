@@ -471,6 +471,46 @@ impl Evaluator {
         }
     }
 
+    /// Helper: Execute loop body statements
+    /// Returns Ok(None) to continue, Ok(Some(v)) for early return
+    fn eval_loop_body_impl(
+        &mut self,
+        body: &[AstNode],
+    ) -> Result<Option<Value>, EvalError> {
+        for stmt in body {
+            match self.eval_internal(stmt)? {
+                ControlFlow::Value(_) => {
+                    // Normal evaluation - continue
+                }
+                ControlFlow::Return(v) => {
+                    // Early return from enclosing function
+                    return Ok(Some(v));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Helper: Execute loop body in a child scope
+    /// Returns Ok(None) to continue, Ok(Some(v)) for early return
+    fn eval_loop_body_with_scope(
+        &mut self,
+        body: &[AstNode],
+    ) -> Result<Option<Value>, EvalError> {
+        // Create child scope for loop body iteration
+        // This allows variables declared inside the loop to be fresh each iteration
+        let child_scope = self.scope.create_child();
+        let old_scope = std::mem::replace(&mut self.scope, child_scope);
+
+        // Execute body statements
+        let return_value = self.eval_loop_body_impl(body)?;
+
+        // Restore parent scope after loop iteration
+        self.scope = old_scope;
+
+        Ok(return_value)
+    }
+
     /// Evaluate while loop
     fn eval_while(
         &mut self,
@@ -486,32 +526,10 @@ impl Evaluator {
                 break; // Exit loop when condition is false
             }
 
-            // Create child scope for loop body iteration
-            // This allows variables declared inside the loop to be fresh each iteration
-            let child_scope = self.scope.create_child();
-            let old_scope = std::mem::replace(&mut self.scope, child_scope);
-
-            // Execute body
-            let mut result = Ok(ControlFlow::Value(Value::nil()));
-            for stmt in body {
-                match self.eval_internal(stmt)? {
-                    ControlFlow::Value(_) => {
-                        // Normal evaluation - continue
-                    }
-                    ControlFlow::Return(v) => {
-                        // Early return from enclosing function - propagate
-                        result = Ok(ControlFlow::Return(v));
-                        break;
-                    }
-                }
-            }
-
-            // Restore parent scope after loop iteration
-            self.scope = old_scope;
-
-            // If there was a return, propagate it
-            if matches!(result, Ok(ControlFlow::Return(_))) {
-                return result;
+            // Execute body in child scope
+            if let Some(return_value) = self.eval_loop_body_with_scope(body)? {
+                // Early return from enclosing function
+                return Ok(ControlFlow::Return(return_value));
             }
         }
 
@@ -534,38 +552,26 @@ impl Evaluator {
 
         // Iterate over elements
         for element in elements.iter() {
-            // Create child scope for loop body iteration
-            // This allows variables declared inside the loop to be fresh each iteration
+            // Create child scope with loop variable bound to current element
             let child_scope = self.scope.create_child();
             let old_scope = std::mem::replace(&mut self.scope, child_scope);
 
-            // Bind loop variable to current element in child scope
-            self.scope.define(var.to_string(), element.clone())
+            // Define loop variable in child scope
+            self.scope
+                .define(var.to_string(), element.clone())
                 .map_err(|e| EvalError::UnsupportedOperation {
-                    operation: format!("define loop variable: {}", e)
+                    operation: format!("define loop variable: {}", e),
                 })?;
 
-            // Execute body
-            let mut result = Ok(ControlFlow::Value(Value::nil()));
-            for stmt in body {
-                match self.eval_internal(stmt)? {
-                    ControlFlow::Value(_) => {
-                        // Normal evaluation - continue
-                    }
-                    ControlFlow::Return(v) => {
-                        // Early return from enclosing function - propagate
-                        result = Ok(ControlFlow::Return(v));
-                        break;
-                    }
-                }
-            }
+            // Execute body and check for early return
+            let return_value = self.eval_loop_body_impl(body)?;
 
-            // Restore parent scope after loop iteration
+            // Restore parent scope
             self.scope = old_scope;
 
-            // If there was a return, propagate it
-            if matches!(result, Ok(ControlFlow::Return(_))) {
-                return result;
+            // Propagate early return
+            if let Some(v) = return_value {
+                return Ok(ControlFlow::Return(v));
             }
         }
 
