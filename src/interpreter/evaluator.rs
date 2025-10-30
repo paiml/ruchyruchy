@@ -438,6 +438,11 @@ impl Evaluator {
         }
 
         // 2. Check for built-in functions first (read_file, write_file, println, etc.)
+        //
+        // Built-ins have priority over user-defined functions. This ensures that core
+        // functionality like I/O is always available and cannot be shadowed by users.
+        // If try_call_builtin returns Some(value), we found and executed a built-in.
+        // If it returns None, we fall through to check user-defined functions below.
         if let Some(result) = self.try_call_builtin(name, args)? {
             return Ok(result);
         }
@@ -533,9 +538,20 @@ impl Evaluator {
 
     /// Try to call a built-in function
     ///
-    /// Returns Some(Value) if the function is a built-in and was executed successfully.
-    /// Returns None if the function is not a built-in (allowing fallback to user-defined).
-    /// Returns Err if the built-in function call failed.
+    /// Built-in functions are checked before user-defined functions, allowing
+    /// core functionality like I/O to be available without explicit imports.
+    ///
+    /// # Built-in Functions
+    ///
+    /// - `read_file(path: String) -> String` - Reads file content
+    /// - `write_file(path: String, content: String) -> nil` - Writes to file
+    /// - `println(msg: String) -> nil` - Prints message to stdout
+    ///
+    /// # Return Values
+    ///
+    /// - `Ok(Some(Value))` - Built-in function executed successfully
+    /// - `Ok(None)` - Not a built-in, should try user-defined functions
+    /// - `Err(EvalError)` - Built-in function call failed (I/O error, wrong args, etc.)
     fn try_call_builtin(
         &mut self,
         name: &str,
