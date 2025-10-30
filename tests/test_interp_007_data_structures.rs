@@ -68,15 +68,9 @@ fn test_vector_index_access() {
     })
     .unwrap();
 
-    let x = eval
-        .eval(&AstNode::Identifier("x".to_string()))
-        .unwrap();
-    let y = eval
-        .eval(&AstNode::Identifier("y".to_string()))
-        .unwrap();
-    let z = eval
-        .eval(&AstNode::Identifier("z".to_string()))
-        .unwrap();
+    let x = eval.eval(&AstNode::Identifier("x".to_string())).unwrap();
+    let y = eval.eval(&AstNode::Identifier("y".to_string())).unwrap();
+    let z = eval.eval(&AstNode::Identifier("z".to_string())).unwrap();
 
     assert_eq!(x.as_integer().unwrap(), 10);
     assert_eq!(y.as_integer().unwrap(), 20);
@@ -197,9 +191,7 @@ fn test_vector_empty() {
     })
     .unwrap();
 
-    let vec = eval
-        .eval(&AstNode::Identifier("vec".to_string()))
-        .unwrap();
+    let vec = eval.eval(&AstNode::Identifier("vec".to_string())).unwrap();
     assert!(vec.is_vector());
     assert_eq!(vec.as_vector().unwrap().len(), 0);
 }
@@ -244,9 +236,7 @@ fn test_vector_mixed_expressions() {
     })
     .unwrap();
 
-    let vec = eval
-        .eval(&AstNode::Identifier("vec".to_string()))
-        .unwrap();
+    let vec = eval.eval(&AstNode::Identifier("vec".to_string())).unwrap();
     let elements = vec.as_vector().unwrap();
     assert_eq!(elements.len(), 3);
     assert_eq!(elements[0].as_integer().unwrap(), 5);
@@ -281,9 +271,7 @@ fn test_hashmap_literal_creation() {
     })
     .unwrap();
 
-    let map = eval
-        .eval(&AstNode::Identifier("map".to_string()))
-        .unwrap();
+    let map = eval.eval(&AstNode::Identifier("map".to_string())).unwrap();
     assert!(map.is_hashmap());
 }
 
@@ -330,12 +318,8 @@ fn test_hashmap_index_access() {
     })
     .unwrap();
 
-    let a = eval
-        .eval(&AstNode::Identifier("a".to_string()))
-        .unwrap();
-    let b = eval
-        .eval(&AstNode::Identifier("b".to_string()))
-        .unwrap();
+    let a = eval.eval(&AstNode::Identifier("a".to_string())).unwrap();
+    let b = eval.eval(&AstNode::Identifier("b".to_string())).unwrap();
 
     assert_eq!(a.as_integer().unwrap(), 10);
     assert_eq!(b.as_integer().unwrap(), 20);
@@ -380,9 +364,7 @@ fn test_hashmap_empty() {
     })
     .unwrap();
 
-    let map = eval
-        .eval(&AstNode::Identifier("map".to_string()))
-        .unwrap();
+    let map = eval.eval(&AstNode::Identifier("map".to_string())).unwrap();
     assert!(map.is_hashmap());
 }
 
