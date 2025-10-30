@@ -39,7 +39,8 @@ pub fn welchs_t_test(sample1: &[f64], sample2: &[f64]) -> (f64, f64) {
         / ((var1 / n1).powi(2) / (n1 - 1.0) + (var2 / n2).powi(2) / (n2 - 1.0));
 
     // Two-tailed p-value using t-distribution
-    let p_value = students_t_cdf(t_stat.abs(), df) * 2.0;
+    // p-value = P(|T| >= |t|) = 2 * P(T >= |t|) = 2 * (1 - P(T <= |t|))
+    let p_value = 2.0 * (1.0 - students_t_cdf(t_stat.abs(), df));
 
     (t_stat, p_value)
 }
