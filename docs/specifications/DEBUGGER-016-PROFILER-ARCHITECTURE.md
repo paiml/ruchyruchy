@@ -287,11 +287,12 @@ std::fs::write("flamegraph.svg", svg)?;
 **Completed**:
 7. ✅ Implement test_perf_event_setup (validates initialization)
 8. ✅ Implement test_hardware_counter_sampling (validates sampling)
+9. ✅ Implement test_stack_unwinding (validates stack trace capture)
 
-**Test Status** (2/6 passing):
+**Test Status** (3/6 passing):
 - ✅ test_perf_event_setup - PASSING (requires root/CAP_PERFMON)
 - ✅ test_hardware_counter_sampling - PASSING (requires root/CAP_PERFMON)
-- ⏳ test_stack_unwinding - Pending (needs DWARF unwinding)
+- ✅ test_stack_unwinding - PASSING (requires root/CAP_PERFMON)
 - ⏳ test_flame_graph_generation - Pending (needs inferno integration)
 - ⏳ test_overhead_under_1_percent - Pending (needs benchmarking)
 - ⏳ test_hotspot_identification - Pending (needs aggregation logic)
