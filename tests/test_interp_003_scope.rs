@@ -33,7 +33,7 @@ fn test_define_variable_in_global_scope() {
     assert!(result.is_ok());
 
     // Should be able to retrieve the variable
-    let value = scope.get("x").unwrap();
+    let value = scope.get_cloned("x").unwrap();
     assert_eq!(value.as_integer().unwrap(), 42);
 }
 
@@ -62,7 +62,7 @@ fn test_assign_to_existing_variable() {
     scope.define("x".to_string(), Value::integer(42)).unwrap();
     scope.assign("x", Value::integer(100)).unwrap();
 
-    let value = scope.get("x").unwrap();
+    let value = scope.get_cloned("x").unwrap();
     assert_eq!(value.as_integer().unwrap(), 100);
 }
 
@@ -103,7 +103,7 @@ fn test_local_scope_access_parent_variable() {
     global.define("x".to_string(), Value::integer(42)).unwrap();
 
     let local = global.create_child();
-    let value = local.get("x").unwrap();
+    let value = local.get_cloned("x").unwrap();
     assert_eq!(value.as_integer().unwrap(), 42);
 }
 
@@ -114,7 +114,7 @@ fn test_local_scope_define_variable() {
     let mut local = global.create_child();
 
     local.define("y".to_string(), Value::integer(100)).unwrap();
-    let value = local.get("y").unwrap();
+    let value = local.get_cloned("y").unwrap();
     assert_eq!(value.as_integer().unwrap(), 100);
 }
 
@@ -126,7 +126,7 @@ fn test_parent_cannot_access_child_variable() {
 
     local.define("y".to_string(), Value::integer(100)).unwrap();
 
-    let result = global.get("y");
+    let result = global.get_cloned("y");
     assert!(result.is_err());
     match result.err().unwrap() {
         ScopeError::Undefined { name } => {
@@ -165,9 +165,9 @@ fn test_nested_scope_variable_lookup() {
     level2.define("c".to_string(), Value::integer(3)).unwrap();
 
     // Level2 should see all variables
-    assert_eq!(level2.get("a").unwrap().as_integer().unwrap(), 1);
-    assert_eq!(level2.get("b").unwrap().as_integer().unwrap(), 2);
-    assert_eq!(level2.get("c").unwrap().as_integer().unwrap(), 3);
+    assert_eq!(level2.get_cloned("a").unwrap().as_integer().unwrap(), 1);
+    assert_eq!(level2.get_cloned("b").unwrap().as_integer().unwrap(), 2);
+    assert_eq!(level2.get_cloned("c").unwrap().as_integer().unwrap(), 3);
 }
 
 #[test]
@@ -180,8 +180,8 @@ fn test_nested_scope_assignment_updates_correct_scope() {
     level1.assign("x", Value::integer(2)).unwrap();
 
     // Both scopes should see updated value
-    assert_eq!(global.get("x").unwrap().as_integer().unwrap(), 2);
-    assert_eq!(level1.get("x").unwrap().as_integer().unwrap(), 2);
+    assert_eq!(global.get_cloned("x").unwrap().as_integer().unwrap(), 2);
+    assert_eq!(level1.get_cloned("x").unwrap().as_integer().unwrap(), 2);
 }
 
 // ===== RED PHASE TEST 4: Variable Shadowing =====
@@ -196,10 +196,10 @@ fn test_variable_shadowing_in_child_scope() {
     local.define("x".to_string(), Value::integer(2)).unwrap();
 
     // Local sees shadowed value
-    assert_eq!(local.get("x").unwrap().as_integer().unwrap(), 2);
+    assert_eq!(local.get_cloned("x").unwrap().as_integer().unwrap(), 2);
 
     // Global still sees original value
-    assert_eq!(global.get("x").unwrap().as_integer().unwrap(), 1);
+    assert_eq!(global.get_cloned("x").unwrap().as_integer().unwrap(), 1);
 }
 
 #[test]
@@ -213,10 +213,10 @@ fn test_shadowing_assignment_updates_local() {
     local.assign("x", Value::integer(3)).unwrap();
 
     // Local sees updated shadowed value
-    assert_eq!(local.get("x").unwrap().as_integer().unwrap(), 3);
+    assert_eq!(local.get_cloned("x").unwrap().as_integer().unwrap(), 3);
 
     // Global still sees original value
-    assert_eq!(global.get("x").unwrap().as_integer().unwrap(), 1);
+    assert_eq!(global.get_cloned("x").unwrap().as_integer().unwrap(), 1);
 }
 
 #[test]
@@ -232,9 +232,9 @@ fn test_multilevel_shadowing() {
     level2.define("x".to_string(), Value::string("level2".to_string())).unwrap();
 
     // Each scope sees its own version
-    assert_eq!(global.get("x").unwrap().as_string().unwrap(), "global");
-    assert_eq!(level1.get("x").unwrap().as_string().unwrap(), "level1");
-    assert_eq!(level2.get("x").unwrap().as_string().unwrap(), "level2");
+    assert_eq!(global.get_cloned("x").unwrap().as_string().unwrap(), "global");
+    assert_eq!(level1.get_cloned("x").unwrap().as_string().unwrap(), "level1");
+    assert_eq!(level2.get_cloned("x").unwrap().as_string().unwrap(), "level2");
 }
 
 // ===== RED PHASE TEST 5: Closure Capture =====
@@ -309,7 +309,7 @@ fn test_scope_contains_check() {
     assert!(local.contains_local("y"));
 
     // But can see x in parent
-    assert!(local.get("x").is_ok());
+    assert!(local.get_cloned("x").is_ok());
 }
 
 #[test]
