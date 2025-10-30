@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Research Infrastructure: Advanced Debugging Tools
 
-#### 🔬 DEBUGGER-016: Statistical Profiling (REFACTOR Phase - 3/6 Tests Passing)
+#### 🔬 DEBUGGER-016: Statistical Profiling (REFACTOR Phase - 4/6 Tests Passing)
 
-**Status**: ✅ Stack trace capture complete - Real-time CPU profiling with perf_event_open
+**Status**: ✅ Flame graph generation complete - Real-time CPU profiling with perf_event_open
 
 This release adds low-overhead statistical profiling using Linux `perf_event_open` syscall and hardware performance counters. Provides <1% overhead at 1000Hz sampling for production profiling of Ruchy programs.
 
@@ -21,7 +21,7 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 
 ###### Profiler Infrastructure (src/profiling/)
 
-- **src/profiling/mod.rs** (350+ LOC)
+- **src/profiling/mod.rs** (450+ LOC)
   - `Profiler::new()` - Initialize perf_event_open with CPU_CYCLES
   - `start()` / `stop()` - Control sampling
   - `collect_samples()` - Read from ring buffer
@@ -38,6 +38,22 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
   }
   ```
 
+- **FlameGraph struct** (NEW! - brendangregg format)
+  ```rust
+  pub struct FlameGraph {
+      stacks: HashMap<String, usize>,  // Aggregated traces
+  }
+
+  impl FlameGraph {
+      pub fn from_samples(samples: &[Sample]) -> Self { ... }
+      pub fn to_string(&self) -> String { ... }  // "0xaddr1;0xaddr2 count\n"
+  }
+  ```
+  - Aggregates samples by stack trace
+  - Generates brendangregg format (compatible with inferno/FlameGraph tools)
+  - Deterministic output (sorted for reproducibility)
+  - Uses hex-formatted IPs (0xaddr)
+
 ###### Dependencies
 
 - **perf-event-open v0.4.2** - Full-featured perf_event_open wrapper
@@ -45,7 +61,7 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 - Ring buffer: 2^10 pages (4MB default, configurable)
 - Feature flag: `profiling` (optional compilation)
 
-##### Tests Passing (3/6)
+##### Tests Passing (4/6)
 
 ✅ **test_perf_event_setup**
 - Validates Profiler::new() initialization
@@ -57,14 +73,20 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 - Validates >90% samples have valid data
 - CPU-bound workload profiling
 
-✅ **test_stack_unwinding** (NEW!)
+✅ **test_stack_unwinding**
 - Verifies stack trace capture from nested function calls
 - Validates 5-level deep call stack profiling
 - Confirms all stack frame IPs are non-zero
 - Uses `#[inline(never)]` to prevent optimization
 
-⏳ **Remaining tests** (require flame graphs/benchmarking):
-- test_flame_graph_generation
+✅ **test_flame_graph_generation** (NEW!)
+- Aggregates samples by stack trace (HashMap)
+- Generates brendangregg format: "0xaddr1;0xaddr2;0xaddr3 count"
+- Validates format compatibility (semicolon-separated, space, count)
+- Produces deterministic output (sorted)
+- Note: Uses hex IPs (DWARF unwinding optional for human-readable names)
+
+⏳ **Remaining tests** (require benchmarking/aggregation):
 - test_overhead_under_1_percent
 - test_hotspot_identification
 

@@ -288,21 +288,23 @@ std::fs::write("flamegraph.svg", svg)?;
 7. ✅ Implement test_perf_event_setup (validates initialization)
 8. ✅ Implement test_hardware_counter_sampling (validates sampling)
 9. ✅ Implement test_stack_unwinding (validates stack trace capture)
+10. ✅ Implement FlameGraph struct with brendangregg format
+11. ✅ Implement test_flame_graph_generation (validates aggregation)
 
-**Test Status** (3/6 passing):
+**Test Status** (4/6 passing):
 - ✅ test_perf_event_setup - PASSING (requires root/CAP_PERFMON)
 - ✅ test_hardware_counter_sampling - PASSING (requires root/CAP_PERFMON)
 - ✅ test_stack_unwinding - PASSING (requires root/CAP_PERFMON)
-- ⏳ test_flame_graph_generation - Pending (needs inferno integration)
+- ✅ test_flame_graph_generation - PASSING (requires root/CAP_PERFMON)
 - ⏳ test_overhead_under_1_percent - Pending (needs benchmarking)
 - ⏳ test_hotspot_identification - Pending (needs aggregation logic)
 
 **Remaining Tasks**:
-1. Add DWARF unwinding for function names (gimli)
-2. Add flame graph generation (inferno)
-3. Add hotspot analysis (top N functions)
-4. Make remaining 4 profiler tests pass
-5. Verify <1% overhead at 1000Hz
+1. Implement overhead benchmarking test
+2. Implement hotspot analysis (top N functions)
+3. Make remaining 2 profiler tests pass
+4. Verify <1% overhead at 1000Hz
+5. (Optional) Add DWARF unwinding for human-readable function names
 
 **Tasks**:
 1. Add DWARF stack unwinding (gimli)
