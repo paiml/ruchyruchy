@@ -70,6 +70,8 @@ pub enum EvalError {
     },
     /// Stack overflow from excessive recursion
     StackOverflow,
+    /// No match arm matched in match expression
+    NoMatchArm,
     /// Unsupported operation
     UnsupportedOperation { operation: String },
 }
@@ -97,6 +99,9 @@ impl fmt::Display for EvalError {
             }
             EvalError::StackOverflow => {
                 write!(f, "Stack overflow: recursion depth exceeded")
+            }
+            EvalError::NoMatchArm => {
+                write!(f, "No match arm matched")
             }
             EvalError::UnsupportedOperation { operation } => {
                 write!(f, "Unsupported operation: {}", operation)
@@ -212,6 +217,31 @@ impl Evaluator {
                         operation: format!("define variable: {}", e)
                     })?;
                 Ok(ControlFlow::Value(Value::nil()))
+            }
+
+            // While loop (STUB - INTERP-006 RED PHASE)
+            AstNode::WhileLoop { .. } => {
+                unimplemented!("INTERP-006: While loop not yet implemented")
+            }
+
+            // For loop (STUB - INTERP-006 RED PHASE)
+            AstNode::ForLoop { .. } => {
+                unimplemented!("INTERP-006: For loop not yet implemented")
+            }
+
+            // Match expression (STUB - INTERP-006 RED PHASE)
+            AstNode::MatchExpr { .. } => {
+                unimplemented!("INTERP-006: Match expression not yet implemented")
+            }
+
+            // Assignment (STUB - INTERP-006 RED PHASE)
+            AstNode::Assignment { .. } => {
+                unimplemented!("INTERP-006: Assignment not yet implemented")
+            }
+
+            // Vector literal (STUB - INTERP-006 RED PHASE)
+            AstNode::VectorLiteral { .. } => {
+                unimplemented!("INTERP-006: Vector literal not yet implemented")
             }
 
             // Unsupported nodes
