@@ -206,8 +206,17 @@ impl BugReport {
         report.push_str(&format!("**Confidence Score**: {:.2} / 1.0\n\n", self.confidence.overall));
         report.push_str(&format!("{}\n\n", self.description));
 
-        // Bug Details
-        report.push_str("## Bug Details\n\n");
+        // Impact statement
+        let impact = match self.severity {
+            Severity::Critical => "Impact: Critical system functionality affected. Immediate attention required.",
+            Severity::High => "Impact: Major functionality impaired. High priority fix needed.",
+            Severity::Medium => "Impact: Moderate functionality affected. Workaround may exist.",
+            Severity::Low => "Impact: Minor issue with limited user impact.",
+        };
+        report.push_str(&format!("**{}**\n\n", impact));
+
+        // Bug Details (collapsible)
+        report.push_str("<details>\n<summary>\n\n## Bug Details\n\n</summary>\n\n");
         report.push_str("### Reproduction Steps\n\n");
         report.push_str("```ruchy\n");
         report.push_str(&self.reproduction_code);
@@ -218,9 +227,10 @@ impl BugReport {
 
         report.push_str("### Actual Behavior\n\n");
         report.push_str(&format!("{}\n\n", self.actual));
+        report.push_str("</details>\n\n");
 
-        // Confidence Breakdown
-        report.push_str("## Confidence Analysis\n\n");
+        // Confidence Breakdown (collapsible)
+        report.push_str("<details>\n<summary>\n\n## Confidence Analysis\n\n</summary>\n\n");
         report.push_str(&format!("**Overall Confidence**: {:.2} / 1.0\n\n", self.confidence.overall));
         report.push_str("### Confidence Factors\n\n");
         report.push_str(&format!("- **Discovery Method**: {:.2} (weight: {})\n",
@@ -239,10 +249,11 @@ impl BugReport {
             self.confidence.root_cause_clarity,
             "15%"
         ));
+        report.push_str("</details>\n\n");
 
-        // Quantitative Analysis (REPORT-001)
+        // Quantitative Analysis (REPORT-001) (collapsible)
         if let Some(ref analysis) = self.quantitative_analysis {
-            report.push_str("## Quantitative Analysis\n\n");
+            report.push_str("<details>\n<summary>\n\n## Quantitative Analysis\n\n</summary>\n\n");
             report.push_str(&format!("**Overall Risk Score**: {:.2} / 1.0 ({:?})\n\n",
                 analysis.risk_score,
                 analysis.risk_level()
@@ -274,17 +285,19 @@ impl BugReport {
 
             report.push_str("### Dependency Analysis\n\n");
             report.push_str(&format!("- **Coupling**: {}\n\n", analysis.coupling));
+            report.push_str("</details>\n\n");
         }
 
-        // Five-Whys Analysis (REPORT-002)
+        // Five-Whys Analysis (REPORT-002) (collapsible)
         if let Some(ref five_whys) = self.five_whys {
+            report.push_str("<details>\n<summary>\n\n## Five-Whys Root Cause Analysis\n\n</summary>\n\n");
             report.push_str(&five_whys.to_markdown());
-            report.push_str("\n");
+            report.push_str("\n</details>\n\n");
         }
 
-        // TDD Workflow (REPORT-003)
+        // TDD Workflow (REPORT-003) (collapsible)
         if let Some(ref tdd) = self.tdd_history {
-            report.push_str("## TDD Fix Workflow\n\n");
+            report.push_str("<details>\n<summary>\n\n## TDD Fix Workflow\n\n</summary>\n\n");
             report.push_str("### Recommended Approach\n\n");
             report.push_str("Follow the RED-GREEN-REFACTOR cycle:\n\n");
             report.push_str("1. **RED**: Write failing test that reproduces the bug\n");
@@ -296,6 +309,7 @@ impl BugReport {
                 report.push_str(&tdd.to_markdown());
                 report.push_str("\n");
             }
+            report.push_str("</details>\n\n");
         }
 
         // Related Files
@@ -728,5 +742,268 @@ mod tests {
         assert!(markdown.contains("## Related Files"));
         assert!(markdown.contains("## Fix Recommendations"));
         assert!(markdown.contains("## Prevention Strategy"));
+    }
+
+    // REPORT-003: Markdown Report Generation - RED PHASE TESTS
+
+    /// Test: Collapsible Sections Support
+    ///
+    /// RED: This test WILL FAIL because we need to implement:
+    /// - Collapsible sections using HTML <details><summary> tags
+    /// - Long sections (>50 lines) should be collapsible
+    /// - Quantitative Analysis, Five-Whys, TDD Workflow should be collapsible
+    ///
+    /// This test verifies markdown reports include collapsible sections for readability.
+    #[test]
+    fn test_report003_collapsible_sections() {
+        // RED: This will fail - collapsible sections don't exist yet
+        //
+        let confidence = ConfidenceScore {
+            overall: 0.88,
+            discovery_method_weight: 0.95,
+            reproducibility_score: 0.85,
+            quantitative_evidence: 0.80,
+            root_cause_clarity: 0.90,
+        };
+
+        let complexity = ComplexityMetrics::new(200);
+        let analysis = QuantitativeAnalysis::new(
+            complexity,
+            None,
+            10, // satd_count
+            0.7, // satd_severity
+            5,  // coupling
+        );
+
+        let mut five_whys = FiveWhysAnalysis::new("Performance regression detected".to_string());
+        five_whys.add_layer(WhyLayer::new(
+            1,
+            "Algorithm changed from O(n) to O(n^2)".to_string(),
+        ));
+
+        let report = BugReport::new(
+            "Performance regression in sort function".to_string(),
+            "Sorting 10K items takes 5 seconds instead of 50ms".to_string(),
+            Severity::High,
+            BugCategory::PerformanceRegression,
+            "fun sort(arr: [i32]) { bubble_sort(arr) }".to_string(),
+            "Should complete in <100ms".to_string(),
+            "Takes 5000ms".to_string(),
+            confidence,
+        )
+        .with_quantitative_analysis(analysis)
+        .with_five_whys(five_whys);
+
+        let markdown = report.to_markdown();
+
+        // Verify collapsible sections are present
+        assert!(
+            markdown.contains("<details>"),
+            "Markdown should contain <details> tags for collapsible sections"
+        );
+        assert!(
+            markdown.contains("<summary>"),
+            "Markdown should contain <summary> tags for section headers"
+        );
+        assert!(
+            markdown.contains("</details>"),
+            "Markdown should properly close <details> tags"
+        );
+
+        // Quantitative Analysis should be collapsible
+        assert!(
+            markdown.contains("<details>") && markdown.contains("## Quantitative Analysis"),
+            "Quantitative Analysis should be in a collapsible section"
+        );
+
+        // Verify collapsible sections can be expanded/collapsed
+        let details_count = markdown.matches("<details>").count();
+        let summary_count = markdown.matches("<summary>").count();
+        assert_eq!(
+            details_count, summary_count,
+            "Every <details> should have a matching <summary>"
+        );
+    }
+
+    /// Test: Executive Summary Content
+    ///
+    /// RED: This test WILL FAIL because we need to implement:
+    /// - Comprehensive executive summary with key metrics
+    /// - Severity, category, confidence score upfront
+    /// - Impact summary (1-2 sentences)
+    /// - Quick action items
+    ///
+    /// This test verifies the executive summary is complete and actionable.
+    #[test]
+    fn test_report003_executive_summary_content() {
+        // RED: This will fail - executive summary needs enhancement
+        //
+        let confidence = ConfidenceScore {
+            overall: 0.75,
+            discovery_method_weight: 0.80,
+            reproducibility_score: 0.70,
+            quantitative_evidence: 0.75,
+            root_cause_clarity: 0.75,
+        };
+
+        let report = BugReport::new(
+            "Null pointer dereference in parser".to_string(),
+            "Parser crashes when encountering empty input".to_string(),
+            Severity::Critical,
+            BugCategory::Crash,
+            "fun parse(code: String) { code[0] }".to_string(),
+            "Should handle empty string gracefully".to_string(),
+            "Crashes with null pointer".to_string(),
+            confidence,
+        );
+
+        let markdown = report.to_markdown();
+
+        // Executive summary should contain key information upfront
+        let exec_summary_idx = markdown
+            .find("## Executive Summary")
+            .expect("Should have Executive Summary section");
+
+        // Get executive summary section (from ## Executive Summary to next ##)
+        let next_section_idx = markdown[exec_summary_idx + 20..]
+            .find("##")
+            .map(|idx| exec_summary_idx + 20 + idx)
+            .unwrap_or(markdown.len());
+
+        let exec_summary = &markdown[exec_summary_idx..next_section_idx];
+
+        // Should mention severity
+        assert!(
+            exec_summary.contains("CRITICAL") || exec_summary.contains("Critical"),
+            "Executive summary should mention severity"
+        );
+
+        // Should mention category
+        assert!(
+            exec_summary.contains("Crash"),
+            "Executive summary should mention bug category"
+        );
+
+        // Should mention confidence score
+        assert!(
+            exec_summary.contains("0.75") || exec_summary.contains("75%"),
+            "Executive summary should mention confidence score"
+        );
+
+        // Should have impact statement
+        assert!(
+            exec_summary.contains("Impact:") || exec_summary.contains("impact"),
+            "Executive summary should describe impact"
+        );
+
+        // Should be concise (not too long)
+        assert!(
+            exec_summary.lines().count() < 15,
+            "Executive summary should be concise (<15 lines)"
+        );
+    }
+
+    /// Test: Template Completeness
+    ///
+    /// RED: This test WILL FAIL because we need to verify:
+    /// - All required sections are present
+    /// - Sections are in correct order
+    /// - No duplicate sections
+    /// - Report metadata (generation time, tool version)
+    ///
+    /// This test verifies markdown reports follow a complete template.
+    #[test]
+    fn test_report003_template_completeness() {
+        // RED: This will fail - template completeness validation needed
+        //
+        let confidence = ConfidenceScore {
+            overall: 0.90,
+            discovery_method_weight: 0.95,
+            reproducibility_score: 0.88,
+            quantitative_evidence: 0.90,
+            root_cause_clarity: 0.88,
+        };
+
+        let complexity = ComplexityMetrics::new(150);
+        let analysis = QuantitativeAnalysis::new(complexity, None, 5, 0.5, 3);
+
+        let mut five_whys = FiveWhysAnalysis::new("Bug found".to_string());
+        five_whys.add_layer(WhyLayer::new(1, "Why 1".to_string()));
+
+        let mut tdd = TddHistory::new();
+        tdd.add_cycle(TddCycle::new(1, TddPhase::Red, "Test".to_string()));
+
+        let mut report = BugReport::new(
+            "Type error in function call".to_string(),
+            "Calling function with wrong type".to_string(),
+            Severity::Medium,
+            BugCategory::TypeError,
+            "fun add(a: i32, b: i32) { a + b } add(\"hello\", 5)".to_string(),
+            "Should reject mismatched types".to_string(),
+            "Accepts and crashes".to_string(),
+            confidence,
+        )
+        .with_quantitative_analysis(analysis)
+        .with_five_whys(five_whys)
+        .with_tdd_history(tdd);
+
+        report.add_related_file("type_checker.ruchy".to_string());
+        report.add_fix_recommendation("Add type validation".to_string());
+        report.add_prevention("Property tests for type safety".to_string());
+
+        let markdown = report.to_markdown();
+
+        // Required sections in order
+        let required_sections = vec![
+            "## Executive Summary",
+            "## Bug Details",
+            "## Reproduction",
+            "## Confidence Analysis",
+            "## Quantitative Analysis",
+            "# Five-Whys Analysis",
+            "## TDD Fix Workflow",
+            "## Related Files",
+            "## Fix Recommendations",
+            "## Prevention Strategy",
+        ];
+
+        let mut last_pos = 0;
+        for section in &required_sections {
+            let pos = markdown
+                .find(section)
+                .unwrap_or_else(|| panic!("Missing required section: {}", section));
+
+            assert!(
+                pos > last_pos,
+                "Section '{}' is out of order (found at {} but previous was {})",
+                section,
+                pos,
+                last_pos
+            );
+
+            last_pos = pos;
+        }
+
+        // Should have metadata footer
+        assert!(
+            markdown.contains("*Generated by RuchyRuchy"),
+            "Report should have generation metadata"
+        );
+
+        // Should have generation timestamp or version
+        assert!(
+            markdown.contains("Generated") || markdown.contains("Version"),
+            "Report should include generation time or tool version"
+        );
+
+        // No duplicate sections
+        for section in &required_sections {
+            let count = markdown.matches(*section).count();
+            assert_eq!(
+                count, 1,
+                "Section '{}' appears {} times (should be 1)",
+                section, count
+            );
+        }
     }
 }
