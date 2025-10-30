@@ -147,7 +147,11 @@ fn test_execution_result_variants() {
     };
 
     match failure {
-        ExecutionResult::Failure { error, output, duration } => {
+        ExecutionResult::Failure {
+            error,
+            output,
+            duration,
+        } => {
             assert!(error.contains("Type error"));
             assert_eq!(output, "Compilation failed\n");
             assert!(duration.as_millis() > 0);
@@ -162,7 +166,10 @@ fn test_execution_result_variants() {
     };
 
     match timeout {
-        ExecutionResult::Timeout { timeout_ms, partial_output } => {
+        ExecutionResult::Timeout {
+            timeout_ms,
+            partial_output,
+        } => {
             assert_eq!(timeout_ms, 5000);
             assert_eq!(partial_output, "Started processing...");
         }
@@ -177,7 +184,11 @@ fn test_execution_result_variants() {
     };
 
     match crash {
-        ExecutionResult::Crash { signal, output, duration } => {
+        ExecutionResult::Crash {
+            signal,
+            output,
+            duration,
+        } => {
             assert_eq!(signal, "SIGSEGV");
             assert_eq!(output, "Segmentation fault\n");
             assert!(duration.as_millis() > 0);

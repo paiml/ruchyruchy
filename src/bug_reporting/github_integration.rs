@@ -68,7 +68,10 @@ impl GitHubClient {
 
     /// Build API endpoint URL
     pub fn endpoint(&self, path: &str) -> String {
-        format!("{}/repos/{}/{}{}", self.base_url, self.owner, self.repo, path)
+        format!(
+            "{}/repos/{}/{}{}",
+            self.base_url, self.owner, self.repo, path
+        )
     }
 }
 
@@ -342,12 +345,9 @@ mod tests {
 
     #[test]
     fn test_github_client_custom_base_url() {
-        let client = GitHubClient::new(
-            "owner".to_string(),
-            "repo".to_string(),
-            "token".to_string(),
-        )
-        .with_base_url("https://custom.github.com".to_string());
+        let client =
+            GitHubClient::new("owner".to_string(), "repo".to_string(), "token".to_string())
+                .with_base_url("https://custom.github.com".to_string());
 
         assert_eq!(client.base_url, "https://custom.github.com");
     }
@@ -372,10 +372,7 @@ mod tests {
 
     #[test]
     fn test_issue_request_creation() {
-        let request = IssueRequest::new(
-            "Test bug".to_string(),
-            "Bug description".to_string(),
-        );
+        let request = IssueRequest::new("Test bug".to_string(), "Bug description".to_string());
 
         assert_eq!(request.title, "Test bug");
         assert_eq!(request.body, "Bug description");
@@ -427,7 +424,10 @@ mod tests {
         );
 
         assert_eq!(response.number, 123);
-        assert_eq!(response.html_url, "https://github.com/paiml/ruchy/issues/123");
+        assert_eq!(
+            response.html_url,
+            "https://github.com/paiml/ruchy/issues/123"
+        );
         assert_eq!(response.state, "open");
     }
 
@@ -465,7 +465,10 @@ mod tests {
 
         let request = BugReportConverter::to_issue_request(&report);
 
-        assert_eq!(request.title, "[CRITICAL] Parser crashes on nested expressions");
+        assert_eq!(
+            request.title,
+            "[CRITICAL] Parser crashes on nested expressions"
+        );
         assert!(request.body.contains("# 🔴 CRITICAL"));
         assert!(request.labels.contains(&"severity: critical".to_string()));
         assert!(request.labels.contains(&"type: crash".to_string()));
@@ -475,18 +478,42 @@ mod tests {
 
     #[test]
     fn test_severity_labels() {
-        assert_eq!(BugReportConverter::severity_label(Severity::Critical), "severity: critical");
-        assert_eq!(BugReportConverter::severity_label(Severity::High), "severity: high");
-        assert_eq!(BugReportConverter::severity_label(Severity::Medium), "severity: medium");
-        assert_eq!(BugReportConverter::severity_label(Severity::Low), "severity: low");
+        assert_eq!(
+            BugReportConverter::severity_label(Severity::Critical),
+            "severity: critical"
+        );
+        assert_eq!(
+            BugReportConverter::severity_label(Severity::High),
+            "severity: high"
+        );
+        assert_eq!(
+            BugReportConverter::severity_label(Severity::Medium),
+            "severity: medium"
+        );
+        assert_eq!(
+            BugReportConverter::severity_label(Severity::Low),
+            "severity: low"
+        );
     }
 
     #[test]
     fn test_category_labels() {
-        assert_eq!(BugReportConverter::category_label(&BugCategory::Crash), "type: crash");
-        assert_eq!(BugReportConverter::category_label(&BugCategory::Hang), "type: hang");
-        assert_eq!(BugReportConverter::category_label(&BugCategory::WrongOutput), "type: wrong-output");
-        assert_eq!(BugReportConverter::category_label(&BugCategory::PerformanceRegression), "type: performance");
+        assert_eq!(
+            BugReportConverter::category_label(&BugCategory::Crash),
+            "type: crash"
+        );
+        assert_eq!(
+            BugReportConverter::category_label(&BugCategory::Hang),
+            "type: hang"
+        );
+        assert_eq!(
+            BugReportConverter::category_label(&BugCategory::WrongOutput),
+            "type: wrong-output"
+        );
+        assert_eq!(
+            BugReportConverter::category_label(&BugCategory::PerformanceRegression),
+            "type: performance"
+        );
     }
 
     #[test]

@@ -24,9 +24,7 @@
 // - Test on real code examples
 // - Measure reduction efficiency
 
-use ruchyruchy::bug_replication::minimizer::{
-    DeltaDebugger, MinimizationStrategy, TestOutcome,
-};
+use ruchyruchy::bug_replication::minimizer::{DeltaDebugger, MinimizationStrategy, TestOutcome};
 
 /// Test: AST-Based Minimization Workflow
 ///
@@ -231,7 +229,14 @@ fn test_real_code_minimization() {
     let parser_result = parser_debugger.minimize(parser_input);
 
     // Should reduce to just the problematic line
-    assert!(parser_result.minimized.chars().filter(|c| *c == '(').count() > 5);
+    assert!(
+        parser_result
+            .minimized
+            .chars()
+            .filter(|c| *c == '(')
+            .count()
+            > 5
+    );
     assert!(parser_result.reduction_ratio > 0.0);
 
     // Test Case 2: Type error with complex annotations

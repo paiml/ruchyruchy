@@ -24,9 +24,7 @@ use ruchyruchy::bug_replication::harness::{Environment, ExecutionResult, Reprodu
 use ruchyruchy::bug_replication::minimizer::{
     DeltaDebugger, MinimizationResult, MinimizationStrategy, TestOutcome,
 };
-use ruchyruchy::bug_reporting::confidence::{
-    QuantitativeEvidence, Reproducibility as ReportRepro,
-};
+use ruchyruchy::bug_reporting::confidence::{QuantitativeEvidence, Reproducibility as ReportRepro};
 use ruchyruchy::bug_reporting::five_whys::{ConfidenceLevel, DataPoint, Hypothesis, WhyLayer};
 use ruchyruchy::bug_reporting::github_integration::{
     BugReportConverter, CommentRequest, GitHubClient, GitHubResult, IssueRequest, IssueResponse,
@@ -34,7 +32,7 @@ use ruchyruchy::bug_reporting::github_integration::{
 
 fn main() {
     println!("🎯 RuchyRuchy Integration Demo\n");
-    println!("=" .repeat(60));
+    println!("=".repeat(60));
 
     demo_bug_discovery();
     demo_bug_replication();
@@ -50,7 +48,7 @@ fn main() {
 
 fn demo_bug_discovery() {
     println!("\n📊 Part 1: Bug Discovery Tools");
-    println!("-" .repeat(60));
+    println!("-".repeat(60));
 
     // 1. Confidence Scoring
     println!("\n1.1 Confidence Scoring");
@@ -170,7 +168,10 @@ fun main() {
     // Simulate minimization
     let minimized = "panic(\"bug here\");";
     println!("   Minimized code: {} lines", minimized.lines().count());
-    println!("   Reduction: {}%", 100 - (minimized.len() * 100 / large_code.len()));
+    println!(
+        "   Reduction: {}%",
+        100 - (minimized.len() * 100 / large_code.len())
+    );
 
     // 2. Git Bisection
     println!("\n2.2 Git Bisection");
@@ -190,7 +191,10 @@ fun main() {
         steps: 5,
     };
 
-    println!("   Result: Bad commit found in {} steps", bisect_result.steps);
+    println!(
+        "   Result: Bad commit found in {} steps",
+        bisect_result.steps
+    );
     println!("   Commit: {}", bisect_result.bad_commit.id.0);
     println!("   Message: {}", bisect_result.bad_commit.message);
 
@@ -231,11 +235,14 @@ fn demo_bug_reporting() {
 
     println!("   Overall confidence: {:.2}", score.overall);
     println!("   Priority: {:?}", score.priority());
-    println!("   Recommendation: {}", if score.overall >= 0.85 {
-        "Auto-file to GitHub"
-    } else {
-        "Manual review needed"
-    });
+    println!(
+        "   Recommendation: {}",
+        if score.overall >= 0.85 {
+            "Auto-file to GitHub"
+        } else {
+            "Manual review needed"
+        }
+    );
 
     // 2. Five-Whys Analysis
     println!("\n3.2 Five-Whys Analysis");
@@ -263,10 +270,7 @@ fn demo_bug_reporting() {
     println!("   Why #1: {}", why_layer_1.question);
     println!("   Data points: {}", why_layer_1.data_points.len());
     println!("   Hypothesis: {}", why_layer_1.hypothesis.description);
-    println!(
-        "   Confidence: {:?}",
-        why_layer_1.hypothesis.confidence
-    );
+    println!("   Confidence: {:?}", why_layer_1.hypothesis.confidence);
     println!("   Use: Root cause analysis with objective data");
 
     // 3. GitHub Integration
@@ -310,7 +314,11 @@ fun main() { }
 - #124: Token validation bug
 "#
         .to_string(),
-        labels: vec!["bug".to_string(), "parser".to_string(), "critical".to_string()],
+        labels: vec![
+            "bug".to_string(),
+            "parser".to_string(),
+            "critical".to_string(),
+        ],
     };
 
     println!("   Issue title: {}", issue_request.title);

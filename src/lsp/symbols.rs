@@ -47,10 +47,7 @@ impl SymbolTable {
 
     /// Add a symbol reference
     pub fn add_reference(&mut self, name: String, location: Location) {
-        self.references
-            .entry(name)
-            .or_default()
-            .push(location);
+        self.references.entry(name).or_default().push(location);
     }
 
     /// Get symbol definition
@@ -157,7 +154,8 @@ fn extract_function_name(text: &str) -> Option<String> {
         let name = trimmed[..paren_pos].trim();
         if !name.is_empty()
             && name.chars().all(is_identifier_char)
-            && !name.chars().next().unwrap().is_numeric() {
+            && !name.chars().next().unwrap().is_numeric()
+        {
             return Some(name.to_string());
         }
     }
@@ -168,9 +166,7 @@ fn extract_function_name(text: &str) -> Option<String> {
 fn extract_variable_name(text: &str) -> Option<String> {
     let trimmed = text.trim();
     // Find first word before = or space
-    let end_pos = trimmed
-        .find(['=', ' ', ':'])
-        .unwrap_or(trimmed.len());
+    let end_pos = trimmed.find(['=', ' ', ':']).unwrap_or(trimmed.len());
 
     let name = trimmed[..end_pos].trim();
     if !name.is_empty() && name.chars().all(is_identifier_char) {
@@ -254,8 +250,14 @@ mod tests {
     #[test]
     fn test_extract_function_name() {
         assert_eq!(extract_function_name("main()"), Some("main".to_string()));
-        assert_eq!(extract_function_name("foo(x: i32)"), Some("foo".to_string()));
-        assert_eq!(extract_function_name("  bar  (  )  "), Some("bar".to_string()));
+        assert_eq!(
+            extract_function_name("foo(x: i32)"),
+            Some("foo".to_string())
+        );
+        assert_eq!(
+            extract_function_name("  bar  (  )  "),
+            Some("bar".to_string())
+        );
         assert_eq!(extract_function_name(""), None);
         assert_eq!(extract_function_name("123()"), None); // Invalid identifier
     }
@@ -264,7 +266,10 @@ mod tests {
     fn test_extract_variable_name() {
         assert_eq!(extract_variable_name("x = 5"), Some("x".to_string()));
         assert_eq!(extract_variable_name("foo = bar"), Some("foo".to_string()));
-        assert_eq!(extract_variable_name("  count  =  "), Some("count".to_string()));
+        assert_eq!(
+            extract_variable_name("  count  =  "),
+            Some("count".to_string())
+        );
         assert_eq!(extract_variable_name("x: i32"), Some("x".to_string()));
         assert_eq!(extract_variable_name(""), None);
     }

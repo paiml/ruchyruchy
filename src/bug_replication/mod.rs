@@ -7,14 +7,10 @@
 // - REPLIC-002: Replication Harness
 // - REPLIC-003: Bisection Tool
 
-pub mod minimizer;
-pub mod harness;
 pub mod bisect;
+pub mod harness;
+pub mod minimizer;
 
-pub use minimizer::{DeltaDebugger, MinimizationStrategy, MinimizationResult, TestOutcome};
-pub use harness::{
-    Environment, ExecutionResult, ReproducibleTest, ReplicationHarness,
-};
-pub use bisect::{
-    CommitId, Commit, TestResult, BisectionState, BisectionResult, GitBisector,
-};
+pub use bisect::{BisectionResult, BisectionState, Commit, CommitId, GitBisector, TestResult};
+pub use harness::{Environment, ExecutionResult, ReplicationHarness, ReproducibleTest};
+pub use minimizer::{DeltaDebugger, MinimizationResult, MinimizationStrategy, TestOutcome};

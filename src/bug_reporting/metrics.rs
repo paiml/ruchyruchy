@@ -174,8 +174,7 @@ impl SatdDetector {
             if let Some(satd_type) = self.detect_satd_type(line) {
                 let comment = self.extract_comment(line);
                 let location = format!("{}:{}", file, line_num + 1);
-                self.satd_instances
-                    .push((location, satd_type, comment));
+                self.satd_instances.push((location, satd_type, comment));
             }
         }
     }
@@ -407,17 +406,12 @@ impl QuantitativeAnalysis {
     ) -> Self {
         // Calculate overall risk score
         let complexity_risk = complexity.complexity_score();
-        let churn_risk = churn
-            .as_ref()
-            .map(|c| c.correlation)
-            .unwrap_or(0.0);
+        let churn_risk = churn.as_ref().map(|c| c.correlation).unwrap_or(0.0);
         let satd_risk = satd_severity;
         let coupling_risk = (coupling as f64 / 20.0).min(1.0);
 
-        let risk_score = 0.35 * complexity_risk
-            + 0.30 * churn_risk
-            + 0.20 * satd_risk
-            + 0.15 * coupling_risk;
+        let risk_score =
+            0.35 * complexity_risk + 0.30 * churn_risk + 0.20 * satd_risk + 0.15 * coupling_risk;
 
         QuantitativeAnalysis {
             complexity,

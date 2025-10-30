@@ -206,12 +206,7 @@ where
     F: FnMut(&CommitId) -> TestResult,
 {
     /// Create a new git bisector
-    pub fn new(
-        test_fn: F,
-        good: CommitId,
-        bad: CommitId,
-        commits: Vec<Commit>,
-    ) -> Self {
+    pub fn new(test_fn: F, good: CommitId, bad: CommitId, commits: Vec<Commit>) -> Self {
         GitBisector {
             test_fn,
             state: BisectionState::new(good, bad),
@@ -267,7 +262,8 @@ where
     pub fn bisect(&mut self) -> Option<BisectionResult> {
         // Verify initial good commit is actually good
         let good_result = (self.test_fn)(&self.state.good);
-        self.state.record_result(self.state.good.clone(), good_result);
+        self.state
+            .record_result(self.state.good.clone(), good_result);
 
         if !good_result.is_good() {
             // Initial "good" commit is not actually good

@@ -42,9 +42,9 @@ fn test_four_factor_confidence_formula() {
     // High confidence bug: property testing, always reproducible, strong evidence, confirmed cause
     let high_confidence = ConfidenceScore::new(
         DiscoveryMethod::PropertyTesting, // 0.9 weight
-        Reproducibility::Always,           // 1.0 weight
-        QuantitativeEvidence::Strong,      // 0.9 weight
-        RootCauseClarity::Confirmed,       // 1.0 weight
+        Reproducibility::Always,          // 1.0 weight
+        QuantitativeEvidence::Strong,     // 0.9 weight
+        RootCauseClarity::Confirmed,      // 1.0 weight
     );
 
     // Expected: 0.30*0.9 + 0.30*1.0 + 0.25*0.9 + 0.15*1.0
@@ -80,10 +80,10 @@ fn test_four_factor_confidence_formula() {
 
     // Medium confidence bug: fuzz testing, often reproducible, moderate evidence, likely cause
     let medium_confidence = ConfidenceScore::new(
-        DiscoveryMethod::FuzzTesting,      // 0.85 weight
-        Reproducibility::Often,            // 0.8 weight
-        QuantitativeEvidence::Moderate,    // 0.6 weight
-        RootCauseClarity::Likely,          // 0.7 weight
+        DiscoveryMethod::FuzzTesting,   // 0.85 weight
+        Reproducibility::Often,         // 0.8 weight
+        QuantitativeEvidence::Moderate, // 0.6 weight
+        RootCauseClarity::Likely,       // 0.7 weight
     );
 
     // Expected: 0.30*0.85 + 0.30*0.8 + 0.25*0.6 + 0.15*0.7
@@ -313,10 +313,10 @@ fn test_confidence_scorer_integration() {
 
     // Scenario 2: Performance regression detected by benchmarks
     let perf_bug = scorer.score(
-        DiscoveryMethod::FuzzTesting,    // Found by fuzz benchmarks
-        Reproducibility::Often,          // 80% reproducible
-        QuantitativeEvidence::Moderate,  // Timing data shows slowdown
-        RootCauseClarity::Likely,        // Hypothesis: algorithm changed
+        DiscoveryMethod::FuzzTesting,   // Found by fuzz benchmarks
+        Reproducibility::Often,         // 80% reproducible
+        QuantitativeEvidence::Moderate, // Timing data shows slowdown
+        RootCauseClarity::Likely,       // Hypothesis: algorithm changed
     );
 
     let score = perf_bug.score;
@@ -328,10 +328,10 @@ fn test_confidence_scorer_integration() {
 
     // Scenario 3: User-reported intermittent issue
     let user_bug = scorer.score(
-        DiscoveryMethod::UserReport,   // User complained
-        Reproducibility::Rarely,       // Can't reproduce locally
-        QuantitativeEvidence::Weak,    // No crash logs
-        RootCauseClarity::Unclear,     // Need more investigation
+        DiscoveryMethod::UserReport, // User complained
+        Reproducibility::Rarely,     // Can't reproduce locally
+        QuantitativeEvidence::Weak,  // No crash logs
+        RootCauseClarity::Unclear,   // Need more investigation
     );
 
     assert!(

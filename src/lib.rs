@@ -29,24 +29,24 @@
 pub mod bootstrap_pipeline;
 /// Bootstrap showcase examples and demonstrations
 pub mod bootstrap_showcase;
-/// Performance benchmarking utilities
-pub mod performance_benchmark;
-/// Stage 3 code generation (real Rust codegen)
-pub mod stage3_real_codegen;
-/// Language Server Protocol (LSP) implementation
-pub mod lsp;
 /// Bug discovery, replication, and reporting system (DISC-001 through DISC-004)
 pub mod bug_discovery;
 /// Bug replication module (REPLIC-001 through REPLIC-003)
 pub mod bug_replication;
 /// Bug reporting module (REPORT-001 through REPORT-004)
 pub mod bug_reporting;
-/// Tracing infrastructure (DEBUGGER-014: Zero-cost compiler instrumentation)
-pub mod tracing;
-/// Statistical profiling (DEBUGGER-016: perf_event_open-based profiler)
-pub mod profiling;
 /// Interpreter for runtime bug discovery (INTERP-001 through INTERP-035)
 pub mod interpreter;
+/// Language Server Protocol (LSP) implementation
+pub mod lsp;
+/// Performance benchmarking utilities
+pub mod performance_benchmark;
+/// Statistical profiling (DEBUGGER-016: perf_event_open-based profiler)
+pub mod profiling;
+/// Stage 3 code generation (real Rust codegen)
+pub mod stage3_real_codegen;
+/// Tracing infrastructure (DEBUGGER-014: Zero-cost compiler instrumentation)
+pub mod tracing;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

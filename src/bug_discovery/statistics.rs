@@ -162,8 +162,7 @@ fn beta_function(a: f64, b: f64) -> f64 {
 /// Natural log of gamma function
 fn gamma_ln(x: f64) -> f64 {
     // Stirling's approximation
-    (x - 0.5) * x.ln() - x + 0.5 * (2.0 * f64::consts::PI).ln()
-        + (1.0 / (12.0 * x))
+    (x - 0.5) * x.ln() - x + 0.5 * (2.0 * f64::consts::PI).ln() + (1.0 / (12.0 * x))
 }
 
 /// Continued fraction for incomplete beta function
@@ -273,13 +272,13 @@ mod tests {
         // Baseline: mean ~100ms, small variance
         let mut baseline = vec![];
         for i in 0..30 {
-            baseline.push(100.0 + (i % 5) as f64);  // 100, 101, 102, 103, 104, ...
+            baseline.push(100.0 + (i % 5) as f64); // 100, 101, 102, 103, 104, ...
         }
 
         // Regressed: mean ~150ms (50% slower), small variance
         let mut regressed = vec![];
         for i in 0..30 {
-            regressed.push(150.0 + (i % 5) as f64);  // 150, 151, 152, 153, 154, ...
+            regressed.push(150.0 + (i % 5) as f64); // 150, 151, 152, 153, 154, ...
         }
 
         let (t_stat, p_value) = welchs_t_test(&baseline, &regressed);

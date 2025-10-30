@@ -93,7 +93,11 @@ impl fmt::Display for EbpfError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EbpfError::SetupRequired(msg) => {
-                write!(f, "eBPF setup required: {}. See docs/setup/EBPF_DEVELOPMENT_SETUP.md", msg)
+                write!(
+                    f,
+                    "eBPF setup required: {}. See docs/setup/EBPF_DEVELOPMENT_SETUP.md",
+                    msg
+                )
             }
             EbpfError::LoadFailed(msg) => write!(f, "Failed to load eBPF program: {}", msg),
             EbpfError::AttachFailed(msg) => write!(f, "Failed to attach eBPF program: {}", msg),
@@ -134,7 +138,8 @@ impl SyscallTracer {
         Err(EbpfError::SetupRequired(
             "eBPF development environment not configured. \
              Install LLVM, bpf-linker, and configure workspace. \
-             See docs/setup/EBPF_DEVELOPMENT_SETUP.md".to_string()
+             See docs/setup/EBPF_DEVELOPMENT_SETUP.md"
+                .to_string(),
         ))
     }
 }
@@ -156,11 +161,15 @@ mod tests {
         let msg = err.to_string();
 
         // Should mention setup guide
-        assert!(msg.contains("EBPF_DEVELOPMENT_SETUP.md"),
-            "Error should reference setup guide");
+        assert!(
+            msg.contains("EBPF_DEVELOPMENT_SETUP.md"),
+            "Error should reference setup guide"
+        );
 
         // Should mention required tools
-        assert!(msg.contains("bpf-linker") || msg.contains("LLVM"),
-            "Error should mention required tools");
+        assert!(
+            msg.contains("bpf-linker") || msg.contains("LLVM"),
+            "Error should mention required tools"
+        );
     }
 }

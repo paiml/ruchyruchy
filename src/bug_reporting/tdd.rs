@@ -286,8 +286,12 @@ impl TddHistory {
         ));
 
         md.push_str("## Cycle History\n\n");
-        md.push_str("| Cycle | Phase | Tests | Passing | Failing | Coverage | Duration | Valid |\n");
-        md.push_str("|-------|-------|-------|---------|---------|----------|----------|-------|\n");
+        md.push_str(
+            "| Cycle | Phase | Tests | Passing | Failing | Coverage | Duration | Valid |\n",
+        );
+        md.push_str(
+            "|-------|-------|-------|---------|---------|----------|----------|-------|\n",
+        );
 
         for cycle in &self.cycles {
             md.push_str(&format!(
@@ -594,13 +598,8 @@ mod tests {
 
     #[test]
     fn test_quality_gate_with_metric() {
-        let gate = QualityGate::with_metric(
-            "Coverage".to_string(),
-            true,
-            "Good".to_string(),
-            85.5,
-            80.0,
-        );
+        let gate =
+            QualityGate::with_metric("Coverage".to_string(), true, "Good".to_string(), 85.5, 80.0);
 
         assert!(gate.value.is_some());
         assert!((gate.value.unwrap() - 85.5).abs() < 0.01);
@@ -612,8 +611,16 @@ mod tests {
         let mut gates = QualityGates::new();
         assert!(gates.all_passed());
 
-        gates.add_gate(QualityGate::new("Test1".to_string(), true, "OK".to_string()));
-        gates.add_gate(QualityGate::new("Test2".to_string(), true, "OK".to_string()));
+        gates.add_gate(QualityGate::new(
+            "Test1".to_string(),
+            true,
+            "OK".to_string(),
+        ));
+        gates.add_gate(QualityGate::new(
+            "Test2".to_string(),
+            true,
+            "OK".to_string(),
+        ));
         assert!(gates.all_passed());
 
         gates.add_gate(QualityGate::new(

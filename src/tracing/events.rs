@@ -2,7 +2,7 @@
 //!
 //! Defines the event types that can be traced during program execution.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Source code location for an event
@@ -142,11 +142,7 @@ pub fn current_thread_id() -> u64 {
 }
 
 /// Helper to create function entry event
-pub fn function_enter(
-    name: &str,
-    args: Vec<TypedValue>,
-    location: SourceLocation,
-) -> TraceEvent {
+pub fn function_enter(name: &str, args: Vec<TypedValue>, location: SourceLocation) -> TraceEvent {
     TraceEvent::FunctionEnter(FunctionEntry {
         name: name.to_string(),
         args,
@@ -157,11 +153,7 @@ pub fn function_enter(
 }
 
 /// Helper to create function exit event
-pub fn function_exit(
-    name: &str,
-    return_value: Option<TypedValue>,
-    duration_ns: u64,
-) -> TraceEvent {
+pub fn function_exit(name: &str, return_value: Option<TypedValue>, duration_ns: u64) -> TraceEvent {
     TraceEvent::FunctionExit(FunctionExit {
         name: name.to_string(),
         return_value,

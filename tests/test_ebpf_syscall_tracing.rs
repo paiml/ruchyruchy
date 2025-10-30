@@ -15,9 +15,9 @@
 // - Decode syscall arguments using kernel BTF
 // - Merge with function traces from DEBUGGER-014
 
-use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::time::Instant;
 
 fn get_ruchy_path() -> PathBuf {
@@ -33,7 +33,9 @@ fn test_ebpf_syscall_capture() {
     // We trace a simple Ruchy program that makes a few syscalls (open, read, write).
 
     let test_file = "/tmp/test_syscall_capture.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     // This will trigger open, write, close syscalls
     let file = open("/tmp/test.txt", "w");
@@ -47,14 +49,16 @@ fun main() {
 
     println(content);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with eBPF syscall tracing enabled
     let output = Command::new("ruchydbg")
         .arg("run")
         .arg(test_file)
-        .arg("--trace-syscalls")  // Not implemented yet
-        .arg("--trace-output=/tmp/syscall_trace.json")  // Not implemented yet
+        .arg("--trace-syscalls") // Not implemented yet
+        .arg("--trace-output=/tmp/syscall_trace.json") // Not implemented yet
         .output()
         .expect("Failed to execute ruchydbg");
 
@@ -64,18 +68,33 @@ fun main() {
     let trace = fs::read_to_string("/tmp/syscall_trace.json").unwrap();
 
     // Should capture open syscalls
-    assert!(trace.contains("\"syscall\":\"open\""), "Missing open syscall");
-    assert!(trace.contains("\"/tmp/test.txt\""), "Missing filename argument");
+    assert!(
+        trace.contains("\"syscall\":\"open\""),
+        "Missing open syscall"
+    );
+    assert!(
+        trace.contains("\"/tmp/test.txt\""),
+        "Missing filename argument"
+    );
 
     // Should capture write syscall
-    assert!(trace.contains("\"syscall\":\"write\""), "Missing write syscall");
+    assert!(
+        trace.contains("\"syscall\":\"write\""),
+        "Missing write syscall"
+    );
     assert!(trace.contains("\"Hello, eBPF!\""), "Missing write data");
 
     // Should capture read syscall
-    assert!(trace.contains("\"syscall\":\"read\""), "Missing read syscall");
+    assert!(
+        trace.contains("\"syscall\":\"read\""),
+        "Missing read syscall"
+    );
 
     // Should capture close syscalls
-    assert!(trace.contains("\"syscall\":\"close\""), "Missing close syscall");
+    assert!(
+        trace.contains("\"syscall\":\"close\""),
+        "Missing close syscall"
+    );
 }
 
 #[test]
@@ -87,7 +106,9 @@ fn test_syscall_decoding() {
     // We need to support at least 50 common syscalls with proper argument decoding.
 
     let test_file = "/tmp/test_syscall_decode.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     // Test various syscalls
     open("/tmp/file.txt", "r");           // open(pathname, flags)
@@ -96,7 +117,9 @@ fun main() {
     stat("/tmp/file.txt");                 // stat(pathname)
     getpid();                              // getpid() - no args
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = Command::new("ruchydbg")
         .arg("run")
@@ -111,19 +134,28 @@ fun main() {
     let trace = fs::read_to_string("/tmp/decode_trace.json").unwrap();
 
     // Verify open() argument decoding
-    assert!(trace.contains("\"args\":[{\"/tmp/file.txt\",\"O_RDONLY\"}]"),
-        "open() arguments not decoded correctly");
+    assert!(
+        trace.contains("\"args\":[{\"/tmp/file.txt\",\"O_RDONLY\"}]"),
+        "open() arguments not decoded correctly"
+    );
 
     // Verify read() argument decoding
-    assert!(trace.contains("\"args\":[{\"fd\":3,\"count\":100}]"),
-        "read() arguments not decoded correctly");
+    assert!(
+        trace.contains("\"args\":[{\"fd\":3,\"count\":100}]"),
+        "read() arguments not decoded correctly"
+    );
 
     // Verify write() argument decoding
-    assert!(trace.contains("\"args\":[{\"fd\":1,\"buf\":\"hello\"}]"),
-        "write() arguments not decoded correctly");
+    assert!(
+        trace.contains("\"args\":[{\"fd\":1,\"buf\":\"hello\"}]"),
+        "write() arguments not decoded correctly"
+    );
 
     // Verify return values
-    assert!(trace.contains("\"return\":"), "Missing syscall return values");
+    assert!(
+        trace.contains("\"return\":"),
+        "Missing syscall return values"
+    );
 }
 
 #[test]
@@ -135,7 +167,9 @@ fn test_correlation_with_functions() {
     // Each syscall should be linked to the function that called it.
 
     let test_file = "/tmp/test_correlation.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun write_file(filename: String, content: String) {
     let file = open(filename, "w");
     write(file, content);
@@ -145,13 +179,15 @@ fun write_file(filename: String, content: String) {
 fun main() {
     write_file("/tmp/test.txt", "Hello");
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = Command::new("ruchydbg")
         .arg("run")
         .arg(test_file)
-        .arg("--trace")  // Function tracing (DEBUGGER-014)
-        .arg("--trace-syscalls")  // Syscall tracing (DEBUGGER-015)
+        .arg("--trace") // Function tracing (DEBUGGER-014)
+        .arg("--trace-syscalls") // Syscall tracing (DEBUGGER-015)
         .arg("--trace-output=/tmp/correlated_trace.json")
         .output()
         .expect("Failed to execute ruchydbg");
@@ -165,8 +201,10 @@ fun main() {
 
     // Should have syscalls INSIDE write_file function
     // Syscalls should have parent_function field linking to write_file
-    assert!(trace.contains("\"parent_function\":\"write_file\""),
-        "Syscalls not correlated with parent function");
+    assert!(
+        trace.contains("\"parent_function\":\"write_file\""),
+        "Syscalls not correlated with parent function"
+    );
 
     // Syscalls should be timestamped between function enter/exit
     // (This requires parsing JSON and validating timestamp ordering)
@@ -181,7 +219,9 @@ fn test_overhead_under_1_percent() {
     // We test with a syscall-heavy program (many small reads/writes).
 
     let test_file = "/tmp/test_overhead.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     // Make 1000 syscalls (open/read/close in loop)
     let mut i = 0;
@@ -192,7 +232,9 @@ fun main() {
         i = i + 1;
     }
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Baseline: Run without eBPF tracing
     let mut baseline_times = Vec::new();
@@ -232,13 +274,17 @@ fun main() {
     };
 
     // Calculate overhead
-    let overhead_percent = ((traced_median.as_micros() as f64
-        / baseline_median.as_micros() as f64) - 1.0) * 100.0;
+    let overhead_percent =
+        ((traced_median.as_micros() as f64 / baseline_median.as_micros() as f64) - 1.0) * 100.0;
 
     // eBPF overhead requirement: <1%
-    assert!(overhead_percent < 1.0,
+    assert!(
+        overhead_percent < 1.0,
         "eBPF overhead too high: {:.2}% (baseline: {:?}, traced: {:?})",
-        overhead_percent, baseline_median, traced_median);
+        overhead_percent,
+        baseline_median,
+        traced_median
+    );
 }
 
 #[test]
@@ -249,18 +295,22 @@ fn test_strace_compatible_output() {
     // Output should be compatible with strace format for easy migration.
 
     let test_file = "/tmp/test_strace_format.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     open("/tmp/file.txt", "r");
     write(1, "hello");
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = Command::new("ruchydbg")
         .arg("run")
         .arg(test_file)
         .arg("--trace-syscalls")
-        .arg("--trace-format=strace")  // Not implemented yet
+        .arg("--trace-format=strace") // Not implemented yet
         .output()
         .expect("Failed to execute ruchydbg");
 
@@ -272,12 +322,18 @@ fun main() {
     // open("/tmp/file.txt", O_RDONLY) = 3
     // write(1, "hello", 5) = 5
 
-    assert!(strace_output.contains("open(\"/tmp/file.txt\", O_RDONLY)"),
-        "Not strace-compatible format");
-    assert!(strace_output.contains("= 3") || strace_output.contains("= 4"),
-        "Missing return value");
-    assert!(strace_output.contains("write(1, \"hello\","),
-        "write() not strace-compatible");
+    assert!(
+        strace_output.contains("open(\"/tmp/file.txt\", O_RDONLY)"),
+        "Not strace-compatible format"
+    );
+    assert!(
+        strace_output.contains("= 3") || strace_output.contains("= 4"),
+        "Missing return value"
+    );
+    assert!(
+        strace_output.contains("write(1, \"hello\","),
+        "write() not strace-compatible"
+    );
 }
 
 #[test]
@@ -288,11 +344,15 @@ fn test_json_output_format() {
     // JSON output should include rich metadata for machine processing.
 
     let test_file = "/tmp/test_json_syscall.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     open("/tmp/file.txt", "r");
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = Command::new("ruchydbg")
         .arg("run")
@@ -307,12 +367,14 @@ fun main() {
     let trace = fs::read_to_string("/tmp/syscall.json").unwrap();
 
     // Should be valid JSON
-    let json: serde_json::Value = serde_json::from_str(&trace)
-        .expect("Invalid JSON output");
+    let json: serde_json::Value = serde_json::from_str(&trace).expect("Invalid JSON output");
 
     // Should have metadata
     assert!(json["metadata"].is_object(), "Missing metadata");
-    assert!(json["metadata"]["program"].is_string(), "Missing program name");
+    assert!(
+        json["metadata"]["program"].is_string(),
+        "Missing program name"
+    );
 
     // Should have syscall events
     assert!(json["events"].is_array(), "Missing events array");
@@ -321,10 +383,16 @@ fun main() {
 
     // Each event should have required fields
     let first_event = &events[0];
-    assert!(first_event["type"].as_str() == Some("syscall"), "Wrong event type");
+    assert!(
+        first_event["type"].as_str() == Some("syscall"),
+        "Wrong event type"
+    );
     assert!(first_event["name"].is_string(), "Missing syscall name");
     assert!(first_event["args"].is_array(), "Missing syscall args");
-    assert!(first_event["return_value"].is_number(), "Missing return value");
+    assert!(
+        first_event["return_value"].is_number(),
+        "Missing return value"
+    );
     assert!(first_event["duration_ns"].is_number(), "Missing duration");
     assert!(first_event["timestamp_ns"].is_number(), "Missing timestamp");
     assert!(first_event["pid"].is_number(), "Missing PID");
@@ -339,20 +407,24 @@ fn test_filtering_by_syscall_pattern() {
     // Should be able to filter syscalls by pattern (e.g., only file operations).
 
     let test_file = "/tmp/test_filter.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     open("/tmp/file.txt", "r");  // File syscall
     read(3, 100);                 // File syscall
     getpid();                     // Process syscall (should be filtered out)
     write(1, "hello");           // File syscall
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let output = Command::new("ruchydbg")
         .arg("run")
         .arg(test_file)
         .arg("--trace-syscalls")
-        .arg("--syscall-filter=file")  // Only file operations
+        .arg("--syscall-filter=file") // Only file operations
         .arg("--trace-output=/tmp/filtered.json")
         .output()
         .expect("Failed to execute ruchydbg");
@@ -362,11 +434,22 @@ fun main() {
     let trace = fs::read_to_string("/tmp/filtered.json").unwrap();
 
     // Should include file syscalls
-    assert!(trace.contains("\"name\":\"open\""), "Missing filtered syscall");
-    assert!(trace.contains("\"name\":\"read\""), "Missing filtered syscall");
-    assert!(trace.contains("\"name\":\"write\""), "Missing filtered syscall");
+    assert!(
+        trace.contains("\"name\":\"open\""),
+        "Missing filtered syscall"
+    );
+    assert!(
+        trace.contains("\"name\":\"read\""),
+        "Missing filtered syscall"
+    );
+    assert!(
+        trace.contains("\"name\":\"write\""),
+        "Missing filtered syscall"
+    );
 
     // Should NOT include process syscalls
-    assert!(!trace.contains("\"name\":\"getpid\""),
-        "Filter didn't exclude non-file syscalls");
+    assert!(
+        !trace.contains("\"name\":\"getpid\""),
+        "Filter didn't exclude non-file syscalls"
+    );
 }

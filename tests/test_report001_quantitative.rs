@@ -43,9 +43,9 @@ fn test_complexity_metrics_calculation() {
     // - Nested loops (cognitive + nesting)
     // - Many parameters
     metrics.cyclomatic = 15; // High complexity (>10 threshold)
-    metrics.cognitive = 20;   // High cognitive load (>15 threshold)
+    metrics.cognitive = 20; // High cognitive load (>15 threshold)
     metrics.halstead_difficulty = 25.0; // High Halstead (>20 threshold)
-    metrics.parameters = 7;   // Too many parameters (>5 threshold)
+    metrics.parameters = 7; // Too many parameters (>5 threshold)
     metrics.nesting_depth = 5; // Deep nesting (>4 threshold)
 
     // Verify thresholds
@@ -229,9 +229,9 @@ fn test_quantitative_analysis_risk_scoring() {
     let mut complex = ComplexityMetrics::new(200);
     // Set high complexity values to push risk score higher
     complex.cyclomatic = 25; // Very high
-    complex.cognitive = 35;   // Very high
+    complex.cognitive = 35; // Very high
     complex.halstead_difficulty = 40.0; // Very high
-    complex.parameters = 10;  // Very high
+    complex.parameters = 10; // Very high
     complex.nesting_depth = 6; // Very deep
 
     let churn = ChurnCorrelation::new("high_risk.rs".to_string(), 50, 15);
@@ -239,7 +239,7 @@ fn test_quantitative_analysis_risk_scoring() {
     let analysis = QuantitativeAnalysis::new(
         complex,
         Some(churn),
-        15, // 15 SATD comments (very high)
+        15,  // 15 SATD comments (very high)
         0.9, // Very high SATD severity
         12,  // Very high coupling (12 dependencies)
     );
@@ -253,7 +253,10 @@ fn test_quantitative_analysis_risk_scoring() {
 
     // Verify risk level classification
     let risk_level = analysis.risk_level();
-    println!("Risk level: {:?}, score: {}", risk_level, analysis.risk_score);
+    println!(
+        "Risk level: {:?}, score: {}",
+        risk_level, analysis.risk_score
+    );
 
     // Medium-to-high risk should be flagged
     assert!(
@@ -277,9 +280,9 @@ fn test_quantitative_analysis_risk_scoring() {
     let safe_analysis = QuantitativeAnalysis::new(
         simple,
         Some(no_churn),
-        0, // No SATD
+        0,   // No SATD
         0.0, // No SATD severity
-        2, // Low coupling
+        2,   // Low coupling
     );
 
     assert!(
@@ -394,7 +397,6 @@ fun process_data(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32) -> i32 {
 
     println!(
         "✅ Comprehensive analysis complete: {} metrics, risk score {}",
-        "10+",
-        analysis.risk_score
+        "10+", analysis.risk_score
     );
 }

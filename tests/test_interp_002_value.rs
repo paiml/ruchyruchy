@@ -105,11 +105,7 @@ fn test_boolean_logical_operations() {
 #[test]
 fn test_create_vector_value() {
     // RED: Test vector (array) creation
-    let elements = vec![
-        Value::integer(1),
-        Value::integer(2),
-        Value::integer(3),
-    ];
+    let elements = vec![Value::integer(1), Value::integer(2), Value::integer(3)];
 
     let val = Value::vector(elements);
 
@@ -120,11 +116,7 @@ fn test_create_vector_value() {
 #[test]
 fn test_vector_indexing() {
     // RED: Test vector element access
-    let elements = vec![
-        Value::integer(10),
-        Value::integer(20),
-        Value::integer(30),
-    ];
+    let elements = vec![Value::integer(10), Value::integer(20), Value::integer(30)];
 
     let vec = Value::vector(elements);
 
@@ -161,13 +153,12 @@ fn test_hashmap_insert_and_get() {
 
     map.insert(
         Value::string("name".to_string()),
-        Value::string("Alice".to_string())
-    ).unwrap();
+        Value::string("Alice".to_string()),
+    )
+    .unwrap();
 
-    map.insert(
-        Value::string("age".to_string()),
-        Value::integer(30)
-    ).unwrap();
+    map.insert(Value::string("age".to_string()), Value::integer(30))
+        .unwrap();
 
     let name = map.get(&Value::string("name".to_string())).unwrap();
     assert_eq!(name.as_string().unwrap(), "Alice");
@@ -203,7 +194,9 @@ fn test_type_mismatch_errors() {
     assert!(result.is_err());
 
     match result.err().unwrap() {
-        ValueError::TypeMismatch { expected, found, .. } => {
+        ValueError::TypeMismatch {
+            expected, found, ..
+        } => {
             assert_eq!(expected, "Integer");
             assert_eq!(found, "String");
         }
@@ -249,7 +242,10 @@ fn test_value_cloning() {
     assert_eq!(cloned.as_integer().unwrap(), 42);
 
     // Verify they're equal but independent
-    assert_eq!(original.equals(&cloned).unwrap().as_boolean().unwrap(), true);
+    assert_eq!(
+        original.equals(&cloned).unwrap().as_boolean().unwrap(),
+        true
+    );
 }
 
 // ===== RED PHASE TEST 10: Type Name Introspection =====

@@ -441,7 +441,11 @@ mod tests {
         let test_fn = |_: &str| TestOutcome::Pass;
         let debugger = DeltaDebugger::new(test_fn, MinimizationStrategy::Line);
 
-        let chunks = vec!["line1".to_string(), "line2".to_string(), "line3".to_string()];
+        let chunks = vec![
+            "line1".to_string(),
+            "line2".to_string(),
+            "line3".to_string(),
+        ];
         let reconstructed = debugger.reconstruct(&chunks);
         assert_eq!(reconstructed, "line1\nline2\nline3");
     }

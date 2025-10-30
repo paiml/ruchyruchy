@@ -177,7 +177,8 @@ impl Evaluator {
 
             // Function definition - register function
             AstNode::FunctionDef { name, params, body } => {
-                self.functions.insert(name.clone(), (params.clone(), body.clone()));
+                self.functions
+                    .insert(name.clone(), (params.clone(), body.clone()));
                 Ok(ControlFlow::Value(Value::nil()))
             }
 
@@ -189,7 +190,9 @@ impl Evaluator {
 
             // Identifier - lookup variable in scope
             AstNode::Identifier(name) => {
-                let value = self.scope.get_cloned(name)
+                let value = self
+                    .scope
+                    .get_cloned(name)
                     .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
                 Ok(ControlFlow::Value(value))
             }
@@ -205,39 +208,41 @@ impl Evaluator {
             }
 
             // If expression - conditional branching
-            AstNode::IfExpr { condition, then_branch, else_branch } => {
-                self.eval_if(condition, then_branch, else_branch)
-            }
+            AstNode::IfExpr {
+                condition,
+                then_branch,
+                else_branch,
+            } => self.eval_if(condition, then_branch, else_branch),
 
             // Let declaration - variable binding
             AstNode::LetDecl { name, value } => {
                 let val = self.eval(value)?;
-                self.scope.define(name.clone(), val)
-                    .map_err(|e| EvalError::UnsupportedOperation {
-                        operation: format!("define variable: {}", e)
-                    })?;
+                self.scope.define(name.clone(), val).map_err(|e| {
+                    EvalError::UnsupportedOperation {
+                        operation: format!("define variable: {}", e),
+                    }
+                })?;
                 Ok(ControlFlow::Value(Value::nil()))
             }
 
             // While loop - execute body while condition is true
-            AstNode::WhileLoop { condition, body } => {
-                self.eval_while(condition, body)
-            }
+            AstNode::WhileLoop { condition, body } => self.eval_while(condition, body),
 
             // For loop - iterate over elements
-            AstNode::ForLoop { var, iterable, body } => {
-                self.eval_for(var, iterable, body)
-            }
+            AstNode::ForLoop {
+                var,
+                iterable,
+                body,
+            } => self.eval_for(var, iterable, body),
 
             // Match expression - pattern matching
-            AstNode::MatchExpr { expr, arms } => {
-                self.eval_match(expr, arms)
-            }
+            AstNode::MatchExpr { expr, arms } => self.eval_match(expr, arms),
 
             // Assignment - reassign existing variable
             AstNode::Assignment { name, value } => {
                 let val = self.eval(value)?;
-                self.scope.assign(name, val)
+                self.scope
+                    .assign(name, val)
                     .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
                 Ok(ControlFlow::Value(Value::nil()))
             }
@@ -293,17 +298,13 @@ impl Evaluator {
                 // LessEqual is LessThan OR Equal
                 let less = left.less_than(&right)?;
                 let equal = left.equals(&right)?;
-                Ok(Value::boolean(
-                    less.as_boolean()? || equal.as_boolean()?,
-                ))
+                Ok(Value::boolean(less.as_boolean()? || equal.as_boolean()?))
             }
             BinaryOperator::GreaterEqual => {
                 // GreaterEqual is GreaterThan OR Equal
                 let greater = left.greater_than(&right)?;
                 let equal = left.equals(&right)?;
-                Ok(Value::boolean(
-                    greater.as_boolean()? || equal.as_boolean()?,
-                ))
+                Ok(Value::boolean(greater.as_boolean()? || equal.as_boolean()?))
             }
 
             // Logical operators
@@ -362,9 +363,13 @@ impl Evaluator {
         }
 
         // 2. Look up function in registry
-        let (params, body) = self.functions.get(name)
-            .cloned()
-            .ok_or_else(|| EvalError::UndefinedFunction { name: name.to_string() })?;
+        let (params, body) =
+            self.functions
+                .get(name)
+                .cloned()
+                .ok_or_else(|| EvalError::UndefinedFunction {
+                    name: name.to_string(),
+                })?;
 
         // 3. Check argument count matches parameter count (arity check)
         if args.len() != params.len() {
@@ -384,9 +389,10 @@ impl Evaluator {
         // 5. Create new scope and bind parameters to argument values
         let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
         for (param, value) in params.iter().zip(arg_values.iter()) {
-            self.scope.define(param.clone(), value.clone())
+            self.scope
+                .define(param.clone(), value.clone())
                 .map_err(|e| EvalError::UnsupportedOperation {
-                    operation: format!("define parameter: {}", e)
+                    operation: format!("define parameter: {}", e),
                 })?;
         }
 
@@ -473,10 +479,7 @@ impl Evaluator {
 
     /// Helper: Execute loop body statements
     /// Returns Ok(None) to continue, Ok(Some(v)) for early return
-    fn eval_loop_body_impl(
-        &mut self,
-        body: &[AstNode],
-    ) -> Result<Option<Value>, EvalError> {
+    fn eval_loop_body_impl(&mut self, body: &[AstNode]) -> Result<Option<Value>, EvalError> {
         for stmt in body {
             match self.eval_internal(stmt)? {
                 ControlFlow::Value(_) => {
@@ -493,10 +496,7 @@ impl Evaluator {
 
     /// Helper: Execute loop body in a child scope
     /// Returns Ok(None) to continue, Ok(Some(v)) for early return
-    fn eval_loop_body_with_scope(
-        &mut self,
-        body: &[AstNode],
-    ) -> Result<Option<Value>, EvalError> {
+    fn eval_loop_body_with_scope(&mut self, body: &[AstNode]) -> Result<Option<Value>, EvalError> {
         // Create child scope for loop body iteration
         // This allows variables declared inside the loop to be fresh each iteration
         let child_scope = self.scope.create_child();
@@ -604,9 +604,10 @@ impl Evaluator {
                 }
                 Pattern::Identifier(name) => {
                     // Identifier pattern - bind variable and always match
-                    self.scope.define(name.clone(), match_val.clone())
+                    self.scope
+                        .define(name.clone(), match_val.clone())
                         .map_err(|e| EvalError::UnsupportedOperation {
-                            operation: format!("bind match variable: {}", e)
+                            operation: format!("bind match variable: {}", e),
                         })?;
                     true
                 }

@@ -235,14 +235,20 @@ mod tests {
     fn test_completion_item_with_detail() {
         let item = CompletionItem::new("fun".to_string(), CompletionItemKind::Keyword)
             .with_detail("Function declaration keyword".to_string());
-        assert_eq!(item.detail, Some("Function declaration keyword".to_string()));
+        assert_eq!(
+            item.detail,
+            Some("Function declaration keyword".to_string())
+        );
     }
 
     #[test]
     fn test_completion_item_with_documentation() {
         let item = CompletionItem::new("fun".to_string(), CompletionItemKind::Keyword)
             .with_documentation("Declares a new function".to_string());
-        assert_eq!(item.documentation, Some("Declares a new function".to_string()));
+        assert_eq!(
+            item.documentation,
+            Some("Declares a new function".to_string())
+        );
     }
 
     #[test]

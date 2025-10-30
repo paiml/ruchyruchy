@@ -154,13 +154,11 @@ impl WhyLayer {
 
     /// Get best hypothesis (highest confidence + data strength)
     pub fn best_hypothesis(&self) -> Option<&Hypothesis> {
-        self.hypotheses
-            .iter()
-            .max_by(|a, b| {
-                let score_a = a.confidence.score() * a.data_strength();
-                let score_b = b.confidence.score() * b.data_strength();
-                score_a.partial_cmp(&score_b).unwrap()
-            })
+        self.hypotheses.iter().max_by(|a, b| {
+            let score_a = a.confidence.score() * a.data_strength();
+            let score_b = b.confidence.score() * b.data_strength();
+            score_a.partial_cmp(&score_b).unwrap()
+        })
     }
 }
 
@@ -308,10 +306,7 @@ impl FiveWhysAnalyzer {
 
     /// Add a data point
     pub fn add_data_point(&mut self, category: String, data: DataPoint) {
-        self.data_points
-            .entry(category)
-            .or_default()
-            .push(data);
+        self.data_points.entry(category).or_default().push(data);
     }
 
     /// Generate hypotheses from data
@@ -351,7 +346,10 @@ impl FiveWhysAnalyzer {
             for data in satd_data {
                 if data.is_highly_relevant() {
                     let hypothesis = Hypothesis::new(
-                        format!("Technical debt marker indicates known issue: {}", data.value),
+                        format!(
+                            "Technical debt marker indicates known issue: {}",
+                            data.value
+                        ),
                         ConfidenceLevel::Medium,
                     )
                     .add_data(data.clone());
@@ -363,7 +361,10 @@ impl FiveWhysAnalyzer {
         // If no specific hypotheses, generate generic one
         if hypotheses.is_empty() {
             hypotheses.push(Hypothesis::new(
-                format!("Unknown cause - insufficient data for question: {}", question),
+                format!(
+                    "Unknown cause - insufficient data for question: {}",
+                    question
+                ),
                 ConfidenceLevel::Low,
             ));
         }
@@ -376,11 +377,13 @@ impl FiveWhysAnalyzer {
         let mut analysis = FiveWhysAnalysis::new(bug_description);
 
         // Generate 5 layers
-        let questions = ["Why did the bug occur?",
+        let questions = [
+            "Why did the bug occur?",
             "Why was the system vulnerable to this issue?",
             "Why was this vulnerability not caught earlier?",
             "Why are our processes not preventing this?",
-            "Why is the root cause not addressed?"];
+            "Why is the root cause not addressed?",
+        ];
 
         for (i, question) in questions.iter().enumerate() {
             let mut layer = WhyLayer::new(i + 1, question.to_string());
@@ -446,10 +449,20 @@ mod tests {
 
     #[test]
     fn test_data_point_relevance_clamping() {
-        let too_low = DataPoint::new("Test".to_string(), "val".to_string(), "src".to_string(), -0.5);
+        let too_low = DataPoint::new(
+            "Test".to_string(),
+            "val".to_string(),
+            "src".to_string(),
+            -0.5,
+        );
         assert_eq!(too_low.relevance, 0.0);
 
-        let too_high = DataPoint::new("Test".to_string(), "val".to_string(), "src".to_string(), 1.5);
+        let too_high = DataPoint::new(
+            "Test".to_string(),
+            "val".to_string(),
+            "src".to_string(),
+            1.5,
+        );
         assert_eq!(too_high.relevance, 1.0);
     }
 
@@ -465,9 +478,13 @@ mod tests {
 
     #[test]
     fn test_hypothesis_with_data() {
-        let data = DataPoint::new("Test".to_string(), "Value".to_string(), "source".to_string(), 0.9);
-        let hyp = Hypothesis::new("Test".to_string(), ConfidenceLevel::Medium)
-            .add_data(data);
+        let data = DataPoint::new(
+            "Test".to_string(),
+            "Value".to_string(),
+            "source".to_string(),
+            0.9,
+        );
+        let hyp = Hypothesis::new("Test".to_string(), ConfidenceLevel::Medium).add_data(data);
 
         assert_eq!(hyp.supporting_data.len(), 1);
         assert!((hyp.data_strength() - 0.9).abs() < 0.01);
@@ -525,8 +542,7 @@ mod tests {
 
         let mut layer = WhyLayer::new(1, "Why?".to_string());
         let data = DataPoint::new("D".to_string(), "V".to_string(), "S".to_string(), 0.9);
-        let hyp = Hypothesis::new("Hypothesis".to_string(), ConfidenceLevel::High)
-            .add_data(data);
+        let hyp = Hypothesis::new("Hypothesis".to_string(), ConfidenceLevel::High).add_data(data);
         layer.add_hypothesis(hyp);
 
         analysis.add_layer(layer);
@@ -541,11 +557,16 @@ mod tests {
         let mut analysis = FiveWhysAnalysis::new("Test bug".to_string());
 
         let mut layer = WhyLayer::new(1, "Why did it happen?".to_string());
-        let data = DataPoint::new("Complexity".to_string(), "High".to_string(), "metrics".to_string(), 0.8);
+        let data = DataPoint::new(
+            "Complexity".to_string(),
+            "High".to_string(),
+            "metrics".to_string(),
+            0.8,
+        );
         layer.add_data_point(data.clone());
 
-        let hyp = Hypothesis::new("High complexity".to_string(), ConfidenceLevel::Medium)
-            .add_data(data);
+        let hyp =
+            Hypothesis::new("High complexity".to_string(), ConfidenceLevel::Medium).add_data(data);
         layer.add_hypothesis(hyp);
 
         analysis.add_layer(layer);
@@ -567,7 +588,12 @@ mod tests {
     #[test]
     fn test_five_whys_analyzer_add_data() {
         let mut analyzer = FiveWhysAnalyzer::new();
-        let data = DataPoint::new("Test".to_string(), "Value".to_string(), "source".to_string(), 0.7);
+        let data = DataPoint::new(
+            "Test".to_string(),
+            "Value".to_string(),
+            "source".to_string(),
+            0.7,
+        );
 
         analyzer.add_data_point("complexity".to_string(), data);
         assert!(analyzer.data_points.contains_key("complexity"));

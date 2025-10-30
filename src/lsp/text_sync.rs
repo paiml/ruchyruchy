@@ -24,11 +24,8 @@ impl TextDocumentManager {
 
     /// Open a text document
     pub fn open(&mut self, uri: String, version: i32, text: String) {
-        self.documents.insert(uri.clone(), TextDocument {
-            uri,
-            version,
-            text,
-        });
+        self.documents
+            .insert(uri.clone(), TextDocument { uri, version, text });
     }
 
     /// Change a text document (full content replacement)
@@ -71,7 +68,11 @@ mod tests {
     #[test]
     fn test_open_document() {
         let mut manager = TextDocumentManager::new();
-        manager.open("file:///test.ruchy".to_string(), 1, "fun main() {}".to_string());
+        manager.open(
+            "file:///test.ruchy".to_string(),
+            1,
+            "fun main() {}".to_string(),
+        );
 
         let doc = manager.get("file:///test.ruchy");
         assert!(doc.is_some());
@@ -82,9 +83,17 @@ mod tests {
     #[test]
     fn test_change_document() {
         let mut manager = TextDocumentManager::new();
-        manager.open("file:///test.ruchy".to_string(), 1, "fun main() {}".to_string());
+        manager.open(
+            "file:///test.ruchy".to_string(),
+            1,
+            "fun main() {}".to_string(),
+        );
 
-        let changed = manager.change("file:///test.ruchy", 2, "fun main() { println(\"hi\") }".to_string());
+        let changed = manager.change(
+            "file:///test.ruchy",
+            2,
+            "fun main() { println(\"hi\") }".to_string(),
+        );
         assert!(changed);
 
         let doc = manager.get("file:///test.ruchy");
@@ -95,7 +104,11 @@ mod tests {
     #[test]
     fn test_close_document() {
         let mut manager = TextDocumentManager::new();
-        manager.open("file:///test.ruchy".to_string(), 1, "fun main() {}".to_string());
+        manager.open(
+            "file:///test.ruchy".to_string(),
+            1,
+            "fun main() {}".to_string(),
+        );
 
         let closed = manager.close("file:///test.ruchy");
         assert!(closed);
@@ -107,7 +120,11 @@ mod tests {
     #[test]
     fn test_get_text() {
         let mut manager = TextDocumentManager::new();
-        manager.open("file:///test.ruchy".to_string(), 1, "fun main() {}".to_string());
+        manager.open(
+            "file:///test.ruchy".to_string(),
+            1,
+            "fun main() {}".to_string(),
+        );
 
         let text = manager.get_text("file:///test.ruchy");
         assert_eq!(text, Some("fun main() {}"));

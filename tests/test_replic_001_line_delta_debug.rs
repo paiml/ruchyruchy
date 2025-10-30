@@ -24,9 +24,7 @@
 // - Test on various input sizes
 // - Verify robustness (no parsing dependencies)
 
-use ruchyruchy::bug_replication::minimizer::{
-    DeltaDebugger, MinimizationStrategy, TestOutcome,
-};
+use ruchyruchy::bug_replication::minimizer::{DeltaDebugger, MinimizationStrategy, TestOutcome};
 
 /// Test: Line-Based Minimization Workflow
 ///
@@ -181,7 +179,10 @@ fn test_on_log_n_performance() {
     let ratio = large_test_runs as f64 / small_test_runs as f64;
 
     // Ratio should be ~10-20x, not 100x (would be quadratic)
-    assert!(ratio < 50.0, "Test runs scaling is too high (possibly O(n²))");
+    assert!(
+        ratio < 50.0,
+        "Test runs scaling is too high (possibly O(n²))"
+    );
 
     // Both should find the bug
     assert!(small_result.minimized.contains("BUG_MARKER"));
@@ -403,7 +404,10 @@ fn test_edge_case_all_lines_required() {
     assert_eq!(result.reduction_ratio, 0.0);
 
     // Bug should still trigger
-    assert_eq!(result.minimized.lines().filter(|l| l.contains("X")).count(), 3);
+    assert_eq!(
+        result.minimized.lines().filter(|l| l.contains("X")).count(),
+        3
+    );
 }
 
 /// Test: Large Input Performance
@@ -466,7 +470,10 @@ fn test_real_bug_parser_crash() {
     // Simulates parser crash on deeply nested structure
     let test_fn = |input: &str| {
         // Fails if any line has >5 opening braces
-        if input.lines().any(|line| line.chars().filter(|c| *c == '{').count() > 5) {
+        if input
+            .lines()
+            .any(|line| line.chars().filter(|c| *c == '{').count() > 5)
+        {
             TestOutcome::Fail
         } else {
             TestOutcome::Pass

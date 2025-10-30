@@ -37,4 +37,4 @@
 
 pub mod syscall_reader;
 
-pub use syscall_reader::{SyscallTracer, SyscallEvent, EbpfError};
+pub use syscall_reader::{EbpfError, SyscallEvent, SyscallTracer};

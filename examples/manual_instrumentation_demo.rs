@@ -10,9 +10,9 @@
 //! This simulates what a compiler would generate when compiling with --trace.
 
 use ruchyruchy::tracing::{
-    buffer::{record_event, drain_thread_events},
-    events::{function_enter, function_exit, SourceLocation, TypedValue, TypeInfo},
-    output::{JsonFormatter, TraceFile, TraceMetadata, TraceStats, TextFormatter},
+    buffer::{drain_thread_events, record_event},
+    events::{function_enter, function_exit, SourceLocation, TypeInfo, TypedValue},
+    output::{JsonFormatter, TextFormatter, TraceFile, TraceMetadata, TraceStats},
 };
 use std::time::Instant;
 

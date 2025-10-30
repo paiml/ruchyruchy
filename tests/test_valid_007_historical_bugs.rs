@@ -136,9 +136,7 @@ fn test_validation_workflow_complete() {
 
     // Detector that catches crashes and hangs, but not type errors
     let detector = |bug: &HistoricalBug| match bug.category {
-        BugCategory::Crash => {
-            DetectionResult::detected("Differential Testing".to_string(), 0.95)
-        }
+        BugCategory::Crash => DetectionResult::detected("Differential Testing".to_string(), 0.95),
         BugCategory::Hang => DetectionResult::detected("Timeout Detection".to_string(), 0.90),
         _ => DetectionResult::missed("No type checking validation".to_string()),
     };
@@ -180,9 +178,8 @@ fn test_detection_rate_calculation() {
         ));
     }
 
-    let perfect_detector = |_: &HistoricalBug| {
-        DetectionResult::detected("Perfect detector".to_string(), 1.0)
-    };
+    let perfect_detector =
+        |_: &HistoricalBug| DetectionResult::detected("Perfect detector".to_string(), 1.0);
 
     let perfect_report = validator.validate(perfect_detector);
     assert_eq!(perfect_report.metrics.detection_rate, 1.0);
@@ -264,17 +261,11 @@ fn test_false_positive_tracking() {
 
     // Test 3: Track FP details in report
     let mut report = ValidationReport::new(metrics_good);
-    report.add_false_positive(
-        "Reported crash in test code (not production)".to_string(),
-    );
-    report.add_false_positive(
-        "Duplicate of existing issue #42".to_string(),
-    );
+    report.add_false_positive("Reported crash in test code (not production)".to_string());
+    report.add_false_positive("Duplicate of existing issue #42".to_string());
 
     assert_eq!(report.false_positive_details.len(), 2);
-    assert!(report
-        .false_positive_details[0]
-        .contains("test code"));
+    assert!(report.false_positive_details[0].contains("test code"));
     assert!(report.false_positive_details[1].contains("Duplicate"));
 
     // Markdown report should include FP details
@@ -333,8 +324,8 @@ fn test_critical_bug_detection() {
     assert_eq!(report.metrics.critical_detected, 4);
 
     // Critical detection rate: 4/5 = 80%
-    let critical_rate = report.metrics.critical_detected as f64
-        / report.metrics.critical_total as f64;
+    let critical_rate =
+        report.metrics.critical_detected as f64 / report.metrics.critical_total as f64;
     assert!((critical_rate - 0.8).abs() < 0.01);
 }
 
@@ -500,9 +491,7 @@ fn test_empty_corpus_edge_case() {
 
     assert_eq!(validator.bug_count(), 0);
 
-    let detector = |_: &HistoricalBug| {
-        DetectionResult::detected("Never called".to_string(), 1.0)
-    };
+    let detector = |_: &HistoricalBug| DetectionResult::detected("Never called".to_string(), 1.0);
 
     let report = validator.validate(detector);
 

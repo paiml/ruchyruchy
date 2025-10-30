@@ -7,12 +7,14 @@
 // - Basic diagnostics
 // - Position/range utilities
 
+pub mod completion;
+pub mod diagnostics;
 pub mod protocol;
 pub mod server;
-pub mod diagnostics;
-pub mod text_sync;
-pub mod completion;
 pub mod symbols;
+pub mod text_sync;
 
+pub use protocol::{
+    CompletionItem, CompletionItemKind, Diagnostic, DiagnosticSeverity, Location, Position, Range,
+};
 pub use server::LspServer;
-pub use protocol::{Position, Range, Diagnostic, DiagnosticSeverity, CompletionItem, CompletionItemKind, Location};

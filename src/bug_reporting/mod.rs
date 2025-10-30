@@ -8,40 +8,36 @@
 // - REPORT-003: TDD Integration
 // - REPORT-004: Markdown Report Generator
 
-pub mod metrics;
-pub mod five_whys;
-pub mod tdd;
-pub mod report_generator;
 pub mod confidence;
+pub mod five_whys;
 pub mod github_integration;
 pub mod issue_linking;
+pub mod metrics;
+pub mod report_generator;
+pub mod tdd;
 pub mod validation;
 
-pub use metrics::{
-    ComplexityMetrics, ChurnCorrelation, SatdDetector, SatdType, DependencyAnalyzer,
-    DependencyNode, QuantitativeAnalysis,
-};
-pub use five_whys::{
-    ConfidenceLevel, DataPoint, Hypothesis, WhyLayer, FiveWhysAnalysis, FiveWhysAnalyzer,
-};
 pub use confidence::{
     ConfidenceScore, ConfidenceScorer, DiscoveryMethod, Priority, QuantitativeEvidence,
     Reproducibility, RootCauseClarity,
 };
-pub use tdd::{
-    TddPhase, TestResult, TddCycle, TddHistory, QualityGate, QualityGates,
-};
-pub use report_generator::{
-    BugReport, Severity, BugCategory,
+pub use five_whys::{
+    ConfidenceLevel, DataPoint, FiveWhysAnalysis, FiveWhysAnalyzer, Hypothesis, WhyLayer,
 };
 pub use github_integration::{
-    GitHubClient, IssueRequest, IssueResponse, BugReportConverter, CommentRequest, GitHubResult,
+    BugReportConverter, CommentRequest, GitHubClient, GitHubResult, IssueRequest, IssueResponse,
 };
 pub use issue_linking::{
-    BugIssue, SimilarityScore, SimilarityCalculator, IssueDeduplicator, DuplicateResult,
-    RelatedIssue, DUPLICATE_THRESHOLD, RELATED_THRESHOLD,
+    BugIssue, DuplicateResult, IssueDeduplicator, RelatedIssue, SimilarityCalculator,
+    SimilarityScore, DUPLICATE_THRESHOLD, RELATED_THRESHOLD,
 };
+pub use metrics::{
+    ChurnCorrelation, ComplexityMetrics, DependencyAnalyzer, DependencyNode, QuantitativeAnalysis,
+    SatdDetector, SatdType,
+};
+pub use report_generator::{BugCategory, BugReport, Severity};
+pub use tdd::{QualityGate, QualityGates, TddCycle, TddHistory, TddPhase, TestResult};
 pub use validation::{
-    HistoricalBug, BugCategory as ValidationBugCategory, DetectionResult, ValidationMetrics,
-    ValidationReport, BugCorpusValidator,
+    BugCategory as ValidationBugCategory, BugCorpusValidator, DetectionResult, HistoricalBug,
+    ValidationMetrics, ValidationReport,
 };

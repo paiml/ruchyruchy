@@ -63,7 +63,10 @@ fn test_data_point_collection() {
     // Verify data point properties
     assert_eq!(commit_data.name, "Recent commits");
     assert_eq!(commit_data.relevance, 0.9);
-    assert!(commit_data.is_highly_relevant(), "Should be highly relevant (>0.7)");
+    assert!(
+        commit_data.is_highly_relevant(),
+        "Should be highly relevant (>0.7)"
+    );
 
     assert_eq!(complexity_data.source, "complexity analyzer");
     assert!(complexity_data.is_highly_relevant());
@@ -81,7 +84,10 @@ fn test_data_point_collection() {
         "source".to_string(),
         1.5, // Should be clamped to 1.0
     );
-    assert_eq!(invalid_high.relevance, 1.0, "Relevance should be clamped to 1.0");
+    assert_eq!(
+        invalid_high.relevance, 1.0,
+        "Relevance should be clamped to 1.0"
+    );
 
     let invalid_low = DataPoint::new(
         "test".to_string(),
@@ -89,7 +95,10 @@ fn test_data_point_collection() {
         "source".to_string(),
         -0.5, // Should be clamped to 0.0
     );
-    assert_eq!(invalid_low.relevance, 0.0, "Relevance should be clamped to 0.0");
+    assert_eq!(
+        invalid_low.relevance, 0.0,
+        "Relevance should be clamped to 0.0"
+    );
 }
 
 /// Test: Hypothesis Generation with Confidence
@@ -140,7 +149,10 @@ fn test_hypothesis_generation_with_confidence() {
         0.6,
     ));
 
-    assert_eq!(medium_confidence_hypothesis.confidence, ConfidenceLevel::Medium);
+    assert_eq!(
+        medium_confidence_hypothesis.confidence,
+        ConfidenceLevel::Medium
+    );
     assert_eq!(medium_confidence_hypothesis.confidence.score(), 0.65);
     assert!(medium_confidence_hypothesis.needs_validation);
 
@@ -171,15 +183,11 @@ fn test_hypothesis_generation_with_confidence() {
 #[test]
 fn test_five_whys_layer_construction() {
     // Create a Five-Whys analysis for a parser bug
-    let mut analysis = FiveWhysAnalysis::new(
-        "Parser crashes on nested expressions with depth >10".to_string(),
-    );
+    let mut analysis =
+        FiveWhysAnalysis::new("Parser crashes on nested expressions with depth >10".to_string());
 
     // Why #1: What triggered the bug?
-    let mut why1 = WhyLayer::new(
-        1,
-        "Stack overflow in recursive descent parser".to_string(),
-    );
+    let mut why1 = WhyLayer::new(1, "Stack overflow in recursive descent parser".to_string());
     why1.add_data_point(DataPoint::new(
         "Stack trace".to_string(),
         "Recursive call depth exceeded at parse_expression()".to_string(),
@@ -200,10 +208,7 @@ fn test_five_whys_layer_construction() {
     );
 
     // Why #2: Why does parser use unbounded recursion?
-    let mut why2 = WhyLayer::new(
-        2,
-        "No recursion depth limit implemented".to_string(),
-    );
+    let mut why2 = WhyLayer::new(2, "No recursion depth limit implemented".to_string());
     why2.add_data_point(DataPoint::new(
         "Code history".to_string(),
         "Depth limit was removed in commit abc123".to_string(),
@@ -253,9 +258,18 @@ fn test_five_whys_layer_construction() {
     assert_eq!(analysis.layers[2].layer, 3);
 
     // Verify overall confidence decreases as we go deeper
-    assert_eq!(analysis.layers[0].hypotheses[0].confidence, ConfidenceLevel::High);
-    assert_eq!(analysis.layers[1].hypotheses[0].confidence, ConfidenceLevel::Medium);
-    assert_eq!(analysis.layers[2].hypotheses[0].confidence, ConfidenceLevel::Low);
+    assert_eq!(
+        analysis.layers[0].hypotheses[0].confidence,
+        ConfidenceLevel::High
+    );
+    assert_eq!(
+        analysis.layers[1].hypotheses[0].confidence,
+        ConfidenceLevel::Medium
+    );
+    assert_eq!(
+        analysis.layers[2].hypotheses[0].confidence,
+        ConfidenceLevel::Low
+    );
 
     // CRITICAL: Verify human validation always required
     assert!(
@@ -328,14 +342,9 @@ fn test_human_validation_markers() {
 #[test]
 fn test_markdown_output_generation() {
     // Create a complete Five-Whys analysis
-    let mut analysis = FiveWhysAnalysis::new(
-        "Performance regression in sort function".to_string(),
-    );
+    let mut analysis = FiveWhysAnalysis::new("Performance regression in sort function".to_string());
 
-    let mut why1 = WhyLayer::new(
-        1,
-        "Algorithm changed from O(n log n) to O(n^2)".to_string(),
-    );
+    let mut why1 = WhyLayer::new(1, "Algorithm changed from O(n log n) to O(n^2)".to_string());
     why1.add_data_point(DataPoint::new(
         "Performance profiling".to_string(),
         "Execution time 100x slower on large inputs".to_string(),
@@ -361,7 +370,10 @@ fn test_markdown_output_generation() {
     let markdown = analysis.to_markdown();
 
     // Verify markdown structure
-    assert!(markdown.contains("# Five-Whys Analysis"), "Should have title");
+    assert!(
+        markdown.contains("# Five-Whys Analysis"),
+        "Should have title"
+    );
     assert!(
         markdown.contains("IMPORTANT"),
         "Should warn this is ASSISTED analysis"
@@ -392,10 +404,7 @@ fn test_markdown_output_generation() {
         markdown.contains("Performance profiling"),
         "Should include data point names"
     );
-    assert!(
-        markdown.contains("profiler"),
-        "Should cite data sources"
-    );
+    assert!(markdown.contains("profiler"), "Should cite data sources");
 
     // Verify hypotheses are included
     assert!(
@@ -437,9 +446,7 @@ fn test_comprehensive_five_whys_integration() {
     );
 
     // Step 2: Create analysis
-    let mut analysis = FiveWhysAnalysis::new(
-        "Memory leak in data processing pipeline".to_string(),
-    );
+    let mut analysis = FiveWhysAnalysis::new("Memory leak in data processing pipeline".to_string());
 
     // Step 3: Build layers with hypotheses
     let mut why1 = WhyLayer::new(1, "Objects not being freed after processing".to_string());
@@ -475,7 +482,10 @@ fn test_comprehensive_five_whys_integration() {
     let markdown = analysis.to_markdown();
 
     assert!(markdown.len() > 100, "Should generate substantial output");
-    assert!(markdown.contains("Memory leak"), "Should include bug description");
+    assert!(
+        markdown.contains("Memory leak"),
+        "Should include bug description"
+    );
     assert!(markdown.contains("Why #1"), "Should have first layer");
     assert!(markdown.contains("Why #2"), "Should have second layer");
     assert!(
@@ -485,8 +495,14 @@ fn test_comprehensive_five_whys_integration() {
 
     println!("✅ Comprehensive Five-Whys integration test passed");
     println!("   - {} layers analyzed", analysis.layers.len());
-    println!("   - {} data points collected",
-        analysis.layers.iter().map(|l| l.data_points.len()).sum::<usize>());
+    println!(
+        "   - {} data points collected",
+        analysis
+            .layers
+            .iter()
+            .map(|l| l.data_points.len())
+            .sum::<usize>()
+    );
     println!("   - Validation required: {}", analysis.needs_validation);
     println!("   - Markdown length: {} characters", markdown.len());
 }

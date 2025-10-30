@@ -11,33 +11,37 @@ use std::time::{Duration, Instant};
 fn main() {
     println!("⚡ PERFORMANCE BENCHMARK: Bootstrap Compiler Speed");
     println!("=================================================");
-    
+
     benchmark_code_generation();
     benchmark_compilation_pipeline();
     benchmark_scalability();
     compare_with_claims();
-    
+
     println!("\n📊 Performance benchmarking complete!");
 }
 
 fn benchmark_code_generation() {
     println!("\n1. 🚀 Code Generation Speed Benchmark");
     println!("-------------------------------------");
-    
+
     // Generate test programs of varying sizes
-    let small_program = generate_test_program(50);   // ~50 lines
+    let small_program = generate_test_program(50); // ~50 lines
     let medium_program = generate_test_program(200); // ~200 lines
-    let large_program = generate_test_program(500);  // ~500 lines
-    
+    let large_program = generate_test_program(500); // ~500 lines
+
     println!("Testing code generation speed:");
-    
+
     // Benchmark small program
     let start = Instant::now();
     let small_rust = bootstrap_compile(&small_program);
     let small_duration = start.elapsed();
     let small_lines = small_program.lines().count();
 
-    println!("  Small program ({} lines): {:.2}ms", small_lines, small_duration.as_secs_f64() * 1000.0);
+    println!(
+        "  Small program ({} lines): {:.2}ms",
+        small_lines,
+        small_duration.as_secs_f64() * 1000.0
+    );
 
     // Benchmark medium program
     let start = Instant::now();
@@ -45,32 +49,46 @@ fn benchmark_code_generation() {
     let medium_duration = start.elapsed();
     let medium_lines = medium_program.lines().count();
 
-    println!("  Medium program ({} lines): {:.2}ms", medium_lines, medium_duration.as_secs_f64() * 1000.0);
+    println!(
+        "  Medium program ({} lines): {:.2}ms",
+        medium_lines,
+        medium_duration.as_secs_f64() * 1000.0
+    );
 
     // Benchmark large program
     let start = Instant::now();
     let _large_rust = bootstrap_compile(&large_program);
     let large_duration = start.elapsed();
     let large_lines = large_program.lines().count();
-    
-    println!("  Large program ({} lines): {:.2}ms", large_lines, large_duration.as_secs_f64() * 1000.0);
-    
+
+    println!(
+        "  Large program ({} lines): {:.2}ms",
+        large_lines,
+        large_duration.as_secs_f64() * 1000.0
+    );
+
     // Calculate throughput
     let total_lines = small_lines + medium_lines + large_lines;
     let total_time = small_duration + medium_duration + large_duration;
     let throughput = total_lines as f64 / total_time.as_secs_f64();
-    
+
     println!("\n📊 Code Generation Results:");
     println!("  Total lines processed: {}", total_lines);
     println!("  Total time: {:.2}ms", total_time.as_secs_f64() * 1000.0);
     println!("  Throughput: {:.0} LOC/s", throughput);
-    
+
     if throughput > 10000.0 {
-        println!("  ✅ EXCEEDS 10K LOC/s target by {:.0} LOC/s", throughput - 10000.0);
+        println!(
+            "  ✅ EXCEEDS 10K LOC/s target by {:.0} LOC/s",
+            throughput - 10000.0
+        );
     } else {
-        println!("  ⚠️ Below 10K LOC/s target by {:.0} LOC/s", 10000.0 - throughput);
+        println!(
+            "  ⚠️ Below 10K LOC/s target by {:.0} LOC/s",
+            10000.0 - throughput
+        );
     }
-    
+
     // Test the generated code
     test_generated_code(&small_rust, "perf_small");
 }
@@ -78,7 +96,7 @@ fn benchmark_code_generation() {
 fn benchmark_compilation_pipeline() {
     println!("\n2. 🔄 End-to-End Pipeline Benchmark");
     println!("------------------------------------");
-    
+
     let test_program = r#"
 // Performance test program
 #[derive(Debug)]
@@ -139,19 +157,19 @@ fn main() {
     println!("✅ Performance test completed successfully!");
 }
 "#;
-    
+
     println!("Benchmarking complete pipeline:");
-    
+
     // Stage 1: Code generation
     let gen_start = Instant::now();
     let rust_code = bootstrap_compile(test_program);
     let gen_duration = gen_start.elapsed();
-    
+
     // Stage 2: Rust compilation
     let compile_start = Instant::now();
     let success = compile_rust_code(&rust_code, "pipeline_perf");
     let compile_duration = compile_start.elapsed();
-    
+
     // Stage 3: Execution
     let exec_start = Instant::now();
     let exec_success = if success {
@@ -160,15 +178,27 @@ fn main() {
         false
     };
     let exec_duration = exec_start.elapsed();
-    
+
     let total_duration = gen_duration + compile_duration + exec_duration;
-    
+
     println!("\n📊 Pipeline Performance:");
-    println!("  Code generation: {:.2}ms", gen_duration.as_secs_f64() * 1000.0);
-    println!("  Rust compilation: {:.2}ms", compile_duration.as_secs_f64() * 1000.0);
-    println!("  Program execution: {:.2}ms", exec_duration.as_secs_f64() * 1000.0);
-    println!("  Total pipeline: {:.2}ms", total_duration.as_secs_f64() * 1000.0);
-    
+    println!(
+        "  Code generation: {:.2}ms",
+        gen_duration.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  Rust compilation: {:.2}ms",
+        compile_duration.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  Program execution: {:.2}ms",
+        exec_duration.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  Total pipeline: {:.2}ms",
+        total_duration.as_secs_f64() * 1000.0
+    );
+
     if exec_success {
         println!("  ✅ Complete pipeline successful");
     } else {
@@ -179,16 +209,16 @@ fn main() {
 fn benchmark_scalability() {
     println!("\n3. 📈 Scalability Benchmark");
     println!("---------------------------");
-    
+
     let sizes = vec![10, 50, 100, 200, 500];
     let mut results = Vec::new();
-    
+
     println!("Testing scalability across program sizes:");
-    
+
     for size in sizes {
         let program = generate_test_program(size);
         let lines = program.lines().count();
-        
+
         // Measure multiple runs for accuracy
         let mut durations = Vec::new();
         for _ in 0..5 {
@@ -196,26 +226,37 @@ fn benchmark_scalability() {
             let _ = bootstrap_compile(&program);
             durations.push(start.elapsed());
         }
-        
+
         // Calculate average duration
         let avg_duration = durations.iter().sum::<Duration>() / durations.len() as u32;
         let throughput = lines as f64 / avg_duration.as_secs_f64();
-        
-        println!("  {} lines: {:.2}ms ({:.0} LOC/s)", lines, avg_duration.as_secs_f64() * 1000.0, throughput);
+
+        println!(
+            "  {} lines: {:.2}ms ({:.0} LOC/s)",
+            lines,
+            avg_duration.as_secs_f64() * 1000.0,
+            throughput
+        );
         results.push((lines, throughput));
     }
-    
+
     // Analyze scalability
     println!("\n📊 Scalability Analysis:");
-    let min_throughput = results.iter().map(|(_, t)| *t).fold(f64::INFINITY, f64::min);
+    let min_throughput = results
+        .iter()
+        .map(|(_, t)| *t)
+        .fold(f64::INFINITY, f64::min);
     let max_throughput = results.iter().map(|(_, t)| *t).fold(0.0, f64::max);
     let avg_throughput = results.iter().map(|(_, t)| *t).sum::<f64>() / results.len() as f64;
-    
+
     println!("  Minimum throughput: {:.0} LOC/s", min_throughput);
-    println!("  Maximum throughput: {:.0} LOC/s", max_throughput);  
+    println!("  Maximum throughput: {:.0} LOC/s", max_throughput);
     println!("  Average throughput: {:.0} LOC/s", avg_throughput);
-    println!("  Variance: {:.1}%", ((max_throughput - min_throughput) / avg_throughput) * 100.0);
-    
+    println!(
+        "  Variance: {:.1}%",
+        ((max_throughput - min_throughput) / avg_throughput) * 100.0
+    );
+
     if avg_throughput > 10000.0 {
         println!("  ✅ Consistent performance above 10K LOC/s");
     } else {
@@ -226,42 +267,48 @@ fn benchmark_scalability() {
 fn compare_with_claims() {
     println!("\n4. 🎯 Claims Validation");
     println!("----------------------");
-    
+
     // Test against our previous claims
     let claims = vec![
         ("Stage 0 Lexer", 10526.0, "Previously measured"),
         ("Stage 3 CodeGen", 11847.0, "Previously claimed"),
         ("Bootstrap Pipeline", 10000.0, "Target minimum"),
     ];
-    
+
     // Measure current performance
     let test_program = generate_test_program(100);
     let lines = test_program.lines().count();
-    
+
     let mut measured_times = Vec::new();
     for _ in 0..10 {
         let start = Instant::now();
         let _ = bootstrap_compile(&test_program);
         measured_times.push(start.elapsed());
     }
-    
+
     let avg_time = measured_times.iter().sum::<Duration>() / measured_times.len() as u32;
     let current_throughput = lines as f64 / avg_time.as_secs_f64();
-    
-    println!("Current measured performance: {:.0} LOC/s", current_throughput);
+
+    println!(
+        "Current measured performance: {:.0} LOC/s",
+        current_throughput
+    );
     println!("\nComparison with claims:");
-    
+
     for (component, claimed_perf, note) in claims {
-        let status = if current_throughput >= claimed_perf * 0.9 { // Within 10%
+        let status = if current_throughput >= claimed_perf * 0.9 {
+            // Within 10%
             "✅ VERIFIED"
         } else {
             "⚠️ BELOW CLAIM"
         };
-        
-        println!("  {}: {:.0} LOC/s claimed - {} ({})", 
-                 component, claimed_perf, status, note);
+
+        println!(
+            "  {}: {:.0} LOC/s claimed - {} ({})",
+            component, claimed_perf, status, note
+        );
     }
-    
+
     println!("\n🎯 Final Performance Assessment:");
     if current_throughput > 10000.0 {
         println!("  ✅ PASSES: Exceeds minimum 10K LOC/s requirement");
@@ -269,16 +316,19 @@ fn compare_with_claims() {
     } else {
         println!("  ⚠️ REVIEW: Below 10K LOC/s target, optimization needed");
     }
-    
+
     println!("  📊 Measured throughput: {:.0} LOC/s", current_throughput);
-    println!("  🎯 Performance tier: {}", classify_performance(current_throughput));
+    println!(
+        "  🎯 Performance tier: {}",
+        classify_performance(current_throughput)
+    );
 }
 
 fn generate_test_program(target_lines: usize) -> String {
     let mut program = String::new();
-    
+
     program.push_str("// Generated test program for performance benchmarking\n\n");
-    
+
     // Add structs
     for i in 0..(target_lines / 20) {
         program.push_str(&format!(
@@ -286,7 +336,7 @@ fn generate_test_program(target_lines: usize) -> String {
             i
         ));
     }
-    
+
     // Add functions
     for i in 0..(target_lines / 10) {
         program.push_str(&format!(
@@ -294,31 +344,35 @@ fn generate_test_program(target_lines: usize) -> String {
             i, i
         ));
     }
-    
+
     // Add main function
     program.push_str("fn main() {\n");
     program.push_str("    println!(\"Performance test program\");\n");
-    
+
     for i in 0..(target_lines / 15) {
-        program.push_str(&format!("    let result_{} = test_function_{}({});\n", i, i % 5, i * 10));
+        program.push_str(&format!(
+            "    let result_{} = test_function_{}({});\n",
+            i,
+            i % 5,
+            i * 10
+        ));
     }
-    
+
     program.push_str("    println!(\"Test completed\");\n");
     program.push_str("}\n");
-    
+
     program
 }
 
 fn bootstrap_compile(source: &str) -> String {
     // Simulate our bootstrap compiler (simplified for benchmarking)
     let mut output = String::new();
-    
+
     output.push_str("// Compiled by RuchyRuchy Bootstrap Compiler\n");
     output.push_str("// Performance benchmark compilation\n\n");
-    
+
     // Simple transformation
-    let transformed = source
-        .replace(r#"println("#, r#"println!("#);
+    let transformed = source.replace(r#"println("#, r#"println!("#);
 
     output.push_str(&transformed);
     output
@@ -326,19 +380,19 @@ fn bootstrap_compile(source: &str) -> String {
 
 fn compile_rust_code(rust_code: &str, name: &str) -> bool {
     let filename = format!("{}.rs", name);
-    
+
     if fs::write(&filename, rust_code).is_err() {
         return false;
     }
-    
+
     let result = Command::new("rustc")
         .arg(&filename)
         .arg("-o")
         .arg(name)
         .output();
-    
+
     let _ = fs::remove_file(&filename);
-    
+
     match result {
         Ok(output) => output.status.success(),
         Err(_) => false,
@@ -347,9 +401,9 @@ fn compile_rust_code(rust_code: &str, name: &str) -> bool {
 
 fn execute_program(name: &str) -> Result<String, String> {
     let result = Command::new(format!("./{}", name)).output();
-    
+
     let _ = fs::remove_file(name);
-    
+
     match result {
         Ok(output) => {
             if output.status.success() {
@@ -357,7 +411,7 @@ fn execute_program(name: &str) -> Result<String, String> {
             } else {
                 Err(String::from_utf8_lossy(&output.stderr).to_string())
             }
-        },
+        }
         Err(e) => Err(e.to_string()),
     }
 }

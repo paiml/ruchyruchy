@@ -223,18 +223,33 @@ fn test_shadowing_assignment_updates_local() {
 fn test_multilevel_shadowing() {
     // RED: Multiple levels can shadow same variable
     let mut global = Scope::new();
-    global.define("x".to_string(), Value::string("global".to_string())).unwrap();
+    global
+        .define("x".to_string(), Value::string("global".to_string()))
+        .unwrap();
 
     let mut level1 = global.create_child();
-    level1.define("x".to_string(), Value::string("level1".to_string())).unwrap();
+    level1
+        .define("x".to_string(), Value::string("level1".to_string()))
+        .unwrap();
 
     let mut level2 = level1.create_child();
-    level2.define("x".to_string(), Value::string("level2".to_string())).unwrap();
+    level2
+        .define("x".to_string(), Value::string("level2".to_string()))
+        .unwrap();
 
     // Each scope sees its own version
-    assert_eq!(global.get_cloned("x").unwrap().as_string().unwrap(), "global");
-    assert_eq!(level1.get_cloned("x").unwrap().as_string().unwrap(), "level1");
-    assert_eq!(level2.get_cloned("x").unwrap().as_string().unwrap(), "level2");
+    assert_eq!(
+        global.get_cloned("x").unwrap().as_string().unwrap(),
+        "global"
+    );
+    assert_eq!(
+        level1.get_cloned("x").unwrap().as_string().unwrap(),
+        "level1"
+    );
+    assert_eq!(
+        level2.get_cloned("x").unwrap().as_string().unwrap(),
+        "level2"
+    );
 }
 
 // ===== RED PHASE TEST 5: Closure Capture =====

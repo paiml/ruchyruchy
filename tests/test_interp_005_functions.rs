@@ -1,7 +1,7 @@
 // INTERP-005: Function Calls & Recursion - RED Phase
 // Tests for function call semantics, argument passing, return values, and recursion
 
-use ruchyruchy::interpreter::evaluator::{Evaluator, EvalError};
+use ruchyruchy::interpreter::evaluator::{EvalError, Evaluator};
 use ruchyruchy::interpreter::parser::{AstNode, BinaryOperator};
 
 // =============================================================================
@@ -654,7 +654,9 @@ fn test_argument_count_mismatch() {
     assert!(result.is_err());
 
     match result {
-        Err(EvalError::ArgumentCountMismatch { expected, actual, .. }) => {
+        Err(EvalError::ArgumentCountMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, 2);
             assert_eq!(actual, 1);
         }
@@ -696,7 +698,9 @@ fn test_argument_count_mismatch_too_many() {
     assert!(result.is_err());
 
     match result {
-        Err(EvalError::ArgumentCountMismatch { expected, actual, .. }) => {
+        Err(EvalError::ArgumentCountMismatch {
+            expected, actual, ..
+        }) => {
             assert_eq!(expected, 2);
             assert_eq!(actual, 3);
         }

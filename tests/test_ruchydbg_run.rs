@@ -9,9 +9,9 @@
 // - Return non-zero on crash
 // - Show execution status
 
-use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn get_ruchydbg_path() -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -27,11 +27,15 @@ fn test_ruchydbg_run_success() {
 
     // Create test file that succeeds
     let test_file = "/tmp/test_ruchydbg_success.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     println!("Success!");
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with ruchydbg
     let output = Command::new(get_ruchydbg_path())
@@ -43,13 +47,18 @@ fun main() {
         .expect("Failed to execute ruchydbg");
 
     // Should succeed with exit code 0
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "Expected success, got exit code: {:?}",
-        output.status.code());
+        output.status.code()
+    );
 
     // Should show execution time
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Success!"), "Expected to see 'Success!' in output");
+    assert!(
+        stdout.contains("Success!"),
+        "Expected to see 'Success!' in output"
+    );
 }
 
 #[test]
@@ -58,11 +67,15 @@ fn test_ruchydbg_run_timeout() {
 
     // Create test file that hangs
     let test_file = "/tmp/test_ruchydbg_timeout.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     loop {}  // Infinite loop
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with ruchydbg with 1 second timeout
     let output = Command::new(get_ruchydbg_path())
@@ -74,14 +87,19 @@ fun main() {
         .expect("Failed to execute ruchydbg");
 
     // Should timeout with exit code 124
-    assert_eq!(output.status.code(), Some(124),
+    assert_eq!(
+        output.status.code(),
+        Some(124),
         "Expected timeout exit code 124, got: {:?}",
-        output.status.code());
+        output.status.code()
+    );
 
     // Should report timeout
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("timeout") || stderr.contains("TIMEOUT"),
-        "Expected timeout message in stderr");
+    assert!(
+        stderr.contains("timeout") || stderr.contains("TIMEOUT"),
+        "Expected timeout message in stderr"
+    );
 }
 
 #[test]
@@ -92,12 +110,16 @@ fn test_ruchydbg_run_crash() {
 
     // Create test file with runtime error (division by zero)
     let test_file = "/tmp/test_ruchydbg_crash.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     // Runtime error: division by zero
     let x = 1 / 0;
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with ruchydbg
     let output = Command::new(get_ruchydbg_path())
@@ -110,9 +132,12 @@ fun main() {
 
     // Should fail with non-zero exit code (not 124)
     assert!(!output.status.success(), "Expected crash, got success");
-    assert_ne!(output.status.code(), Some(124),
+    assert_ne!(
+        output.status.code(),
+        Some(124),
         "Expected crash exit code (not timeout 124), got: {:?}",
-        output.status.code());
+        output.status.code()
+    );
 }
 
 #[test]
@@ -132,8 +157,10 @@ fn test_ruchydbg_run_invalid_file() {
     assert!(!output.status.success(), "Expected error for invalid file");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("not found") || stderr.contains("No such file"),
-        "Expected file not found error");
+    assert!(
+        stderr.contains("not found") || stderr.contains("No such file"),
+        "Expected file not found error"
+    );
 }
 
 #[test]
@@ -150,9 +177,14 @@ fn test_ruchydbg_run_help() {
     // Should show help text
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("run"), "Expected 'run' in help text");
-    assert!(stdout.contains("timeout"), "Expected 'timeout' in help text");
-    assert!(stdout.contains("USAGE") || stdout.contains("Usage"),
-        "Expected usage information");
+    assert!(
+        stdout.contains("timeout"),
+        "Expected 'timeout' in help text"
+    );
+    assert!(
+        stdout.contains("USAGE") || stdout.contains("Usage"),
+        "Expected usage information"
+    );
 }
 
 #[test]
@@ -161,11 +193,15 @@ fn test_ruchydbg_run_default_timeout() {
 
     // Create fast test file
     let test_file = "/tmp/test_ruchydbg_default_timeout.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     println!("Fast!");
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run without --timeout argument (should use default)
     let output = Command::new(get_ruchydbg_path())
@@ -175,9 +211,11 @@ fun main() {
         .expect("Failed to execute ruchydbg");
 
     // Should succeed with default timeout
-    assert!(output.status.success(),
+    assert!(
+        output.status.success(),
         "Expected success with default timeout, got exit code: {:?}",
-        output.status.code());
+        output.status.code()
+    );
 }
 
 #[test]
@@ -186,11 +224,15 @@ fn test_ruchydbg_run_reports_execution_time() {
 
     // Create test file
     let test_file = "/tmp/test_ruchydbg_timing.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     println!("Done!");
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Run with ruchydbg
     let output = Command::new(get_ruchydbg_path())
@@ -203,6 +245,8 @@ fun main() {
 
     // Should report execution time
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("ms") || stdout.contains("milliseconds") || stdout.contains("time"),
-        "Expected execution time in output");
+    assert!(
+        stdout.contains("ms") || stdout.contains("milliseconds") || stdout.contains("time"),
+        "Expected execution time in output"
+    );
 }

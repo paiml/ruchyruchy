@@ -56,8 +56,16 @@ pub enum ValueError {
 impl fmt::Display for ValueError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ValueError::TypeMismatch { expected, found, operation } => {
-                write!(f, "Type mismatch in {}: expected {}, found {}", operation, expected, found)
+            ValueError::TypeMismatch {
+                expected,
+                found,
+                operation,
+            } => {
+                write!(
+                    f,
+                    "Type mismatch in {}: expected {}, found {}",
+                    operation, expected, found
+                )
             }
             ValueError::DivisionByZero => {
                 write!(f, "Division by zero")
@@ -245,9 +253,7 @@ impl Value {
     pub fn add(&self, other: &Value) -> Result<Value, ValueError> {
         match (self, other) {
             (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a + b)),
-            (Value::String(a), Value::String(b)) => {
-                Ok(Value::String(format!("{}{}", a, b)))
-            }
+            (Value::String(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
             _ => Err(ValueError::TypeMismatch {
                 expected: self.type_name().to_string(),
                 found: other.type_name().to_string(),
@@ -368,12 +374,10 @@ impl Value {
     /// Index into vector
     pub fn index(&self, idx: usize) -> Result<&Value, ValueError> {
         match self {
-            Value::Vector(v) => {
-                v.get(idx).ok_or_else(|| ValueError::IndexOutOfBounds {
-                    index: idx,
-                    len: v.len(),
-                })
-            }
+            Value::Vector(v) => v.get(idx).ok_or_else(|| ValueError::IndexOutOfBounds {
+                index: idx,
+                len: v.len(),
+            }),
             _ => Err(ValueError::TypeMismatch {
                 expected: "Vector".to_string(),
                 found: self.type_name().to_string(),
@@ -403,11 +407,13 @@ impl Value {
             Value::HashMap(m) => {
                 let key_str = match key {
                     Value::String(s) => s,
-                    _ => return Err(ValueError::TypeMismatch {
-                        expected: "String".to_string(),
-                        found: key.type_name().to_string(),
-                        operation: "insert key".to_string(),
-                    }),
+                    _ => {
+                        return Err(ValueError::TypeMismatch {
+                            expected: "String".to_string(),
+                            found: key.type_name().to_string(),
+                            operation: "insert key".to_string(),
+                        })
+                    }
                 };
                 m.insert(key_str, value);
                 Ok(())
@@ -426,11 +432,13 @@ impl Value {
             Value::HashMap(m) => {
                 let key_str = match key {
                     Value::String(s) => s,
-                    _ => return Err(ValueError::TypeMismatch {
-                        expected: "String".to_string(),
-                        found: key.type_name().to_string(),
-                        operation: "get key".to_string(),
-                    }),
+                    _ => {
+                        return Err(ValueError::TypeMismatch {
+                            expected: "String".to_string(),
+                            found: key.type_name().to_string(),
+                            operation: "get key".to_string(),
+                        })
+                    }
                 };
                 m.get(key_str).ok_or_else(|| ValueError::KeyNotFound {
                     key: key_str.clone(),

@@ -14,8 +14,8 @@
 //!
 //! See `docs/setup/EBPF_DEVELOPMENT_SETUP.md` for eBPF setup instructions.
 
-pub mod events;
 pub mod buffer;
+pub mod events;
 pub mod output;
 
 /// eBPF syscall tracing (DEBUGGER-015)
@@ -30,6 +30,6 @@ pub mod ebpf;
 #[cfg(not(feature = "ebpf"))]
 pub mod ebpf_placeholder;
 
-pub use events::{TraceEvent, FunctionEntry, FunctionExit, SourceLocation, TypedValue, TypeInfo};
 pub use buffer::TraceBuffer;
+pub use events::{FunctionEntry, FunctionExit, SourceLocation, TraceEvent, TypeInfo, TypedValue};
 pub use output::{JsonFormatter, TraceFile, TraceMetadata, TraceStats};

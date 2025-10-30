@@ -22,11 +22,11 @@
 // - POST /repos/{owner}/{repo}/issues/{issue_number}/labels
 // - POST /repos/{owner}/{repo}/issues/{issue_number}/comments
 
+use ruchyruchy::bug_discovery::confidence::ConfidenceScore;
 use ruchyruchy::bug_reporting::github_integration::{
     BugReportConverter, CommentRequest, GitHubClient, GitHubResult, IssueRequest, IssueResponse,
 };
 use ruchyruchy::bug_reporting::report_generator::{BugCategory, BugReport, Severity};
-use ruchyruchy::bug_discovery::confidence::ConfidenceScore;
 
 /// Test: GitHub Authentication
 ///
@@ -49,15 +49,15 @@ fn test_github_authentication() {
 
     // Verify auth header format: "Bearer {token}"
     let auth = client.auth_header();
-    assert!(auth.starts_with("Bearer "), "Auth header should start with 'Bearer '");
+    assert!(
+        auth.starts_with("Bearer "),
+        "Auth header should start with 'Bearer '"
+    );
     assert!(
         auth.contains("ghp_test"),
         "Auth header should contain token"
     );
-    assert_eq!(
-        auth,
-        "Bearer ghp_test1234567890abcdefghijklmnopqrstuvwxyz"
-    );
+    assert_eq!(auth, "Bearer ghp_test1234567890abcdefghijklmnopqrstuvwxyz");
 
     // Verify endpoint URL construction
     let issues_endpoint = client.endpoint("/issues");
@@ -127,19 +127,25 @@ fn test_issue_creation() {
     // Verify JSON serialization
     let json = issue.to_json();
 
-    assert!(json.contains("\"title\""), "JSON should contain title field");
+    assert!(
+        json.contains("\"title\""),
+        "JSON should contain title field"
+    );
     assert!(
         json.contains("Parser crashes on nested expressions"),
         "JSON should contain title value"
     );
     assert!(json.contains("\"body\""), "JSON should contain body field");
-    assert!(json.contains("\"labels\""), "JSON should contain labels field");
-    assert!(json.contains("\"assignees\""), "JSON should contain assignees field");
-    assert!(json.contains("bug"), "JSON should contain bug label");
     assert!(
-        json.contains("noahgift"),
-        "JSON should contain assignee"
+        json.contains("\"labels\""),
+        "JSON should contain labels field"
     );
+    assert!(
+        json.contains("\"assignees\""),
+        "JSON should contain assignees field"
+    );
+    assert!(json.contains("bug"), "JSON should contain bug label");
+    assert!(json.contains("noahgift"), "JSON should contain assignee");
 
     // Verify JSON is valid (basic check)
     assert!(json.starts_with("{"));
@@ -208,16 +214,17 @@ fn test_bug_report_conversion() {
     // Create confidence score for the bug (f64 values: 0.0-1.0)
     // discovery_method, reproducibility, evidence, root_cause
     let confidence = ConfidenceScore::new(
-        0.9,  // High discovery method confidence (property testing)
-        1.0,  // Always reproducible
-        0.9,  // Strong quantitative evidence
-        1.0,  // Root cause confirmed
+        0.9, // High discovery method confidence (property testing)
+        1.0, // Always reproducible
+        0.9, // Strong quantitative evidence
+        1.0, // Root cause confirmed
     );
 
     // Create a BugReport with all required fields
     let report = BugReport::new(
         "Parser crashes on deeply nested expressions".to_string(),
-        "The parser crashes with a stack overflow when processing deeply nested expressions.".to_string(),
+        "The parser crashes with a stack overflow when processing deeply nested expressions."
+            .to_string(),
         Severity::Critical,
         BugCategory::Crash,
         "let x = ((((((((((1))))))))));  // 100 nested parens".to_string(),
@@ -249,32 +256,42 @@ fn test_bug_report_conversion() {
         "Body should contain reproduction code"
     );
     assert!(
-        issue.body.contains("Expected") || issue.body.contains("expected") || issue.body.contains("should handle"),
+        issue.body.contains("Expected")
+            || issue.body.contains("expected")
+            || issue.body.contains("should handle"),
         "Body should contain expected behavior"
     );
     assert!(
-        issue.body.contains("Actual") || issue.body.contains("actual") || issue.body.contains("crashes"),
+        issue.body.contains("Actual")
+            || issue.body.contains("actual")
+            || issue.body.contains("crashes"),
         "Body should contain actual behavior"
     );
 
     // Verify labels derived from severity
     assert!(
-        issue.labels.iter().any(|l| l.contains("critical") || l.contains("severity")),
+        issue
+            .labels
+            .iter()
+            .any(|l| l.contains("critical") || l.contains("severity")),
         "Labels should include severity"
     );
 
     // Verify labels derived from category
     assert!(
-        issue.labels.iter().any(|l| l.contains("crash") || l.contains("bug")),
+        issue
+            .labels
+            .iter()
+            .any(|l| l.contains("crash") || l.contains("bug")),
         "Labels should include category"
     );
 
     // Test with different severity
     let low_confidence = ConfidenceScore::new(
-        0.5,  // Manual testing
-        0.5,  // Sometimes reproducible
-        0.3,  // Weak evidence
-        0.3,  // Unclear root cause
+        0.5, // Manual testing
+        0.5, // Sometimes reproducible
+        0.3, // Weak evidence
+        0.3, // Unclear root cause
     );
 
     let low_severity_report = BugReport::new(
@@ -306,10 +323,10 @@ fn test_bug_report_conversion() {
 fn test_label_assignment() {
     // Helper confidence score
     let high_conf = ConfidenceScore::new(
-        0.85,  // Fuzz testing
-        1.0,   // Always reproducible
-        0.9,   // Strong evidence
-        1.0,   // Confirmed
+        0.85, // Fuzz testing
+        1.0,  // Always reproducible
+        0.9,  // Strong evidence
+        1.0,  // Confirmed
     );
 
     // Test 1: Critical crash in parser
@@ -328,13 +345,19 @@ fn test_label_assignment() {
 
     // Should have severity label
     assert!(
-        issue.labels.iter().any(|l| l.to_lowercase().contains("critical")),
+        issue
+            .labels
+            .iter()
+            .any(|l| l.to_lowercase().contains("critical")),
         "Should have critical label"
     );
 
     // Should have bug/crash label
     assert!(
-        issue.labels.iter().any(|l| l.to_lowercase().contains("bug") || l.to_lowercase().contains("crash")),
+        issue
+            .labels
+            .iter()
+            .any(|l| l.to_lowercase().contains("bug") || l.to_lowercase().contains("crash")),
         "Should have bug or crash label"
     );
 
@@ -353,7 +376,10 @@ fn test_label_assignment() {
     let high_issue = BugReportConverter::to_issue_request(&high_report);
 
     assert!(
-        high_issue.labels.iter().any(|l| l.to_lowercase().contains("high")),
+        high_issue
+            .labels
+            .iter()
+            .any(|l| l.to_lowercase().contains("high")),
         "Should have high severity label"
     );
 
@@ -372,7 +398,10 @@ fn test_label_assignment() {
     let medium_issue = BugReportConverter::to_issue_request(&medium_report);
 
     assert!(
-        medium_issue.labels.iter().any(|l| l.to_lowercase().contains("medium")),
+        medium_issue
+            .labels
+            .iter()
+            .any(|l| l.to_lowercase().contains("medium")),
         "Should have medium severity label"
     );
 
@@ -391,7 +420,10 @@ fn test_label_assignment() {
     let low_issue = BugReportConverter::to_issue_request(&low_report);
 
     assert!(
-        low_issue.labels.iter().any(|l| l.to_lowercase().contains("low")),
+        low_issue
+            .labels
+            .iter()
+            .any(|l| l.to_lowercase().contains("low")),
         "Should have low severity label"
     );
 
@@ -416,7 +448,8 @@ fn test_label_assignment() {
 fn test_comment_posting() {
     // Create a comment
     let comment = CommentRequest::new(
-        "## Update\n\nRoot cause identified: off-by-one error in line 123.\n\n**Fix**: PR #456".to_string(),
+        "## Update\n\nRoot cause identified: off-by-one error in line 123.\n\n**Fix**: PR #456"
+            .to_string(),
     );
 
     // Verify body stored correctly
@@ -436,16 +469,16 @@ fn test_comment_posting() {
 
     // Test lifecycle comment
     let lifecycle_comment = CommentRequest::new(
-        "This issue has been resolved in v1.2.3 and will be included in the next release.".to_string(),
+        "This issue has been resolved in v1.2.3 and will be included in the next release."
+            .to_string(),
     );
 
     assert!(lifecycle_comment.body.contains("resolved"));
     assert!(lifecycle_comment.body.contains("v1.2.3"));
 
     // Test update comment with references
-    let update_comment = CommentRequest::new(
-        "Related to #123 and #456. Possible duplicate of #789.".to_string(),
-    );
+    let update_comment =
+        CommentRequest::new("Related to #123 and #456. Possible duplicate of #789.".to_string());
 
     assert!(update_comment.body.contains("#123"));
     assert!(update_comment.body.contains("#456"));
@@ -465,7 +498,10 @@ fn test_github_result_handling() {
     let success: GitHubResult<u64> = GitHubResult::Success(42);
 
     assert!(success.is_ok(), "Success should return true for is_ok()");
-    assert!(!success.is_err(), "Success should return false for is_err()");
+    assert!(
+        !success.is_err(),
+        "Success should return false for is_err()"
+    );
 
     let value = success.clone().ok();
     assert_eq!(value, Some(42));
