@@ -3457,3 +3457,570 @@ future_roadmap:
               - <1% overhead
 
               Reference: de Melo (2010) "The New Linux 'perf' Tools"
+
+  # SPRINT: Phase 3 - Ruchy Interpreter for Runtime Bug Discovery (16 weeks)
+  - id: sprint-phase3-interpreter
+    name: "Phase 3: Ruchy Interpreter - Systematic Runtime Bug Discovery"
+    goal: "Build interpreter to execute ALL ruchy-book examples, discover 50+ runtime bugs"
+    duration: 16_weeks
+    specification: "docs/specifications/ruchyruchy-interpreter-book-flush-out-runtime-bugs.md"
+    research_foundation:
+      - "Aho et al. (2006) - Compiler Design"
+      - "Ierusalimschy et al. (2007) - Lua Implementation"
+      - "Cadar et al. (2008) - KLEE Symbolic Execution"
+      - "Zeller & Hildebrandt (2002) - Delta Debugging"
+      - "12 total peer-reviewed citations"
+    tickets:
+
+      # ===== PHASE 1: Interpreter Infrastructure (Weeks 1-4) =====
+
+      - id: INTERP-001
+        title: "AST Parser Integration"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 1
+        requirements:
+          - Parse ruchy-book examples to AST using ruchy check
+          - Integration with existing Ruchy compiler
+          - Support all 212 examples syntactically
+        tests:
+          - test_parse_all_examples (212 tests)
+          - test_ast_structure_validity
+          - test_error_recovery
+        acceptance:
+          - Parse all 212 ruchy-book examples without errors
+          - AST structure matches Ruchy compiler output
+          - Error messages useful for debugging
+        deliverables:
+          - src/interpreter/parser.rs (~300 LOC)
+          - tests/interpreter/test_parser.rs (~150 LOC)
+        research: "Aho et al. (2006) Chapter 4: Syntax Analysis"
+        pmat_gates:
+          - TDG score: >85 (B+)
+          - Complexity: <20 per function
+          - Coverage: >80%
+
+      - id: INTERP-002
+        title: "Value Representation System"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 1
+        requirements:
+          - Implement runtime value types (Integer, String, Boolean, Vector, HashMap, Function)
+          - Type checking at runtime
+          - Memory management (ownership, borrowing)
+        tests:
+          - test_create_integer_value
+          - test_create_string_value
+          - test_create_vector_value
+          - test_create_hashmap_value
+          - test_type_checking
+        acceptance:
+          - All 6 value types implemented
+          - Runtime type errors caught and reported
+          - No memory leaks (validated with valgrind)
+        deliverables:
+          - src/interpreter/value.rs (~400 LOC)
+          - tests/interpreter/test_value.rs (~200 LOC)
+        research: "Ierusalimschy et al. (2007) Section 3: Value Representation"
+
+      - id: INTERP-003
+        title: "Symbol Table & Lexical Scoping"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 2
+        requirements:
+          - Implement scoped symbol table
+          - Support nested scopes (blocks, functions)
+          - Variable shadowing semantics
+          - Closure support
+        tests:
+          - test_global_scope
+          - test_local_scope
+          - test_nested_scopes
+          - test_variable_shadowing
+          - test_closure_capture
+        acceptance:
+          - Scoping matches Ruchy semantics
+          - Closures capture variables correctly
+          - Shadowing behaves as expected
+        deliverables:
+          - src/interpreter/scope.rs (~350 LOC)
+          - tests/interpreter/test_scope.rs (~180 LOC)
+        research: "Aho et al. (2006) Chapter 2: Symbol Tables"
+
+      - id: INTERP-004
+        title: "Expression Evaluator"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 2
+        requirements:
+          - Arithmetic operators (+, -, *, /, %)
+          - Comparison operators (==, !=, <, >, <=, >=)
+          - Logical operators (&&, ||, !)
+          - Operator precedence
+        tests:
+          - test_arithmetic_operations (20 tests)
+          - test_comparison_operations (15 tests)
+          - test_logical_operations (10 tests)
+          - test_operator_precedence (10 tests)
+        acceptance:
+          - All operators work correctly
+          - Precedence matches Ruchy spec
+          - Type errors caught at runtime
+        deliverables:
+          - src/interpreter/evaluator.rs (~500 LOC)
+          - tests/interpreter/test_evaluator.rs (~250 LOC)
+        research: "Aho et al. (2006) Chapter 8: Expression Evaluation"
+
+      - id: INTERP-005
+        title: "Function Calls & Recursion"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 3
+        requirements:
+          - Function call semantics
+          - Argument passing (by value)
+          - Return values
+          - Recursion support
+          - Stack overflow detection
+        tests:
+          - test_simple_function_call
+          - test_function_with_arguments
+          - test_function_return_value
+          - test_factorial_recursion
+          - test_fibonacci_recursion
+          - test_mutual_recursion
+          - test_stack_overflow_detection
+        acceptance:
+          - Functions execute correctly
+          - Recursion works (tested with 10K depth)
+          - Stack overflows caught gracefully
+        deliverables:
+          - src/interpreter/call.rs (~450 LOC)
+          - tests/interpreter/test_call.rs (~220 LOC)
+        research: "Aho et al. (2006) Chapter 7: Activation Records"
+
+      - id: INTERP-006
+        title: "Control Flow Implementation"
+        priority: high
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 3
+        requirements:
+          - if/else conditionals
+          - while loops
+          - for loops (over iterators)
+          - match expressions
+          - break/continue statements
+        tests:
+          - test_if_else_simple
+          - test_if_else_nested
+          - test_while_loop
+          - test_for_loop_vector
+          - test_match_expression
+          - test_break_continue
+        acceptance:
+          - All control flow constructs work
+          - Nested control flow handled correctly
+          - Match expressions with exhaustiveness
+        deliverables:
+          - src/interpreter/control_flow.rs (~400 LOC)
+          - tests/interpreter/test_control_flow.rs (~200 LOC)
+        research: "Aho et al. (2006) Chapter 8: Control Flow Translation"
+
+      - id: INTERP-007
+        title: "Data Structure Operations"
+        priority: high
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 4
+        requirements:
+          - Vector operations (push, pop, index, len)
+          - HashMap operations (insert, get, remove, keys)
+          - Struct creation and field access
+          - Method calls on data structures
+        tests:
+          - test_vector_operations (15 tests)
+          - test_hashmap_operations (15 tests)
+          - test_struct_creation
+          - test_struct_field_access
+          - test_method_calls
+        acceptance:
+          - All data structures from Ch06 work
+          - Index out of bounds caught
+          - HashMap key errors caught
+        deliverables:
+          - src/interpreter/data_structures.rs (~500 LOC)
+          - tests/interpreter/test_data_structures.rs (~250 LOC)
+        research: "Ierusalimschy et al. (2007) Section 4: Tables"
+
+      - id: INTERP-008
+        title: "File I/O Integration"
+        priority: medium
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 4
+        requirements:
+          - File reading (read_file)
+          - File writing (write_file)
+          - stdin/stdout integration
+          - Error handling for I/O failures
+        tests:
+          - test_read_file
+          - test_write_file
+          - test_stdin_input
+          - test_stdout_output
+          - test_io_error_handling
+        acceptance:
+          - All Ch10 I/O examples work
+          - Errors reported clearly
+          - File handles closed properly
+        deliverables:
+          - src/interpreter/io.rs (~300 LOC)
+          - tests/interpreter/test_io.rs (~150 LOC)
+        research: "Aho et al. (2006) Chapter 8: I/O Runtime Support"
+
+      - id: INTERP-009
+        title: "Error Handling & Runtime Reporting"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 4
+        requirements:
+          - Runtime error detection (type errors, bounds, null pointer)
+          - Stack trace generation
+          - Source location mapping
+          - Useful error messages
+        tests:
+          - test_type_error_reporting
+          - test_bounds_error_reporting
+          - test_null_pointer_error
+          - test_stack_trace_generation
+          - test_source_location_accuracy
+        acceptance:
+          - All runtime errors caught
+          - Stack traces accurate (file:line)
+          - Error messages helpful for debugging
+        deliverables:
+          - src/interpreter/error.rs (~350 LOC)
+          - tests/interpreter/test_error.rs (~180 LOC)
+        research: "Würthinger et al. (2013) Section 5: Runtime Error Handling"
+
+      - id: INTERP-010
+        title: "Bug Discovery Integration"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 4
+        requirements:
+          - Integration with GITHUB-001 (auto-filing)
+          - Integration with REPORT-004 (confidence scoring)
+          - Integration with REPLIC-001 (delta debugging)
+          - Automatic bug filing on runtime errors
+        tests:
+          - test_bug_detection
+          - test_confidence_scoring
+          - test_delta_debugging_integration
+          - test_github_auto_filing
+          - test_bug_deduplication
+        acceptance:
+          - Runtime errors automatically filed as bugs
+          - Confidence scores >0.9 (high quality)
+          - Bugs deduplicated (GITHUB-002)
+          - 5 known bugs discovered and filed
+        deliverables:
+          - src/interpreter/bug_discovery.rs (~400 LOC)
+          - tests/interpreter/test_bug_discovery.rs (~200 LOC)
+        research: "Cadar et al. (2008) Section 6: Automated Bug Reporting"
+
+
+      # ===== PHASE 2: Example Execution (Weeks 5-12) =====
+      # Note: 17 tickets total (INTERP-011 through INTERP-027), one per chapter
+      # Template shown for first 3, remaining follow same pattern
+
+      - id: INTERP-011
+        title: "Execute All Chapter 1 Examples (Hello World)"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 5
+        chapter: ch01-02-hello-world-tdd.md
+        example_count: 5
+        requirements:
+          - Execute all 5 examples from Chapter 1
+          - Verify output matches expected results
+          - File bugs for any runtime failures
+        tests:
+          - test_ch01_example_01_hello_world
+          - test_ch01_example_02_variables
+          - test_ch01_example_03_functions
+          - test_ch01_example_04_control_flow
+          - test_ch01_example_05_data_structures
+        acceptance:
+          - All 5 examples execute without errors
+          - Output matches book expectations
+          - Any bugs filed on GitHub with confidence >0.9
+        deliverables:
+          - tests/interpreter/examples/test_ch01_examples.rs (~100 LOC)
+          - Bug reports filed (if any)
+          - docs/interpreter/ch01_completion_report.md
+        research: "Beck (2002) Chapter 2: Test-Driven Development"
+        bugs_expected: 2-3 (based on KLEE results)
+
+      - id: INTERP-012
+        title: "Execute All Chapter 2 Examples (Variables & Types)"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 5
+        chapter: ch02-00-variables-types-tdd.md
+        example_count: 15
+        requirements:
+          - Execute all 15 examples from Chapter 2
+          - Test type inference, mutations, shadowing
+          - Discover type system bugs
+        tests:
+          - test_ch02_example_01_through_15 (15 tests)
+        acceptance:
+          - All 15 examples execute
+          - Type inference works correctly
+          - Bugs filed for any type mismatches
+        deliverables:
+          - tests/interpreter/examples/test_ch02_examples.rs (~250 LOC)
+        bugs_expected: 3-5 (type system complex)
+
+      - id: INTERP-013
+        title: "Execute All Chapter 3 Examples (Functions)"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 6
+        chapter: ch03-00-functions-tdd.md
+        example_count: 20
+        requirements:
+          - Execute all 20 examples from Chapter 3
+          - Test calls, recursion, closures, higher-order functions
+          - Discover function semantics bugs
+        tests:
+          - test_ch03_example_01_through_20 (20 tests)
+        acceptance:
+          - All 20 examples execute
+          - Recursion works correctly
+          - Closures capture variables properly
+        deliverables:
+          - tests/interpreter/examples/test_ch03_examples.rs (~350 LOC)
+        bugs_expected: 5-8 (closures complex)
+
+      # Remaining tickets: INTERP-014 (Ch04), INTERP-015 (Ch05), INTERP-016 (Ch06),
+      # INTERP-017 (Ch10), INTERP-018 (Ch13), INTERP-019 (Ch14), INTERP-020 (Ch15),
+      # INTERP-021 (Ch16), INTERP-022 (Ch17), INTERP-023 (Ch18), INTERP-024 (Ch19),
+      # INTERP-025 (Ch20), INTERP-026 (Ch22), INTERP-027 (Ch23)
+      # Total: 17 chapter tickets, 212 examples
+
+      # ===== PHASE 3: Runtime Conformance (Weeks 13-16) =====
+
+      - id: INTERP-028
+        title: "Property-Based Runtime Testing"
+        priority: high
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 13
+        requirements:
+          - Generate 10K random Ruchy programs
+          - Test interpreter robustness
+          - Ensure no crashes or panics
+          - Property: Well-formed programs either execute or error gracefully
+        tests:
+          - test_property_no_crashes (10K cases)
+          - test_property_deterministic_execution
+          - test_property_error_recovery
+        acceptance:
+          - 10K programs executed
+          - Zero interpreter crashes
+          - All errors caught and reported
+        deliverables:
+          - tests/interpreter/test_property_based.rs (~400 LOC)
+          - Bug reports for any discovered issues
+        research: "Godefroid et al. (2005) DART: Property-Based Testing"
+
+      - id: INTERP-029
+        title: "Fuzzing Integration & Coverage Analysis"
+        priority: high
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 14
+        requirements:
+          - Grammar-based fuzzing (reuse DISCOVERY-002B)
+          - Generate 1M test inputs
+          - Measure runtime path coverage
+          - Target: >90% path coverage
+        tests:
+          - test_fuzzing_1m_inputs
+          - test_coverage_measurement
+          - test_crash_detection
+        acceptance:
+          - 1M inputs executed
+          - >90% runtime path coverage achieved
+          - All crashes documented and filed
+        deliverables:
+          - tests/interpreter/test_fuzzing.rs (~500 LOC)
+          - docs/interpreter/fuzzing_report.md
+        research: "Cadar et al. (2008) KLEE: High-Coverage Testing"
+
+      - id: INTERP-030
+        title: "Performance Profiling & Benchmarking"
+        priority: medium
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 14
+        requirements:
+          - Benchmark interpreter vs native Ruchy
+          - Target: <100x slower than native
+          - Profile hotspots
+          - Optimize critical paths
+        tests:
+          - test_benchmark_fibonacci (measure overhead)
+          - test_benchmark_vector_ops
+          - test_benchmark_hashmap_ops
+          - test_performance_regression
+        acceptance:
+          - Interpreter <100x slower than native
+          - Hotspots identified
+          - No performance regressions
+        deliverables:
+          - benches/interpreter_benchmarks.rs (~300 LOC)
+          - docs/interpreter/performance_report.md
+        research: "Bolz et al. (2009) PyPy: Meta-Tracing JIT"
+
+      - id: INTERP-031
+        title: "Memory Safety Validation"
+        priority: high
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 15
+        requirements:
+          - Run all tests under valgrind
+          - Run all tests under AddressSanitizer
+          - Ensure zero memory leaks
+          - Ensure no use-after-free bugs
+        tests:
+          - test_valgrind_all_examples (212 tests)
+          - test_asan_all_examples (212 tests)
+        acceptance:
+          - Zero memory leaks detected
+          - Zero memory safety violations
+          - All 212 examples pass under valgrind/ASAN
+        deliverables:
+          - scripts/validate_memory_safety.sh
+          - docs/interpreter/memory_safety_report.md
+        research: "Serebryany et al. (2012) AddressSanitizer"
+
+      - id: INTERP-032
+        title: "Concurrency Testing (Chapter 20)"
+        priority: medium
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 15
+        requirements:
+          - Execute Ch20 HTTP server examples
+          - Test multi-threaded execution
+          - Detect data races
+          - Detect deadlocks
+        tests:
+          - test_concurrent_execution
+          - test_data_race_detection
+          - test_deadlock_detection
+          - test_thread_safety
+        acceptance:
+          - Ch20 examples execute correctly
+          - No data races detected (ThreadSanitizer)
+          - No deadlocks
+        deliverables:
+          - tests/interpreter/test_concurrency.rs (~300 LOC)
+        research: "Savage et al. (1997) Eraser: Data Race Detection"
+
+      - id: INTERP-033
+        title: "Bug Taxonomy & Comprehensive Analysis"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 16
+        requirements:
+          - Categorize all discovered bugs
+          - Severity analysis (CRITICAL/HIGH/MEDIUM/LOW)
+          - Root cause analysis (via Five-Whys)
+          - Impact assessment
+          - Generate comprehensive report
+        tests:
+          - test_bug_categorization
+          - test_severity_distribution
+          - test_root_cause_analysis
+        acceptance:
+          - All bugs categorized
+          - Report includes statistics
+          - Severity distribution documented
+          - Root causes identified
+        deliverables:
+          - docs/interpreter/BUG_TAXONOMY.md (~500 lines)
+          - docs/interpreter/IMPACT_ANALYSIS.md (~300 lines)
+        research: "Zeller & Hildebrandt (2002) Delta Debugging"
+
+      - id: INTERP-034
+        title: "Ruchy Compiler Bug Filing (Upstream)"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 16
+        requirements:
+          - File all discovered bugs at paiml/ruchy
+          - Use GitHub API (GITHUB-001)
+          - Include reproduction steps
+          - Include confidence scores (>0.9)
+          - Target: 50+ bugs filed
+        tests:
+          - test_github_api_integration
+          - test_bug_report_quality
+          - test_reproduction_steps
+        acceptance:
+          - 50+ bugs filed successfully
+          - All bugs have confidence >0.9
+          - All bugs include reproduction
+          - Bugs properly categorized
+        deliverables:
+          - GitHub issues filed (50+)
+          - docs/interpreter/BUGS_FILED.md (tracking)
+        research: "Zimmermann et al. (2012) Quality of Bug Reports"
+
+      - id: INTERP-035
+        title: "Conformance Test Suite Export"
+        priority: critical
+        status: pending
+        phase: RED-GREEN-REFACTOR-TOOL-BUG
+        week: 16
+        requirements:
+          - Export test suite for Ruchy compiler
+          - Format: ruchy test compatible
+          - Include all 212 examples
+          - Include property tests
+          - Target: Ruchy compiler passes 95%+
+        tests:
+          - test_export_test_suite
+          - test_ruchy_compiler_compatibility
+          - test_ci_integration
+        acceptance:
+          - Test suite exported successfully
+          - Ruchy compiler can run tests
+          - Documentation complete
+          - CI/CD integration guide provided
+        deliverables:
+          - conformance/ruchy_test_suite/ (212 files)
+          - docs/interpreter/CONFORMANCE_SUITE.md
+          - .github/workflows/conformance.yml
+        research: "Beck (2002) Continuous Integration"
+
