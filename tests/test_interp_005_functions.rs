@@ -3,7 +3,6 @@
 
 use ruchyruchy::interpreter::evaluator::{Evaluator, EvalError};
 use ruchyruchy::interpreter::parser::{AstNode, BinaryOperator};
-use ruchyruchy::interpreter::value::Value;
 
 // =============================================================================
 // Simple Function Calls

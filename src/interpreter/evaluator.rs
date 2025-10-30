@@ -15,12 +15,29 @@
 use crate::interpreter::parser::{AstNode, BinaryOperator, UnaryOperator};
 use crate::interpreter::scope::Scope;
 use crate::interpreter::value::{Value, ValueError};
+use std::collections::HashMap;
 use std::fmt;
+
+/// Maximum recursion depth before stack overflow
+/// This is set conservatively to prevent actual Rust stack overflow
+const MAX_CALL_DEPTH: usize = 150;
 
 /// Evaluator executes AST nodes and produces values
 pub struct Evaluator {
-    /// Scope for variable lookups (will be used in later phases)
-    _scope: Scope,
+    /// Scope for variable lookups
+    scope: Scope,
+    /// Function registry: name -> (params, body)
+    functions: HashMap<String, (Vec<String>, Vec<AstNode>)>,
+    /// Current call depth for stack overflow detection
+    call_depth: usize,
+}
+
+/// Internal control flow for handling early returns
+enum ControlFlow {
+    /// Normal value
+    Value(Value),
+    /// Early return from function
+    Return(Value),
 }
 
 /// Evaluation errors
@@ -87,7 +104,9 @@ impl Evaluator {
     /// Create a new evaluator
     pub fn new() -> Self {
         Evaluator {
-            _scope: Scope::new(),
+            scope: Scope::new(),
+            functions: HashMap::new(),
+            call_depth: 0,
         }
     }
 
@@ -109,56 +128,80 @@ impl Evaluator {
     /// assert_eq!(result.as_integer().unwrap(), 5);
     /// ```
     pub fn eval(&mut self, node: &AstNode) -> Result<Value, EvalError> {
+        match self.eval_internal(node)? {
+            ControlFlow::Value(v) => Ok(v),
+            ControlFlow::Return(v) => Ok(v),
+        }
+    }
+
+    /// Internal evaluation with control flow support
+    fn eval_internal(&mut self, node: &AstNode) -> Result<ControlFlow, EvalError> {
         match node {
             // Literals - direct conversion to values
-            AstNode::IntegerLiteral(n) => Ok(Value::integer(*n)),
-            AstNode::StringLiteral(s) => Ok(Value::string(s.clone())),
-            AstNode::BooleanLiteral(b) => Ok(Value::boolean(*b)),
+            AstNode::IntegerLiteral(n) => Ok(ControlFlow::Value(Value::integer(*n))),
+            AstNode::StringLiteral(s) => Ok(ControlFlow::Value(Value::string(s.clone()))),
+            AstNode::BooleanLiteral(b) => Ok(ControlFlow::Value(Value::boolean(*b))),
 
             // Binary operations - evaluate operands then apply operator
             AstNode::BinaryOp { op, left, right } => {
                 let left_val = self.eval(left)?;
                 let right_val = self.eval(right)?;
-                self.eval_binary_op(*op, left_val, right_val)
+                let result = self.eval_binary_op(*op, left_val, right_val)?;
+                Ok(ControlFlow::Value(result))
             }
 
             // Unary operations - evaluate operand then apply operator
             AstNode::UnaryOp { op, operand } => {
                 let operand_val = self.eval(operand)?;
-                self.eval_unary_op(*op, operand_val)
+                let result = self.eval_unary_op(*op, operand_val)?;
+                Ok(ControlFlow::Value(result))
             }
 
-            // Function definition - register function (STUB - RED PHASE)
-            AstNode::FunctionDef { .. } => {
-                unimplemented!("INTERP-005: Function definition not yet implemented")
+            // Function definition - register function
+            AstNode::FunctionDef { name, params, body } => {
+                self.functions.insert(name.clone(), (params.clone(), body.clone()));
+                Ok(ControlFlow::Value(Value::nil()))
             }
 
-            // Function call - evaluate arguments and call function (STUB - RED PHASE)
-            AstNode::FunctionCall { .. } => {
-                unimplemented!("INTERP-005: Function call not yet implemented")
+            // Function call - evaluate arguments and call function
+            AstNode::FunctionCall { name, args } => {
+                let result = self.call_function(name, args)?;
+                Ok(ControlFlow::Value(result))
             }
 
-            // Identifier - lookup variable or function (STUB - RED PHASE)
-            AstNode::Identifier(_) => {
-                unimplemented!("INTERP-005: Identifier lookup not yet implemented")
+            // Identifier - lookup variable in scope
+            AstNode::Identifier(name) => {
+                let value = self.scope.get_cloned(name)
+                    .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
+                Ok(ControlFlow::Value(value))
             }
 
-            // Return statement - early return from function (STUB - RED PHASE)
-            AstNode::Return { .. } => {
-                unimplemented!("INTERP-005: Return statement not yet implemented")
+            // Return statement - early return from function
+            AstNode::Return { value } => {
+                let return_val = if let Some(expr) = value {
+                    self.eval(expr)?
+                } else {
+                    Value::nil()
+                };
+                Ok(ControlFlow::Return(return_val))
             }
 
-            // If expression - conditional branching (STUB - RED PHASE)
-            AstNode::IfExpr { .. } => {
-                unimplemented!("INTERP-005: If expression not yet implemented")
+            // If expression - conditional branching
+            AstNode::IfExpr { condition, then_branch, else_branch } => {
+                self.eval_if(condition, then_branch, else_branch)
             }
 
-            // Let declaration - variable binding (STUB - RED PHASE)
-            AstNode::LetDecl { .. } => {
-                unimplemented!("INTERP-005: Let declaration not yet implemented")
+            // Let declaration - variable binding
+            AstNode::LetDecl { name, value } => {
+                let val = self.eval(value)?;
+                self.scope.define(name.clone(), val)
+                    .map_err(|e| EvalError::UnsupportedOperation {
+                        operation: format!("define variable: {}", e)
+                    })?;
+                Ok(ControlFlow::Value(Value::nil()))
             }
 
-            // Unsupported nodes (statements, declarations, etc.)
+            // Unsupported nodes
             _ => Err(EvalError::UnsupportedOperation {
                 operation: format!("{:?}", node),
             }),
@@ -247,6 +290,110 @@ impl Evaluator {
                 // Logical NOT for booleans
                 Ok(operand.logical_not()?)
             }
+        }
+    }
+
+    /// Call a function with arguments
+    fn call_function(&mut self, name: &str, args: &[AstNode]) -> Result<Value, EvalError> {
+        // Check stack depth
+        if self.call_depth >= MAX_CALL_DEPTH {
+            return Err(EvalError::StackOverflow);
+        }
+
+        // Look up function
+        let (params, body) = self.functions.get(name)
+            .cloned()
+            .ok_or_else(|| EvalError::UndefinedFunction { name: name.to_string() })?;
+
+        // Check argument count
+        if args.len() != params.len() {
+            return Err(EvalError::ArgumentCountMismatch {
+                function: name.to_string(),
+                expected: params.len(),
+                actual: args.len(),
+            });
+        }
+
+        // Evaluate arguments
+        let mut arg_values = Vec::new();
+        for arg in args {
+            arg_values.push(self.eval(arg)?);
+        }
+
+        // Create new scope with parameters bound to arguments
+        let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
+        for (param, value) in params.iter().zip(arg_values.iter()) {
+            self.scope.define(param.clone(), value.clone())
+                .map_err(|e| EvalError::UnsupportedOperation {
+                    operation: format!("define parameter: {}", e)
+                })?;
+        }
+
+        // Increment call depth
+        self.call_depth += 1;
+
+        // Execute function body
+        let mut result = Value::nil();
+        for stmt in &body {
+            match self.eval_internal(stmt)? {
+                ControlFlow::Value(v) => {
+                    result = v;
+                }
+                ControlFlow::Return(v) => {
+                    result = v;
+                    break; // Early return
+                }
+            }
+        }
+
+        // Decrement call depth and restore scope
+        self.call_depth -= 1;
+        self.scope = saved_scope;
+
+        Ok(result)
+    }
+
+    /// Evaluate if expression
+    fn eval_if(
+        &mut self,
+        condition: &AstNode,
+        then_branch: &[AstNode],
+        else_branch: &Option<Vec<AstNode>>,
+    ) -> Result<ControlFlow, EvalError> {
+        let cond_val = self.eval(condition)?;
+        let cond_bool = cond_val.as_boolean()?;
+
+        if cond_bool {
+            // Execute then branch
+            let mut result = Value::nil();
+            for stmt in then_branch {
+                match self.eval_internal(stmt)? {
+                    ControlFlow::Value(v) => {
+                        result = v;
+                    }
+                    ControlFlow::Return(v) => {
+                        return Ok(ControlFlow::Return(v)); // Propagate early return
+                    }
+                }
+            }
+            Ok(ControlFlow::Value(result))
+        } else if let Some(else_stmts) = else_branch {
+            // Execute else branch
+            let mut result = Value::nil();
+            for stmt in else_stmts {
+                match self.eval_internal(stmt)? {
+                    ControlFlow::Value(v) => {
+                        result = v;
+                    }
+                    ControlFlow::Return(v) => {
+                        return Ok(ControlFlow::Return(v)); // Propagate early return
+                    }
+                }
+            }
+            Ok(ControlFlow::Value(result))
+        } else {
+            // No else branch
+            Ok(ControlFlow::Value(Value::nil()))
         }
     }
 }
