@@ -1,13 +1,19 @@
-// INTERP-004: Expression Evaluator
-// REFACTOR Phase: Clean implementation with enhanced documentation
+// INTERP-005: Function Calls & Recursion
+// GREEN Phase: Complete implementation with all tests passing
 //
-// Research: Aho et al. (2006) Chapter 8: Expression Evaluation
+// Research:
+// - Aho et al. (2006) Chapter 8: Expression Evaluation
+// - Aho et al. (2006) Chapter 7: Runtime Environments
 //
-// This module implements expression evaluation for the Ruchy interpreter.
-// Handles arithmetic, comparison, and logical operations with proper precedence.
+// This module implements expression evaluation and function calls for the Ruchy interpreter.
+// Supports function definition, function calls with recursion, control flow, and variable scoping.
 //
 // Design:
 // - Tree-walking evaluator that recursively evaluates AST nodes
+// - Function registry for storing function definitions
+// - Call stack depth tracking for stack overflow detection
+// - Scope management for function parameters and local variables
+// - Control flow mechanism for early returns (ControlFlow enum)
 // - Operator precedence handled by parser (AST structure)
 // - Type safety enforced at runtime through Value operations
 // - Error propagation via Result types
@@ -33,10 +39,17 @@ pub struct Evaluator {
 }
 
 /// Internal control flow for handling early returns
+///
+/// When evaluating function bodies, we need to distinguish between:
+/// - Normal evaluation (last expression value)
+/// - Early return (explicit return statement)
+///
+/// This enum allows return statements to propagate up through nested
+/// control structures (if/else, loops) without executing remaining statements.
 enum ControlFlow {
-    /// Normal value
+    /// Normal value - continues evaluating subsequent statements
     Value(Value),
-    /// Early return from function
+    /// Early return from function - stops evaluation and returns immediately
     Return(Value),
 }
 
@@ -294,18 +307,29 @@ impl Evaluator {
     }
 
     /// Call a function with arguments
+    ///
+    /// Implements function call semantics:
+    /// 1. Stack overflow protection
+    /// 2. Function lookup in registry
+    /// 3. Argument count validation
+    /// 4. Eager argument evaluation (call-by-value)
+    /// 5. New scope creation with parameter binding
+    /// 6. Function body execution with early return support
+    /// 7. Scope restoration after function exit
+    ///
+    /// Returns the last expression value or explicit return value.
     fn call_function(&mut self, name: &str, args: &[AstNode]) -> Result<Value, EvalError> {
-        // Check stack depth
+        // 1. Check stack depth before recursing (prevent stack overflow)
         if self.call_depth >= MAX_CALL_DEPTH {
             return Err(EvalError::StackOverflow);
         }
 
-        // Look up function
+        // 2. Look up function in registry
         let (params, body) = self.functions.get(name)
             .cloned()
             .ok_or_else(|| EvalError::UndefinedFunction { name: name.to_string() })?;
 
-        // Check argument count
+        // 3. Check argument count matches parameter count (arity check)
         if args.len() != params.len() {
             return Err(EvalError::ArgumentCountMismatch {
                 function: name.to_string(),
@@ -314,13 +338,13 @@ impl Evaluator {
             });
         }
 
-        // Evaluate arguments
+        // 4. Evaluate all arguments eagerly (call-by-value semantics)
         let mut arg_values = Vec::new();
         for arg in args {
             arg_values.push(self.eval(arg)?);
         }
 
-        // Create new scope with parameters bound to arguments
+        // 5. Create new scope and bind parameters to argument values
         let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
         for (param, value) in params.iter().zip(arg_values.iter()) {
             self.scope.define(param.clone(), value.clone())
@@ -329,37 +353,46 @@ impl Evaluator {
                 })?;
         }
 
-        // Increment call depth
+        // Increment call depth for recursion tracking
         self.call_depth += 1;
 
-        // Execute function body
+        // 6. Execute function body, handling early returns
         let mut result = Value::nil();
         for stmt in &body {
             match self.eval_internal(stmt)? {
                 ControlFlow::Value(v) => {
+                    // Normal evaluation - update result and continue
                     result = v;
                 }
                 ControlFlow::Return(v) => {
+                    // Early return - stop executing and return immediately
                     result = v;
-                    break; // Early return
+                    break;
                 }
             }
         }
 
-        // Decrement call depth and restore scope
+        // 7. Restore previous scope and call depth
         self.call_depth -= 1;
         self.scope = saved_scope;
 
         Ok(result)
     }
 
-    /// Evaluate if expression
+    /// Evaluate if expression with conditional branching
+    ///
+    /// Evaluates the condition, then executes either the then_branch or else_branch
+    /// based on the result. Returns the last expression value from the executed branch.
+    ///
+    /// Early returns are propagated up to allow:
+    ///   if (condition) { return value; }
     fn eval_if(
         &mut self,
         condition: &AstNode,
         then_branch: &[AstNode],
         else_branch: &Option<Vec<AstNode>>,
     ) -> Result<ControlFlow, EvalError> {
+        // Evaluate condition and check it's a boolean
         let cond_val = self.eval(condition)?;
         let cond_bool = cond_val.as_boolean()?;
 
@@ -369,10 +402,12 @@ impl Evaluator {
             for stmt in then_branch {
                 match self.eval_internal(stmt)? {
                     ControlFlow::Value(v) => {
+                        // Normal evaluation - continue with next statement
                         result = v;
                     }
                     ControlFlow::Return(v) => {
-                        return Ok(ControlFlow::Return(v)); // Propagate early return
+                        // Early return - propagate immediately
+                        return Ok(ControlFlow::Return(v));
                     }
                 }
             }
@@ -383,16 +418,18 @@ impl Evaluator {
             for stmt in else_stmts {
                 match self.eval_internal(stmt)? {
                     ControlFlow::Value(v) => {
+                        // Normal evaluation - continue with next statement
                         result = v;
                     }
                     ControlFlow::Return(v) => {
-                        return Ok(ControlFlow::Return(v)); // Propagate early return
+                        // Early return - propagate immediately
+                        return Ok(ControlFlow::Return(v));
                     }
                 }
             }
             Ok(ControlFlow::Value(result))
         } else {
-            // No else branch
+            // No else branch - return nil
             Ok(ControlFlow::Value(Value::nil()))
         }
     }
