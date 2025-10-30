@@ -36,6 +36,8 @@ pub struct Evaluator {
     functions: HashMap<String, (Vec<String>, Vec<AstNode>)>,
     /// Current call depth for stack overflow detection
     call_depth: usize,
+    /// Call stack for error reporting (tracks function call chain)
+    call_stack: Vec<String>,
 }
 
 /// Internal control flow for handling early returns
@@ -74,6 +76,11 @@ pub enum EvalError {
     NoMatchArm,
     /// Unsupported operation
     UnsupportedOperation { operation: String },
+    /// Error with call stack information for debugging
+    WithCallStack {
+        error: Box<EvalError>,
+        call_stack: Vec<String>,
+    },
 }
 
 impl fmt::Display for EvalError {
@@ -106,6 +113,13 @@ impl fmt::Display for EvalError {
             EvalError::UnsupportedOperation { operation } => {
                 write!(f, "Unsupported operation: {}", operation)
             }
+            EvalError::WithCallStack { error, call_stack } => {
+                write!(f, "{}\nCall stack:\n", error)?;
+                for (i, func_name) in call_stack.iter().enumerate() {
+                    write!(f, "  {}. {}\n", i + 1, func_name)?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -125,6 +139,7 @@ impl Evaluator {
             scope: Scope::new(),
             functions: HashMap::new(),
             call_depth: 0,
+            call_stack: Vec::new(),
         }
     }
 
@@ -447,27 +462,49 @@ impl Evaluator {
                 })?;
         }
 
+        // Push function name to call stack for error reporting
+        self.call_stack.push(name.to_string());
+
         // Increment call depth for recursion tracking
         self.call_depth += 1;
 
         // 6. Execute function body, handling early returns
         let mut result = Value::nil();
         for stmt in &body {
-            match self.eval_internal(stmt)? {
-                ControlFlow::Value(v) => {
+            match self.eval_internal(stmt) {
+                Ok(ControlFlow::Value(v)) => {
                     // Normal evaluation - update result and continue
                     result = v;
                 }
-                ControlFlow::Return(v) => {
+                Ok(ControlFlow::Return(v)) => {
                     // Early return - stop executing and return immediately
                     result = v;
                     break;
                 }
+                Err(e) => {
+                    // Error occurred - capture call stack before restoration
+                    let captured_stack = self.call_stack.clone();
+
+                    // Restore state
+                    self.call_depth -= 1;
+                    self.call_stack.pop();
+                    self.scope = saved_scope;
+
+                    // Wrap error with call stack if not already wrapped
+                    return Err(match e {
+                        EvalError::WithCallStack { .. } => e,
+                        _ => EvalError::WithCallStack {
+                            error: Box::new(e),
+                            call_stack: captured_stack,
+                        },
+                    });
+                }
             }
         }
 
-        // 7. Restore previous scope and call depth
+        // 7. Restore previous scope, call depth, and call stack
         self.call_depth -= 1;
+        self.call_stack.pop();
         self.scope = saved_scope;
 
         Ok(result)
