@@ -14,6 +14,8 @@
 // Goal: Discover 50+ runtime bugs, >90% path coverage
 
 pub mod parser;
+pub mod value;
 
 // Re-export main types for convenience
 pub use parser::{Parser, ParseError, Ast, AstNode};
+pub use value::{Value, ValueError};
