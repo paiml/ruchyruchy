@@ -961,6 +961,12 @@ pub enum AstNode {
         right: Box<AstNode>,
     },
 
+    /// Unary operation: op operand
+    UnaryOp {
+        op: UnaryOperator,
+        operand: Box<AstNode>,
+    },
+
     /// Return statement: return expr
     Return {
         value: Option<Box<AstNode>>,
@@ -1030,6 +1036,10 @@ impl AstNode {
                 callback(right);
                 right.visit_children(callback);
             }
+            AstNode::UnaryOp { operand, .. } => {
+                callback(operand);
+                operand.visit_children(callback);
+            }
             _ => {
                 // Other node types: visit children as needed
                 // This is minimal for RED phase
@@ -1054,6 +1064,14 @@ pub enum BinaryOperator {
     GreaterEqual, // >=
     And,       // &&
     Or,        // ||
+}
+
+/// Unary operators
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Negate,  // - (unary minus)
+    Not,     // ! (logical not)
+    Plus,    // + (unary plus, identity)
 }
 
 /// Match arm in match expression
