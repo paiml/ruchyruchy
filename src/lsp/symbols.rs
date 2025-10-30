@@ -49,7 +49,7 @@ impl SymbolTable {
     pub fn add_reference(&mut self, name: String, location: Location) {
         self.references
             .entry(name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(location);
     }
 
@@ -156,7 +156,7 @@ fn extract_function_name(text: &str) -> Option<String> {
     if let Some(paren_pos) = trimmed.find('(') {
         let name = trimmed[..paren_pos].trim();
         if !name.is_empty()
-            && name.chars().all(|c| is_identifier_char(c))
+            && name.chars().all(is_identifier_char)
             && !name.chars().next().unwrap().is_numeric() {
             return Some(name.to_string());
         }
@@ -169,11 +169,11 @@ fn extract_variable_name(text: &str) -> Option<String> {
     let trimmed = text.trim();
     // Find first word before = or space
     let end_pos = trimmed
-        .find(|c: char| c == '=' || c == ' ' || c == ':')
+        .find(['=', ' ', ':'])
         .unwrap_or(trimmed.len());
 
     let name = trimmed[..end_pos].trim();
-    if !name.is_empty() && name.chars().all(|c| is_identifier_char(c)) {
+    if !name.is_empty() && name.chars().all(is_identifier_char) {
         return Some(name.to_string());
     }
     None

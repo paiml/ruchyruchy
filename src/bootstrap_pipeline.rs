@@ -159,9 +159,8 @@ fn compile_ruchy_to_rust(ruchy_source: &str) -> String {
     
     // Convert Ruchy syntax to Rust
     let transformed = ruchy_source
-        .replace(r#"println("#, r#"println!("#)
-        .replace("String", "String");
-    
+        .replace(r#"println("#, r#"println!("#);
+
     // Add derive attributes for structs
     let transformed = add_derive_attributes(transformed);
     

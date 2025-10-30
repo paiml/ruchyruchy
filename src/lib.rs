@@ -3,6 +3,8 @@
 //! This crate provides educational resources and debugging tools for the
 //! Ruchy programming language ecosystem.
 //!
+
+#![allow(missing_docs)]
 //! # Components
 //!
 //! - **Bootstrap Compiler**: Educational implementation of compiler stages

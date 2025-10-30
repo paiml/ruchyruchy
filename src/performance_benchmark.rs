@@ -318,9 +318,8 @@ fn bootstrap_compile(source: &str) -> String {
     
     // Simple transformation
     let transformed = source
-        .replace(r#"println("#, r#"println!("#)
-        .replace("String", "String");
-    
+        .replace(r#"println("#, r#"println!("#);
+
     output.push_str(&transformed);
     output
 }

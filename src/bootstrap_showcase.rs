@@ -368,9 +368,8 @@ fn bootstrap_compile(source: &str) -> String {
     
     // Smart syntax conversion
     let converted = source
-        .replace(r#"println("#, r#"println!("#)
-        .replace("String", "String");
-    
+        .replace(r#"println("#, r#"println!("#);
+
     rust_code.push_str(&converted);
     rust_code
 }

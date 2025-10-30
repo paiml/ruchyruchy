@@ -304,10 +304,10 @@ impl BugReport {
             report.push_str("2. **GREEN**: Make minimal change to pass the test\n");
             report.push_str("3. **REFACTOR**: Clean up code while keeping tests green\n\n");
 
-            if tdd.cycles().len() > 0 {
+            if !tdd.cycles().is_empty() {
                 report.push_str("### TDD History\n\n");
                 report.push_str(&tdd.to_markdown());
-                report.push_str("\n");
+                report.push('\n');
             }
             report.push_str("</details>\n\n");
         }
@@ -318,7 +318,7 @@ impl BugReport {
             for file in &self.related_files {
                 report.push_str(&format!("- `{}`\n", file));
             }
-            report.push_str("\n");
+            report.push('\n');
         }
 
         // Fix Recommendations
@@ -327,7 +327,7 @@ impl BugReport {
             for (i, rec) in self.fix_recommendations.iter().enumerate() {
                 report.push_str(&format!("{}. {}\n", i + 1, rec));
             }
-            report.push_str("\n");
+            report.push('\n');
         }
 
         // Prevention Strategy
@@ -336,7 +336,7 @@ impl BugReport {
             for strategy in &self.prevention {
                 report.push_str(&format!("- {}\n", strategy));
             }
-            report.push_str("\n");
+            report.push('\n');
         }
 
         // Footer

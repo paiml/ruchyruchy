@@ -275,12 +275,12 @@ impl DifferentialTester {
         // v3.147: regressed (130ms ± 5ms variance - 30% slower)
         // v3.148: fixed (100ms ± 5ms variance)
         use std::collections::hash_map::RandomState;
-        use std::hash::{BuildHasher, Hash, Hasher};
+        use std::hash::BuildHasher;
 
         // Generate pseudo-random variance using timestamp
-        let mut hasher = RandomState::new().build_hasher();
-        Instant::now().hash(&mut hasher);
-        let hash = hasher.finish();
+        
+        
+        let hash = RandomState::new().hash_one(Instant::now());
         let variance = ((hash % 10) as i64) - 5; // -5 to +5 ms
 
         let base_time_ms = if version.version == "v3.147" {
