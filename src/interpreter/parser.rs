@@ -1156,10 +1156,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]
-    fn test_parse_unimplemented() {
-        // RED: parse() should panic with unimplemented
+    fn test_parse_implemented() {
+        // REFACTOR: Verify parse() works (was RED phase test expecting panic)
         let mut parser = Parser::new("fun main() {}");
-        let _ = parser.parse();
+        let result = parser.parse();
+        assert!(result.is_ok(), "Parser should successfully parse simple function");
     }
 }
