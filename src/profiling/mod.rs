@@ -1,6 +1,6 @@
 //! Statistical Profiling (DEBUGGER-016)
 //!
-//! **Status**: GREEN Phase - Basic implementation in progress
+//! **Status**: REFACTOR Phase - Sample field extraction complete
 //!
 //! This module provides low-overhead statistical profiling using `perf_event_open`
 //! and hardware performance counters (<1% overhead at 1000Hz).
@@ -16,8 +16,8 @@
 //! # Phases
 //!
 //! - ✅ RED Phase: Architecture documented, 6 tests written (all failing)
-//! - 🔄 GREEN Phase: Minimal implementation (make tests pass)
-//! - ⏳ REFACTOR Phase: DWARF unwinding, flame graphs, production-ready
+//! - ✅ GREEN Phase: Minimal implementation (sampling infrastructure)
+//! - 🔄 REFACTOR Phase: Sample extraction, DWARF unwinding, flame graphs
 //!
 //! # Setup Required
 //!
@@ -61,8 +61,7 @@
 //! - [x] Architecture documented
 //! - [x] GREEN Phase: Basic sampling infrastructure (perf_event_open syscall)
 //! - [x] GREEN Phase: Ring buffer allocation and reading
-//! - [x] GREEN Phase: Sample iteration (placeholder data)
-//! - [ ] REFACTOR: Extract actual sample fields (ip, tid, time, stack)
+//! - [x] REFACTOR: Extract actual sample fields (ip, tid, time, stack)
 //! - [ ] REFACTOR: DWARF unwinding (function names)
 //! - [ ] REFACTOR: Flame graph generation
 //! - [ ] REFACTOR: Hotspot analysis
@@ -83,6 +82,7 @@ use perf_event_open::{
     config::{Cpu, Opts, Proc, SampleOn, Size},
     count::Counter,
     event::hw::Hardware,
+    sample::record::Record,
 };
 
 /// Error types for profiling operations
@@ -300,16 +300,45 @@ impl Profiler {
 
         // Iterate through all available samples
         // Note: sampler.iter() returns (Priv, Record) tuples
-        // GREEN Phase: Collect basic sample data (no field extraction yet)
-        for (_priv, _record) in sampler.iter() {
-            // TODO: Extract actual fields from Record in REFACTOR phase
-            // For now, create placeholder sample to verify sampling works
-            samples.push(Sample {
-                ip: 0,
-                tid: 0,
-                time: 0,
-                stack: Vec::new(),
-            });
+        for (_priv, record) in sampler.iter() {
+            // Only process Sample records (not Mmap, Fork, etc.)
+            if let Record::Sample(sample) = record {
+                // Extract instruction pointer from code_addr
+                // code_addr is Option<(u64, bool)> where bool indicates exact IP
+                let ip = sample.code_addr.map(|(addr, _exact)| addr).unwrap_or(0);
+
+                // Extract thread ID from task info
+                let tid = sample
+                    .record_id
+                    .task
+                    .as_ref()
+                    .map(|t| t.tid)
+                    .unwrap_or(0);
+
+                // Extract timestamp
+                let time = sample.record_id.time.unwrap_or(0);
+
+                // Extract stack trace from user_stack (Vec<u8>)
+                // Convert from raw bytes to u64 instruction pointers
+                let stack = sample
+                    .user_stack
+                    .as_ref()
+                    .map(|bytes| {
+                        bytes
+                            .chunks_exact(8)
+                            .map(|chunk| {
+                                u64::from_ne_bytes([
+                                    chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5],
+                                    chunk[6], chunk[7],
+                                ])
+                            })
+                            .filter(|&addr| addr != 0) // Filter out null addresses
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                samples.push(Sample { ip, tid, time, stack });
+            }
         }
 
         Ok(samples)

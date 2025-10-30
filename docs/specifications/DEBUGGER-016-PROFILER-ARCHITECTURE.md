@@ -259,22 +259,37 @@ std::fs::write("flamegraph.svg", svg)?;
 - **Ring Buffer**: Configurable size (default 2^10 = 1024 pages = 4MB)
 - **Sample Format**: user_stack enabled (8KB per sample)
 
-**Limitation**:
-- Sample field extraction not yet implemented (GREEN phase simplification)
-- Returns placeholder Sample structs with zero values
-- Full field extraction (ip, tid, time, stack) deferred to REFACTOR phase
-
-**Tasks for REFACTOR**:
-1. Extract actual sample fields from Record struct
-2. Implement proper stack trace parsing
-3. Add DWARF unwinding for function names (gimli)
-4. Add flame graph generation (inferno)
-5. Make all 6 profiler tests pass
-6. Verify <1% overhead at 1000Hz
+**Next Steps**:
+- REFACTOR phase for DWARF unwinding and flame graphs
 
 ### REFACTOR Phase
 
 **Goal**: Production-ready profiling
+
+**Status**: 🔄 IN PROGRESS - Sample extraction complete
+
+**Completed**:
+1. ✅ Extract actual sample fields from Record enum
+2. ✅ Parse instruction pointer (code_addr)
+3. ✅ Parse thread ID (record_id.task.tid)
+4. ✅ Parse timestamp (record_id.time)
+5. ✅ Parse user stack (user_stack Vec<u8> → Vec<u64>)
+6. ✅ Filter null addresses from stack traces
+
+**Implementation Details**:
+- Process only `Record::Sample` variants from iterator
+- Extract `ip` from `code_addr` Option<(u64, bool)>
+- Extract `tid` from `record_id.task.tid`
+- Extract `time` from `record_id.time`
+- Convert `user_stack` from Vec<u8> to Vec<u64> via chunks_exact(8)
+- Filter out null (0) addresses from stack traces
+
+**Remaining Tasks**:
+1. Add DWARF unwinding for function names (gimli)
+2. Add flame graph generation (inferno)
+3. Add hotspot analysis (top N functions)
+4. Make all 6 profiler tests pass
+5. Verify <1% overhead at 1000Hz
 
 **Tasks**:
 1. Add DWARF stack unwinding (gimli)
