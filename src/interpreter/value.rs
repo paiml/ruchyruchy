@@ -30,6 +30,8 @@ pub enum Value {
         params: Vec<String>,
         body: Vec<AstNode>,
     },
+    /// Nil/Unit value (represents absence of value)
+    Nil,
 }
 
 /// Runtime type errors
@@ -108,6 +110,11 @@ impl Value {
         Value::Function { params, body }
     }
 
+    /// Create a nil value
+    pub fn nil() -> Self {
+        Value::Nil
+    }
+
     // ===== Type Checking =====
 
     /// Check if value is an integer
@@ -140,6 +147,11 @@ impl Value {
         matches!(self, Value::Function { .. })
     }
 
+    /// Check if value is nil
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Value::Nil)
+    }
+
     /// Get type name as string
     pub fn type_name(&self) -> &str {
         match self {
@@ -149,6 +161,7 @@ impl Value {
             Value::Vector(_) => "Vector",
             Value::HashMap(_) => "HashMap",
             Value::Function { .. } => "Function",
+            Value::Nil => "Nil",
         }
     }
 
@@ -461,6 +474,7 @@ impl fmt::Display for Value {
             Value::Function { params, .. } => {
                 write!(f, "fun({})", params.join(", "))
             }
+            Value::Nil => write!(f, "nil"),
         }
     }
 }

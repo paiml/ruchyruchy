@@ -30,6 +30,16 @@ pub enum EvalError {
     ValueError(ValueError),
     /// Undefined variable
     UndefinedVariable { name: String },
+    /// Undefined function
+    UndefinedFunction { name: String },
+    /// Argument count mismatch in function call
+    ArgumentCountMismatch {
+        function: String,
+        expected: usize,
+        actual: usize,
+    },
+    /// Stack overflow from excessive recursion
+    StackOverflow,
     /// Unsupported operation
     UnsupportedOperation { operation: String },
 }
@@ -40,6 +50,23 @@ impl fmt::Display for EvalError {
             EvalError::ValueError(err) => write!(f, "{}", err),
             EvalError::UndefinedVariable { name } => {
                 write!(f, "Undefined variable: {}", name)
+            }
+            EvalError::UndefinedFunction { name } => {
+                write!(f, "Undefined function: {}", name)
+            }
+            EvalError::ArgumentCountMismatch {
+                function,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "Function '{}' expects {} arguments, but {} were provided",
+                    function, expected, actual
+                )
+            }
+            EvalError::StackOverflow => {
+                write!(f, "Stack overflow: recursion depth exceeded")
             }
             EvalError::UnsupportedOperation { operation } => {
                 write!(f, "Unsupported operation: {}", operation)
@@ -99,6 +126,36 @@ impl Evaluator {
             AstNode::UnaryOp { op, operand } => {
                 let operand_val = self.eval(operand)?;
                 self.eval_unary_op(*op, operand_val)
+            }
+
+            // Function definition - register function (STUB - RED PHASE)
+            AstNode::FunctionDef { .. } => {
+                unimplemented!("INTERP-005: Function definition not yet implemented")
+            }
+
+            // Function call - evaluate arguments and call function (STUB - RED PHASE)
+            AstNode::FunctionCall { .. } => {
+                unimplemented!("INTERP-005: Function call not yet implemented")
+            }
+
+            // Identifier - lookup variable or function (STUB - RED PHASE)
+            AstNode::Identifier(_) => {
+                unimplemented!("INTERP-005: Identifier lookup not yet implemented")
+            }
+
+            // Return statement - early return from function (STUB - RED PHASE)
+            AstNode::Return { .. } => {
+                unimplemented!("INTERP-005: Return statement not yet implemented")
+            }
+
+            // If expression - conditional branching (STUB - RED PHASE)
+            AstNode::IfExpr { .. } => {
+                unimplemented!("INTERP-005: If expression not yet implemented")
+            }
+
+            // Let declaration - variable binding (STUB - RED PHASE)
+            AstNode::LetDecl { .. } => {
+                unimplemented!("INTERP-005: Let declaration not yet implemented")
             }
 
             // Unsupported nodes (statements, declarations, etc.)
