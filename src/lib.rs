@@ -45,6 +45,8 @@ pub mod bug_reporting;
 pub mod tracing;
 /// Statistical profiling (DEBUGGER-016: perf_event_open-based profiler)
 pub mod profiling;
+/// Interpreter for runtime bug discovery (INTERP-001 through INTERP-035)
+pub mod interpreter;
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
