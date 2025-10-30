@@ -284,11 +284,23 @@ std::fs::write("flamegraph.svg", svg)?;
 - Convert `user_stack` from Vec<u8> to Vec<u64> via chunks_exact(8)
 - Filter out null (0) addresses from stack traces
 
+**Completed**:
+7. ✅ Implement test_perf_event_setup (validates initialization)
+8. ✅ Implement test_hardware_counter_sampling (validates sampling)
+
+**Test Status** (2/6 passing):
+- ✅ test_perf_event_setup - PASSING (requires root/CAP_PERFMON)
+- ✅ test_hardware_counter_sampling - PASSING (requires root/CAP_PERFMON)
+- ⏳ test_stack_unwinding - Pending (needs DWARF unwinding)
+- ⏳ test_flame_graph_generation - Pending (needs inferno integration)
+- ⏳ test_overhead_under_1_percent - Pending (needs benchmarking)
+- ⏳ test_hotspot_identification - Pending (needs aggregation logic)
+
 **Remaining Tasks**:
 1. Add DWARF unwinding for function names (gimli)
 2. Add flame graph generation (inferno)
 3. Add hotspot analysis (top N functions)
-4. Make all 6 profiler tests pass
+4. Make remaining 4 profiler tests pass
 5. Verify <1% overhead at 1000Hz
 
 **Tasks**:
