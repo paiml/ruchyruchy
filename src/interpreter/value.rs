@@ -78,185 +78,388 @@ impl Value {
 
     /// Create an integer value
     pub fn integer(n: i64) -> Self {
-        unimplemented!("RED: Create integer value")
+        Value::Integer(n)
     }
 
     /// Create a string value
     pub fn string(s: String) -> Self {
-        unimplemented!("RED: Create string value")
+        Value::String(s)
     }
 
     /// Create a boolean value
     pub fn boolean(b: bool) -> Self {
-        unimplemented!("RED: Create boolean value")
+        Value::Boolean(b)
     }
 
     /// Create a vector value
     pub fn vector(elements: Vec<Value>) -> Self {
-        unimplemented!("RED: Create vector value")
+        Value::Vector(elements)
     }
 
     /// Create a hashmap value
     pub fn hashmap() -> Self {
-        unimplemented!("RED: Create hashmap value")
+        Value::HashMap(HashMap::new())
     }
 
     /// Create a function value
     pub fn function(params: Vec<String>, body: Vec<AstNode>) -> Self {
-        unimplemented!("RED: Create function value")
+        Value::Function { params, body }
     }
 
     // ===== Type Checking =====
 
     /// Check if value is an integer
     pub fn is_integer(&self) -> bool {
-        unimplemented!("RED: Check if integer")
+        matches!(self, Value::Integer(_))
     }
 
     /// Check if value is a string
     pub fn is_string(&self) -> bool {
-        unimplemented!("RED: Check if string")
+        matches!(self, Value::String(_))
     }
 
     /// Check if value is a boolean
     pub fn is_boolean(&self) -> bool {
-        unimplemented!("RED: Check if boolean")
+        matches!(self, Value::Boolean(_))
     }
 
     /// Check if value is a vector
     pub fn is_vector(&self) -> bool {
-        unimplemented!("RED: Check if vector")
+        matches!(self, Value::Vector(_))
     }
 
     /// Check if value is a hashmap
     pub fn is_hashmap(&self) -> bool {
-        unimplemented!("RED: Check if hashmap")
+        matches!(self, Value::HashMap(_))
     }
 
     /// Check if value is a function
     pub fn is_function(&self) -> bool {
-        unimplemented!("RED: Check if function")
+        matches!(self, Value::Function { .. })
     }
 
     /// Get type name as string
     pub fn type_name(&self) -> &str {
-        unimplemented!("RED: Get type name")
+        match self {
+            Value::Integer(_) => "Integer",
+            Value::String(_) => "String",
+            Value::Boolean(_) => "Boolean",
+            Value::Vector(_) => "Vector",
+            Value::HashMap(_) => "HashMap",
+            Value::Function { .. } => "Function",
+        }
     }
 
     // ===== Type Conversion =====
 
     /// Extract integer value
     pub fn as_integer(&self) -> Result<i64, ValueError> {
-        unimplemented!("RED: Extract integer")
+        match self {
+            Value::Integer(n) => Ok(*n),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Integer".to_string(),
+                found: self.type_name().to_string(),
+                operation: "as_integer".to_string(),
+            }),
+        }
     }
 
     /// Extract string value
     pub fn as_string(&self) -> Result<&str, ValueError> {
-        unimplemented!("RED: Extract string")
+        match self {
+            Value::String(s) => Ok(s),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "String".to_string(),
+                found: self.type_name().to_string(),
+                operation: "as_string".to_string(),
+            }),
+        }
     }
 
     /// Extract boolean value
     pub fn as_boolean(&self) -> Result<bool, ValueError> {
-        unimplemented!("RED: Extract boolean")
+        match self {
+            Value::Boolean(b) => Ok(*b),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Boolean".to_string(),
+                found: self.type_name().to_string(),
+                operation: "as_boolean".to_string(),
+            }),
+        }
     }
 
     /// Extract vector value
     pub fn as_vector(&self) -> Result<&Vec<Value>, ValueError> {
-        unimplemented!("RED: Extract vector")
+        match self {
+            Value::Vector(v) => Ok(v),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Vector".to_string(),
+                found: self.type_name().to_string(),
+                operation: "as_vector".to_string(),
+            }),
+        }
     }
 
     /// Extract hashmap value (mutable)
     pub fn as_hashmap(&mut self) -> Result<&mut HashMap<String, Value>, ValueError> {
-        unimplemented!("RED: Extract hashmap")
+        match self {
+            Value::HashMap(m) => Ok(m),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "HashMap".to_string(),
+                found: self.type_name().to_string(),
+                operation: "as_hashmap".to_string(),
+            }),
+        }
     }
 
     /// Extract function parameters
     pub fn as_function_params(&self) -> Result<&Vec<String>, ValueError> {
-        unimplemented!("RED: Extract function params")
+        match self {
+            Value::Function { params, .. } => Ok(params),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Function".to_string(),
+                found: self.type_name().to_string(),
+                operation: "as_function_params".to_string(),
+            }),
+        }
     }
 
     // ===== Arithmetic Operations =====
 
     /// Add two values
     pub fn add(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Add operation")
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a + b)),
+            (Value::String(a), Value::String(b)) => {
+                Ok(Value::String(format!("{}{}", a, b)))
+            }
+            _ => Err(ValueError::TypeMismatch {
+                expected: self.type_name().to_string(),
+                found: other.type_name().to_string(),
+                operation: "add".to_string(),
+            }),
+        }
     }
 
     /// Subtract two values
     pub fn subtract(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Subtract operation")
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a - b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Integer".to_string(),
+                found: format!("{} - {}", self.type_name(), other.type_name()),
+                operation: "subtract".to_string(),
+            }),
+        }
     }
 
     /// Multiply two values
     pub fn multiply(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Multiply operation")
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a * b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Integer".to_string(),
+                found: format!("{} * {}", self.type_name(), other.type_name()),
+                operation: "multiply".to_string(),
+            }),
+        }
     }
 
     /// Divide two values
     pub fn divide(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Divide operation")
+        match (self, other) {
+            (Value::Integer(_), Value::Integer(0)) => Err(ValueError::DivisionByZero),
+            (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a / b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Integer".to_string(),
+                found: format!("{} / {}", self.type_name(), other.type_name()),
+                operation: "divide".to_string(),
+            }),
+        }
     }
 
     // ===== Logical Operations =====
 
     /// Logical AND
     pub fn logical_and(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Logical AND")
+        match (self, other) {
+            (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(*a && *b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Boolean".to_string(),
+                found: format!("{} && {}", self.type_name(), other.type_name()),
+                operation: "logical_and".to_string(),
+            }),
+        }
     }
 
     /// Logical OR
     pub fn logical_or(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Logical OR")
+        match (self, other) {
+            (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(*a || *b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Boolean".to_string(),
+                found: format!("{} || {}", self.type_name(), other.type_name()),
+                operation: "logical_or".to_string(),
+            }),
+        }
     }
 
     /// Logical NOT
     pub fn logical_not(&self) -> Result<Value, ValueError> {
-        unimplemented!("RED: Logical NOT")
+        match self {
+            Value::Boolean(b) => Ok(Value::Boolean(!b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Boolean".to_string(),
+                found: self.type_name().to_string(),
+                operation: "logical_not".to_string(),
+            }),
+        }
     }
 
     // ===== Comparison Operations =====
 
     /// Less than comparison
     pub fn less_than(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Less than")
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a < b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Integer".to_string(),
+                found: format!("{} < {}", self.type_name(), other.type_name()),
+                operation: "less_than".to_string(),
+            }),
+        }
     }
 
     /// Greater than comparison
     pub fn greater_than(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Greater than")
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a > b)),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Integer".to_string(),
+                found: format!("{} > {}", self.type_name(), other.type_name()),
+                operation: "greater_than".to_string(),
+            }),
+        }
     }
 
     /// Equality comparison
     pub fn equals(&self, other: &Value) -> Result<Value, ValueError> {
-        unimplemented!("RED: Equals")
+        // Use PartialEq implementation
+        Ok(Value::Boolean(self == other))
     }
 
     // ===== Collection Operations =====
 
     /// Index into vector
     pub fn index(&self, idx: usize) -> Result<&Value, ValueError> {
-        unimplemented!("RED: Vector indexing")
+        match self {
+            Value::Vector(v) => {
+                v.get(idx).ok_or_else(|| ValueError::IndexOutOfBounds {
+                    index: idx,
+                    len: v.len(),
+                })
+            }
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Vector".to_string(),
+                found: self.type_name().to_string(),
+                operation: "index".to_string(),
+            }),
+        }
     }
 
     /// Push value to vector
     pub fn push(&mut self, value: Value) -> Result<(), ValueError> {
-        unimplemented!("RED: Vector push")
+        match self {
+            Value::Vector(v) => {
+                v.push(value);
+                Ok(())
+            }
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Vector".to_string(),
+                found: self.type_name().to_string(),
+                operation: "push".to_string(),
+            }),
+        }
     }
 
     /// Insert key-value pair into hashmap
     pub fn insert(&mut self, key: Value, value: Value) -> Result<(), ValueError> {
-        unimplemented!("RED: HashMap insert")
+        match self {
+            Value::HashMap(m) => {
+                let key_str = match key {
+                    Value::String(s) => s,
+                    _ => return Err(ValueError::TypeMismatch {
+                        expected: "String".to_string(),
+                        found: key.type_name().to_string(),
+                        operation: "insert key".to_string(),
+                    }),
+                };
+                m.insert(key_str, value);
+                Ok(())
+            }
+            _ => Err(ValueError::TypeMismatch {
+                expected: "HashMap".to_string(),
+                found: self.type_name().to_string(),
+                operation: "insert".to_string(),
+            }),
+        }
     }
 
     /// Get value from hashmap by key
     pub fn get(&self, key: &Value) -> Result<&Value, ValueError> {
-        unimplemented!("RED: HashMap get")
+        match self {
+            Value::HashMap(m) => {
+                let key_str = match key {
+                    Value::String(s) => s,
+                    _ => return Err(ValueError::TypeMismatch {
+                        expected: "String".to_string(),
+                        found: key.type_name().to_string(),
+                        operation: "get key".to_string(),
+                    }),
+                };
+                m.get(key_str).ok_or_else(|| ValueError::KeyNotFound {
+                    key: key_str.clone(),
+                })
+            }
+            _ => Err(ValueError::TypeMismatch {
+                expected: "HashMap".to_string(),
+                found: self.type_name().to_string(),
+                operation: "get".to_string(),
+            }),
+        }
     }
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!("RED: Display value")
+        match self {
+            Value::Integer(n) => write!(f, "{}", n),
+            Value::String(s) => write!(f, "\"{}\"", s),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Vector(v) => {
+                write!(f, "[")?;
+                for (i, val) in v.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", val)?;
+                }
+                write!(f, "]")
+            }
+            Value::HashMap(m) => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in m.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "\"{}\": {}", k, v)?;
+                }
+                write!(f, "}}")
+            }
+            Value::Function { params, .. } => {
+                write!(f, "fun({})", params.join(", "))
+            }
+        }
     }
 }
 
@@ -265,9 +468,10 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]
-    fn test_value_unimplemented() {
-        // RED: All methods should panic with unimplemented
-        let _ = Value::integer(42);
+    fn test_value_implemented() {
+        // GREEN: Verify basic implementation works
+        let val = Value::integer(42);
+        assert_eq!(val.as_integer().unwrap(), 42);
+        assert!(val.is_integer());
     }
 }
