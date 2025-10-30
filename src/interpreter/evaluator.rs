@@ -1,10 +1,16 @@
 // INTERP-004: Expression Evaluator
-// GREEN Phase: Minimal implementation to pass all tests
+// REFACTOR Phase: Clean implementation with enhanced documentation
 //
 // Research: Aho et al. (2006) Chapter 8: Expression Evaluation
 //
 // This module implements expression evaluation for the Ruchy interpreter.
 // Handles arithmetic, comparison, and logical operations with proper precedence.
+//
+// Design:
+// - Tree-walking evaluator that recursively evaluates AST nodes
+// - Operator precedence handled by parser (AST structure)
+// - Type safety enforced at runtime through Value operations
+// - Error propagation via Result types
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -59,26 +65,43 @@ impl Evaluator {
     }
 
     /// Evaluate an AST node and return a value
+    ///
+    /// Recursively evaluates the AST by pattern matching on node type.
+    /// Literals are converted directly to values. Operations are evaluated
+    /// by recursively evaluating operands first, then applying the operation.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let mut eval = Evaluator::new();
+    /// let node = AstNode::BinaryOp {
+    ///     op: BinaryOperator::Add,
+    ///     left: Box::new(AstNode::IntegerLiteral(2)),
+    ///     right: Box::new(AstNode::IntegerLiteral(3)),
+    /// };
+    /// let result = eval.eval(&node).unwrap();
+    /// assert_eq!(result.as_integer().unwrap(), 5);
+    /// ```
     pub fn eval(&mut self, node: &AstNode) -> Result<Value, EvalError> {
         match node {
-            // Literals
+            // Literals - direct conversion to values
             AstNode::IntegerLiteral(n) => Ok(Value::integer(*n)),
             AstNode::StringLiteral(s) => Ok(Value::string(s.clone())),
             AstNode::BooleanLiteral(b) => Ok(Value::boolean(*b)),
 
-            // Binary operations
+            // Binary operations - evaluate operands then apply operator
             AstNode::BinaryOp { op, left, right } => {
                 let left_val = self.eval(left)?;
                 let right_val = self.eval(right)?;
                 self.eval_binary_op(*op, left_val, right_val)
             }
 
-            // Unary operations
+            // Unary operations - evaluate operand then apply operator
             AstNode::UnaryOp { op, operand } => {
                 let operand_val = self.eval(operand)?;
                 self.eval_unary_op(*op, operand_val)
             }
 
+            // Unsupported nodes (statements, declarations, etc.)
             _ => Err(EvalError::UnsupportedOperation {
                 operation: format!("{:?}", node),
             }),
@@ -86,6 +109,13 @@ impl Evaluator {
     }
 
     /// Evaluate a binary operation
+    ///
+    /// Applies a binary operator to two values. Operations are grouped into:
+    /// - Arithmetic: +, -, *, /, %
+    /// - Comparison: <, >, ==, !=, <=, >=
+    /// - Logical: &&, ||
+    ///
+    /// Type checking is performed by Value methods.
     fn eval_binary_op(
         &self,
         op: BinaryOperator,
