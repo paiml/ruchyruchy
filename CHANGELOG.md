@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Integration
+- **Ruchy v3.149.0 Compatibility**: Updated integration for new type-aware debugging features
+  - Type-aware tracing with `--trace` flag (shows argument/return types)
+  - RUCHY_TRACE environment variable support
+  - Enterprise code quality improvements (280+ clippy errors fixed)
+  - Updated version references in README.md and INTEGRATION.md
+
 ## [1.9.0] - 2025-10-30
 
 ### 🎉 Phase 2 Completion: Validation & Robustness - 101 New Integration Tests
