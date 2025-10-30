@@ -219,29 +219,36 @@ impl Evaluator {
                 Ok(ControlFlow::Value(Value::nil()))
             }
 
-            // While loop (STUB - INTERP-006 RED PHASE)
-            AstNode::WhileLoop { .. } => {
-                unimplemented!("INTERP-006: While loop not yet implemented")
+            // While loop - execute body while condition is true
+            AstNode::WhileLoop { condition, body } => {
+                self.eval_while(condition, body)
             }
 
-            // For loop (STUB - INTERP-006 RED PHASE)
-            AstNode::ForLoop { .. } => {
-                unimplemented!("INTERP-006: For loop not yet implemented")
+            // For loop - iterate over elements
+            AstNode::ForLoop { var, iterable, body } => {
+                self.eval_for(var, iterable, body)
             }
 
-            // Match expression (STUB - INTERP-006 RED PHASE)
-            AstNode::MatchExpr { .. } => {
-                unimplemented!("INTERP-006: Match expression not yet implemented")
+            // Match expression - pattern matching
+            AstNode::MatchExpr { expr, arms } => {
+                self.eval_match(expr, arms)
             }
 
-            // Assignment (STUB - INTERP-006 RED PHASE)
-            AstNode::Assignment { .. } => {
-                unimplemented!("INTERP-006: Assignment not yet implemented")
+            // Assignment - reassign existing variable
+            AstNode::Assignment { name, value } => {
+                let val = self.eval(value)?;
+                self.scope.assign(name, val)
+                    .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
+                Ok(ControlFlow::Value(Value::nil()))
             }
 
-            // Vector literal (STUB - INTERP-006 RED PHASE)
-            AstNode::VectorLiteral { .. } => {
-                unimplemented!("INTERP-006: Vector literal not yet implemented")
+            // Vector literal - create vector value
+            AstNode::VectorLiteral { elements } => {
+                let mut values = Vec::new();
+                for elem in elements {
+                    values.push(self.eval(elem)?);
+                }
+                Ok(ControlFlow::Value(Value::vector(values)))
             }
 
             // Unsupported nodes
@@ -462,6 +469,163 @@ impl Evaluator {
             // No else branch - return nil
             Ok(ControlFlow::Value(Value::nil()))
         }
+    }
+
+    /// Evaluate while loop
+    fn eval_while(
+        &mut self,
+        condition: &AstNode,
+        body: &[AstNode],
+    ) -> Result<ControlFlow, EvalError> {
+        loop {
+            // Evaluate condition
+            let cond_val = self.eval(condition)?;
+            let cond_bool = cond_val.as_boolean()?;
+
+            if !cond_bool {
+                break; // Exit loop when condition is false
+            }
+
+            // Create child scope for loop body iteration
+            // This allows variables declared inside the loop to be fresh each iteration
+            let child_scope = self.scope.create_child();
+            let old_scope = std::mem::replace(&mut self.scope, child_scope);
+
+            // Execute body
+            let mut result = Ok(ControlFlow::Value(Value::nil()));
+            for stmt in body {
+                match self.eval_internal(stmt)? {
+                    ControlFlow::Value(_) => {
+                        // Normal evaluation - continue
+                    }
+                    ControlFlow::Return(v) => {
+                        // Early return from enclosing function - propagate
+                        result = Ok(ControlFlow::Return(v));
+                        break;
+                    }
+                }
+            }
+
+            // Restore parent scope after loop iteration
+            self.scope = old_scope;
+
+            // If there was a return, propagate it
+            if matches!(result, Ok(ControlFlow::Return(_))) {
+                return result;
+            }
+        }
+
+        // While loops return nil
+        Ok(ControlFlow::Value(Value::nil()))
+    }
+
+    /// Evaluate for loop
+    fn eval_for(
+        &mut self,
+        var: &str,
+        iterable: &AstNode,
+        body: &[AstNode],
+    ) -> Result<ControlFlow, EvalError> {
+        // Evaluate iterable expression
+        let iterable_val = self.eval(iterable)?;
+
+        // Get vector elements
+        let elements = iterable_val.as_vector()?.clone();
+
+        // Iterate over elements
+        for element in elements.iter() {
+            // Create child scope for loop body iteration
+            // This allows variables declared inside the loop to be fresh each iteration
+            let child_scope = self.scope.create_child();
+            let old_scope = std::mem::replace(&mut self.scope, child_scope);
+
+            // Bind loop variable to current element in child scope
+            self.scope.define(var.to_string(), element.clone())
+                .map_err(|e| EvalError::UnsupportedOperation {
+                    operation: format!("define loop variable: {}", e)
+                })?;
+
+            // Execute body
+            let mut result = Ok(ControlFlow::Value(Value::nil()));
+            for stmt in body {
+                match self.eval_internal(stmt)? {
+                    ControlFlow::Value(_) => {
+                        // Normal evaluation - continue
+                    }
+                    ControlFlow::Return(v) => {
+                        // Early return from enclosing function - propagate
+                        result = Ok(ControlFlow::Return(v));
+                        break;
+                    }
+                }
+            }
+
+            // Restore parent scope after loop iteration
+            self.scope = old_scope;
+
+            // If there was a return, propagate it
+            if matches!(result, Ok(ControlFlow::Return(_))) {
+                return result;
+            }
+        }
+
+        // For loops return nil
+        Ok(ControlFlow::Value(Value::nil()))
+    }
+
+    /// Evaluate match expression
+    fn eval_match(
+        &mut self,
+        expr: &AstNode,
+        arms: &[crate::interpreter::parser::MatchArm],
+    ) -> Result<ControlFlow, EvalError> {
+        use crate::interpreter::parser::Pattern;
+
+        // Evaluate the matched expression
+        let match_val = self.eval(expr)?;
+
+        // Try each arm in order
+        for arm in arms {
+            let matches = match &arm.pattern {
+                Pattern::Wildcard => {
+                    // Wildcard matches anything
+                    true
+                }
+                Pattern::Literal(lit) => {
+                    // Literal pattern - evaluate and compare
+                    let pattern_val = self.eval(lit)?;
+                    match_val == pattern_val
+                }
+                Pattern::Identifier(name) => {
+                    // Identifier pattern - bind variable and always match
+                    self.scope.define(name.clone(), match_val.clone())
+                        .map_err(|e| EvalError::UnsupportedOperation {
+                            operation: format!("bind match variable: {}", e)
+                        })?;
+                    true
+                }
+            };
+
+            if matches {
+                // Execute arm body
+                let mut result = Value::nil();
+                for stmt in &arm.body {
+                    match self.eval_internal(stmt)? {
+                        ControlFlow::Value(v) => {
+                            result = v;
+                        }
+                        ControlFlow::Return(v) => {
+                            // Early return - propagate
+                            return Ok(ControlFlow::Return(v));
+                        }
+                    }
+                }
+                return Ok(ControlFlow::Value(result));
+            }
+        }
+
+        // No arm matched
+        Err(EvalError::NoMatchArm)
     }
 }
 
