@@ -77,6 +77,14 @@ pub enum EvalError {
     /// Unsupported operation
     UnsupportedOperation { operation: String },
     /// Error with call stack information for debugging
+    ///
+    /// Wraps another error and attaches the function call stack at the point
+    /// where the error occurred. The call stack is ordered from outermost to
+    /// innermost function (most recent call is last in the vector).
+    ///
+    /// This variant is automatically added when an error occurs during function
+    /// execution, providing context about which functions were active when the
+    /// error happened.
     WithCallStack {
         error: Box<EvalError>,
         call_stack: Vec<String>,
@@ -114,8 +122,9 @@ impl fmt::Display for EvalError {
                 write!(f, "Unsupported operation: {}", operation)
             }
             EvalError::WithCallStack { error, call_stack } => {
-                write!(f, "{}\nCall stack:\n", error)?;
-                for (i, func_name) in call_stack.iter().enumerate() {
+                write!(f, "{}\nCall stack (most recent call first):\n", error)?;
+                // Display stack in reverse order: innermost (most recent) call first
+                for (i, func_name) in call_stack.iter().rev().enumerate() {
                     write!(f, "  {}. {}\n", i + 1, func_name)?;
                 }
                 Ok(())
@@ -463,6 +472,8 @@ impl Evaluator {
         }
 
         // Push function name to call stack for error reporting
+        // This enables displaying the full call chain when errors occur,
+        // making debugging much easier (shows which functions led to the error)
         self.call_stack.push(name.to_string());
 
         // Increment call depth for recursion tracking
@@ -482,20 +493,25 @@ impl Evaluator {
                     break;
                 }
                 Err(e) => {
-                    // Error occurred - capture call stack before restoration
+                    // Error occurred during function body execution
+                    //
+                    // IMPORTANT: Capture the call stack BEFORE popping the current function.
+                    // The captured stack includes all functions in the call chain up to and
+                    // including the current function where the error occurred.
                     let captured_stack = self.call_stack.clone();
 
-                    // Restore state
+                    // Restore evaluator state (depth, stack, scope)
                     self.call_depth -= 1;
-                    self.call_stack.pop();
+                    self.call_stack.pop(); // Remove current function from active stack
                     self.scope = saved_scope;
 
-                    // Wrap error with call stack if not already wrapped
+                    // Wrap error with call stack information for debugging, unless it's
+                    // already wrapped (prevents double-wrapping in nested errors)
                     return Err(match e {
-                        EvalError::WithCallStack { .. } => e,
+                        EvalError::WithCallStack { .. } => e, // Already has stack info
                         _ => EvalError::WithCallStack {
                             error: Box::new(e),
-                            call_stack: captured_stack,
+                            call_stack: captured_stack, // Attach the call stack
                         },
                     });
                 }
