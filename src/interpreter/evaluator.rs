@@ -257,14 +257,14 @@ impl Evaluator {
             }
 
             // HashMap literal - create hashmap value
+            // Syntax: {key1: val1, key2: val2, ...}
+            // Keys must evaluate to strings, values can be any type
             AstNode::HashMapLiteral { pairs } => {
                 use std::collections::HashMap;
                 let mut map = HashMap::new();
                 for (key_node, val_node) in pairs {
-                    // Evaluate key expression - must be a string
                     let key_val = self.eval(key_node)?;
                     let key_str = key_val.as_string()?.to_string();
-                    // Evaluate value expression
                     let value = self.eval(val_node)?;
                     map.insert(key_str, value);
                 }
@@ -272,13 +272,15 @@ impl Evaluator {
             }
 
             // Index access - vec[i], map[key]
+            // For vectors: index must be non-negative integer
+            // For hashmaps: key can be any Value (converted to string internally)
+            // Errors: IndexOutOfBounds (vec), KeyNotFound (map), TypeMismatch (non-indexable)
             AstNode::IndexAccess { expr, index } => {
                 let container = self.eval(expr)?;
                 let index_val = self.eval(index)?;
 
                 match &container {
                     Value::Vector(_) => {
-                        // Vector indexing requires integer index
                         let idx = index_val.as_integer()?;
                         if idx < 0 {
                             return Err(EvalError::ValueError(
@@ -292,7 +294,6 @@ impl Evaluator {
                         Ok(ControlFlow::Value(result))
                     }
                     Value::HashMap(_) => {
-                        // HashMap indexing requires string key
                         let result = container.get(&index_val)?.clone();
                         Ok(ControlFlow::Value(result))
                     }
