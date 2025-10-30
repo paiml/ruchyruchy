@@ -2,7 +2,7 @@
 
 [![Version](https://img.shields.io/badge/Version-v1.9.0-brightgreen.svg)](https://crates.io/crates/ruchyruchy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Ruchy Version](https://img.shields.io/badge/Ruchy-v3.111.0+-blue.svg)](https://github.com/paiml/ruchy)
+[![Ruchy Version](https://img.shields.io/badge/Ruchy-v3.149.0+-blue.svg)](https://github.com/paiml/ruchy)
 [![Debugger](https://img.shields.io/badge/Debugger-100%25%20Complete-success.svg)](./INTEGRATION.md)
 [![Tests](https://img.shields.io/badge/Tests-1.4M+-orange.svg)](./INTEGRATION.md)
 [![Toyota Way](https://img.shields.io/badge/Toyota%20Way-EXTREME%20TDD-green.svg)](https://lean.org/toyota-production-system/)

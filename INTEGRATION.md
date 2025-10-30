@@ -26,7 +26,7 @@
 ---
 
 **Last Updated**: October 30, 2025
-**Ruchy Version**: v3.146.0 ⭐ **LATEST**
+**Ruchy Version**: v3.149.0 ⭐ **LATEST**
 **RuchyRuchy Version**: v1.9.0 ⭐ **PUBLISHED TO CRATES.IO**
 **RuchyRuchy Commit**: QUALITY-010 (Symbol Table Analysis - 8/8 Phases Complete)
 **Project Status**: 🟢 **🏆 ALL ROADMAPS 100% COMPLETE + QUALITY 10/10! 🏆** - WASM (9/9), Debugger (12/12), Bootstrap (16/16), Infrastructure (6/6), Quality (10/10) ALL at 100%!
@@ -50,6 +50,12 @@
 - v3.99.1: Issue #39 (nested match with Box<T>) FIXED ✅
 - v3.99.2: Issue #40 partially fixed (hang resolved, mutation bug introduced)
 - v3.100.0: Issue #40 COMPLETELY FIXED (all tests passing) ⭐ **NEW**
+- **v3.149.0: Type-Aware Debugging & Production Quality** 🎉 **LATEST**
+  - **Type-Aware Tracing**: `--trace` flag shows argument/return types (e.g., `square(5: integer)` → `25: integer`)
+  - **RUCHY_TRACE Environment Variable**: Enable tracing without code changes
+  - **Enterprise Code Quality**: 280+ clippy errors fixed (372 → 91 = 75% reduction)
+  - **Published to crates.io**: Both `ruchy` and `ruchy-wasm` v3.149.0 available
+  - **Example**: `ruchy --trace -e "fun square(x) { x * x }; square(5)"` shows typed trace output
 - WASM-001: WebAssembly Type Mapping COMPLETE (ALL phases) ⭐ **NEW**
 - WASM-002: Closure Compilation COMPLETE (ALL phases) ⭐ **NEW**
 - WASM-003: Multi-Target Integration COMPLETE (All phases) ⭐ **DONE**
