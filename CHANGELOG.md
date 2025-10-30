@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Research Infrastructure: Advanced Debugging Tools
 
-#### 🔬 DEBUGGER-016: Statistical Profiling (REFACTOR Phase - 5/6 Tests Passing)
+#### 🔬 DEBUGGER-016: Statistical Profiling (REFACTOR Phase - 6/6 Tests Passing - 100% COMPLETE!)
 
-**Status**: ✅ Overhead benchmarking complete - Real-time CPU profiling with perf_event_open
+**Status**: 🎉 All tests passing - Production-ready CPU profiling with perf_event_open
 
 This release adds low-overhead statistical profiling using Linux `perf_event_open` syscall and hardware performance counters. Provides <1% overhead at 1000Hz sampling for production profiling of Ruchy programs.
 
@@ -21,7 +21,7 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 
 ###### Profiler Infrastructure (src/profiling/)
 
-- **src/profiling/mod.rs** (450+ LOC)
+- **src/profiling/mod.rs** (550+ LOC)
   - `Profiler::new()` - Initialize perf_event_open with CPU_CYCLES
   - `start()` / `stop()` - Control sampling
   - `collect_samples()` - Read from ring buffer
@@ -38,7 +38,7 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
   }
   ```
 
-- **FlameGraph struct** (NEW! - brendangregg format)
+- **FlameGraph struct** (brendangregg format)
   ```rust
   pub struct FlameGraph {
       stacks: HashMap<String, usize>,  // Aggregated traces
@@ -54,6 +54,23 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
   - Deterministic output (sorted for reproducibility)
   - Uses hex-formatted IPs (0xaddr)
 
+- **Hotspot struct** (NEW! - top N analysis)
+  ```rust
+  pub struct HotspotEntry {
+      pub function: String,    // Hex IP (0xaddr)
+      pub count: usize,        // Sample count
+      pub percentage: f64,     // % of total
+  }
+
+  impl Hotspot {
+      pub fn analyze(samples: &[Sample], top_n: usize) -> Vec<HotspotEntry> { ... }
+  }
+  ```
+  - Aggregates samples by instruction pointer
+  - Returns top N hotspots sorted by sample count (descending)
+  - Calculates percentages for each hotspot
+  - Identifies CPU-intensive code locations
+
 ###### Dependencies
 
 - **perf-event-open v0.4.2** - Full-featured perf_event_open wrapper
@@ -61,7 +78,7 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 - Ring buffer: 2^10 pages (4MB default, configurable)
 - Feature flag: `profiling` (optional compilation)
 
-##### Tests Passing (5/6)
+##### Tests Passing (6/6 - 100% COMPLETE!)
 
 ✅ **test_perf_event_setup**
 - Validates Profiler::new() initialization
@@ -86,7 +103,7 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 - Produces deterministic output (sorted)
 - Note: Uses hex IPs (DWARF unwinding optional for human-readable names)
 
-✅ **test_overhead_under_1_percent** (NEW!)
+✅ **test_overhead_under_1_percent**
 - Baseline benchmark: 3 iterations, median calculation
 - Profiled benchmark: 1 iteration with profiling at 1000Hz
 - CPU-bound workload: recursive fibonacci(20) for 2 seconds
@@ -94,8 +111,13 @@ This release adds low-overhead statistical profiling using Linux `perf_event_ope
 - Collects and reports sample count for verification
 - Statistical measurement with detailed output
 
-⏳ **Remaining tests** (require aggregation):
-- test_hotspot_identification
+✅ **test_hotspot_identification** (NEW! - FINAL TEST!)
+- Aggregates samples by instruction pointer (HashMap<u64, usize>)
+- Identifies CPU-intensive code locations (hotspot functions)
+- Returns top N hotspots sorted by sample count (descending)
+- Calculates percentage of total samples for each hotspot
+- Validates top hotspot has >50% of samples
+- Verifies sorting order (highest count first)
 
 ##### Technical Details
 
@@ -146,8 +168,8 @@ for sample in &samples {
 
 ##### Testing
 
-- **291/291 tests passing**
-- **6 profiler tests** (2 passing, 4 require advanced features)
+- **299/299 tests passing** (280 + 7 + 7 + 5)
+- **6 profiler tests** (ALL PASSING - 100% COMPLETE!)
 - Tests marked #[ignore] (require root/CAP_PERFMON)
 - Run with: `sudo -E cargo test --features profiling -- --ignored`
 
@@ -171,13 +193,17 @@ for sample in &samples {
 - Ring buffer allocation and reading
 - Sample iteration infrastructure
 
-**🔄 REFACTOR Phase** (Partial - 2/6 tests passing)
+**✅ REFACTOR Phase** (Complete - 6/6 tests passing - 100%!)
 - ✅ Sample field extraction (ip, tid, time, stack)
 - ✅ Stack trace parsing (bytes → addresses)
-- ✅ First 2 tests implemented and passing
-- ⏳ DWARF unwinding (function names from addresses)
-- ⏳ Flame graph generation (inferno crate)
-- ⏳ Hotspot analysis (top N functions)
+- ✅ test_perf_event_setup implemented and passing
+- ✅ test_hardware_counter_sampling implemented and passing
+- ✅ test_stack_unwinding implemented and passing
+- ✅ test_flame_graph_generation implemented and passing
+- ✅ test_overhead_under_1_percent implemented and passing
+- ✅ test_hotspot_identification implemented and passing
+- ✅ FlameGraph struct with brendangregg format
+- ✅ Hotspot struct with top N analysis
 
 ##### Next Steps (Future Release)
 
