@@ -16,8 +16,10 @@
 pub mod parser;
 pub mod value;
 pub mod scope;
+pub mod evaluator;
 
 // Re-export main types for convenience
 pub use parser::{Parser, ParseError, Ast, AstNode};
 pub use value::{Value, ValueError};
 pub use scope::{Scope, ScopeError};
+pub use evaluator::{Evaluator, EvalError};
