@@ -26,7 +26,7 @@
 ---
 
 **Last Updated**: October 31, 2025
-**Ruchy Version**: v3.149.0 ⭐ **LATEST**
+**Ruchy Version**: v3.153.0 ⭐ **LATEST**
 **RuchyRuchy Version**: v1.9.1+ ⭐ **IN DEVELOPMENT**
 **RuchyRuchy Commit**: INTERP-013 (Chapter 3 Functions Complete - CRITICAL Parser Bug Fixed)
 **Project Status**: 🟢 **🏆 ALL ROADMAPS 100% COMPLETE + QUALITY 10/10! 🏆** - WASM (9/9), Debugger (12/12), Bootstrap (16/16), Infrastructure (6/6), Quality (10/10) ALL at 100%!
@@ -50,12 +50,18 @@
 - v3.99.1: Issue #39 (nested match with Box<T>) FIXED ✅
 - v3.99.2: Issue #40 partially fixed (hang resolved, mutation bug introduced)
 - v3.100.0: Issue #40 COMPLETELY FIXED (all tests passing) ⭐ **NEW**
-- **v3.149.0: Type-Aware Debugging & Production Quality** 🎉 **LATEST**
+- **v3.153.0: Try Operator + std::env + String Slicing** 🎉 **LATEST**
+  - **Try Operator (?)**: Ergonomic error propagation for Result types (Issue #97, 5/5 tests passing)
+  - **std::env module**: `env.args()` for CLI arguments, `env.var(key)` for environment variables (Issue #96)
+  - **String slicing**: Range syntax `text[0..5]`, `text[..5]`, `text[5..]`, negative indices (Issue #94, 12/12 tests)
+  - **SATD Cleanup**: Phase 1-3 complete, all CRITICAL+HIGH comments removed (Issue #95)
+  - **Quality**: Reduced eval_command_method complexity 15→9 (Issue #93)
+  - **Parser Fix**: `is_ternary_operator` now correctly handles binary operators after `?`
+- v3.149.0: Type-Aware Debugging & Production Quality
   - **Type-Aware Tracing**: `--trace` flag shows argument/return types (e.g., `square(5: integer)` → `25: integer`)
   - **RUCHY_TRACE Environment Variable**: Enable tracing without code changes
   - **Enterprise Code Quality**: 280+ clippy errors fixed (372 → 91 = 75% reduction)
   - **Published to crates.io**: Both `ruchy` and `ruchy-wasm` v3.149.0 available
-  - **Example**: `ruchy --trace -e "fun square(x) { x * x }; square(5)"` shows typed trace output
 - **INTERP-013: Chapter 3 Functions COMPLETE** (October 31, 2025) ⭐ **NEW**
   - **Test Suite**: 5/5 tests passing (4 examples + 1 meta test, 100% success rate)
   - **CRITICAL BUG FIXED**: Parser infinite loop on function type annotations (Issue #6)
