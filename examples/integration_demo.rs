@@ -9,30 +9,29 @@
 //   cargo run --example integration_demo
 
 use ruchyruchy::bug_discovery::confidence::{
-    ConfidenceScore, ConfidenceScorer, DiscoveryMethod, EvidenceLevel, Priority, Reproducibility,
+    ConfidenceScorer, DiscoveryMethod, EvidenceLevel, Reproducibility,
     RootCauseClarity,
 };
 use ruchyruchy::bug_discovery::differential::{
-    CompilationTarget, CompilerVersion, DifferentialTester, FailureMode, RegressionBug, TestResult,
-    TestStatus,
+    CompilerVersion, DifferentialTester, FailureMode, RegressionBug, TestResult,
 };
 use ruchyruchy::bug_discovery::schema_fuzzer::{
-    Constructor, Operation, OperationCall, RuntimeSchema, RuntimeTestCase, ShadowState,
+    Constructor, Operation, RuntimeSchema,
 };
-use ruchyruchy::bug_replication::bisect::{BisectionResult, BisectionState, Commit, CommitId};
+use ruchyruchy::bug_replication::bisect::{BisectionResult, Commit, CommitId};
 use ruchyruchy::bug_replication::harness::{Environment, ExecutionResult, ReproducibleTest};
 use ruchyruchy::bug_replication::minimizer::{
-    DeltaDebugger, MinimizationResult, MinimizationStrategy, TestOutcome,
+    DeltaDebugger, TestOutcome,
 };
 use ruchyruchy::bug_reporting::confidence::{QuantitativeEvidence, Reproducibility as ReportRepro};
 use ruchyruchy::bug_reporting::five_whys::{ConfidenceLevel, DataPoint, Hypothesis, WhyLayer};
 use ruchyruchy::bug_reporting::github_integration::{
-    BugReportConverter, CommentRequest, GitHubClient, GitHubResult, IssueRequest, IssueResponse,
+    IssueRequest,
 };
 
 fn main() {
     println!("🎯 RuchyRuchy Integration Demo\n");
-    println!("=".repeat(60));
+    println!("{}", "=".repeat(60));
 
     demo_bug_discovery();
     demo_bug_replication();
@@ -48,7 +47,7 @@ fn main() {
 
 fn demo_bug_discovery() {
     println!("\n📊 Part 1: Bug Discovery Tools");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     // 1. Confidence Scoring
     println!("\n1.1 Confidence Scoring");
@@ -138,7 +137,7 @@ fn demo_bug_discovery() {
 
 fn demo_bug_replication() {
     println!("\n🔬 Part 2: Bug Replication Tools");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     // 1. Delta Debugging (Minimization)
     println!("\n2.1 Delta Debugging");
@@ -221,7 +220,7 @@ fun main() {
 
 fn demo_bug_reporting() {
     println!("\n📝 Part 3: Bug Reporting Tools");
-    println!("-".repeat(60));
+    println!("{}", "-".repeat(60));
 
     // 1. Confidence Scoring (for reports)
     println!("\n3.1 Confidence Scoring for Reports");

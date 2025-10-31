@@ -170,11 +170,8 @@ fn test_compiler_property_roundtrip() {
         !test_case.is_empty() // Simple mock validation
     });
 
-    match result {
-        PropertyResult::Success { cases_tested } => {
-            assert_eq!(cases_tested, 100);
-        }
-        _ => {}
+    if let PropertyResult::Success { cases_tested } = result {
+        assert_eq!(cases_tested, 100);
     }
 }
 
@@ -197,14 +194,11 @@ fn test_compiler_property_type_preservation() {
 
     let result = checker.check(&prop, |test_case| {
         // Mock: assume all well-formed inputs preserve types
-        test_case.len() > 0
+        !test_case.is_empty()
     });
 
-    match result {
-        PropertyResult::Success { cases_tested } => {
-            assert_eq!(cases_tested, 100);
-        }
-        _ => {}
+    if let PropertyResult::Success { cases_tested } = result {
+        assert_eq!(cases_tested, 100);
     }
 }
 
@@ -259,11 +253,8 @@ fn test_compiler_property_semantic_equivalence() {
         !test_case.is_empty()
     });
 
-    match result {
-        PropertyResult::Success { cases_tested } => {
-            assert_eq!(cases_tested, 100);
-        }
-        _ => {}
+    if let PropertyResult::Success { cases_tested } = result {
+        assert_eq!(cases_tested, 100);
     }
 }
 

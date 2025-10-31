@@ -22,9 +22,9 @@
 // - Slowdown threshold: 20% (1.2x)
 
 use ruchyruchy::bug_discovery::differential::{
-    CompilationTarget, CompilerVersion, DifferentialTester, FailureMode, TestStatus,
+    CompilerVersion, DifferentialTester, FailureMode,
 };
-use ruchyruchy::bug_discovery::statistics::{cohens_d, welchs_t_test, PerformanceRegression};
+use ruchyruchy::bug_discovery::statistics::{cohens_d, welchs_t_test};
 
 /// Test: Version Regression Detection
 ///

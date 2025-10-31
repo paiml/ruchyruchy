@@ -56,7 +56,7 @@ fn test_four_factor_confidence_formula() {
         score
     );
     assert!(
-        score >= 0.0 && score <= 1.0,
+        (0.0..=1.0).contains(&score),
         "Score must be in [0, 1] range (got {})",
         score
     );
