@@ -35,6 +35,8 @@ pub mod bug_discovery;
 pub mod bug_replication;
 /// Bug reporting module (REPORT-001 through REPORT-004)
 pub mod bug_reporting;
+/// Conformance test suite export (INTERP-035)
+pub mod conformance;
 /// Interpreter for runtime bug discovery (INTERP-001 through INTERP-035)
 pub mod interpreter;
 /// Language Server Protocol (LSP) implementation
