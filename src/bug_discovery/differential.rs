@@ -16,34 +16,53 @@ use std::time::{Duration, Instant};
 /// Test status for differential testing
 #[derive(Debug, Clone, PartialEq)]
 pub enum TestStatus {
+    /// Test passed successfully
     Pass,
+    /// Test hung with timeout
     Hang(Duration),
+    /// Test crashed with error
     Crash(String),
+    /// Test produced wrong output
     WrongOutput(String),
-    PerfRegression { slowdown_factor: f64, p_value: f64 },
+    /// Performance regression detected
+    PerfRegression {
+        /// Slowdown factor (e.g., 1.5 = 50% slower)
+        slowdown_factor: f64,
+        /// Statistical significance p-value
+        p_value: f64
+    },
 }
 
 /// Result from running a single test
 #[derive(Debug, Clone)]
 pub struct TestResult {
+    /// Test execution status
     pub status: TestStatus,
+    /// Execution time in milliseconds
     pub execution_time_ms: Option<f64>,
+    /// Memory usage in megabytes
     pub memory_usage_mb: Option<f64>,
+    /// Test output
     pub output: Option<String>,
 }
 
 /// Compiler version for differential testing
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompilerVersion {
+    /// Version string (e.g., "3.0.0")
     pub version: String,
+    /// Compilation target
     pub target: CompilationTarget,
 }
 
 /// Compilation target
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompilationTarget {
+    /// Debug build
     Debug,
+    /// Release build
     Release,
+    /// WebAssembly target
     Wasm,
 }
 
@@ -56,27 +75,54 @@ impl std::fmt::Display for CompilerVersion {
 /// Bug discovered via differential testing
 #[derive(Debug, Clone)]
 pub struct RegressionBug {
+    /// Test case that triggered the bug
     pub test_case: String,
+    /// Compiler version where test works
     pub working_version: CompilerVersion,
+    /// Compiler version where test fails
     pub broken_version: CompilerVersion,
+    /// How the test fails
     pub failure_mode: FailureMode,
+    /// Confidence score for this bug
     pub confidence: ConfidenceScore,
 }
 
 /// Failure mode classification
 #[derive(Debug, Clone)]
 pub enum FailureMode {
-    Hang { timeout_ms: u64 },
-    Crash { error_message: String },
-    WrongOutput { expected: String, actual: String },
-    PerformanceRegression { regression: PerformanceRegression },
+    /// Test hangs
+    Hang {
+        /// Timeout in milliseconds
+        timeout_ms: u64
+    },
+    /// Test crashes
+    Crash {
+        /// Error message from crash
+        error_message: String
+    },
+    /// Test produces wrong output
+    WrongOutput {
+        /// Expected output
+        expected: String,
+        /// Actual output
+        actual: String
+    },
+    /// Performance regression
+    PerformanceRegression {
+        /// Regression details
+        regression: PerformanceRegression
+    },
 }
 
 /// Differential tester
 pub struct DifferentialTester {
+    /// Compiler versions to test
     versions: Vec<CompilerVersion>,
+    /// Number of statistical samples for performance testing
     statistical_samples: usize,
+    /// Significance level for statistical tests (e.g., 0.05)
     significance_level: f64,
+    /// Minimum slowdown factor to report (e.g., 1.2 = 20%)
     min_slowdown: f64,
 }
 

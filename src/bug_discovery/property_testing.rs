@@ -14,7 +14,9 @@ use crate::bug_discovery::confidence::{
 /// A property that should hold for all valid inputs
 #[derive(Debug, Clone)]
 pub struct Property {
+    /// Property name
     pub name: String,
+    /// Property description
     pub description: String,
 }
 
@@ -65,15 +67,24 @@ impl Property {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyResult {
     /// Property holds for all tested inputs
-    Success { cases_tested: usize },
+    Success {
+        /// Number of test cases executed
+        cases_tested: usize
+    },
     /// Property violated with counterexample
     Violation {
+        /// Counterexample that violates the property
         counterexample: String,
+        /// Shrunk (simplified) example if available
         shrunk_example: Option<String>,
+        /// Number of cases tested before failure
         cases_until_failure: usize,
     },
     /// Testing encountered an error
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String
+    },
 }
 
 /// Property test generator trait
@@ -84,9 +95,12 @@ pub trait Generator {
 
 /// Simple AST generator for property testing
 pub struct AstGenerator {
+    /// Random seed for reproducibility
     #[allow(dead_code)]
     seed: u64,
+    /// Current PRNG state
     state: u64,
+    /// Maximum AST depth
     max_depth: usize,
 }
 
@@ -269,9 +283,13 @@ impl PropertyChecker {
 /// Bug found via property testing
 #[derive(Debug, Clone)]
 pub struct PropertyBug {
+    /// Property that was violated
     pub property: Property,
+    /// Counterexample that violates the property
     pub counterexample: String,
+    /// Shrunk (minimized) counterexample
     pub shrunk_example: Option<String>,
+    /// Confidence score for this bug
     pub confidence: ConfidenceScore,
 }
 
