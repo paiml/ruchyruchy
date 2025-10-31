@@ -50,9 +50,15 @@ pub struct Scope {
 #[derive(Debug, Clone)]
 pub enum ScopeError {
     /// Variable already defined in current scope
-    AlreadyDefined { name: String },
+    AlreadyDefined {
+        /// Name of the variable
+        name: String
+    },
     /// Variable not defined in any scope
-    Undefined { name: String },
+    Undefined {
+        /// Name of the variable
+        name: String
+    },
 }
 
 impl fmt::Display for ScopeError {

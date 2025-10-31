@@ -7,17 +7,24 @@ use std::collections::HashMap;
 /// Symbol kind
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SymbolKind {
+    /// Function symbol
     Function,
+    /// Variable symbol
     Variable,
+    /// Type symbol
     Type,
+    /// Constant symbol
     Constant,
 }
 
 /// Symbol information
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Symbol {
+    /// Symbol name
     pub name: String,
+    /// Symbol kind
     pub kind: SymbolKind,
+    /// Symbol location
     pub location: Location,
 }
 
@@ -28,6 +35,7 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
+    /// Create a new symbol table
     pub fn new() -> Self {
         Self {
             symbols: HashMap::new(),

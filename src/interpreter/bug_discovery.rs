@@ -84,7 +84,9 @@ pub struct BugDiscoveryAnalyzer {
 /// Fingerprint for bug deduplication
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BugFingerprint {
+    /// Bug category
     pub category: BugCategory,
+    /// Error signature for matching
     pub error_signature: String,
 }
 

@@ -291,7 +291,9 @@ impl CommentRequest {
 /// GitHub integration result
 #[derive(Debug, Clone)]
 pub enum GitHubResult<T> {
+    /// Operation succeeded
     Success(T),
+    /// Operation failed with error message
     Error(String),
 }
 
