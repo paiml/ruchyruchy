@@ -7,7 +7,7 @@
 // - Bug report generation
 // - Integration with existing bug discovery tools
 
-use crate::bug_discovery::confidence::{ConfidenceScore, DiscoveryMethod};
+use crate::bug_discovery::confidence::ConfidenceScore;
 use crate::interpreter::evaluator::EvalError;
 use std::fmt;
 
@@ -83,9 +83,9 @@ pub struct BugDiscoveryAnalyzer {
 
 /// Fingerprint for bug deduplication
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct BugFingerprint {
-    category: BugCategory,
-    error_signature: String,
+pub struct BugFingerprint {
+    pub category: BugCategory,
+    pub error_signature: String,
 }
 
 impl BugDiscoveryAnalyzer {

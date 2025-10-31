@@ -196,6 +196,7 @@ impl FlameGraph {
     /// "frame1;frame2;frame3 count"
     ///
     /// This format can be rendered by inferno or brendangregg/FlameGraph tools.
+    #[allow(clippy::inherent_to_string)]
     pub fn to_string(&self) -> String {
         let mut lines: Vec<String> = self
             .stacks
@@ -351,8 +352,10 @@ impl Profiler {
     /// Returns `ProfilerError::InitializationFailed` if perf_event_open fails.
     pub fn with_frequency(frequency: u64) -> Result<Self, ProfilerError> {
         // Configure sampling options
-        let mut opts = Opts::default();
-        opts.sample_on = SampleOn::Freq(frequency);
+        let mut opts = Opts {
+            sample_on: SampleOn::Freq(frequency),
+            ..Opts::default()
+        };
         // Note: ip, tid, time are included automatically in samples
         opts.sample_format.user_stack = Some(Size(1024)); // 8KB user stack (1024 * 8 bytes)
 
@@ -522,7 +525,8 @@ impl Profiler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    #[cfg(not(feature = "profiling"))]
+    use super::Profiler;
 
     #[test]
     #[cfg(not(feature = "profiling"))]

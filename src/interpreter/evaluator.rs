@@ -125,7 +125,7 @@ impl fmt::Display for EvalError {
                 write!(f, "{}\nCall stack (most recent call first):\n", error)?;
                 // Display stack in reverse order: innermost (most recent) call first
                 for (i, func_name) in call_stack.iter().rev().enumerate() {
-                    write!(f, "  {}. {}\n", i + 1, func_name)?;
+                    writeln!(f, "  {}. {}", i + 1, func_name)?;
                 }
                 Ok(())
             }
@@ -196,7 +196,7 @@ impl Evaluator {
                         // Extract expression until '}'
                         let mut expr_str = String::new();
                         let mut depth = 1;
-                        while let Some(ch) = chars.next() {
+                        for ch in chars.by_ref() {
                             if ch == '{' {
                                 depth += 1;
                                 expr_str.push(ch);
@@ -626,7 +626,7 @@ impl Evaluator {
         }
 
         // 6. Create new scope and bind parameters to argument values
-        let saved_scope = std::mem::replace(&mut self.scope, Scope::new());
+        let saved_scope = std::mem::take(&mut self.scope);
         for (param, value) in params.iter().zip(arg_values.iter()) {
             self.scope
                 .define(param.clone(), value.clone())
@@ -710,7 +710,7 @@ impl Evaluator {
         match method {
             "len" => {
                 // String length: "hello".len() => 5
-                if arg_values.len() != 0 {
+                if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: format!("{}.len()", receiver.type_name()),
                         expected: 0,
@@ -752,7 +752,7 @@ impl Evaluator {
             }
             "round" => {
                 // Float rounding: 3.7.round() => 4.0
-                if arg_values.len() != 0 {
+                if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: format!("{}.round()", receiver.type_name()),
                         expected: 0,

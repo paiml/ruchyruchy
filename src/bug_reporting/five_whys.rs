@@ -62,7 +62,7 @@ impl DataPoint {
             name,
             value,
             source,
-            relevance: relevance.max(0.0).min(1.0),
+            relevance: relevance.clamp(0.0, 1.0),
         }
     }
 

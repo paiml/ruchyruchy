@@ -412,7 +412,7 @@ impl Value {
     /// Index into vector
     pub fn index(&self, idx: usize) -> Result<&Value, ValueError> {
         match self {
-            Value::Vector(v) => v.get(idx).ok_or_else(|| ValueError::IndexOutOfBounds {
+            Value::Vector(v) => v.get(idx).ok_or(ValueError::IndexOutOfBounds {
                 index: idx,
                 len: v.len(),
             }),

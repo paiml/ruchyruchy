@@ -103,7 +103,7 @@ where
 
     /// Run test with caching
     fn test(&mut self, input: &str) -> TestOutcome {
-        if self.cache.get(input).is_some() {
+        if self.cache.contains(input) {
             // Cache hit - return cached result
             // For now, we recompute (could store outcomes in map)
             // This avoids the complexity of storing outcomes
