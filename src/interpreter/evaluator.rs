@@ -786,7 +786,8 @@ impl Evaluator {
             }
 
             "println" => {
-                // println(msg: String) -> nil
+                // println(value: Any) -> nil
+                // Prints any value (strings without quotes, other types with their display format)
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "println".to_string(),
@@ -796,7 +797,7 @@ impl Evaluator {
                 }
 
                 let msg_val = self.eval(&args[0])?;
-                let msg = msg_val.as_string()?;
+                let msg = msg_val.to_println_string();
 
                 println!("{}", msg);
                 Ok(Some(Value::nil()))
