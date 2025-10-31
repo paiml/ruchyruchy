@@ -30,6 +30,8 @@ enum Token {
     Struct,
     As,
     Mut,
+    Use,
+    Move,
 
     // Identifiers and literals
     Identifier(String),
@@ -55,6 +57,7 @@ enum Token {
     GreaterEqual,
     AndAnd,
     OrOr,
+    Pipe,
 
     // Delimiters
     LeftParen,
@@ -66,6 +69,7 @@ enum Token {
     Comma,
     Semicolon,
     Colon,
+    ColonColon,
     Arrow,
     FatArrow,
     Dot,
@@ -242,6 +246,8 @@ impl Parser {
                         "return" => Token::Return,
                         "struct" => Token::Struct,
                         "as" => Token::As,
+                        "use" => Token::Use,
+                        "move" => Token::Move,
                         "true" => Token::True,
                         "false" => Token::False,
                         _ => Token::Identifier(ident),
@@ -306,6 +312,11 @@ impl Parser {
                 ';' => {
                     chars.next();
                     tokens.push(Token::Semicolon);
+                }
+                ':' if chars.clone().nth(1) == Some(':') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::ColonColon);
                 }
                 ':' => {
                     chars.next();
@@ -377,6 +388,10 @@ impl Parser {
                     chars.next();
                     tokens.push(Token::OrOr);
                 }
+                '|' => {
+                    chars.next();
+                    tokens.push(Token::Pipe);
+                }
 
                 _ => {
                     // Unknown character - skip
@@ -390,12 +405,14 @@ impl Parser {
         Ok(())
     }
 
-    /// Parse a top-level item (function, struct, or statement)
+    /// Parse a top-level item (function, struct, use statement, or statement)
     ///
     /// Supports REPL-style programming by allowing top-level statements
     /// like `println("Hello")` or `let x = 42` in addition to function/struct declarations.
     fn parse_top_level(&mut self) -> Result<AstNode, ParseError> {
-        if self.check(&Token::Fun) {
+        if self.check(&Token::Use) {
+            self.parse_use()
+        } else if self.check(&Token::Fun) {
             self.parse_function()
         } else if self.check(&Token::Struct) {
             self.parse_struct()
@@ -522,6 +539,29 @@ impl Parser {
         self.consume(&Token::RightBrace)?;
 
         Ok(AstNode::StructDef { name, fields })
+    }
+
+    /// Parse a use statement: use std::sync::Mutex;
+    fn parse_use(&mut self) -> Result<AstNode, ParseError> {
+        self.consume(&Token::Use)?;
+
+        let mut path = Vec::new();
+
+        // Parse the first identifier
+        path.push(self.expect_identifier());
+
+        // Parse :: separated path segments
+        while self.check(&Token::ColonColon) {
+            self.advance(); // consume ::
+            path.push(self.expect_identifier());
+        }
+
+        // Optional semicolon
+        if self.check(&Token::Semicolon) {
+            self.advance();
+        }
+
+        Ok(AstNode::UseDecl { path })
     }
 
     /// Parse a statement
@@ -925,6 +965,34 @@ impl Parser {
                 let id = id.clone();
                 self.advance();
 
+                // Check for path expression (e.g., thread::spawn, Arc::new)
+                if self.check(&Token::ColonColon) {
+                    let mut segments = vec![id];
+                    while self.check(&Token::ColonColon) {
+                        self.advance(); // consume ::
+                        segments.push(self.expect_identifier());
+                    }
+
+                    // Check for function call on path (e.g., thread::spawn(...))
+                    if self.check(&Token::LeftParen) {
+                        self.advance();
+                        let mut args = Vec::new();
+                        while !self.check(&Token::RightParen) && !self.is_at_end() {
+                            args.push(self.parse_expression()?);
+                            if self.check(&Token::Comma) {
+                                self.advance();
+                            }
+                        }
+                        self.consume(&Token::RightParen)?;
+                        // Convert path to function name (e.g., "thread::spawn")
+                        let name = segments.join("::");
+                        return Ok(AstNode::FunctionCall { name, args });
+                    } else {
+                        // Just a path expression without call
+                        return Ok(AstNode::PathExpr { segments });
+                    }
+                }
+
                 // Check for function call
                 if self.check(&Token::LeftParen) {
                     self.advance();
@@ -991,20 +1059,63 @@ impl Parser {
                 Ok(AstNode::VectorLiteral { elements })
             }
             Some(Token::LeftBrace) => {
-                // HashMap literal
+                // Block expression or HashMap literal
                 self.advance();
-                let mut pairs = Vec::new();
-                while !self.check(&Token::RightBrace) && !self.is_at_end() {
-                    let key = self.parse_expression()?;
-                    self.consume(&Token::Colon)?;
-                    let value = self.parse_expression()?;
-                    pairs.push((key, value));
-                    if self.check(&Token::Comma) {
-                        self.advance();
-                    }
+
+                // Disambiguate: block vs HashMap
+                // HashMap: { key: value, ... }
+                // Block: { statement; statement; ... }
+
+                // Empty block/hashmap
+                if self.check(&Token::RightBrace) {
+                    self.advance();
+                    return Ok(AstNode::HashMapLiteral { pairs: Vec::new() });
                 }
-                self.consume(&Token::RightBrace)?;
-                Ok(AstNode::HashMapLiteral { pairs })
+
+                // Look ahead to determine if it's a HashMap or block
+                // HashMap has pattern: expr : expr
+                // Block has pattern: statement (often starts with keyword or ends with ;)
+
+                // Check if first token suggests a statement (let, if, while, etc.)
+                let is_block = matches!(
+                    self.current(),
+                    Some(Token::Let) | Some(Token::If) | Some(Token::While) |
+                    Some(Token::For) | Some(Token::Match) | Some(Token::Return)
+                );
+
+                if is_block {
+                    // Parse as block expression
+                    let mut body = Vec::new();
+                    while !self.check(&Token::RightBrace) && !self.is_at_end() {
+                        body.push(self.parse_statement()?);
+                    }
+                    self.consume(&Token::RightBrace)?;
+
+                    // For now, represent block as a tuple with special marker
+                    // In a full implementation, we'd have a BlockExpr AST node
+                    // For simplicity, treating it as an expression that evaluates to last statement
+                    if body.is_empty() {
+                        Ok(AstNode::TupleLiteral { elements: Vec::new() })
+                    } else {
+                        // Return the last expression from the block
+                        // This is a simplification - ideally we'd have proper block scoping
+                        Ok(body.into_iter().last().unwrap())
+                    }
+                } else {
+                    // Try parsing as HashMap
+                    let mut pairs = Vec::new();
+                    while !self.check(&Token::RightBrace) && !self.is_at_end() {
+                        let key = self.parse_expression()?;
+                        self.consume(&Token::Colon)?;
+                        let value = self.parse_expression()?;
+                        pairs.push((key, value));
+                        if self.check(&Token::Comma) {
+                            self.advance();
+                        }
+                    }
+                    self.consume(&Token::RightBrace)?;
+                    Ok(AstNode::HashMapLiteral { pairs })
+                }
             }
             Some(Token::LeftParen) => {
                 // Grouped expression or tuple literal
@@ -1059,6 +1170,70 @@ impl Parser {
                 Ok(AstNode::UnaryOp {
                     op: UnaryOperator::Not,
                     operand,
+                })
+            }
+            Some(Token::OrOr) => {
+                // Closure with no parameters: || { body }
+                self.advance(); // consume ||
+
+                self.consume(&Token::LeftBrace)?;
+                let mut body = Vec::new();
+                while !self.check(&Token::RightBrace) && !self.is_at_end() {
+                    body.push(self.parse_statement()?);
+                }
+                self.consume(&Token::RightBrace)?;
+
+                Ok(AstNode::Closure {
+                    is_move: false,
+                    params: Vec::new(),
+                    body,
+                })
+            }
+            Some(Token::Pipe) | Some(Token::Move) => {
+                // Closure: |params| { body } or move |params| { body }
+                let is_move = if self.check(&Token::Move) {
+                    self.advance();
+                    // Check for || after move
+                    if self.check(&Token::OrOr) {
+                        self.advance();
+                        self.consume(&Token::LeftBrace)?;
+                        let mut body = Vec::new();
+                        while !self.check(&Token::RightBrace) && !self.is_at_end() {
+                            body.push(self.parse_statement()?);
+                        }
+                        self.consume(&Token::RightBrace)?;
+                        return Ok(AstNode::Closure {
+                            is_move: true,
+                            params: Vec::new(),
+                            body,
+                        });
+                    }
+                    true
+                } else {
+                    false
+                };
+
+                self.consume(&Token::Pipe)?;
+                let mut params = Vec::new();
+                while !self.check(&Token::Pipe) && !self.is_at_end() {
+                    params.push(self.expect_identifier());
+                    if self.check(&Token::Comma) {
+                        self.advance();
+                    }
+                }
+                self.consume(&Token::Pipe)?;
+
+                self.consume(&Token::LeftBrace)?;
+                let mut body = Vec::new();
+                while !self.check(&Token::RightBrace) && !self.is_at_end() {
+                    body.push(self.parse_statement()?);
+                }
+                self.consume(&Token::RightBrace)?;
+
+                Ok(AstNode::Closure {
+                    is_move,
+                    params,
+                    body,
                 })
             }
             _ => {
@@ -1353,6 +1528,28 @@ pub enum AstNode {
 
     /// Boolean literal
     BooleanLiteral(bool),
+
+    /// Use statement: use std::sync::Mutex;
+    UseDecl {
+        /// Import path (e.g., ["std", "sync", "Mutex"])
+        path: Vec<String>,
+    },
+
+    /// Path expression: std::thread::spawn
+    PathExpr {
+        /// Path segments (e.g., ["std", "thread", "spawn"])
+        segments: Vec<String>,
+    },
+
+    /// Closure/lambda expression: |params| body or move |params| body
+    Closure {
+        /// Whether this is a move closure
+        is_move: bool,
+        /// Parameter names
+        params: Vec<String>,
+        /// Closure body statements
+        body: Vec<AstNode>,
+    },
 }
 
 impl AstNode {
