@@ -8,13 +8,21 @@
 // - REPORT-003: TDD Integration
 // - REPORT-004: Markdown Report Generator
 
+/// Confidence scoring for bug reports
 pub mod confidence;
+/// Five-Whys root cause analysis
 pub mod five_whys;
+/// GitHub issue integration
 pub mod github_integration;
+/// Issue deduplication and linking
 pub mod issue_linking;
+/// Quantitative code metrics
 pub mod metrics;
+/// Bug report generation
 pub mod report_generator;
+/// TDD cycle tracking
 pub mod tdd;
+/// Bug corpus validation
 pub mod validation;
 
 pub use confidence::{
