@@ -336,6 +336,17 @@ impl Evaluator {
                 Ok(ControlFlow::Value(Value::HashMap(map)))
             }
 
+            // Tuple literal - create tuple value
+            // Syntax: (elem1, elem2, ...)
+            // Elements can be heterogeneous types
+            AstNode::TupleLiteral { elements } => {
+                let mut values = Vec::new();
+                for elem in elements {
+                    values.push(self.eval(elem)?);
+                }
+                Ok(ControlFlow::Value(Value::tuple(values)))
+            }
+
             // Index access - vec[i], map[key]
             // For vectors: index must be non-negative integer
             // For hashmaps: key can be any Value (converted to string internally)
