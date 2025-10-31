@@ -287,7 +287,7 @@ fn test_precondition_filtering() {
     // Verify that tests were generated
     // Note: Precondition enforcement may vary by implementation
     // At minimum, verify that both operations can be generated
-    assert!(tests.len() > 0, "Should generate tests");
+    assert!(!tests.is_empty(), "Should generate tests");
 
     // If implementation enforces preconditions, tests with pop should have push first
     // For now, just verify that SOME tests have push (showing generator works)
@@ -332,7 +332,7 @@ fn test_shadow_state_tracking() {
 
     assert_eq!(state.history.len(), 1);
     assert_eq!(state.history[0], "new");
-    assert_eq!(*state.predicates.get("is_empty").unwrap(), true);
+    assert!(*state.predicates.get("is_empty").unwrap());
 
     // Check preconditions
     assert!(
@@ -344,7 +344,7 @@ fn test_shadow_state_tracking() {
         "is_empty predicate should be satisfied"
     );
     assert!(
-        state.check_preconditions(&["!is_empty".to_string()]) == false,
+        !state.check_preconditions(&["!is_empty".to_string()]),
         "!is_empty should NOT be satisfied when is_empty is true"
     );
 
@@ -355,7 +355,7 @@ fn test_shadow_state_tracking() {
 
     assert_eq!(state.history.len(), 2);
     assert_eq!(state.history[1], "push(1)");
-    assert_eq!(*state.predicates.get("is_empty").unwrap(), false);
+    assert!(!(*state.predicates.get("is_empty").unwrap()));
 
     // Now !is_empty should be satisfied
     assert!(
@@ -363,7 +363,7 @@ fn test_shadow_state_tracking() {
         "!is_empty should be satisfied after push"
     );
     assert!(
-        state.check_preconditions(&["is_empty".to_string()]) == false,
+        !state.check_preconditions(&["is_empty".to_string()]),
         "is_empty should NOT be satisfied after push"
     );
 

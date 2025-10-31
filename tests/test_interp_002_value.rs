@@ -77,8 +77,8 @@ fn test_create_boolean_value() {
     assert!(val_true.is_boolean());
     assert!(val_false.is_boolean());
 
-    assert_eq!(val_true.as_boolean().unwrap(), true);
-    assert_eq!(val_false.as_boolean().unwrap(), false);
+    assert!(val_true.as_boolean().unwrap());
+    assert!(!val_false.as_boolean().unwrap());
 }
 
 #[test]
@@ -89,15 +89,15 @@ fn test_boolean_logical_operations() {
 
     // AND
     let and_result = t.logical_and(&f).unwrap();
-    assert_eq!(and_result.as_boolean().unwrap(), false);
+    assert!(!and_result.as_boolean().unwrap());
 
     // OR
     let or_result = t.logical_or(&f).unwrap();
-    assert_eq!(or_result.as_boolean().unwrap(), true);
+    assert!(or_result.as_boolean().unwrap());
 
     // NOT
     let not_result = t.logical_not().unwrap();
-    assert_eq!(not_result.as_boolean().unwrap(), false);
+    assert!(!not_result.as_boolean().unwrap());
 }
 
 // ===== RED PHASE TEST 4: Create Vector Value =====
@@ -210,10 +210,10 @@ fn test_comparison_operations() {
     let a = Value::integer(10);
     let b = Value::integer(20);
 
-    assert_eq!(a.less_than(&b).unwrap().as_boolean().unwrap(), true);
-    assert_eq!(a.greater_than(&b).unwrap().as_boolean().unwrap(), false);
-    assert_eq!(a.equals(&b).unwrap().as_boolean().unwrap(), false);
-    assert_eq!(a.equals(&a).unwrap().as_boolean().unwrap(), true);
+    assert!(a.less_than(&b).unwrap().as_boolean().unwrap());
+    assert!(!a.greater_than(&b).unwrap().as_boolean().unwrap());
+    assert!(!a.equals(&b).unwrap().as_boolean().unwrap());
+    assert!(a.equals(&a).unwrap().as_boolean().unwrap());
 }
 
 // ===== RED PHASE TEST 8: Display and Debug =====
@@ -242,9 +242,8 @@ fn test_value_cloning() {
     assert_eq!(cloned.as_integer().unwrap(), 42);
 
     // Verify they're equal but independent
-    assert_eq!(
-        original.equals(&cloned).unwrap().as_boolean().unwrap(),
-        true
+    assert!(
+        original.equals(&cloned).unwrap().as_boolean().unwrap()
     );
 }
 

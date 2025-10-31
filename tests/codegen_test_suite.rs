@@ -527,7 +527,7 @@ fn test_code_generation(ruchy_code: &str, test_name: &str) -> Result<String, Str
                 .output();
 
             let _ = fs::remove_file(&filename);
-            let _ = fs::remove_file(&format!("test_{}.d", test_name));
+            let _ = fs::remove_file(format!("test_{}.d", test_name));
 
             match output {
                 Ok(result) => {
@@ -572,10 +572,7 @@ fn transform_basic_syntax_test(code: String) -> String {
     code.replace(r#"println("#, r#"println!("#)
         .replace(r#"print("#, r#"print!("#)
         .replace(r#"format("#, r#"format!("#)
-        .replace("Vec<Token>", "Vec<Token>")
-        .replace("Vec<String>", "Vec<String>")
-        .replace("HashMap<", "HashMap<")
-        .replace("HashSet<", "HashSet<")
+    // Note: Vec<T> and HashMap<T> replacements removed - they were no-ops
 }
 
 fn add_derive_attributes_test(code: String) -> String {

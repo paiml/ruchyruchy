@@ -535,22 +535,18 @@ fn test_documentation_consistency() {
 #[test]
 fn test_troubleshooting_guide_coverage() {
     // Common compilation errors that should be documented
-    let compilation_errors = vec![
-        "missing dependency",
+    let compilation_errors = ["missing dependency",
         "version mismatch",
         "type error",
         "borrow checker",
-        "trait not implemented",
-    ];
+        "trait not implemented"];
 
     // Common runtime errors
-    let runtime_errors = vec![
-        "panic",
+    let runtime_errors = ["panic",
         "unwrap on None",
         "out of bounds",
         "timeout",
-        "deadlock",
-    ];
+        "deadlock"];
 
     // Verify coverage counts
     assert!(

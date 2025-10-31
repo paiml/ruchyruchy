@@ -381,14 +381,11 @@ fn test_multiple_version_comparison() {
 
     // Each regression should have proper statistical evidence
     for regression in &regressions {
-        match &regression.failure_mode {
-            FailureMode::PerformanceRegression { regression: perf } => {
-                assert!(
-                    perf.p_value < 0.05,
-                    "All regressions must be statistically significant"
-                );
-            }
-            _ => {}
+        if let FailureMode::PerformanceRegression { regression: perf } = &regression.failure_mode {
+            assert!(
+                perf.p_value < 0.05,
+                "All regressions must be statistically significant"
+            );
         }
     }
 }
