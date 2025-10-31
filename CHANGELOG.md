@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **INTERP-013: Execute Chapter 3 Examples (Functions)** (October 31, 2025)
+  - Test suite for Chapter 3 function examples from Ruchy book
+  - 5 tests: 4 examples + 1 meta test (100% success rate)
+  - Tests: basic functions, parameters, return values, type annotations, nested calls
+  - File: tests/test_interp_013_ch03_examples.rs (219 LOC)
+
+### Fixed
+- **CRITICAL: Parser Infinite Loop on Function Type Annotations** (GitHub Issue #6)
+  - Bug: Parser entered infinite loop when encountering function type annotations
+  - Symptom: Tests hung indefinitely (>60s) on `fun multiply(x: i32) -> i32 { x * y }`
+  - Root Cause 1: Arrow token (`->`) not tokenized (treated as Minus + GreaterThan)
+  - Root Cause 2: Parameter parsing loop never advanced on Colon token
+  - Fix 1: Added arrow token tokenization with lookahead (src/interpreter/parser.rs:236-244)
+  - Fix 2: Added type annotation handling in parameter parsing (lines 402-420)
+  - Impact: Functions with type annotations now work correctly
+  - Discovery: EXTREME TDD RED phase (STOP THE LINE protocol)
+  - Status: ✅ FIXED in GREEN phase - All 5 tests passing in <0.01s (previously hung >60s)
+
 ## [1.9.1] - 2025-10-30
 
 ### Quality Improvements
