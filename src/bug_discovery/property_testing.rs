@@ -73,7 +73,7 @@ pub enum PropertyResult {
     /// Property holds for all tested inputs
     Success {
         /// Number of test cases executed
-        cases_tested: usize
+        cases_tested: usize,
     },
     /// Property violated with counterexample
     Violation {
@@ -87,7 +87,7 @@ pub enum PropertyResult {
     /// Testing encountered an error
     Error {
         /// Error message
-        message: String
+        message: String,
     },
 }
 

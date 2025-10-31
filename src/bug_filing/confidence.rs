@@ -46,6 +46,16 @@ pub enum Impact {
 pub struct ConfidenceCalculator;
 
 impl ConfidenceCalculator {
+    /// Confidence weights for scoring factors
+    const WEIGHT_REPRODUCIBILITY: f64 = 0.4; // 40%
+    const WEIGHT_MINIMALITY: f64 = 0.3; // 30%
+    const WEIGHT_SPEC_VIOLATION: f64 = 0.2; // 20%
+    const WEIGHT_IMPACT: f64 = 0.1; // 10%
+
+    /// Lines of code thresholds for minimality scoring
+    const LOC_THRESHOLD_MINIMAL: usize = 10; // < 10 lines = 1.0
+    const LOC_THRESHOLD_MODERATE: usize = 50; // < 50 lines = 0.5
+
     /// Calculate confidence score (0.0-1.0)
     ///
     /// # Factors
@@ -90,30 +100,54 @@ impl ConfidenceCalculator {
     /// assert!(confidence >= 0.9);
     /// ```
     pub fn calculate(factors: &ConfidenceFactors) -> f64 {
-        let repro_score = match factors.reproducibility {
+        let repro_score = Self::calculate_reproducibility_score(factors.reproducibility);
+        let minimality_score = Self::calculate_minimality_score(factors.lines_of_code);
+        let spec_score = Self::calculate_spec_score(factors.spec_violation);
+        let impact_score = Self::calculate_impact_score(factors.impact);
+
+        // Weighted average
+        (repro_score * Self::WEIGHT_REPRODUCIBILITY)
+            + (minimality_score * Self::WEIGHT_MINIMALITY)
+            + (spec_score * Self::WEIGHT_SPEC_VIOLATION)
+            + (impact_score * Self::WEIGHT_IMPACT)
+    }
+
+    /// Calculate reproducibility score (0.0-1.0)
+    fn calculate_reproducibility_score(reproducibility: Reproducibility) -> f64 {
+        match reproducibility {
             Reproducibility::Always => 1.0,
             Reproducibility::Sometimes => 0.5,
             Reproducibility::Never => 0.0,
-        };
+        }
+    }
 
-        let minimality_score = if factors.lines_of_code < 10 {
+    /// Calculate minimality score (0.0-1.0) based on lines of code
+    fn calculate_minimality_score(lines_of_code: usize) -> f64 {
+        if lines_of_code < Self::LOC_THRESHOLD_MINIMAL {
             1.0
-        } else if factors.lines_of_code <= 50 {
+        } else if lines_of_code <= Self::LOC_THRESHOLD_MODERATE {
             0.5
         } else {
             0.0
-        };
+        }
+    }
 
-        let spec_score = if factors.spec_violation { 1.0 } else { 0.5 };
+    /// Calculate spec violation score (0.5-1.0)
+    fn calculate_spec_score(spec_violation: bool) -> f64 {
+        if spec_violation {
+            1.0
+        } else {
+            0.5
+        }
+    }
 
-        let impact_score = match factors.impact {
+    /// Calculate impact score (0.0-1.0)
+    fn calculate_impact_score(impact: Impact) -> f64 {
+        match impact {
             Impact::Critical => 1.0,
             Impact::High => 0.5,
             Impact::Medium | Impact::Low => 0.0,
-        };
-
-        // Weighted average
-        (repro_score * 0.4) + (minimality_score * 0.3) + (spec_score * 0.2) + (impact_score * 0.1)
+        }
     }
 }
 

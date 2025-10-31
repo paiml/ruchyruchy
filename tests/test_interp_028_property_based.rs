@@ -81,7 +81,7 @@ mod property_testing {
                 7 => format!("fun f() {{ {} }} f()", self.seed % 100), // Function
                 8 => format!("{} == {}", self.seed % 100, (self.seed / 100) % 100), // Comparison
                 9 => format!("!{}", self.seed.is_multiple_of(2)), // Boolean negation
-                _ => "42".to_string(), // Fallback
+                _ => "42".to_string(),                           // Fallback
             }
         }
 
@@ -172,9 +172,16 @@ mod property_testing {
     #[derive(Debug, PartialEq)]
     #[allow(dead_code)] // Used in RED phase tests
     pub enum PropertyResult {
-        Success { cases_tested: usize },
-        Crash { program: String, cases_until_crash: usize },
-        Error { message: String },
+        Success {
+            cases_tested: usize,
+        },
+        Crash {
+            program: String,
+            cases_until_crash: usize,
+        },
+        Error {
+            message: String,
+        },
     }
 
     /// Outcome of testing a single program

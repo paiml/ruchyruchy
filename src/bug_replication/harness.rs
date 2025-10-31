@@ -76,7 +76,7 @@ pub enum ExecutionResult {
         /// Test output
         output: String,
         /// Execution duration
-        duration: Duration
+        duration: Duration,
     },
     /// Test failed with error
     Failure {

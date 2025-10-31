@@ -99,11 +99,7 @@ impl BugDiscoveryAnalyzer {
     }
 
     /// Analyze an interpreter error and generate bug report
-    pub fn analyze_error(
-        &mut self,
-        error: &EvalError,
-        source_code: &str,
-    ) -> InterpreterBugReport {
+    pub fn analyze_error(&mut self, error: &EvalError, source_code: &str) -> InterpreterBugReport {
         // Categorize the error
         let category = Self::categorize_error(error);
 
@@ -181,14 +177,14 @@ impl BugDiscoveryAnalyzer {
     fn calculate_confidence(category: BugCategory, call_stack: &[String]) -> ConfidenceScore {
         // High confidence for clear runtime errors
         let discovery_method = match category {
-            BugCategory::DivisionByZero => 0.95, // Very clear error
-            BugCategory::IndexOutOfBounds => 0.90, // Clear error
-            BugCategory::StackOverflow => 0.85,    // Clear but might be intentional test
-            BugCategory::UndefinedIdentifier => 0.90, // Clear error
-            BugCategory::TypeMismatch => 0.85,     // Clear but context-dependent
-            BugCategory::NoMatchArm => 0.80,       // Might be incomplete code
+            BugCategory::DivisionByZero => 0.95,       // Very clear error
+            BugCategory::IndexOutOfBounds => 0.90,     // Clear error
+            BugCategory::StackOverflow => 0.85,        // Clear but might be intentional test
+            BugCategory::UndefinedIdentifier => 0.90,  // Clear error
+            BugCategory::TypeMismatch => 0.85,         // Clear but context-dependent
+            BugCategory::NoMatchArm => 0.80,           // Might be incomplete code
             BugCategory::UnsupportedOperation => 0.75, // Might be unimplemented feature
-            BugCategory::Other => 0.60,            // Unknown error type
+            BugCategory::Other => 0.60,                // Unknown error type
         };
 
         // Reproducibility: 100% if we have the error

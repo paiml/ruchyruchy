@@ -63,12 +63,12 @@ pub enum EvalError {
     /// Undefined variable
     UndefinedVariable {
         /// Variable name
-        name: String
+        name: String,
     },
     /// Undefined function
     UndefinedFunction {
         /// Function name
-        name: String
+        name: String,
     },
     /// Argument count mismatch in function call
     ArgumentCountMismatch {
@@ -86,7 +86,7 @@ pub enum EvalError {
     /// Unsupported operation
     UnsupportedOperation {
         /// Operation description
-        operation: String
+        operation: String,
     },
     /// Error with call stack information for debugging
     ///
@@ -227,11 +227,14 @@ impl Evaluator {
 
                         // Parse and evaluate the expression
                         let mut parser = Parser::new(&expr_str);
-                        let ast = parser.parse().map_err(|e| {
-                            EvalError::UnsupportedOperation {
-                                operation: format!("Failed to parse f-string expression '{}': {:?}", expr_str, e),
-                            }
-                        })?;
+                        let ast = parser
+                            .parse()
+                            .map_err(|e| EvalError::UnsupportedOperation {
+                                operation: format!(
+                                    "Failed to parse f-string expression '{}': {:?}",
+                                    expr_str, e
+                                ),
+                            })?;
 
                         // Evaluate the expression
                         if let Some(node) = ast.nodes().first() {
@@ -274,12 +277,24 @@ impl Evaluator {
                 let start_val = self.eval(start)?;
                 let end_val = self.eval(end)?;
 
-                let start_int = start_val.as_integer().map_err(|_| EvalError::UnsupportedOperation {
-                    operation: format!("range start must be integer, got {}", start_val.type_name()),
-                })?;
-                let end_int = end_val.as_integer().map_err(|_| EvalError::UnsupportedOperation {
-                    operation: format!("range end must be integer, got {}", end_val.type_name()),
-                })?;
+                let start_int =
+                    start_val
+                        .as_integer()
+                        .map_err(|_| EvalError::UnsupportedOperation {
+                            operation: format!(
+                                "range start must be integer, got {}",
+                                start_val.type_name()
+                            ),
+                        })?;
+                let end_int =
+                    end_val
+                        .as_integer()
+                        .map_err(|_| EvalError::UnsupportedOperation {
+                            operation: format!(
+                                "range end must be integer, got {}",
+                                end_val.type_name()
+                            ),
+                        })?;
 
                 // Create vector of integers from start to end (exclusive)
                 let mut elements = Vec::new();
@@ -542,11 +557,11 @@ impl Evaluator {
                 } else if let Ok(f) = value.as_float() {
                     Ok(Value::integer(f as i64))
                 } else if let Ok(s) = value.as_string() {
-                    s.parse::<i64>()
-                        .map(Value::integer)
-                        .map_err(|_| EvalError::UnsupportedOperation {
+                    s.parse::<i64>().map(Value::integer).map_err(|_| {
+                        EvalError::UnsupportedOperation {
                             operation: format!("cannot cast string '{}' to i32", s),
-                        })
+                        }
+                    })
                 } else {
                     Err(EvalError::UnsupportedOperation {
                         operation: format!("cannot cast {} to i32", value.type_name()),
@@ -560,11 +575,11 @@ impl Evaluator {
                 } else if let Ok(i) = value.as_integer() {
                     Ok(Value::float(i as f64))
                 } else if let Ok(s) = value.as_string() {
-                    s.parse::<f64>()
-                        .map(Value::float)
-                        .map_err(|_| EvalError::UnsupportedOperation {
+                    s.parse::<f64>().map(Value::float).map_err(|_| {
+                        EvalError::UnsupportedOperation {
                             operation: format!("cannot cast string '{}' to f64", s),
-                        })
+                        }
+                    })
                 } else {
                     Err(EvalError::UnsupportedOperation {
                         operation: format!("cannot cast {} to f64", value.type_name()),
@@ -736,7 +751,10 @@ impl Evaluator {
                     Ok(Value::integer(s.len() as i64))
                 } else {
                     Err(EvalError::UnsupportedOperation {
-                        operation: format!("method 'len' not supported on type {}", receiver.type_name()),
+                        operation: format!(
+                            "method 'len' not supported on type {}",
+                            receiver.type_name()
+                        ),
                     })
                 }
             }
@@ -778,12 +796,19 @@ impl Evaluator {
                     Ok(Value::float(f.round()))
                 } else {
                     Err(EvalError::UnsupportedOperation {
-                        operation: format!("method 'round' not supported on type {}", receiver.type_name()),
+                        operation: format!(
+                            "method 'round' not supported on type {}",
+                            receiver.type_name()
+                        ),
                     })
                 }
             }
             _ => Err(EvalError::UnsupportedOperation {
-                operation: format!("unknown method '{}' on type {}", method, receiver.type_name()),
+                operation: format!(
+                    "unknown method '{}' on type {}",
+                    method,
+                    receiver.type_name()
+                ),
             }),
         }
     }

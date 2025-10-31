@@ -120,45 +120,83 @@ impl BugReport {
     ///
     /// Markdown-formatted string ready for GitHub issue creation.
     pub fn to_github_markdown(&self) -> String {
-        let category_str = format!("{:?}", self.category);
-        let severity_str = format!("{:?}", self.severity);
-
         let mut markdown = String::new();
-        markdown.push_str(&format!("## Bug Report: {}\n\n", self.title));
-        markdown.push_str(&format!("**Category**: {}\n", category_str));
-        markdown.push_str(&format!("**Confidence**: {:.2}\n", self.confidence));
-        markdown.push_str(&format!("**Severity**: {}\n", severity_str));
-        markdown.push_str("**Discovered By**: RuchyRuchy Interpreter v1.10.0\n\n");
 
-        markdown.push_str("### Minimal Reproduction\n\n");
-        markdown.push_str("```ruchy\n");
-        markdown.push_str(&self.reproduction);
-        markdown.push('\n');
-        markdown.push_str("```\n\n");
+        // Header section
+        markdown.push_str(&self.format_header());
 
-        markdown.push_str("### Expected Behavior\n\n");
-        markdown.push_str(&self.expected);
-        markdown.push_str("\n\n");
+        // Code reproduction section
+        markdown.push_str(&self.format_reproduction());
 
-        markdown.push_str("### Actual Behavior\n\n");
-        markdown.push_str(&self.actual);
-        markdown.push_str("\n\n");
+        // Behavior sections
+        markdown.push_str(&self.format_expected_behavior());
+        markdown.push_str(&self.format_actual_behavior());
 
-        markdown.push_str("### Environment\n\n");
-        for (key, value) in &self.environment {
-            markdown.push_str(&format!("- **{}**: {}\n", key, value));
-        }
-        markdown.push('\n');
-
+        // Environment and metadata
+        markdown.push_str(&self.format_environment());
         if let Some(test_file) = &self.test_file {
             markdown.push_str(&format!("**Test File**: {}\n\n", test_file));
         }
 
-        markdown.push_str("---\n");
-        markdown.push_str("**Filed by**: RuchyRuchy Automated Bug Reporter\n");
-        markdown.push_str("**Ticket**: INTERP-034\n");
+        // Footer
+        markdown.push_str(&Self::format_footer());
 
         markdown
+    }
+
+    /// Format bug report header with metadata
+    fn format_header(&self) -> String {
+        let category_str = format!("{:?}", self.category);
+        let severity_str = format!("{:?}", self.severity);
+
+        format!(
+            "## Bug Report: {}\n\n\
+             **Category**: {}\n\
+             **Confidence**: {:.2}\n\
+             **Severity**: {}\n\
+             **Discovered By**: RuchyRuchy Interpreter v1.10.0\n\n",
+            self.title, category_str, self.confidence, severity_str
+        )
+    }
+
+    /// Format minimal reproduction code section
+    fn format_reproduction(&self) -> String {
+        format!(
+            "### Minimal Reproduction\n\n\
+             ```ruchy\n\
+             {}\n\
+             ```\n\n",
+            self.reproduction
+        )
+    }
+
+    /// Format expected behavior section
+    fn format_expected_behavior(&self) -> String {
+        format!("### Expected Behavior\n\n{}\n\n", self.expected)
+    }
+
+    /// Format actual behavior section
+    fn format_actual_behavior(&self) -> String {
+        format!("### Actual Behavior\n\n{}\n\n", self.actual)
+    }
+
+    /// Format environment information section
+    fn format_environment(&self) -> String {
+        let mut env_section = String::from("### Environment\n\n");
+        for (key, value) in &self.environment {
+            env_section.push_str(&format!("- **{}**: {}\n", key, value));
+        }
+        env_section.push('\n');
+        env_section
+    }
+
+    /// Format issue footer with attribution
+    fn format_footer() -> String {
+        String::from(
+            "---\n\
+             **Filed by**: RuchyRuchy Automated Bug Reporter\n\
+             **Ticket**: INTERP-034\n",
+        )
     }
 
     /// Calculate bug fingerprint for deduplication
@@ -174,6 +212,82 @@ impl BugReport {
         self.reproduction.hash(&mut hasher);
         self.actual.hash(&mut hasher);
         format!("{:x}", hasher.finish())
+    }
+
+    /// Builder pattern: Set confidence score
+    ///
+    /// # Arguments
+    ///
+    /// * `confidence` - Confidence score (0.0-1.0)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ruchyruchy::bug_filing::{BugReport, Category, Severity};
+    ///
+    /// let bug = BugReport::new(
+    ///     Category::Parser,
+    ///     Severity::High,
+    ///     "Bug".to_string(),
+    ///     "code".to_string(),
+    ///     "expected".to_string(),
+    ///     "actual".to_string(),
+    /// ).with_confidence(0.95);
+    /// ```
+    pub fn with_confidence(mut self, confidence: f64) -> Self {
+        self.confidence = confidence;
+        self
+    }
+
+    /// Builder pattern: Set test file
+    ///
+    /// # Arguments
+    ///
+    /// * `test_file` - Path to test file where bug was discovered
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ruchyruchy::bug_filing::{BugReport, Category, Severity};
+    ///
+    /// let bug = BugReport::new(
+    ///     Category::Parser,
+    ///     Severity::High,
+    ///     "Bug".to_string(),
+    ///     "code".to_string(),
+    ///     "expected".to_string(),
+    ///     "actual".to_string(),
+    /// ).with_test_file("tests/test_parser.rs".to_string());
+    /// ```
+    pub fn with_test_file(mut self, test_file: String) -> Self {
+        self.test_file = Some(test_file);
+        self
+    }
+
+    /// Builder pattern: Add environment variable
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Environment variable name
+    /// * `value` - Environment variable value
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ruchyruchy::bug_filing::{BugReport, Category, Severity};
+    ///
+    /// let bug = BugReport::new(
+    ///     Category::Parser,
+    ///     Severity::High,
+    ///     "Bug".to_string(),
+    ///     "code".to_string(),
+    ///     "expected".to_string(),
+    ///     "actual".to_string(),
+    /// ).with_env("custom_var", "custom_value");
+    /// ```
+    pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.environment.insert(key.into(), value.into());
+        self
     }
 }
 

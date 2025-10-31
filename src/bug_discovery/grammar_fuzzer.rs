@@ -310,14 +310,14 @@ pub enum FuzzResult {
     /// Test hung (exceeded timeout)
     Hang {
         /// Timeout in milliseconds
-        timeout_ms: u64
+        timeout_ms: u64,
     },
     /// Test produced incorrect output
     IncorrectOutput {
         /// Expected output
         expected: String,
         /// Actual output
-        actual: String
+        actual: String,
     },
 }
 

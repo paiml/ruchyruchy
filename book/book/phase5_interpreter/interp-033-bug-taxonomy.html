@@ -1,0 +1,529 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>INTERP-033: Bug Taxonomy &amp; Comprehensive Analysis - RuchyRuchy: Educational Bootstrap Compiler</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Complete documentation of the RuchyRuchy bootstrap compiler built with EXTREME TDD methodology">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "rust";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RuchyRuchy: Educational Bootstrap Compiler</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/paiml/ruchyruchy" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/paiml/ruchyruchy/edit/main/book/src/phase5_interpreter/interp-033-bug-taxonomy.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="interp-033-bug-taxonomy--comprehensive-analysis"><a class="header" href="#interp-033-bug-taxonomy--comprehensive-analysis">INTERP-033: Bug Taxonomy &amp; Comprehensive Analysis</a></h1>
+<h2 id="context"><a class="header" href="#context">Context</a></h2>
+<p>Bug taxonomy provides systematic categorization, prioritization, and analysis of discovered bugs. This ticket implements a comprehensive bug tracking database with severity levels, categories, and root cause analysis.</p>
+<p><strong>Why this is needed</strong>: Discovered bugs must be tracked, prioritized, and analyzed systematically. A taxonomy enables pattern recognition, root cause analysis, and prioritization of fixes.</p>
+<h2 id="red-write-failing-test"><a class="header" href="#red-write-failing-test">RED: Write Failing Test</a></h2>
+<p>Tests were written first to define taxonomy requirements:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// File: tests/test_interp_033_bug_taxonomy.rs
+#[test]
+fn test_bug_taxonomy_basic() {
+    let mut taxonomy = BugTaxonomy::new();
+
+    let bug = BugReport::new(
+        "BUG-001".to_string(),
+        "Block expressions not supported".to_string(),
+        BugCategory::Parser,
+        Severity::Medium,
+        "Parser cannot handle block expressions with braces".to_string(),
+        RootCause::MissingFeature,
+        "Limits expressiveness".to_string(),
+        "Try to parse { let x = 10; x }".to_string(),
+    );
+
+    taxonomy.add_bug(bug);
+    assert_eq!(taxonomy.total_bugs(), 1);
+}
+
+#[test]
+fn test_severity_distribution() {
+    let mut taxonomy = BugTaxonomy::new();
+    // ... add bugs with different severities ...
+
+    let dist = taxonomy.severity_distribution();
+    assert!(dist.len() &gt; 0);
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Expected</strong>: Tests fail because <code>BugTaxonomy</code> and <code>BugReport</code> don't exist.</p>
+<p><strong>Actual</strong>: Compilation error - bug taxonomy infrastructure not implemented.</p>
+<p><strong>Validation</strong>: <code>cargo test test_bug_taxonomy_basic</code> exits with status 1.</p>
+<h2 id="green-minimal-implementation"><a class="header" href="#green-minimal-implementation">GREEN: Minimal Implementation</a></h2>
+<p>Implemented comprehensive bug taxonomy system:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// File: tests/test_interp_033_bug_taxonomy.rs
+#[derive(Debug, Clone, PartialEq)]
+pub enum BugCategory {
+    Parser,
+    Evaluator,
+    Performance,
+    Safety,
+    TypeSystem,
+    Optimizer,
+    Compatibility,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Severity {
+    Critical,  // Crash, data loss, security
+    High,      // Major functionality broken
+    Medium,    // Minor functionality broken
+    Low,       // Cosmetic, performance
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RootCause {
+    MissingFeature,
+    IncorrectLogic,
+    EdgeCaseHandling,
+    PerformanceBottleneck,
+    DesignLimitation,
+}
+
+pub struct BugReport {
+    pub id: String,
+    pub title: String,
+    pub category: BugCategory,
+    pub severity: Severity,
+    pub description: String,
+    pub root_cause: RootCause,
+    pub impact: String,
+    pub reproduction: String,
+}
+
+pub struct BugTaxonomy {
+    bugs: Vec&lt;BugReport&gt;,
+}
+
+impl BugTaxonomy {
+    pub fn new() -&gt; Self {
+        Self { bugs: Vec::new() }
+    }
+
+    pub fn add_bug(&amp;mut self, bug: BugReport) {
+        self.bugs.push(bug);
+    }
+
+    pub fn total_bugs(&amp;self) -&gt; usize {
+        self.bugs.len()
+    }
+
+    pub fn severity_distribution(&amp;self) -&gt; HashMap&lt;String, usize&gt; {
+        let mut dist = HashMap::new();
+        for bug in &amp;self.bugs {
+            let severity = format!("{:?}", bug.severity);
+            *dist.entry(severity).or_insert(0) += 1;
+        }
+        dist
+    }
+
+    pub fn category_distribution(&amp;self) -&gt; HashMap&lt;String, usize&gt; {
+        let mut dist = HashMap::new();
+        for bug in &amp;self.bugs {
+            let category = format!("{:?}", bug.category);
+            *dist.entry(category).or_insert(0) += 1;
+        }
+        dist
+    }
+
+    pub fn generate_report(&amp;self) -&gt; String {
+        let mut report = String::new();
+        report.push_str("=== Bug Taxonomy Report ===\n\n");
+        report.push_str(&amp;format!("Total Bugs: {}\n\n", self.total_bugs()));
+
+        // Severity distribution
+        report.push_str("Severity Distribution:\n");
+        for (severity, count) in self.severity_distribution() {
+            report.push_str(&amp;format!("  {}: {}\n", severity, count));
+        }
+
+        // Category distribution
+        report.push_str("\nCategory Distribution:\n");
+        for (category, count) in self.category_distribution() {
+            report.push_str(&amp;format!("  {}: {}\n", category, count));
+        }
+
+        // Detailed bug list
+        report.push_str("\nDetailed Bug List:\n");
+        for bug in &amp;self.bugs {
+            report.push_str(&amp;format!("\n{}. {} ({:?})\n", bug.id, bug.title, bug.severity));
+            report.push_str(&amp;format!("   Category: {:?}\n", bug.category));
+            report.push_str(&amp;format!("   Root Cause: {:?}\n", bug.root_cause));
+            report.push_str(&amp;format!("   Impact: {}\n", bug.impact));
+        }
+
+        report
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Key Design Decisions</strong>:</p>
+<ol>
+<li><strong>7 Bug Categories</strong>: Parser, Evaluator, Performance, Safety, TypeSystem, Optimizer, Compatibility</li>
+<li><strong>4 Severity Levels</strong>: Critical, High, Medium, Low</li>
+<li><strong>5 Root Causes</strong>: MissingFeature, IncorrectLogic, EdgeCaseHandling, PerformanceBottleneck, DesignLimitation</li>
+<li><strong>Comprehensive Metadata</strong>: ID, title, description, impact, reproduction steps</li>
+</ol>
+<p><strong>Result</strong>: ✅ All 7 tests passing</p>
+<p><strong>Discovered Bugs Cataloged</strong>:</p>
+<ul>
+<li><strong>BUG-001</strong>: Block expressions not supported (Parser, Medium)</li>
+<li><strong>BUG-002</strong>: Variable lookup overhead (Performance, Low)</li>
+<li><strong>BUG-003</strong>: if-else as rvalue not supported (Parser, Medium)</li>
+</ul>
+<p><strong>Validation</strong>: <code>cargo test --test test_interp_033_bug_taxonomy</code> exits with status 0.</p>
+<h2 id="refactor-improvements"><a class="header" href="#refactor-improvements">REFACTOR: Improvements</a></h2>
+<p>After getting tests green, refactored for:</p>
+<ol>
+<li><strong>Report Generation</strong>: Comprehensive bug reports with distributions</li>
+<li><strong>Query Methods</strong>: Filter by severity, category, root cause</li>
+<li><strong>Pattern Analysis</strong>: Identify common root causes</li>
+</ol>
+<p><strong>Clippy Fix</strong>: BugReport::new() had 8 parameters (clippy limit is 7):</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[allow(clippy::too_many_arguments)]  // Bug reports need comprehensive metadata
+pub fn new(
+    id: String,
+    title: String,
+    category: BugCategory,
+    severity: Severity,
+    description: String,
+    root_cause: RootCause,
+    impact: String,
+    reproduction: String,
+) -&gt; Self { ... }
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Alternative considered</strong>: Builder pattern, but decided against it for simplicity.</p>
+<h2 id="tool-validation-7-rust-tools"><a class="header" href="#tool-validation-7-rust-tools">TOOL VALIDATION (7 Rust Tools)</a></h2>
+<pre><code class="language-bash">cargo test --test test_interp_033_bug_taxonomy  # ✅ 7/7 tests passing
+cargo clippy -- -D warnings                     # ✅ Zero warnings
+cargo fmt -- --check                            # ✅ Properly formatted
+</code></pre>
+<p><strong>Results</strong>:</p>
+<ol>
+<li><code>cargo test</code>: ✅ 7/7 tests passing</li>
+<li><code>cargo clippy</code>: ✅ Zero warnings (allow annotation for too_many_arguments)</li>
+<li><code>cargo fmt --check</code>: ✅ No formatting issues</li>
+<li>Taxonomy: ✅ 3 bugs cataloged</li>
+<li>Severity distribution: ✅ 0 Critical, 0 High, 2 Medium, 1 Low</li>
+<li>Category distribution: ✅ 2 Parser, 1 Performance</li>
+<li>Report generation: ✅ Comprehensive report produced</li>
+</ol>
+<h2 id="reproducibility"><a class="header" href="#reproducibility">REPRODUCIBILITY</a></h2>
+<p><strong>Script</strong>: <code>tests/test_interp_033_bug_taxonomy.rs</code> (self-contained)</p>
+<pre><code class="language-bash">cargo test --test test_interp_033_bug_taxonomy
+# Exit status: 0
+# Output: 7/7 tests passing
+# Bugs tracked: 3
+</code></pre>
+<p><strong>Idempotent</strong>: Yes - bug database is deterministic.</p>
+<h2 id="debuggability"><a class="header" href="#debuggability">DEBUGGABILITY</a></h2>
+<p><strong>Debug Session</strong>:</p>
+<pre><code class="language-bash"># Run taxonomy tests
+cargo test test_bug_taxonomy_basic
+
+# Check severity distribution
+cargo test test_severity_distribution
+
+# Generate full report
+cargo test test_report_generation -- --nocapture
+</code></pre>
+<p><strong>Sample Report Output</strong>:</p>
+<pre><code>=== Bug Taxonomy Report ===
+
+Total Bugs: 3
+
+Severity Distribution:
+  Medium: 2
+  Low: 1
+
+Category Distribution:
+  Parser: 2
+  Performance: 1
+
+Detailed Bug List:
+
+BUG-001. Block expressions not supported (Medium)
+   Category: Parser
+   Root Cause: MissingFeature
+   Impact: Limits expressiveness of generated test programs
+
+BUG-002. Variable lookup overhead (Low)
+   Category: Performance
+   Root Cause: PerformanceBottleneck
+   Impact: Variable-heavy programs have 60x overhead
+
+BUG-003. if-else as rvalue not supported (Medium)
+   Category: Parser
+   Root Cause: MissingFeature
+   Impact: Cannot use if-else in expression positions
+</code></pre>
+<h2 id="discoveries"><a class="header" href="#discoveries">Discoveries</a></h2>
+<h3 id="bug-patterns-identified"><a class="header" href="#bug-patterns-identified">Bug Patterns Identified</a></h3>
+<ol>
+<li><strong>Parser Limitations</strong>: 2/3 bugs are parser-related (missing features)</li>
+<li><strong>Performance Issues</strong>: 1/3 bugs are performance bottlenecks</li>
+<li><strong>Root Causes</strong>: All bugs stem from MissingFeature (2) or PerformanceBottleneck (1)</li>
+<li><strong>Severity</strong>: No critical bugs (good!), focus on medium priority items</li>
+</ol>
+<h3 id="bug-001-block-expressions-not-supported"><a class="header" href="#bug-001-block-expressions-not-supported">BUG-001: Block Expressions Not Supported</a></h3>
+<ul>
+<li><strong>Discovery Method</strong>: Fuzzing (INTERP-029)</li>
+<li><strong>Category</strong>: Parser</li>
+<li><strong>Severity</strong>: Medium</li>
+<li><strong>Root Cause</strong>: MissingFeature</li>
+<li><strong>Impact</strong>: Limits expressiveness</li>
+<li><strong>Reproduction</strong>: <code>{ let x = 10; x }</code></li>
+<li><strong>Recommendation</strong>: Add block expression support to parser</li>
+</ul>
+<h3 id="bug-002-variable-lookup-performance-overhead"><a class="header" href="#bug-002-variable-lookup-performance-overhead">BUG-002: Variable Lookup Performance Overhead</a></h3>
+<ul>
+<li><strong>Discovery Method</strong>: Benchmarking (INTERP-030)</li>
+<li><strong>Category</strong>: Performance</li>
+<li><strong>Severity</strong>: Low</li>
+<li><strong>Root Cause</strong>: PerformanceBottleneck</li>
+<li><strong>Impact</strong>: 60x overhead vs native (vs 28x for arithmetic)</li>
+<li><strong>Reproduction</strong>: Run <code>test_benchmark_vector_ops</code></li>
+<li><strong>Recommendation</strong>: Consider array-based local variable storage</li>
+</ul>
+<h3 id="bug-003-if-else-as-rvalue-not-supported"><a class="header" href="#bug-003-if-else-as-rvalue-not-supported">BUG-003: if-else as rvalue Not Supported</a></h3>
+<ul>
+<li><strong>Discovery Method</strong>: Integration testing (INTERP-099)</li>
+<li><strong>Category</strong>: Parser</li>
+<li><strong>Severity</strong>: Medium</li>
+<li><strong>Root Cause</strong>: MissingFeature</li>
+<li><strong>Impact</strong>: Cannot use conditionals in expression positions</li>
+<li><strong>Reproduction</strong>: <code>let x = if (cond) { 1 } else { 2 };</code></li>
+<li><strong>Recommendation</strong>: Extend parser to support if-else expressions</li>
+</ul>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<p>INTERP-033 enables:</p>
+<ul>
+<li><strong>INTERP-034</strong>: File bugs upstream at paiml/ruchy with comprehensive data</li>
+<li><strong>INTERP-035</strong>: Export conformance test suite with known limitations documented</li>
+<li><strong>Prioritization</strong>: Focus on Medium severity parser limitations first</li>
+</ul>
+<h2 id="validation-summary"><a class="header" href="#validation-summary">Validation Summary</a></h2>
+<ul>
+<li>✅ RED phase: Tests failed as expected (compilation error)</li>
+<li>✅ GREEN phase: Tests passing with taxonomy infrastructure</li>
+<li>✅ REFACTOR phase: Report generation and query methods</li>
+<li>✅ TOOL VALIDATION: All Rust tooling passing</li>
+<li>✅ REPRODUCIBILITY: Deterministic bug database</li>
+<li>✅ DEBUGGABILITY: Comprehensive bug reports</li>
+<li>✅ PATTERN ANALYSIS: 2 parser bugs, 1 performance bug identified</li>
+</ul>
+<p><strong>Status</strong>: 🟢 COMPLETE (7/7 phases validated)</p>
+<p><strong>Taxonomy Statistics</strong>:</p>
+<ul>
+<li>7 tests implemented</li>
+<li>7 tests passing</li>
+<li>0 tests failing</li>
+<li>Bugs tracked: 3</li>
+<li>Severity: 0 Critical, 0 High, 2 Medium, 1 Low</li>
+<li>Categories: 2 Parser, 1 Performance</li>
+<li>Root causes: 2 MissingFeature, 1 PerformanceBottleneck</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../phase5_interpreter/interp-031-memory-safety.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../phase5_interpreter/interp-099-integration.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../phase5_interpreter/interp-031-memory-safety.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../phase5_interpreter/interp-099-integration.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>

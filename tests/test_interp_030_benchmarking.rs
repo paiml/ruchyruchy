@@ -66,7 +66,12 @@ mod benchmarking {
         /// Run a benchmark on interpreter code
         ///
         /// GREEN phase: Execute program N times and measure performance
-        pub fn bench_interpreter(&mut self, name: &str, program: &str, iterations: usize) -> BenchmarkResult {
+        pub fn bench_interpreter(
+            &mut self,
+            name: &str,
+            program: &str,
+            iterations: usize,
+        ) -> BenchmarkResult {
             let start = Instant::now();
 
             for _ in 0..iterations {
@@ -75,7 +80,8 @@ mod benchmarking {
 
                 let mut eval = Evaluator::new();
                 for statement in ast.nodes() {
-                    eval.eval(statement).expect("Benchmark program should execute");
+                    eval.eval(statement)
+                        .expect("Benchmark program should execute");
                 }
             }
 
@@ -132,7 +138,10 @@ mod benchmarking {
         /// Print benchmark report
         pub fn print_report(&self) {
             println!("\n=== Performance Benchmark Report ===");
-            println!("{:<30} {:>12} {:>15} {:>15}", "Name", "Iterations", "Avg (µs)", "Throughput/s");
+            println!(
+                "{:<30} {:>12} {:>15} {:>15}",
+                "Name", "Iterations", "Avg (µs)", "Throughput/s"
+            );
             println!("{}", "=".repeat(75));
 
             for result in &self.results {
@@ -291,8 +300,8 @@ fn test_performance_regression() {
     let result2 = runner.bench_interpreter("arithmetic_run2", program, 10000);
 
     // Performance should be consistent (within 20% variance)
-    let variance = (result1.avg_duration_us - result2.avg_duration_us).abs()
-                   / result1.avg_duration_us;
+    let variance =
+        (result1.avg_duration_us - result2.avg_duration_us).abs() / result1.avg_duration_us;
 
     println!("Performance Regression Check:");
     println!("  Run 1: {:.2} µs/op", result1.avg_duration_us);
