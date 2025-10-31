@@ -396,7 +396,6 @@ fun process_data(a: i32, b: i32, c: i32, d: i32, e: i32, f: i32) -> i32 {
     assert_eq!(analysis.coupling, 4);
 
     println!(
-        "✅ Comprehensive analysis complete: {} metrics, risk score {}",
-        "10+", analysis.risk_score
+        "✅ Comprehensive analysis complete: 10+ metrics, risk score {}", analysis.risk_score
     );
 }

@@ -192,11 +192,11 @@ fn test_eval_boolean_literal() {
 
     let true_node = AstNode::BooleanLiteral(true);
     let result = eval.eval(&true_node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 
     let false_node = AstNode::BooleanLiteral(false);
     let result = eval.eval(&false_node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn test_eval_less_than_true() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -236,7 +236,7 @@ fn test_eval_less_than_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn test_eval_greater_than_true() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -264,7 +264,7 @@ fn test_eval_greater_than_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -278,7 +278,7 @@ fn test_eval_equals_true() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn test_eval_equals_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -306,7 +306,7 @@ fn test_eval_not_equals_true() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -320,7 +320,7 @@ fn test_eval_not_equals_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn test_eval_less_than_or_equal_true_less() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -348,7 +348,7 @@ fn test_eval_less_than_or_equal_true_equal() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -362,7 +362,7 @@ fn test_eval_less_than_or_equal_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn test_eval_greater_than_or_equal_true_greater() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -390,7 +390,7 @@ fn test_eval_greater_than_or_equal_true_equal() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -404,7 +404,7 @@ fn test_eval_greater_than_or_equal_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -418,7 +418,7 @@ fn test_eval_string_equality() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 // ===== RED PHASE TEST 3: Logical Operations (10 tests) =====
@@ -434,7 +434,7 @@ fn test_eval_logical_and_true() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -448,7 +448,7 @@ fn test_eval_logical_and_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -462,7 +462,7 @@ fn test_eval_logical_or_true() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -476,7 +476,7 @@ fn test_eval_logical_or_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -489,7 +489,7 @@ fn test_eval_logical_not_true() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), false);
+    assert!(!result.as_boolean().unwrap());
 }
 
 #[test]
@@ -502,7 +502,7 @@ fn test_eval_logical_not_false() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -520,7 +520,7 @@ fn test_eval_combined_logical_expression() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -542,7 +542,7 @@ fn test_eval_comparison_with_logical() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -630,7 +630,7 @@ fn test_precedence_comparison_over_logical() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -664,7 +664,7 @@ fn test_precedence_not_over_and() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]
@@ -682,7 +682,7 @@ fn test_precedence_and_over_or() {
     };
 
     let result = eval.eval(&node).unwrap();
-    assert_eq!(result.as_boolean().unwrap(), true);
+    assert!(result.as_boolean().unwrap());
 }
 
 #[test]

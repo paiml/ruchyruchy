@@ -416,7 +416,7 @@ fn test_hashmap_mixed_value_types() {
             index: Box::new(AstNode::StringLiteral("bool".to_string())),
         })
         .unwrap();
-    assert_eq!(b.as_boolean().unwrap(), true);
+    assert!(b.as_boolean().unwrap());
 }
 
 #[test]
