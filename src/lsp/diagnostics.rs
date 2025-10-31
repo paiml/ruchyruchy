@@ -8,6 +8,7 @@ use std::process::Command;
 pub struct DiagnosticsProvider;
 
 impl DiagnosticsProvider {
+    /// Create a new diagnostics provider
     pub fn new() -> Self {
         Self
     }
