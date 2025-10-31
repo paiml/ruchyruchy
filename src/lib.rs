@@ -31,6 +31,8 @@ pub mod bootstrap_pipeline;
 pub mod bootstrap_showcase;
 /// Bug discovery, replication, and reporting system (DISC-001 through DISC-004)
 pub mod bug_discovery;
+/// Bug filing to upstream Ruchy (INTERP-034)
+pub mod bug_filing;
 /// Bug replication module (REPLIC-001 through REPLIC-003)
 pub mod bug_replication;
 /// Bug reporting module (REPORT-001 through REPORT-004)
