@@ -181,6 +181,7 @@ impl Evaluator {
         match node {
             // Literals - direct conversion to values
             AstNode::IntegerLiteral(n) => Ok(ControlFlow::Value(Value::integer(*n))),
+            AstNode::FloatLiteral(f) => Ok(ControlFlow::Value(Value::float(*f))),
             AstNode::StringLiteral(s) => Ok(ControlFlow::Value(Value::string(s.clone()))),
             AstNode::BooleanLiteral(b) => Ok(ControlFlow::Value(Value::boolean(*b))),
 

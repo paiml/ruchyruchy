@@ -135,8 +135,7 @@ fn test_ch02_example_04_float_calculations() {
     //     println(area);
     // }
     //
-    // EXPECTED TO FAIL: Interpreter doesn't support float literals yet
-    // This test documents the missing feature
+    // GREEN phase: Float support implemented!
 
     let source = r#"
 fun main() {
@@ -148,21 +147,9 @@ fun main() {
 "#;
 
     let result = execute_program(source);
-
-    // RED phase: This should fail because we don't support floats yet
-    // We're documenting this expected failure
-    if result.is_err() {
-        println!("Expected failure: Float literals not supported yet");
-        println!("Error: {:?}", result);
-    } else {
-        // If it passes, great! But unexpected in RED phase
-        println!("Unexpected: Float support seems to work!");
-    }
-
-    // For now, we expect this to fail
     assert!(
-        result.is_err(),
-        "Example 4 expected to fail (no float support), but it passed: {:?}",
+        result.is_ok(),
+        "Example 4 should execute successfully: {:?}",
         result
     );
 }

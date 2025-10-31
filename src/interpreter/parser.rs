@@ -32,6 +32,7 @@ enum Token {
     // Identifiers and literals
     Identifier(String),
     Integer(i64),
+    Float(f64),
     StringLit(String),
     True,
     False,
@@ -147,9 +148,12 @@ impl Parser {
                     tokens.push(Token::StringLit(string));
                 }
 
-                // Numbers
+                // Numbers (integers and floats)
                 '0'..='9' => {
                     let mut num = String::new();
+                    let mut is_float = false;
+
+                    // Parse integer part
                     while let Some(&ch) = chars.peek() {
                         if ch.is_ascii_digit() {
                             num.push(ch);
@@ -158,8 +162,39 @@ impl Parser {
                             break;
                         }
                     }
-                    if let Ok(n) = num.parse() {
-                        tokens.push(Token::Integer(n));
+
+                    // Check for decimal point
+                    if chars.peek() == Some(&'.') {
+                        // Look ahead to see if next char is a digit (not a method call like "42.abs()")
+                        let chars_clone = chars.clone();
+                        if let Some(next_ch) = chars_clone.skip(1).next() {
+                            if next_ch.is_ascii_digit() {
+                                is_float = true;
+                                num.push('.');
+                                chars.next(); // consume '.'
+
+                                // Parse fractional part
+                                while let Some(&ch) = chars.peek() {
+                                    if ch.is_ascii_digit() {
+                                        num.push(ch);
+                                        chars.next();
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Create appropriate token
+                    if is_float {
+                        if let Ok(f) = num.parse::<f64>() {
+                            tokens.push(Token::Float(f));
+                        }
+                    } else {
+                        if let Ok(n) = num.parse::<i64>() {
+                            tokens.push(Token::Integer(n));
+                        }
                     }
                 }
 
@@ -707,6 +742,11 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::IntegerLiteral(n))
             }
+            Some(Token::Float(f)) => {
+                let f = *f;
+                self.advance();
+                Ok(AstNode::FloatLiteral(f))
+            }
             Some(Token::StringLit(s)) => {
                 let s = s.clone();
                 self.advance();
@@ -1022,6 +1062,9 @@ pub enum AstNode {
 
     /// Integer literal
     IntegerLiteral(i64),
+
+    /// Float literal
+    FloatLiteral(f64),
 
     /// String literal
     StringLiteral(String),
