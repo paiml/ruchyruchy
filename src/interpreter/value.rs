@@ -17,6 +17,8 @@ use std::fmt;
 pub enum Value {
     /// Integer value
     Integer(i64),
+    /// Float value
+    Float(f64),
     /// String value
     String(String),
     /// Boolean value
@@ -93,6 +95,11 @@ impl Value {
         Value::Integer(n)
     }
 
+    /// Create a float value
+    pub fn float(f: f64) -> Self {
+        Value::Float(f)
+    }
+
     /// Create a string value
     pub fn string(s: String) -> Self {
         Value::String(s)
@@ -164,6 +171,7 @@ impl Value {
     pub fn type_name(&self) -> &str {
         match self {
             Value::Integer(_) => "Integer",
+            Value::Float(_) => "Float",
             Value::String(_) => "String",
             Value::Boolean(_) => "Boolean",
             Value::Vector(_) => "Vector",
@@ -183,6 +191,18 @@ impl Value {
                 expected: "Integer".to_string(),
                 found: self.type_name().to_string(),
                 operation: "as_integer".to_string(),
+            }),
+        }
+    }
+
+    /// Extract float value
+    pub fn as_float(&self) -> Result<f64, ValueError> {
+        match self {
+            Value::Float(f) => Ok(*f),
+            _ => Err(ValueError::TypeMismatch {
+                expected: "Float".to_string(),
+                found: self.type_name().to_string(),
+                operation: "as_float".to_string(),
             }),
         }
     }
@@ -253,6 +273,7 @@ impl Value {
     pub fn add(&self, other: &Value) -> Result<Value, ValueError> {
         match (self, other) {
             (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a + b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
             (Value::String(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
             _ => Err(ValueError::TypeMismatch {
                 expected: self.type_name().to_string(),
@@ -266,8 +287,9 @@ impl Value {
     pub fn subtract(&self, other: &Value) -> Result<Value, ValueError> {
         match (self, other) {
             (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a - b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
             _ => Err(ValueError::TypeMismatch {
-                expected: "Integer".to_string(),
+                expected: "Integer or Float".to_string(),
                 found: format!("{} - {}", self.type_name(), other.type_name()),
                 operation: "subtract".to_string(),
             }),
@@ -278,8 +300,9 @@ impl Value {
     pub fn multiply(&self, other: &Value) -> Result<Value, ValueError> {
         match (self, other) {
             (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a * b)),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
             _ => Err(ValueError::TypeMismatch {
-                expected: "Integer".to_string(),
+                expected: "Integer or Float".to_string(),
                 found: format!("{} * {}", self.type_name(), other.type_name()),
                 operation: "multiply".to_string(),
             }),
@@ -291,8 +314,15 @@ impl Value {
         match (self, other) {
             (Value::Integer(_), Value::Integer(0)) => Err(ValueError::DivisionByZero),
             (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a / b)),
+            (Value::Float(a), Value::Float(b)) => {
+                if *b == 0.0 {
+                    Err(ValueError::DivisionByZero)
+                } else {
+                    Ok(Value::Float(a / b))
+                }
+            }
             _ => Err(ValueError::TypeMismatch {
-                expected: "Integer".to_string(),
+                expected: "Integer or Float".to_string(),
                 found: format!("{} / {}", self.type_name(), other.type_name()),
                 operation: "divide".to_string(),
             }),
@@ -457,6 +487,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Integer(n) => write!(f, "{}", n),
+            Value::Float(fl) => write!(f, "{}", fl),
             Value::String(s) => write!(f, "\"{}\"", s),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Vector(v) => {
