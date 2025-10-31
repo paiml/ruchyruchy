@@ -175,7 +175,8 @@ main();
     // For now, we just verify the error is detected
     if let Err(e) = result {
         assert!(
-            e.contains("Eval error") && (e.contains("division") || e.contains("zero") || e.contains("Division")),
+            e.contains("Eval error")
+                && (e.contains("division") || e.contains("zero") || e.contains("Division")),
             "Error should be eval error with division/zero: {}",
             e
         );

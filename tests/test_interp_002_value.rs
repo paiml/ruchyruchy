@@ -242,9 +242,7 @@ fn test_value_cloning() {
     assert_eq!(cloned.as_integer().unwrap(), 42);
 
     // Verify they're equal but independent
-    assert!(
-        original.equals(&cloned).unwrap().as_boolean().unwrap()
-    );
+    assert!(original.equals(&cloned).unwrap().as_boolean().unwrap());
 }
 
 // ===== RED PHASE TEST 10: Type Name Introspection =====

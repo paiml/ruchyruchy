@@ -59,19 +59,19 @@ pub enum ValueError {
         /// Index attempted
         index: usize,
         /// Collection length
-        len: usize
+        len: usize,
     },
     /// Key not found in HashMap
     KeyNotFound {
         /// Key that was not found
-        key: String
+        key: String,
     },
     /// Invalid operation
     InvalidOperation {
         /// Operation description
         operation: String,
         /// Error message
-        message: String
+        message: String,
     },
 }
 

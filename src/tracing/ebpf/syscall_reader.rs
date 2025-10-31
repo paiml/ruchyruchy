@@ -1,11 +1,6 @@
 //! Userspace eBPF loader and ring buffer reader
 
-use aya::{
-    include_bytes_aligned,
-    maps::RingBuf,
-    programs::TracePoint,
-    Ebpf,
-};
+use aya::{include_bytes_aligned, maps::RingBuf, programs::TracePoint, Ebpf};
 use std::error::Error;
 use std::fmt;
 

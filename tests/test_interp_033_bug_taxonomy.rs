@@ -36,21 +36,21 @@ mod bug_taxonomy {
     /// Bug severity levels
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum Severity {
-        Critical,  // Crash, data loss, security vulnerability
-        High,      // Major functionality broken, blocks features
-        Medium,    // Minor functionality broken, workaround exists
-        Low,       // Cosmetic issues, documentation errors
+        Critical, // Crash, data loss, security vulnerability
+        High,     // Major functionality broken, blocks features
+        Medium,   // Minor functionality broken, workaround exists
+        Low,      // Cosmetic issues, documentation errors
     }
 
     /// Bug categories
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum BugCategory {
-        Parser,           // Parsing issues (syntax errors, grammar bugs)
-        Evaluator,        // Evaluation issues (runtime errors, logic bugs)
-        Performance,      // Performance issues (slowness, memory usage)
-        Safety,           // Safety issues (panics, crashes)
-        Compatibility,    // Compatibility issues (platform-specific)
-        Documentation,    // Documentation issues
+        Parser,        // Parsing issues (syntax errors, grammar bugs)
+        Evaluator,     // Evaluation issues (runtime errors, logic bugs)
+        Performance,   // Performance issues (slowness, memory usage)
+        Safety,        // Safety issues (panics, crashes)
+        Compatibility, // Compatibility issues (platform-specific)
+        Documentation, // Documentation issues
         Other,
     }
 
@@ -216,8 +216,10 @@ mod bug_taxonomy {
             // Detailed bug list
             report.push_str("Detailed Bug List:\n");
             for bug in &self.bugs {
-                report.push_str(&format!("\n[{}] {} ({:?} - {:?})\n",
-                    bug.id, bug.title, bug.severity, bug.category));
+                report.push_str(&format!(
+                    "\n[{}] {} ({:?} - {:?})\n",
+                    bug.id, bug.title, bug.severity, bug.category
+                ));
                 report.push_str(&format!("  Description: {}\n", bug.description));
                 report.push_str(&format!("  Impact: {}\n", bug.impact));
                 report.push_str(&format!("  Root Cause: {:?}\n", bug.root_cause));

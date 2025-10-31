@@ -1013,7 +1013,9 @@ impl Parser {
                 // Check for empty tuple: ()
                 if self.check(&Token::RightParen) {
                     self.advance();
-                    return Ok(AstNode::TupleLiteral { elements: Vec::new() });
+                    return Ok(AstNode::TupleLiteral {
+                        elements: Vec::new(),
+                    });
                 }
 
                 // Parse first expression
@@ -1176,7 +1178,7 @@ pub enum AstNode {
         /// Variable name
         name: String,
         /// Initial value expression
-        value: Box<AstNode>
+        value: Box<AstNode>,
     },
 
     /// Assignment: name = expr
@@ -1184,7 +1186,7 @@ pub enum AstNode {
         /// Variable name
         name: String,
         /// New value expression
-        value: Box<AstNode>
+        value: Box<AstNode>,
     },
 
     /// Function call: name(args)
@@ -1192,7 +1194,7 @@ pub enum AstNode {
         /// Function name
         name: String,
         /// Argument expressions
-        args: Vec<AstNode>
+        args: Vec<AstNode>,
     },
 
     /// If expression: if condition { then_branch } else { else_branch }
@@ -1252,7 +1254,7 @@ pub enum AstNode {
         /// Expression to access field from
         expr: Box<AstNode>,
         /// Field name
-        field: String
+        field: String,
     },
 
     /// Method call: receiver.method(args)
@@ -1268,19 +1270,19 @@ pub enum AstNode {
     /// Vector literal: [elem1, elem2, ...]
     VectorLiteral {
         /// Vector elements
-        elements: Vec<AstNode>
+        elements: Vec<AstNode>,
     },
 
     /// HashMap literal: {key1: val1, key2: val2, ...}
     HashMapLiteral {
         /// Key-value pairs
-        pairs: Vec<(AstNode, AstNode)>
+        pairs: Vec<(AstNode, AstNode)>,
     },
 
     /// Tuple literal: (elem1, elem2, ...)
     TupleLiteral {
         /// Tuple elements
-        elements: Vec<AstNode>
+        elements: Vec<AstNode>,
     },
 
     /// Index access: expr[index]
@@ -1328,7 +1330,7 @@ pub enum AstNode {
     /// Return statement: return expr
     Return {
         /// Return value (optional)
-        value: Option<Box<AstNode>>
+        value: Option<Box<AstNode>>,
     },
 
     /// Identifier reference
@@ -1346,7 +1348,7 @@ pub enum AstNode {
     /// F-string with interpolation: f"text {expr} more"
     FString {
         /// F-string content with embedded expressions
-        content: String
+        content: String,
     },
 
     /// Boolean literal

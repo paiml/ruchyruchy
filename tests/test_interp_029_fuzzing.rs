@@ -227,15 +227,15 @@ mod fuzzing {
         /// Generate an invalid program for boundary testing
         pub fn generate_invalid(&self, seed: u64) -> String {
             let invalid_patterns = [
-                "let",                 // Incomplete
-                "fun f() {",           // Unclosed brace
-                "1 +",                 // Incomplete expression
-                "if (true) { 1 }",     // Missing else in some contexts
-                "let x = ; x",         // Missing value
-                "fun () { 1 }",        // Missing name
-                "1 / 0",               // Division by zero
-                "unknown_var",         // Undefined variable
-                "let x = x; x",        // Self-reference
+                "let",             // Incomplete
+                "fun f() {",       // Unclosed brace
+                "1 +",             // Incomplete expression
+                "if (true) { 1 }", // Missing else in some contexts
+                "let x = ; x",     // Missing value
+                "fun () { 1 }",    // Missing name
+                "1 / 0",           // Division by zero
+                "unknown_var",     // Undefined variable
+                "let x = x; x",    // Self-reference
             ];
 
             let idx = (seed % invalid_patterns.len() as u64) as usize;

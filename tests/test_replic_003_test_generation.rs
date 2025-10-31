@@ -290,7 +290,7 @@ fn test_replication_harness_execution() {
     match success_result {
         ExecutionResult::Success { output, duration } => {
             assert!(output.contains("OK") || output.contains("Test passed")); // Mock output
-            // Duration is always non-negative (type invariant)
+                                                                              // Duration is always non-negative (type invariant)
             let _ = duration.as_millis();
         }
         _ => {

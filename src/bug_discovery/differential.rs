@@ -29,7 +29,7 @@ pub enum TestStatus {
         /// Slowdown factor (e.g., 1.5 = 50% slower)
         slowdown_factor: f64,
         /// Statistical significance p-value
-        p_value: f64
+        p_value: f64,
     },
 }
 
@@ -93,24 +93,24 @@ pub enum FailureMode {
     /// Test hangs
     Hang {
         /// Timeout in milliseconds
-        timeout_ms: u64
+        timeout_ms: u64,
     },
     /// Test crashes
     Crash {
         /// Error message from crash
-        error_message: String
+        error_message: String,
     },
     /// Test produces wrong output
     WrongOutput {
         /// Expected output
         expected: String,
         /// Actual output
-        actual: String
+        actual: String,
     },
     /// Performance regression
     PerformanceRegression {
         /// Regression details
-        regression: PerformanceRegression
+        regression: PerformanceRegression,
     },
 }
 

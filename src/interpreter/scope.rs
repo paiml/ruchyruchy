@@ -52,12 +52,12 @@ pub enum ScopeError {
     /// Variable already defined in current scope
     AlreadyDefined {
         /// Name of the variable
-        name: String
+        name: String,
     },
     /// Variable not defined in any scope
     Undefined {
         /// Name of the variable
-        name: String
+        name: String,
     },
 }
 

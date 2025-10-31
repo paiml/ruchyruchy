@@ -200,14 +200,14 @@ fn test_no_panics_on_invalid_input() {
     let mut validator = SafetyValidator::new();
 
     let invalid_programs = [
-        "",                    // Empty program
-        "let",                 // Incomplete
-        "1 +",                 // Incomplete expression
-        "let x = ; x",         // Missing value
-        "unknown_var",         // Undefined variable
-        "fun () { 1 }",        // Missing function name
-        "1 / 0",               // Division by zero
-        "if (true) { 1 }",     // Missing else
+        "",                // Empty program
+        "let",             // Incomplete
+        "1 +",             // Incomplete expression
+        "let x = ; x",     // Missing value
+        "unknown_var",     // Undefined variable
+        "fun () { 1 }",    // Missing function name
+        "1 / 0",           // Division by zero
+        "if (true) { 1 }", // Missing else
     ];
 
     for program in &invalid_programs {
@@ -278,7 +278,10 @@ fn test_safe_error_handling() {
 
         match result {
             SafetyResult::Error { message } => {
-                println!("Got expected error for {}: {}", expected_error_type, message);
+                println!(
+                    "Got expected error for {}: {}",
+                    expected_error_type, message
+                );
             }
             SafetyResult::Safe => {
                 // Some error cases might not be caught yet - that's ok for RED phase
@@ -339,10 +342,10 @@ fn test_malformed_input_safety() {
     let mut validator = SafetyValidator::new();
 
     let malformed_inputs = [
-        "\0",                  // Null byte
-        "\x01\x02\x03",        // Binary data
-        "let x = \u{FEFF};",   // BOM character
-        "🚀",                  // Emoji
+        "\0",                       // Null byte
+        "\x01\x02\x03",             // Binary data
+        "let x = \u{FEFF};",        // BOM character
+        "🚀",                       // Emoji
         "let x = 1; \n\n\n\n\n; x", // Many newlines
     ];
 
@@ -377,12 +380,7 @@ fn test_concurrent_safety() {
     use std::sync::Arc;
     use std::thread;
 
-    let programs = Arc::new(vec![
-        "1 + 1",
-        "let x = 10; x",
-        "2 * 3",
-        "5 - 2",
-    ]);
+    let programs = Arc::new(vec!["1 + 1", "let x = 10; x", "2 * 3", "5 - 2"]);
 
     let mut handles = vec![];
 

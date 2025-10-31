@@ -56,15 +56,15 @@ fn test_meta_minimum_test_count() {
 fn test_meta_test_file_naming() {
     // Validate naming conventions
     let valid_prefixes = vec![
-        "test_interp_",     // Interpreter tests
-        "test_disc_",       // Discovery tests
-        "test_replic_",     // Replication tests
-        "test_report",      // Report tests
-        "test_valid_",      // Validation tests
-        "test_docs_",       // Documentation tests
-        "test_github_",     // GitHub integration tests
-        "test_meta_",       // Meta tests
-        "codegen_",         // Code generation tests
+        "test_interp_", // Interpreter tests
+        "test_disc_",   // Discovery tests
+        "test_replic_", // Replication tests
+        "test_report",  // Report tests
+        "test_valid_",  // Validation tests
+        "test_docs_",   // Documentation tests
+        "test_github_", // GitHub integration tests
+        "test_meta_",   // Meta tests
+        "codegen_",     // Code generation tests
     ];
 
     assert!(!valid_prefixes.is_empty(), "Should have naming conventions");
@@ -82,15 +82,15 @@ fn test_meta_test_file_naming() {
 #[test]
 fn test_meta_test_coverage_categories() {
     let required_categories = vec![
-        "interpreter",   // Core interpreter functionality
-        "discovery",     // Bug discovery
-        "replication",   // Bug replication
-        "reporting",     // Bug reporting
-        "validation",    // Validation and testing
-        "integration",   // Integration tests
-        "performance",   // Performance tests
-        "safety",        // Safety tests
-        "fuzzing",       // Fuzz tests
+        "interpreter", // Core interpreter functionality
+        "discovery",   // Bug discovery
+        "replication", // Bug replication
+        "reporting",   // Bug reporting
+        "validation",  // Validation and testing
+        "integration", // Integration tests
+        "performance", // Performance tests
+        "safety",      // Safety tests
+        "fuzzing",     // Fuzz tests
     ];
 
     assert_eq!(required_categories.len(), 9, "Should test 9 categories");
@@ -180,12 +180,12 @@ fn test_meta_test_coverage_statistics() {
 #[test]
 fn test_meta_performance_benchmarks() {
     let benchmarks = vec![
-        ("Fuzzing throughput", 372_000), // 372K inputs/sec
+        ("Fuzzing throughput", 372_000),     // 372K inputs/sec
         ("Benchmark throughput", 1_000_000), // 1M ops/sec
-        ("Property test cases", 10_000), // 10K cases
-        ("Fuzz test inputs", 1_000_000), // 1M inputs
-        ("Integration programs", 116), // 116+ programs
-        ("Stress test iterations", 100), // 100 iterations
+        ("Property test cases", 10_000),     // 10K cases
+        ("Fuzz test inputs", 1_000_000),     // 1M inputs
+        ("Integration programs", 116),       // 116+ programs
+        ("Stress test iterations", 100),     // 100 iterations
     ];
 
     for (benchmark, value) in &benchmarks {
@@ -218,9 +218,19 @@ fn test_meta_safety_validation() {
 #[test]
 fn test_meta_bug_discovery_tracking() {
     let discovered_bugs = vec![
-        ("BUG-001", "Block expressions not supported", "Parser", "Medium"),
+        (
+            "BUG-001",
+            "Block expressions not supported",
+            "Parser",
+            "Medium",
+        ),
         ("BUG-002", "Variable lookup overhead", "Performance", "Low"),
-        ("BUG-003", "if-else as rvalue not supported", "Parser", "Medium"),
+        (
+            "BUG-003",
+            "if-else as rvalue not supported",
+            "Parser",
+            "Medium",
+        ),
     ];
 
     assert_eq!(discovered_bugs.len(), 3, "Should have 3 documented bugs");
@@ -251,7 +261,11 @@ fn test_meta_infrastructure_completeness() {
         "Boolean logic",
     ];
 
-    assert_eq!(infrastructure.len(), 10, "Should have 10 infrastructure components");
+    assert_eq!(
+        infrastructure.len(),
+        10,
+        "Should have 10 infrastructure components"
+    );
 
     for component in &infrastructure {
         assert!(!component.is_empty(), "Component should be named");
