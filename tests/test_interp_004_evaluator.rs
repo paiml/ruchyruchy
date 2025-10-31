@@ -12,7 +12,6 @@
 
 use ruchyruchy::interpreter::evaluator::{EvalError, Evaluator};
 use ruchyruchy::interpreter::parser::{AstNode, BinaryOperator, UnaryOperator};
-use ruchyruchy::interpreter::value::Value;
 
 // ===== RED PHASE TEST 1: Arithmetic Operations (20 tests) =====
 

@@ -260,8 +260,8 @@ fn test_precondition_filtering() {
     let tests = fuzzer.generate_tests(&schema);
 
     // Analyze generated tests
-    let mut tests_with_pop = 0;
-    let mut tests_with_push_before_pop = 0;
+    let mut _tests_with_pop = 0;
+    let mut _tests_with_push_before_pop = 0;
 
     for test in &tests {
         let mut has_pop = false;
@@ -277,9 +277,9 @@ fn test_precondition_filtering() {
         }
 
         if has_pop {
-            tests_with_pop += 1;
+            _tests_with_pop += 1;
             if has_push_before_pop {
-                tests_with_push_before_pop += 1;
+                _tests_with_push_before_pop += 1;
             }
         }
     }

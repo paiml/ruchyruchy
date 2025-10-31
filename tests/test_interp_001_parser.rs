@@ -9,7 +9,7 @@
 // 3. Handle syntax errors gracefully
 // 4. Validate AST structure correctness
 
-use ruchyruchy::interpreter::parser::{Ast, AstNode, ParseError, Parser};
+use ruchyruchy::interpreter::parser::{AstNode, ParseError, Parser};
 
 // ===== RED PHASE TEST 1: Parse Simple Hello World =====
 
