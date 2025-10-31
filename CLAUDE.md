@@ -2,6 +2,57 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 P0 CRITICAL: ALWAYS USE LOCAL BUILDS (DOGFOODING MANDATE)
+
+**MANDATORY - ZERO TOLERANCE - BLOCKING - P0 PRIORITY**
+
+YOU ARE BUILDING THE `ruchydbg` DEBUGGER - YOU MUST USE YOUR OWN BUILD!
+
+### NEVER Use Installed Binaries
+
+**FORBIDDEN**:
+```bash
+ruchydbg run test.ruchy              # ❌ WRONG - uses ~/.cargo/bin/ruchydbg (old version)
+which ruchydbg                       # ❌ WRONG - points to installed version
+/home/noah/.cargo/bin/ruchydbg       # ❌ WRONG - not your changes!
+```
+
+**MANDATORY**:
+```bash
+./target/debug/ruchydbg run test.ruchy    # ✅ CORRECT - uses YOUR parser changes
+./target/debug/ruchydbg validate          # ✅ CORRECT - tests YOUR implementation
+cargo run --bin ruchydbg -- run test.ruchy  # ✅ CORRECT - always fresh build
+```
+
+### Why This is P0 Critical
+
+1. **You ARE the debugger** - `ruchydbg` is the RuchyRuchy interpreter binary you're developing
+2. **Installed version is STALE** - doesn't include your parser fixes
+3. **Defeats dogfooding** - testing old code invalidates the entire project purpose
+4. **False validation** - bugs may appear "fixed" when they're not in your code
+5. **Wastes time** - debugging the wrong codebase
+
+### Before ANY ruchydbg Command
+
+**ALWAYS**:
+1. Check you're using `./target/debug/ruchydbg` (note the `./`)
+2. Rebuild if needed: `cargo build --bin ruchydbg`
+3. Verify version matches: `./target/debug/ruchydbg --version` should show current project version
+4. Never use bare `ruchydbg` command without `./target/debug/` prefix
+
+### Pre-commit Hook Enforcement
+
+Add to `.git/hooks/pre-commit`:
+```bash
+# Verify no references to bare 'ruchydbg' command in commits
+if git diff --cached | grep -E "^\+.*[^/]ruchydbg " | grep -v "# "; then
+    echo "❌ ERROR: Found bare 'ruchydbg' command - MUST use './target/debug/ruchydbg'"
+    exit 1
+fi
+```
+
+**REMEMBER**: The point of this project is DOGFOODING our own debugging tools. Using the installed version defeats this entirely.
+
 ## Project Overview
 
 RuchyRuchy is an educational compiler infrastructure project supporting the Ruchy programming language ecosystem. The project provides educational resources, development tools, and extensive validation frameworks for understanding compiler construction and testing compiler robustness.
