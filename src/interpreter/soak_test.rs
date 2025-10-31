@@ -4,7 +4,7 @@
 //
 // Features:
 // - RSS (Resident Set Size) measurement via /proc/self/status (Linux)
-// - PMAT TDG integration for continuous quality monitoring
+// - PMAT TDG integration for continuous quality monitoring (GREEN phase: robust JSON parsing)
 // - Workload generation with configurable distributions
 // - Rate limiting for throughput control
 // - Telemetry collection and analysis
@@ -20,6 +20,7 @@
 // - DO-178C (Aviation software certification)
 // - ISO/IEC 25010 (Quality models)
 
+use serde_json;
 use std::time::{Duration, Instant};
 
 /// Workload distribution strategies for soak testing
@@ -239,10 +240,24 @@ impl TelemetryCollector {
             Ok(output) if output.status.success() => {
                 // Parse JSON output to extract TDG score
                 if let Ok(stdout) = String::from_utf8(output.stdout) {
-                    // Simple extraction: look for "tdg_score": 97.4
-                    // TODO: Use proper JSON parsing in future phase
+                    // Try proper JSON parsing first (GREEN phase enhancement)
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                        // Try to extract tdg_score from JSON structure
+                        if let Some(score) = json.get("tdg_score").and_then(|v| v.as_f64()) {
+                            return score;
+                        }
+                        // Try alternate field names
+                        if let Some(score) = json.get("score").and_then(|v| v.as_f64()) {
+                            return score;
+                        }
+                        if let Some(score) = json.get("tdg").and_then(|v| v.as_f64()) {
+                            return score;
+                        }
+                    }
+
+                    // Fallback: line-by-line parsing for robustness
                     for line in stdout.lines() {
-                        if line.contains("tdg_score") {
+                        if line.contains("tdg_score") || line.contains("\"score\"") {
                             // Extract number after colon
                             if let Some(score_str) = line.split(':').nth(1) {
                                 let cleaned = score_str.trim().trim_matches(',').trim_matches('"');
