@@ -82,15 +82,25 @@ impl HistoricalBug {
 /// Bug category for classification
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BugCategory {
+    /// Program crashed
     Crash,
+    /// Program hung/froze
     Hang,
+    /// Incorrect output produced
     WrongOutput,
+    /// Type error
     TypeError,
+    /// Parser error
     ParserError,
+    /// Compiler error
     CompilerError,
+    /// Runtime error
     RuntimeError,
+    /// Performance regression
     PerformanceRegression,
+    /// Memory leak
     MemoryLeak,
+    /// Other bug category
     Other(String),
 }
 

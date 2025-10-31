@@ -61,13 +61,22 @@ pub enum EvalError {
     /// Value error (type mismatch, division by zero, etc.)
     ValueError(ValueError),
     /// Undefined variable
-    UndefinedVariable { name: String },
+    UndefinedVariable {
+        /// Variable name
+        name: String
+    },
     /// Undefined function
-    UndefinedFunction { name: String },
+    UndefinedFunction {
+        /// Function name
+        name: String
+    },
     /// Argument count mismatch in function call
     ArgumentCountMismatch {
+        /// Function name
         function: String,
+        /// Expected argument count
         expected: usize,
+        /// Actual argument count
         actual: usize,
     },
     /// Stack overflow from excessive recursion
@@ -75,7 +84,10 @@ pub enum EvalError {
     /// No match arm matched in match expression
     NoMatchArm,
     /// Unsupported operation
-    UnsupportedOperation { operation: String },
+    UnsupportedOperation {
+        /// Operation description
+        operation: String
+    },
     /// Error with call stack information for debugging
     ///
     /// Wraps another error and attaches the function call stack at the point
@@ -86,7 +98,9 @@ pub enum EvalError {
     /// execution, providing context about which functions were active when the
     /// error happened.
     WithCallStack {
+        /// Wrapped error
         error: Box<EvalError>,
+        /// Function call stack (outermost to innermost)
         call_stack: Vec<String>,
     },
 }

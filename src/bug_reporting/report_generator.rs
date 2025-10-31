@@ -22,10 +22,14 @@ use crate::bug_reporting::tdd::TddHistory;
 /// Bug severity level
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
-    Critical, // Crash, data loss, security
-    High,     // Major functionality broken
-    Medium,   // Minor functionality broken, workaround exists
-    Low,      // Cosmetic, documentation
+    /// Critical: Crash, data loss, security vulnerability
+    Critical,
+    /// High: Major functionality broken
+    High,
+    /// Medium: Minor functionality broken, workaround exists
+    Medium,
+    /// Low: Cosmetic, documentation
+    Low,
 }
 
 impl Severity {
@@ -53,13 +57,21 @@ impl Severity {
 /// Bug category
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BugCategory {
+    /// Program crashed
     Crash,
+    /// Program hung/froze
     Hang,
+    /// Incorrect output produced
     WrongOutput,
+    /// Performance regression detected
     PerformanceRegression,
+    /// Memory leak detected
     MemoryLeak,
+    /// Type error
     TypeError,
+    /// Parser error
     ParserError,
+    /// Other bug category
     Other(String),
 }
 

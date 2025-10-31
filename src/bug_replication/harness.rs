@@ -72,22 +72,35 @@ impl Environment {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecutionResult {
     /// Test passed
-    Success { output: String, duration: Duration },
+    Success {
+        /// Test output
+        output: String,
+        /// Execution duration
+        duration: Duration
+    },
     /// Test failed with error
     Failure {
+        /// Error message
         error: String,
+        /// Test output
         output: String,
+        /// Execution duration
         duration: Duration,
     },
     /// Test hung (exceeded timeout)
     Timeout {
+        /// Timeout value in milliseconds
         timeout_ms: u64,
+        /// Partial output before timeout
         partial_output: String,
     },
     /// Test crashed
     Crash {
+        /// Signal that caused crash
         signal: String,
+        /// Test output before crash
         output: String,
+        /// Execution duration before crash
         duration: Duration,
     },
 }
