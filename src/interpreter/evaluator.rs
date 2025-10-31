@@ -200,6 +200,13 @@ impl Evaluator {
                 Ok(ControlFlow::Value(result))
             }
 
+            // Type cast - convert value to target type
+            AstNode::TypeCast { expr, target_type } => {
+                let value = self.eval(expr)?;
+                let result = self.eval_type_cast(value, target_type)?;
+                Ok(ControlFlow::Value(result))
+            }
+
             // Function definition - register function
             AstNode::FunctionDef { name, params, body } => {
                 self.functions
@@ -431,6 +438,61 @@ impl Evaluator {
         }
     }
 
+    /// Evaluate a type cast
+    fn eval_type_cast(&mut self, value: Value, target_type: &str) -> Result<Value, EvalError> {
+        match target_type {
+            "i32" => {
+                // Cast to integer
+                if let Ok(i) = value.as_integer() {
+                    Ok(Value::integer(i))
+                } else if let Ok(f) = value.as_float() {
+                    Ok(Value::integer(f as i64))
+                } else if let Ok(s) = value.as_string() {
+                    s.parse::<i64>()
+                        .map(Value::integer)
+                        .map_err(|_| EvalError::UnsupportedOperation {
+                            operation: format!("cannot cast string '{}' to i32", s),
+                        })
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!("cannot cast {} to i32", value.type_name()),
+                    })
+                }
+            }
+            "f64" => {
+                // Cast to float
+                if let Ok(f) = value.as_float() {
+                    Ok(Value::float(f))
+                } else if let Ok(i) = value.as_integer() {
+                    Ok(Value::float(i as f64))
+                } else if let Ok(s) = value.as_string() {
+                    s.parse::<f64>()
+                        .map(Value::float)
+                        .map_err(|_| EvalError::UnsupportedOperation {
+                            operation: format!("cannot cast string '{}' to f64", s),
+                        })
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!("cannot cast {} to f64", value.type_name()),
+                    })
+                }
+            }
+            "bool" => {
+                // Cast to boolean
+                if let Ok(b) = value.as_boolean() {
+                    Ok(Value::boolean(b))
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!("cannot cast {} to bool", value.type_name()),
+                    })
+                }
+            }
+            _ => Err(EvalError::UnsupportedOperation {
+                operation: format!("unknown type cast target: {}", target_type),
+            }),
+        }
+    }
+
     /// Call a function with arguments
     ///
     /// Implements function call semantics:
@@ -605,6 +667,24 @@ impl Evaluator {
                             receiver.type_name(),
                             arg_values[0].type_name()
                         ),
+                    })
+                }
+            }
+            "round" => {
+                // Float rounding: 3.7.round() => 4.0
+                if arg_values.len() != 0 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: format!("{}.round()", receiver.type_name()),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+
+                if let Ok(f) = receiver.as_float() {
+                    Ok(Value::float(f.round()))
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!("method 'round' not supported on type {}", receiver.type_name()),
                     })
                 }
             }
