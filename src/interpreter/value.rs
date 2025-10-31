@@ -29,7 +29,9 @@ pub enum Value {
     HashMap(HashMap<String, Value>),
     /// Function value (closure)
     Function {
+        /// Function parameter names
         params: Vec<String>,
+        /// Function body statements
         body: Vec<AstNode>,
     },
     /// Tuple value (ordered collection of heterogeneous values)
@@ -43,18 +45,34 @@ pub enum Value {
 pub enum ValueError {
     /// Type mismatch error
     TypeMismatch {
+        /// Expected type name
         expected: String,
+        /// Found type name
         found: String,
+        /// Operation that failed
         operation: String,
     },
     /// Division by zero
     DivisionByZero,
     /// Index out of bounds
-    IndexOutOfBounds { index: usize, len: usize },
+    IndexOutOfBounds {
+        /// Index attempted
+        index: usize,
+        /// Collection length
+        len: usize
+    },
     /// Key not found in HashMap
-    KeyNotFound { key: String },
+    KeyNotFound {
+        /// Key that was not found
+        key: String
+    },
     /// Invalid operation
-    InvalidOperation { operation: String, message: String },
+    InvalidOperation {
+        /// Operation description
+        operation: String,
+        /// Error message
+        message: String
+    },
 }
 
 impl fmt::Display for ValueError {
