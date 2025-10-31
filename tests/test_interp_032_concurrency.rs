@@ -34,8 +34,8 @@
 /// Property: Should create and execute thread
 #[test]
 fn test_basic_thread_spawn() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     let code = r#"
         // Simple thread spawn
@@ -65,8 +65,8 @@ fn test_basic_thread_spawn() {
 /// Property: Main thread should wait for spawned thread completion
 #[test]
 fn test_thread_join() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     let code = r#"
         let mut completed = false;
@@ -98,8 +98,8 @@ fn test_thread_join() {
 /// Property: Only one thread can lock mutex at a time
 #[test]
 fn test_mutex_exclusive_access() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     let code = r#"
         use std::sync::Mutex;
@@ -120,7 +120,8 @@ fn test_mutex_exclusive_access() {
 
     let mut eval = Evaluator::new();
     for statement in ast.nodes() {
-        eval.eval(statement).expect("Should execute Mutex operations");
+        eval.eval(statement)
+            .expect("Should execute Mutex operations");
     }
 }
 
@@ -131,8 +132,8 @@ fn test_mutex_exclusive_access() {
 /// Property: Multiple threads can share Arc<Mutex<T>> safely
 #[test]
 fn test_arc_shared_ownership() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     let code = r#"
         use std::sync::{Arc, Mutex};
@@ -163,7 +164,8 @@ fn test_arc_shared_ownership() {
 
     let mut eval = Evaluator::new();
     for statement in ast.nodes() {
-        eval.eval(statement).expect("Should execute Arc<Mutex<T>> pattern");
+        eval.eval(statement)
+            .expect("Should execute Arc<Mutex<T>> pattern");
     }
 }
 
@@ -174,8 +176,8 @@ fn test_arc_shared_ownership() {
 /// Property: Messages sent via channel are received correctly
 #[test]
 fn test_channel_communication() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     let code = r#"
         use std::sync::mpsc;
@@ -197,7 +199,8 @@ fn test_channel_communication() {
 
     let mut eval = Evaluator::new();
     for statement in ast.nodes() {
-        eval.eval(statement).expect("Should execute channel communication");
+        eval.eval(statement)
+            .expect("Should execute channel communication");
     }
 }
 
@@ -208,8 +211,8 @@ fn test_channel_communication() {
 /// Property: Counter incremented by N threads should equal N
 #[test]
 fn test_concurrent_counter() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     let code = r#"
         use std::sync::{Arc, Mutex};
@@ -242,7 +245,8 @@ fn test_concurrent_counter() {
 
     let mut eval = Evaluator::new();
     for statement in ast.nodes() {
-        eval.eval(statement).expect("Should execute concurrent counter safely");
+        eval.eval(statement)
+            .expect("Should execute concurrent counter safely");
     }
 }
 
@@ -255,8 +259,8 @@ fn test_concurrent_counter() {
 #[test]
 #[ignore]
 fn test_data_race_detection() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     // Code with intentional data race (no synchronization)
     let code = r#"
@@ -303,8 +307,8 @@ fn test_data_race_detection() {
 #[test]
 #[ignore]
 fn test_deadlock_detection() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     // Code with potential deadlock (circular dependency)
     let code = r#"
@@ -357,8 +361,8 @@ fn test_deadlock_detection() {
 /// Property: Concurrent programs should not panic
 #[test]
 fn test_thread_safety() {
-    use ruchyruchy::interpreter::parser::Parser;
     use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::interpreter::parser::Parser;
 
     let code = r#"
         use std::sync::{Arc, Mutex};
