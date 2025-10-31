@@ -18,7 +18,7 @@
 // - Type safety enforced at runtime through Value operations
 // - Error propagation via Result types
 
-use crate::interpreter::parser::{AstNode, BinaryOperator, UnaryOperator};
+use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
 use crate::interpreter::value::{Value, ValueError};
 use std::collections::HashMap;
@@ -184,6 +184,53 @@ impl Evaluator {
             AstNode::FloatLiteral(f) => Ok(ControlFlow::Value(Value::float(*f))),
             AstNode::StringLiteral(s) => Ok(ControlFlow::Value(Value::string(s.clone()))),
             AstNode::BooleanLiteral(b) => Ok(ControlFlow::Value(Value::boolean(*b))),
+
+            // F-string with interpolation: f"text {expr} more"
+            // Parse the content to extract {expr} parts and evaluate them
+            AstNode::FString { content } => {
+                let mut result = String::new();
+                let mut chars = content.chars().peekable();
+
+                while let Some(ch) = chars.next() {
+                    if ch == '{' {
+                        // Extract expression until '}'
+                        let mut expr_str = String::new();
+                        let mut depth = 1;
+                        while let Some(ch) = chars.next() {
+                            if ch == '{' {
+                                depth += 1;
+                                expr_str.push(ch);
+                            } else if ch == '}' {
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                                expr_str.push(ch);
+                            } else {
+                                expr_str.push(ch);
+                            }
+                        }
+
+                        // Parse and evaluate the expression
+                        let mut parser = Parser::new(&expr_str);
+                        let ast = parser.parse().map_err(|e| {
+                            EvalError::UnsupportedOperation {
+                                operation: format!("Failed to parse f-string expression '{}': {:?}", expr_str, e),
+                            }
+                        })?;
+
+                        // Evaluate the expression
+                        if let Some(node) = ast.nodes().first() {
+                            let value = self.eval(node)?;
+                            result.push_str(&value.to_println_string());
+                        }
+                    } else {
+                        result.push(ch);
+                    }
+                }
+
+                Ok(ControlFlow::Value(Value::string(result)))
+            }
 
             // Binary operations - evaluate operands then apply operator
             AstNode::BinaryOp { op, left, right } => {

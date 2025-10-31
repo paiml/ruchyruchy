@@ -36,6 +36,7 @@ enum Token {
     Integer(i64),
     Float(f64),
     StringLit(String),
+    FString(String), // F-string with interpolation: f"text {expr}"
     True,
     False,
 
@@ -200,6 +201,22 @@ impl Parser {
                             tokens.push(Token::Integer(n));
                         }
                     }
+                }
+
+                // F-strings: f"text {expr} more"
+                'f' if chars.clone().nth(1) == Some('"') => {
+                    chars.next(); // consume 'f'
+                    chars.next(); // consume opening "
+
+                    let mut content = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        chars.next();
+                        if ch == '"' {
+                            break;
+                        }
+                        content.push(ch);
+                    }
+                    tokens.push(Token::FString(content));
                 }
 
                 // Identifiers and keywords
@@ -893,6 +910,11 @@ impl Parser {
                 self.advance();
                 Ok(AstNode::StringLiteral(s))
             }
+            Some(Token::FString(content)) => {
+                let content = content.clone();
+                self.advance();
+                Ok(AstNode::FString { content })
+            }
             Some(Token::True) => {
                 self.advance();
                 Ok(AstNode::BooleanLiteral(true))
@@ -1259,6 +1281,9 @@ pub enum AstNode {
 
     /// String literal
     StringLiteral(String),
+
+    /// F-string with interpolation: f"text {expr} more"
+    FString { content: String },
 
     /// Boolean literal
     BooleanLiteral(bool),
