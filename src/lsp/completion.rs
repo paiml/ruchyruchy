@@ -7,6 +7,7 @@ use super::protocol::{CompletionItem, CompletionItemKind, Position};
 pub struct CompletionProvider;
 
 impl CompletionProvider {
+    /// Create a new completion provider
     pub fn new() -> Self {
         Self
     }
