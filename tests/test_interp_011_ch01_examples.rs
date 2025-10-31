@@ -1,13 +1,17 @@
 // INTERP-011: Execute All Chapter 1 Examples (Hello World)
-// RED Phase: Create tests for executing book examples
+// GREEN Phase: All tests passing after adding top-level statement support
+//
+// This test suite validates that Chapter 1 examples from the Ruchy book
+// execute correctly. It tests both traditional programs with main() functions
+// and REPL-style code with top-level statements.
 //
 // Tests for:
 // - Example 1: Basic Hello World with main
 // - Example 2: Multiple println with main
 // - Example 3: Variable with main
-// - Example 4: Direct println (no main)
-// - Example 5: Variable storage (no main)
-// - Example 6: Sequential output (no main)
+// - Example 4: Direct println (no main) - requires top-level statement support
+// - Example 5: Variable storage (no main) - requires top-level statement support
+// - Example 6: Sequential output (no main) - requires top-level statement support
 //
 // Test Coverage:
 // - Basic examples: 6 tests
