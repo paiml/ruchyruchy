@@ -15,12 +15,18 @@ use std::collections::HashMap;
 /// File change information from version control
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileChange {
+    /// Path to the file that changed
     pub file_path: String,
+    /// Git commit hash
     pub commit_hash: String,
+    /// Number of lines added
     pub lines_added: usize,
+    /// Number of lines deleted
     pub lines_deleted: usize,
+    /// Author of the change
     pub author: String,
-    pub timestamp: u64, // Unix timestamp
+    /// Unix timestamp of the change
+    pub timestamp: u64,
 }
 
 impl FileChange {
@@ -52,14 +58,22 @@ impl FileChange {
 /// Code churn metrics for a file
 #[derive(Debug, Clone)]
 pub struct ChurnMetrics {
+    /// Path to the file
     pub file_path: String,
+    /// Total number of changes
     pub total_changes: usize,
+    /// Total lines added across all changes
     pub total_lines_added: usize,
+    /// Total lines deleted across all changes
     pub total_lines_deleted: usize,
+    /// Total churn (lines added + deleted)
     pub total_churn: usize,
+    /// Number of unique authors who modified this file
     pub unique_authors: usize,
-    pub change_frequency: f64, // Changes per day
-    pub churn_rate: f64,       // Lines changed per change
+    /// Changes per day
+    pub change_frequency: f64,
+    /// Average lines changed per change
+    pub churn_rate: f64,
 }
 
 impl ChurnMetrics {
@@ -115,19 +129,27 @@ impl ChurnMetrics {
 /// Code churn hotspot (high-risk file)
 #[derive(Debug, Clone)]
 pub struct ChurnHotspot {
+    /// Churn metrics for this hotspot
     pub metrics: ChurnMetrics,
+    /// Risk level classification
     pub risk_level: RiskLevel,
+    /// Confidence in this hotspot identification
     pub confidence: ConfidenceScore,
 }
 
 /// Risk level classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RiskLevel {
-    Critical, // Risk score >= 0.8
-    High,     // Risk score >= 0.6
-    Medium,   // Risk score >= 0.4
-    Low,      // Risk score >= 0.2
-    Minimal,  // Risk score < 0.2
+    /// Critical risk (score >= 0.8)
+    Critical,
+    /// High risk (score >= 0.6)
+    High,
+    /// Medium risk (score >= 0.4)
+    Medium,
+    /// Low risk (score >= 0.2)
+    Low,
+    /// Minimal risk (score < 0.2)
+    Minimal,
 }
 
 impl RiskLevel {
