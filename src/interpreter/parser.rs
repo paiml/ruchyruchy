@@ -1,5 +1,6 @@
 // INTERP-001: AST Parser Integration
 // INTERP-032: Concurrency syntax support (use, ::, closures, blocks)
+// INTERP-036: Grouped import syntax (use std::sync::{Arc, Mutex})
 // REFACTOR Phase: Clean up implementation while keeping tests green
 //
 // Research: Aho et al. (2006) Chapter 4: Syntax Analysis
@@ -13,6 +14,11 @@
 // - Path expressions: thread::spawn, Arc::new
 // - Closures: || { }, |x| { }, move || { }
 // - Block expressions: { let x = 1; }
+//
+// Grouped imports (INTERP-036):
+// - Grouped use declarations: use std::sync::{Arc, Mutex};
+// - Multiple items in braces: {Arc, Mutex, RwLock}
+// - Nested paths: use std::sync::{Arc, Mutex};
 
 /// Parser for Ruchy source code
 pub struct Parser {
@@ -561,6 +567,34 @@ impl Parser {
         while self.check(&Token::ColonColon) {
             self.advance(); // consume ::
             path.push(self.expect_identifier());
+        }
+
+        // Check for grouped imports: use std::{Arc, Mutex};
+        if self.check(&Token::LeftBrace) {
+            self.advance(); // consume {
+
+            let mut items = Vec::new();
+
+            // Parse comma-separated items
+            while !self.check(&Token::RightBrace) && !self.is_at_end() {
+                items.push(self.expect_identifier());
+
+                if self.check(&Token::Comma) {
+                    self.advance();
+                }
+            }
+
+            self.consume(&Token::RightBrace)?;
+
+            // Optional semicolon
+            if self.check(&Token::Semicolon) {
+                self.advance();
+            }
+
+            return Ok(AstNode::GroupedUseDecl {
+                base_path: path,
+                items,
+            });
         }
 
         // Optional semicolon
@@ -1546,6 +1580,14 @@ pub enum AstNode {
     UseDecl {
         /// Import path (e.g., ["std", "sync", "Mutex"])
         path: Vec<String>,
+    },
+
+    /// Grouped use declaration: use std::sync::{Arc, Mutex};
+    GroupedUseDecl {
+        /// Base path (e.g., ["std", "sync"])
+        base_path: Vec<String>,
+        /// Items to import (e.g., ["Arc", "Mutex"])
+        items: Vec<String>,
     },
 
     /// Path expression: std::thread::spawn

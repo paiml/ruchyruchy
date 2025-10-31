@@ -1,5 +1,6 @@
 // INTERP-005: Function Calls & Recursion
 // INTERP-032: Mock concurrency primitives (GREEN phase)
+// INTERP-036: Grouped import evaluation (GREEN phase)
 // REFACTOR Phase: Optimize and document
 //
 // Research:
@@ -9,7 +10,7 @@
 //
 // This module implements expression evaluation and function calls for the Ruchy interpreter.
 // Supports function definition, function calls with recursion, control flow, variable scoping,
-// and mock concurrency primitives for testing.
+// mock concurrency primitives, and import handling.
 //
 // Design:
 // - Tree-walking evaluator that recursively evaluates AST nodes
@@ -25,6 +26,11 @@
 // - Built-in functions: thread::spawn, Arc::new, Mutex::new, mpsc::channel
 // - Mock methods: lock(), unwrap(), join(), push(), send(), recv()
 // - Note: These are simplified stubs for testing, not actual threading
+//
+// Import Handling (INTERP-036):
+// - UseDecl: Single imports like `use std::thread;`
+// - GroupedUseDecl: Grouped imports like `use std::sync::{Arc, Mutex};`
+// - Both are currently no-ops (no module system yet)
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -472,6 +478,18 @@ impl Evaluator {
             AstNode::UseDecl { path: _ } => {
                 // For now, just acknowledge the use statement without error
                 // Path like ["std", "sync", "Mutex"] is noted but not imported
+                Ok(ControlFlow::Value(Value::nil()))
+            }
+
+            // Grouped use declaration - ignored for now (no module system yet)
+            // Examples: use std::sync::{Arc, Mutex};
+            AstNode::GroupedUseDecl {
+                base_path: _,
+                items: _,
+            } => {
+                // For now, just acknowledge the grouped use statement without error
+                // Base path like ["std", "sync"] and items like ["Arc", "Mutex"]
+                // Would expand to: use std::sync::Arc; use std::sync::Mutex;
                 Ok(ControlFlow::Value(Value::nil()))
             }
 
