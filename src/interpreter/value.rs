@@ -32,6 +32,8 @@ pub enum Value {
         params: Vec<String>,
         body: Vec<AstNode>,
     },
+    /// Tuple value (ordered collection of heterogeneous values)
+    Tuple(Vec<Value>),
     /// Nil/Unit value (represents absence of value)
     Nil,
 }
@@ -113,6 +115,11 @@ impl Value {
     /// Create a vector value
     pub fn vector(elements: Vec<Value>) -> Self {
         Value::Vector(elements)
+    }
+
+    /// Create a tuple value
+    pub fn tuple(elements: Vec<Value>) -> Self {
+        Value::Tuple(elements)
     }
 
     /// Create a hashmap value
@@ -483,6 +490,32 @@ impl Value {
     }
 }
 
+impl Value {
+    /// Format value for println output (strings without quotes)
+    pub fn to_println_string(&self) -> String {
+        match self {
+            Value::String(s) => s.clone(), // Strings without quotes for println
+            Value::Vector(v) => {
+                let elements: Vec<String> = v.iter().map(|val| val.to_println_string()).collect();
+                format!("[{}]", elements.join(", "))
+            }
+            Value::Tuple(t) => {
+                let elements: Vec<String> = t.iter().map(|val| val.to_println_string()).collect();
+                format!("({})", elements.join(", "))
+            }
+            Value::HashMap(m) => {
+                let pairs: Vec<String> = m
+                    .iter()
+                    .map(|(k, v)| format!("\"{}\": {}", k, v.to_println_string()))
+                    .collect();
+                format!("{{{}}}", pairs.join(", "))
+            }
+            // For all other types, use Display trait
+            other => format!("{}", other),
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -499,6 +532,16 @@ impl fmt::Display for Value {
                     write!(f, "{}", val)?;
                 }
                 write!(f, "]")
+            }
+            Value::Tuple(t) => {
+                write!(f, "(")?;
+                for (i, val) in t.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", val)?;
+                }
+                write!(f, ")")
             }
             Value::HashMap(m) => {
                 write!(f, "{{")?;
