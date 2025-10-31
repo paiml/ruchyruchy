@@ -2,56 +2,92 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 🚨 P0 CRITICAL: ALWAYS USE LOCAL BUILDS (DOGFOODING MANDATE)
+## 🚨 P0 CRITICAL: Understanding RuchyRuchy Architecture
 
 **MANDATORY - ZERO TOLERANCE - BLOCKING - P0 PRIORITY**
 
-YOU ARE BUILDING THE `ruchydbg` DEBUGGER - YOU MUST USE YOUR OWN BUILD!
+### Critical Architecture Understanding
 
-### NEVER Use Installed Binaries
+**RuchyRuchy has TWO components:**
 
-**FORBIDDEN**:
-```bash
-ruchydbg run test.ruchy              # ❌ WRONG - uses ~/.cargo/bin/ruchydbg (old version)
-which ruchydbg                       # ❌ WRONG - points to installed version
-/home/noah/.cargo/bin/ruchydbg       # ❌ WRONG - not your changes!
+1. **RuchyRuchy Interpreter** (what you're building)
+   - Location: `src/interpreter/parser.rs`, `src/interpreter/evaluator.rs`
+   - Purpose: Educational tree-walking interpreter
+   - Testing: Via Rust tests (`cargo test`)
+   - **THIS IS WHAT YOU'RE DEVELOPING**
+
+2. **`ruchydbg` CLI Tool** (wrapper)
+   - Location: `src/bin/ruchydbg.rs`
+   - Purpose: Wrapper around production `ruchy` compiler (lines 129, 145)
+   - **DOES NOT USE YOUR PARSER** - shells out to `ruchy` binary
+   - Testing: Validates production `ruchy` works, NOT your interpreter
+
+### CRITICAL: ruchydbg IS NOT THE INTERPRETER
+
+**`ruchydbg` source (src/bin/ruchydbg.rs:129)**:
+```rust
+cmd.arg("ruchy");  // Shells out to production Ruchy compiler!
 ```
 
-**MANDATORY**:
+**What this means**:
+- ❌ `ruchydbg run test.ruchy` uses PRODUCTION `ruchy` compiler
+- ❌ `ruchydbg` does NOT test YOUR parser changes
+- ✅ `cargo test` uses YOUR Parser implementation
+- ✅ Tests in `tests/` directory use YOUR interpreter
+
+### How to Test YOUR Parser Changes
+
+**CORRECT - Tests YOUR interpreter**:
 ```bash
-./target/debug/ruchydbg run test.ruchy    # ✅ CORRECT - uses YOUR parser changes
-./target/debug/ruchydbg validate          # ✅ CORRECT - tests YOUR implementation
-cargo run --bin ruchydbg -- run test.ruchy  # ✅ CORRECT - always fresh build
+cargo test --test test_interp_014_ch04_examples  # ✅ Uses YOUR Parser
+cargo test test_interp_013                       # ✅ Uses YOUR Parser
+cargo run --example interpreter_demo             # ✅ Uses YOUR interpreter
 ```
 
-### Why This is P0 Critical
-
-1. **You ARE the debugger** - `ruchydbg` is the RuchyRuchy interpreter binary you're developing
-2. **Installed version is STALE** - doesn't include your parser fixes
-3. **Defeats dogfooding** - testing old code invalidates the entire project purpose
-4. **False validation** - bugs may appear "fixed" when they're not in your code
-5. **Wastes time** - debugging the wrong codebase
-
-### Before ANY ruchydbg Command
-
-**ALWAYS**:
-1. Check you're using `./target/debug/ruchydbg` (note the `./`)
-2. Rebuild if needed: `cargo build --bin ruchydbg`
-3. Verify version matches: `./target/debug/ruchydbg --version` should show current project version
-4. Never use bare `ruchydbg` command without `./target/debug/` prefix
-
-### Pre-commit Hook Enforcement
-
-Add to `.git/hooks/pre-commit`:
+**INCORRECT - Tests production Ruchy**:
 ```bash
-# Verify no references to bare 'ruchydbg' command in commits
-if git diff --cached | grep -E "^\+.*[^/]ruchydbg " | grep -v "# "; then
-    echo "❌ ERROR: Found bare 'ruchydbg' command - MUST use './target/debug/ruchydbg'"
-    exit 1
-fi
+ruchydbg run test.ruchy                          # ❌ Uses production ruchy binary
+./target/debug/ruchydbg run test.ruchy           # ❌ Still uses production ruchy
 ```
 
-**REMEMBER**: The point of this project is DOGFOODING our own debugging tools. Using the installed version defeats this entirely.
+### When to Use ruchydbg
+
+Use `ruchydbg` to:
+- ✅ Verify production `ruchy` compiler works
+- ✅ Validate debugging tools infrastructure
+- ✅ Test timeout detection and tracing wrappers
+- ✅ Show expected behavior for comparison
+
+**But NEVER** to test your Parser changes!
+
+### Example Workflow
+
+```bash
+# 1. Make parser changes
+vim src/interpreter/parser.rs
+
+# 2. Test YOUR changes (CORRECT)
+cargo test --test test_interp_014_ch04_examples
+
+# 3. Compare with production behavior (optional)
+echo 'fun main() { println("test"); }' > /tmp/test.ruchy
+ruchydbg run /tmp/test.ruchy  # Shows production behavior
+
+# 4. Commit
+git add src/interpreter/parser.rs
+git commit -m "INTERP-XXX: Fix parser"
+```
+
+### Pre-commit Hook (Updated)
+
+The key is testing via `cargo test`, not `ruchydbg`:
+```bash
+# In .git/hooks/pre-commit
+echo "Running interpreter tests..."
+cargo test --test test_interp_014_ch04_examples || exit 1
+```
+
+**REMEMBER**: `ruchydbg` is a WRAPPER around production `ruchy`. Your interpreter is tested via `cargo test`.
 
 ## Project Overview
 
