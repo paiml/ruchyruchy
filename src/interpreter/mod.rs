@@ -13,12 +13,14 @@
 // Architecture: Tree-walking AST interpreter
 // Goal: Discover 50+ runtime bugs, >90% path coverage
 
+pub mod bug_discovery;
 pub mod evaluator;
 pub mod parser;
 pub mod scope;
 pub mod value;
 
 // Re-export main types for convenience
+pub use bug_discovery::{BugDiscoveryAnalyzer, InterpreterBugReport};
 pub use evaluator::{EvalError, Evaluator};
 pub use parser::{Ast, AstNode, ParseError, Parser};
 pub use scope::{Scope, ScopeError};
