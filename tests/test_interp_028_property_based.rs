@@ -33,7 +33,6 @@ mod property_testing {
     use super::*;
 
     /// Property-based tester for interpreter robustness
-    #[allow(dead_code)] // Fields used in GREEN phase
     pub struct PropertyBasedTester {
         seed: u64,
         program_count: usize,
@@ -55,24 +54,117 @@ mod property_testing {
         }
 
         /// Generate a random Ruchy program
+        ///
+        /// GREEN phase: Simple implementation using LCG (Linear Congruential Generator)
+        /// for deterministic pseudo-random number generation
         pub fn generate_program(&mut self) -> String {
-            // RED: Will implement in GREEN phase
-            unimplemented!("Program generator not implemented yet")
+            // Update seed using LCG: next = (a * seed + c) mod m
+            // Using parameters from Numerical Recipes
+            const A: u64 = 1664525;
+            const C: u64 = 1013904223;
+            self.seed = A.wrapping_mul(self.seed).wrapping_add(C);
+
+            // Generate simple programs based on seed
+            let program_type = self.seed % 10;
+
+            match program_type {
+                0 => format!("{}", self.seed % 1000), // Integer literal
+                1 => format!("{} + {}", self.seed % 100, (self.seed / 100) % 100), // Addition
+                2 => format!("{} - {}", self.seed % 100, (self.seed / 100) % 100), // Subtraction
+                3 => format!("{} * {}", self.seed % 50, (self.seed / 100) % 50), // Multiplication
+                4 => {
+                    let divisor = (self.seed % 50) + 1; // Avoid division by zero
+                    format!("{} / {}", self.seed % 100, divisor)
+                }
+                5 => format!("let x = {}; x", self.seed % 1000), // Variable
+                6 => format!("if ({} > 50) {{ 100 }} else {{ 0 }}", self.seed % 100), // If-else
+                7 => format!("fun f() {{ {} }} f()", self.seed % 100), // Function
+                8 => format!("{} == {}", self.seed % 100, (self.seed / 100) % 100), // Comparison
+                9 => format!("!{}", self.seed.is_multiple_of(2)), // Boolean negation
+                _ => "42".to_string(), // Fallback
+            }
         }
 
         /// Test the "no crashes" property: all programs execute or error gracefully
-        pub fn test_no_crashes<F>(&mut self, _test_fn: F) -> PropertyResult
+        ///
+        /// GREEN phase: Run test_fn on each generated program and count outcomes
+        pub fn test_no_crashes<F>(&mut self, mut test_fn: F) -> PropertyResult
         where
             F: FnMut(&str) -> TestOutcome,
         {
-            // RED: Will implement in GREEN phase
-            unimplemented!("No crashes property test not implemented yet")
+            for i in 0..self.program_count {
+                let program = self.generate_program();
+
+                match test_fn(&program) {
+                    TestOutcome::Success | TestOutcome::Error => {
+                        // Both are acceptable - continue testing
+                    }
+                    TestOutcome::Crash => {
+                        // Interpreter crashed - property violated
+                        return PropertyResult::Crash {
+                            program,
+                            cases_until_crash: i + 1,
+                        };
+                    }
+                }
+            }
+
+            // All programs executed without crashes
+            PropertyResult::Success {
+                cases_tested: self.program_count,
+            }
         }
 
         /// Test deterministic execution: same input produces same output
-        pub fn test_deterministic(&mut self, _program: &str) -> bool {
-            // RED: Will implement in GREEN phase
-            unimplemented!("Deterministic test not implemented yet")
+        ///
+        /// GREEN phase: Parse and evaluate program twice, compare results
+        pub fn test_deterministic(&mut self, program: &str) -> bool {
+            use super::*;
+
+            // Parse program
+            let mut parser1 = Parser::new(program);
+            let ast1 = match parser1.parse() {
+                Ok(ast) => ast,
+                Err(_) => return true, // Parse errors are deterministic
+            };
+
+            // Evaluate first time
+            let mut eval1 = Evaluator::new();
+            let mut result1 = None;
+            let mut error1 = None;
+            for statement in ast1.nodes() {
+                match eval1.eval(statement) {
+                    Ok(val) => result1 = Some(format!("{:?}", val)),
+                    Err(e) => {
+                        error1 = Some(format!("{:?}", e));
+                        break;
+                    }
+                }
+            }
+
+            // Parse again (to get fresh AST)
+            let mut parser2 = Parser::new(program);
+            let ast2 = match parser2.parse() {
+                Ok(ast) => ast,
+                Err(_) => return true, // Parse errors are deterministic
+            };
+
+            // Evaluate second time
+            let mut eval2 = Evaluator::new();
+            let mut result2 = None;
+            let mut error2 = None;
+            for statement in ast2.nodes() {
+                match eval2.eval(statement) {
+                    Ok(val) => result2 = Some(format!("{:?}", val)),
+                    Err(e) => {
+                        error2 = Some(format!("{:?}", e));
+                        break;
+                    }
+                }
+            }
+
+            // Compare results - should be identical
+            result1 == result2 && error1 == error2
         }
     }
 
