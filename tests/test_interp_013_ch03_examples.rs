@@ -109,7 +109,6 @@ fun main() {
 }
 
 #[test]
-#[ignore = "CRITICAL BUG: Parser hangs on type annotations (colon and arrow tokens)"]
 fn test_ch03_example_03_function_with_types() {
     // Example 3: Function with Type Annotations
     //
@@ -149,7 +148,6 @@ fun main() {
 }
 
 #[test]
-#[ignore = "CRITICAL BUG: Parser hangs on type annotations (colon and arrow tokens)"]
 fn test_ch03_example_04_nested_calls() {
     // Example 4: Nested Function Calls
     //

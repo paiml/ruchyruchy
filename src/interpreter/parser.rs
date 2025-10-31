@@ -233,6 +233,11 @@ impl Parser {
                     chars.next();
                     tokens.push(Token::Plus);
                 }
+                '-' if chars.clone().nth(1) == Some('>') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::Arrow);
+                }
                 '-' => {
                     chars.next();
                     tokens.push(Token::Minus);
@@ -393,6 +398,12 @@ impl Parser {
             if let Some(Token::Identifier(p)) = self.current() {
                 params.push(p.clone());
                 self.advance();
+
+                // Skip optional type annotation
+                if self.check(&Token::Colon) {
+                    self.advance(); // consume ':'
+                    self.advance(); // skip type (for now, just skip one token)
+                }
             }
 
             if self.check(&Token::Comma) {
@@ -401,6 +412,13 @@ impl Parser {
         }
 
         self.consume(&Token::RightParen)?;
+
+        // Skip optional return type annotation
+        if self.check(&Token::Arrow) {
+            self.advance(); // consume '->'
+            self.advance(); // skip return type (for now, just skip one token)
+        }
+
         self.consume(&Token::LeftBrace)?;
 
         let mut body = Vec::new();
