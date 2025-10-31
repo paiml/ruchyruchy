@@ -400,9 +400,15 @@ impl Parser {
                 self.advance();
 
                 // Skip optional type annotation
+                // Note: '&' in '&str' is not tokenized (skipped by tokenizer)
+                // so '&str' appears as just 'str' token, making it a single-token type
                 if self.check(&Token::Colon) {
                     self.advance(); // consume ':'
-                    self.advance(); // skip type (for now, just skip one token)
+
+                    // Skip the type name (one token: 'i32', 'str', 'bool', etc.)
+                    if !self.is_at_end() {
+                        self.advance();
+                    }
                 }
             }
 
@@ -414,9 +420,14 @@ impl Parser {
         self.consume(&Token::RightParen)?;
 
         // Skip optional return type annotation
+        // Note: '&' is not tokenized, so '&str' appears as just 'str' token, making it a single token
         if self.check(&Token::Arrow) {
             self.advance(); // consume '->'
-            self.advance(); // skip return type (for now, just skip one token)
+
+            // Skip the return type name (one token: 'i32', 'str', 'bool', etc.)
+            if !self.is_at_end() {
+                self.advance();
+            }
         }
 
         self.consume(&Token::LeftBrace)?;
@@ -552,13 +563,23 @@ impl Parser {
 
         let else_branch = if self.check(&Token::Else) {
             self.advance();
-            self.consume(&Token::LeftBrace)?;
-            let mut else_body = Vec::new();
-            while !self.check(&Token::RightBrace) && !self.is_at_end() {
-                else_body.push(self.parse_statement()?);
+
+            // Check for 'else if' (two separate tokens)
+            if self.check(&Token::If) {
+                // Recursively parse the 'if' as the else branch
+                // This handles 'else if' chains naturally
+                let else_if = self.parse_if()?;
+                Some(vec![else_if])
+            } else {
+                // Regular 'else { ... }' block
+                self.consume(&Token::LeftBrace)?;
+                let mut else_body = Vec::new();
+                while !self.check(&Token::RightBrace) && !self.is_at_end() {
+                    else_body.push(self.parse_statement()?);
+                }
+                self.consume(&Token::RightBrace)?;
+                Some(else_body)
             }
-            self.consume(&Token::RightBrace)?;
-            Some(else_body)
         } else {
             None
         };
