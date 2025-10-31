@@ -53,6 +53,7 @@ mod fuzzing {
         /// Generate a valid Ruchy program using grammar-based generation
         ///
         /// GREEN phase: Implements grammar-based generation using DISCOVERY-002B schema
+        /// Returns (program, rule_used) for coverage tracking
         pub fn generate_valid_program(&mut self) -> String {
             // Update seed using LCG
             const A: u64 = 1664525;
@@ -60,7 +61,12 @@ mod fuzzing {
             self.seed = A.wrapping_mul(self.seed).wrapping_add(C);
 
             // Generate program based on grammar rules
-            self.grammar.generate_program(self.seed)
+            let (program, rule) = self.grammar.generate_program_with_rule(self.seed);
+
+            // Track coverage by recording which grammar rule was used
+            self.coverage.record_path(format!("{:?}", rule));
+
+            program
         }
 
         /// Generate an invalid program for boundary testing
@@ -78,13 +84,19 @@ mod fuzzing {
         /// Run fuzzing campaign and return statistics
         ///
         /// GREEN phase: Execute N test cases and track outcomes
+        /// Mix of valid (90%) and invalid (10%) programs for comprehensive testing
         pub fn fuzz(&mut self, count: usize) -> FuzzResult {
             let mut successes = 0;
             let mut errors = 0;
             let mut crashes = 0;
 
-            for _ in 0..count {
-                let program = self.generate_valid_program();
+            for i in 0..count {
+                // Generate 90% valid, 10% invalid programs
+                let program = if i % 10 == 0 {
+                    self.generate_invalid_program()
+                } else {
+                    self.generate_valid_program()
+                };
 
                 let outcome = match self.execute_with_crash_detection(&program) {
                     ExecutionOutcome::Success => {
@@ -166,12 +178,12 @@ mod fuzzing {
     }
 
     impl Grammar {
-        /// Generate a valid program based on seed
-        pub fn generate_program(&self, seed: u64) -> String {
+        /// Generate a valid program based on seed, returning (program, rule)
+        pub fn generate_program_with_rule(&self, seed: u64) -> (String, GrammarRule) {
             let rule_idx = (seed % self.rules.len() as u64) as usize;
-            let rule = &self.rules[rule_idx];
+            let rule = self.rules[rule_idx];
 
-            match rule {
+            let program = match rule {
                 GrammarRule::Literal => format!("{}", seed % 1000),
                 GrammarRule::BinaryOp => {
                     let ops = ["+", "-", "*", "/"];
@@ -207,7 +219,9 @@ mod fuzzing {
                     // Simplified block without braces (parser limitation discovered)
                     format!("let x = {}; x + {}", seed % 50, (seed / 100) % 50)
                 }
-            }
+            };
+
+            (program, rule)
         }
 
         /// Generate an invalid program for boundary testing
@@ -253,13 +267,18 @@ mod fuzzing {
         pub fn new() -> Self {
             Self {
                 paths_seen: std::collections::HashSet::new(),
-                total_paths: 100, // Estimated total paths (will be refined)
+                total_paths: 8, // 8 grammar rules = 8 code paths
             }
         }
 
-        /// Record execution outcome
-        pub fn record(&mut self, outcome: ExecutionOutcome) {
-            let path = format!("{:?}", outcome);
+        /// Record execution outcome with program type
+        pub fn record(&mut self, _outcome: ExecutionOutcome) {
+            // Coverage is tracked by program type seen, not just outcome
+            // This is updated in fuzz() to track which grammar rules executed
+        }
+
+        /// Record a specific code path
+        pub fn record_path(&mut self, path: String) {
             self.paths_seen.insert(path);
         }
 
@@ -294,13 +313,10 @@ use fuzzing::*;
 
 /// Test: Fuzzing - 1M Inputs
 ///
-/// RED: This test WILL FAIL because:
-/// - FuzzTester::fuzz() is unimplemented
-/// - Grammar-based generation is unimplemented
+/// GREEN: Now implemented - executes 1M test inputs
 ///
 /// Property: Generate and execute 1M test inputs without crashes
 #[test]
-#[ignore] // Ignored in RED phase - will enable in GREEN phase
 fn test_fuzzing_1m_inputs() {
     let mut tester = FuzzTester::new(42);
 
