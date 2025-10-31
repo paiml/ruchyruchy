@@ -10,12 +10,19 @@ use std::f64;
 /// Performance regression detected via statistical analysis
 #[derive(Debug, Clone, PartialEq)]
 pub struct PerformanceRegression {
+    /// Baseline version (faster)
     pub baseline_version: String,
+    /// Regressed version (slower)
     pub regressed_version: String,
+    /// Slowdown factor (e.g., 1.5 = 50% slower)
     pub slowdown_factor: f64,
+    /// Statistical significance (p-value)
     pub p_value: f64,
+    /// Baseline mean execution time in milliseconds
     pub baseline_mean_ms: f64,
+    /// Regressed mean execution time in milliseconds
     pub regressed_mean_ms: f64,
+    /// Cohen's d effect size
     pub effect_size: f64,
 }
 
