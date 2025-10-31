@@ -10,12 +10,16 @@ pub struct TextDocumentManager {
 
 /// Text document state
 pub struct TextDocument {
+    /// Document URI
     pub uri: String,
+    /// Document version number
     pub version: i32,
+    /// Document text content
     pub text: String,
 }
 
 impl TextDocumentManager {
+    /// Create a new text document manager
     pub fn new() -> Self {
         Self {
             documents: HashMap::new(),

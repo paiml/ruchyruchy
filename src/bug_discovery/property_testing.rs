@@ -34,6 +34,7 @@ impl Property {
         )
     }
 
+    /// Type preservation property: typecheck(transform(ast)) preserves types
     pub fn type_preservation() -> Self {
         Property::new(
             "type_preservation".to_string(),
@@ -41,6 +42,7 @@ impl Property {
         )
     }
 
+    /// Deterministic compilation property: compile(source) produces identical output on repeated runs
     pub fn deterministic_compilation() -> Self {
         Property::new(
             "deterministic_compilation".to_string(),
@@ -48,6 +50,7 @@ impl Property {
         )
     }
 
+    /// Semantic equivalence property: compile(source).run() == interpret(source)
     pub fn semantic_equivalence() -> Self {
         Property::new(
             "semantic_equivalence".to_string(),
@@ -55,6 +58,7 @@ impl Property {
         )
     }
 
+    /// Idempotent optimization property: optimize(optimize(code)) == optimize(code)
     pub fn idempotent_optimization() -> Self {
         Property::new(
             "idempotent_optimization".to_string(),
