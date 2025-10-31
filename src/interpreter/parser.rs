@@ -43,6 +43,7 @@ enum Token {
     Star,
     Slash,
     Percent,
+    Not,
     EqualEqual,
     NotEqual,
     LessThan,
@@ -314,6 +315,10 @@ impl Parser {
                     chars.next();
                     chars.next();
                     tokens.push(Token::NotEqual);
+                }
+                '!' => {
+                    chars.next();
+                    tokens.push(Token::Not);
                 }
 
                 '<' if chars.clone().nth(1) == Some('=') => {
@@ -928,6 +933,24 @@ impl Parser {
                 let expr = self.parse_expression()?;
                 self.consume(&Token::RightParen)?;
                 Ok(expr)
+            }
+            Some(Token::Minus) => {
+                // Unary minus: -expr (negative numbers, negation)
+                self.advance();
+                let operand = Box::new(self.parse_primary()?);
+                Ok(AstNode::UnaryOp {
+                    op: UnaryOperator::Negate,
+                    operand,
+                })
+            }
+            Some(Token::Not) => {
+                // Unary not: !expr (boolean negation)
+                self.advance();
+                let operand = Box::new(self.parse_primary()?);
+                Ok(AstNode::UnaryOp {
+                    op: UnaryOperator::Not,
+                    operand,
+                })
             }
             _ => {
                 let found = format!("{:?}", self.current());
