@@ -266,6 +266,7 @@ pub struct TestCase {
 /// Parse test cases from Rust test file
 ///
 /// Extracts Ruchy source code from Rust test functions.
+/// Also extracts test descriptions from comments above test functions.
 fn parse_rust_test_file(
     content: &str,
     chapter_num: usize,
@@ -280,6 +281,31 @@ fn parse_rust_test_file(
     while i < lines.len() {
         // Find test function
         if lines[i].trim().starts_with("#[test]") {
+            // Extract description from comments before #[test]
+            let mut description = String::new();
+            let mut comment_start = i.saturating_sub(1);
+
+            // Look backwards for comment block
+            while comment_start > 0 {
+                let line = lines[comment_start].trim();
+                if line.starts_with("//") {
+                    // Extract comment text
+                    if let Some(comment_text) = line.strip_prefix("//").map(str::trim) {
+                        if !comment_text.is_empty()
+                            && !comment_text.starts_with('=')
+                            && !comment_text.starts_with("Example")
+                        {
+                            description = format!("{} {}", comment_text, description);
+                        }
+                    }
+                    comment_start = comment_start.saturating_sub(1);
+                } else if !line.is_empty() {
+                    break;
+                } else {
+                    comment_start = comment_start.saturating_sub(1);
+                }
+            }
+
             i += 1;
             if i >= lines.len() {
                 break;
@@ -297,7 +323,7 @@ fn parse_rust_test_file(
             let mut source_code = String::new();
             let expected_output = Vec::new();
 
-            // Look for let program = r#"..."# pattern
+            // Look for let program = r#"..."# pattern or let source = r#"..."#
             while i < lines.len() {
                 if lines[i].contains("r#\"") || lines[i].contains("r\"") {
                     i += 1;
@@ -315,11 +341,18 @@ fn parse_rust_test_file(
             }
 
             if !source_code.is_empty() {
+                // Use extracted description or fallback
+                let final_description = if description.trim().is_empty() {
+                    format!("Test case from chapter {} - {}", chapter_num, chapter_name)
+                } else {
+                    description.trim().to_string()
+                };
+
                 test_cases.push(TestCase {
                     name: test_name,
                     chapter: chapter_num,
                     chapter_name: chapter_name.to_string(),
-                    description: format!("Test case from chapter {}", chapter_num),
+                    description: final_description,
                     source_code: source_code.trim().to_string(),
                     expected_output,
                 });
