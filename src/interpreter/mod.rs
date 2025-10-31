@@ -21,6 +21,8 @@ pub mod evaluator;
 pub mod parser;
 /// Variable scope management
 pub mod scope;
+/// NASA-level soak and performance testing infrastructure
+pub mod soak_test;
 /// Runtime value types
 pub mod value;
 
@@ -29,4 +31,8 @@ pub use bug_discovery::{BugDiscoveryAnalyzer, InterpreterBugReport};
 pub use evaluator::{EvalError, Evaluator};
 pub use parser::{Ast, AstNode, ParseError, Parser};
 pub use scope::{Scope, ScopeError};
+pub use soak_test::{
+    SoakConfig, SoakResult, SoakTestRunner, TelemetryCollector, TelemetrySnapshot,
+    WorkloadDistribution,
+};
 pub use value::{Value, ValueError};
