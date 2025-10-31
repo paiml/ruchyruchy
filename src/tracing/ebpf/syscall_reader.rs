@@ -23,10 +23,15 @@ const EBPF_PROGRAM: &[u8] = include_bytes_aligned!(concat!(
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct SyscallEvent {
+    /// Process ID
     pub pid: u32,
+    /// Syscall number
     pub syscall_nr: i64,
+    /// Timestamp in nanoseconds
     pub timestamp_ns: u64,
-    pub is_enter: u8, // 1 for enter, 0 for exit
+    /// 1 for syscall enter, 0 for syscall exit
+    pub is_enter: u8,
+    /// Padding for alignment
     pub _padding: [u8; 7],
 }
 
