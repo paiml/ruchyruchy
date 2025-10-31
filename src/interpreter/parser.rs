@@ -851,14 +851,34 @@ impl Parser {
                         Ok(AstNode::Identifier(id))
                     }
                 }
-                // Check for field access
+                // Check for field access or method call
                 else if self.check(&Token::Dot) {
                     self.advance();
-                    let field = self.expect_identifier();
-                    Ok(AstNode::FieldAccess {
-                        expr: Box::new(AstNode::Identifier(id)),
-                        field,
-                    })
+                    let method_or_field = self.expect_identifier();
+
+                    // Check if it's a method call (followed by '(')
+                    if self.check(&Token::LeftParen) {
+                        self.advance();
+                        let mut args = Vec::new();
+                        while !self.check(&Token::RightParen) && !self.is_at_end() {
+                            args.push(self.parse_expression()?);
+                            if self.check(&Token::Comma) {
+                                self.advance();
+                            }
+                        }
+                        self.consume(&Token::RightParen)?;
+                        Ok(AstNode::MethodCall {
+                            receiver: Box::new(AstNode::Identifier(id)),
+                            method: method_or_field,
+                            args,
+                        })
+                    } else {
+                        // It's a field access
+                        Ok(AstNode::FieldAccess {
+                            expr: Box::new(AstNode::Identifier(id)),
+                            field: method_or_field,
+                        })
+                    }
                 }
                 // Check for index access
                 else if self.check(&Token::LeftBracket) {
@@ -1067,6 +1087,13 @@ pub enum AstNode {
 
     /// Field access: expr.field
     FieldAccess { expr: Box<AstNode>, field: String },
+
+    /// Method call: receiver.method(args)
+    MethodCall {
+        receiver: Box<AstNode>,
+        method: String,
+        args: Vec<AstNode>,
+    },
 
     /// Vector literal: [elem1, elem2, ...]
     VectorLiteral { elements: Vec<AstNode> },

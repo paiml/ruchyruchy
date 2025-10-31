@@ -213,6 +213,17 @@ impl Evaluator {
                 Ok(ControlFlow::Value(result))
             }
 
+            // Method call - evaluate receiver and call method on it
+            AstNode::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
+                let receiver_val = self.eval(receiver)?;
+                let result = self.call_method(receiver_val, method, args)?;
+                Ok(ControlFlow::Value(result))
+            }
+
             // Identifier - lookup variable in scope
             AstNode::Identifier(name) => {
                 let value = self
@@ -535,6 +546,72 @@ impl Evaluator {
         self.scope = saved_scope;
 
         Ok(result)
+    }
+
+    /// Call a method on a receiver value
+    ///
+    /// Implements basic method call syntax: receiver.method(args)
+    /// Currently supports string methods: len(), contains()
+    fn call_method(
+        &mut self,
+        receiver: Value,
+        method: &str,
+        args: &[AstNode],
+    ) -> Result<Value, EvalError> {
+        // Evaluate arguments
+        let mut arg_values = Vec::new();
+        for arg in args {
+            arg_values.push(self.eval(arg)?);
+        }
+
+        // Dispatch based on method name
+        match method {
+            "len" => {
+                // String length: "hello".len() => 5
+                if arg_values.len() != 0 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: format!("{}.len()", receiver.type_name()),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+
+                if let Ok(s) = receiver.as_string() {
+                    Ok(Value::integer(s.len() as i64))
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!("method 'len' not supported on type {}", receiver.type_name()),
+                    })
+                }
+            }
+            "contains" => {
+                // String contains: "hello".contains('e') => true
+                if arg_values.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: format!("{}.contains()", receiver.type_name()),
+                        expected: 1,
+                        actual: arg_values.len(),
+                    });
+                }
+
+                if let (Ok(haystack), Ok(needle)) =
+                    (receiver.as_string(), arg_values[0].as_string())
+                {
+                    Ok(Value::boolean(haystack.contains(needle)))
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!(
+                            "method 'contains' not supported on types {} and {}",
+                            receiver.type_name(),
+                            arg_values[0].type_name()
+                        ),
+                    })
+                }
+            }
+            _ => Err(EvalError::UnsupportedOperation {
+                operation: format!("unknown method '{}' on type {}", method, receiver.type_name()),
+            }),
+        }
     }
 
     /// Try to call a built-in function
