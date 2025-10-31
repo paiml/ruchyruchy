@@ -117,30 +117,55 @@ impl Location {
 /// Completion item kind
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompletionItemKind {
+    /// Plain text completion
     Text = 1,
+    /// Method or member function
     Method = 2,
+    /// Function or procedure
     Function = 3,
+    /// Constructor
     Constructor = 4,
+    /// Field or property of a class/struct
     Field = 5,
+    /// Variable
     Variable = 6,
+    /// Class
     Class = 7,
+    /// Interface
     Interface = 8,
+    /// Module
     Module = 9,
+    /// Property
     Property = 10,
+    /// Unit value
     Unit = 11,
+    /// Value
     Value = 12,
+    /// Enumeration
     Enum = 13,
+    /// Language keyword
     Keyword = 14,
+    /// Code snippet
     Snippet = 15,
+    /// Color value
     Color = 16,
+    /// File reference
     File = 17,
+    /// Reference to another symbol
     Reference = 18,
+    /// Folder or directory
     Folder = 19,
+    /// Enumeration member
     EnumMember = 20,
+    /// Constant value
     Constant = 21,
+    /// Struct or record type
     Struct = 22,
+    /// Event
     Event = 23,
+    /// Operator
     Operator = 24,
+    /// Type parameter or generic
     TypeParameter = 25,
 }
 
@@ -160,6 +185,7 @@ pub struct CompletionItem {
 }
 
 impl CompletionItem {
+    /// Create a new completion item
     pub fn new(label: String, kind: CompletionItemKind) -> Self {
         Self {
             label,
@@ -170,16 +196,19 @@ impl CompletionItem {
         }
     }
 
+    /// Add a detail string to this completion item
     pub fn with_detail(mut self, detail: String) -> Self {
         self.detail = Some(detail);
         self
     }
 
+    /// Add documentation to this completion item
     pub fn with_documentation(mut self, documentation: String) -> Self {
         self.documentation = Some(documentation);
         self
     }
 
+    /// Add insert text to this completion item
     pub fn with_insert_text(mut self, insert_text: String) -> Self {
         self.insert_text = Some(insert_text);
         self

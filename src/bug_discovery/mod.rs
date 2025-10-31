@@ -9,12 +9,19 @@
 // - DISC-003: Property-Based Testing Integration
 // - DISC-004: Code Churn Analysis
 
+/// Code churn analysis for identifying bug-prone areas
 pub mod code_churn;
+/// Confidence scoring for bug reports
 pub mod confidence;
+/// Differential testing infrastructure
 pub mod differential;
+/// Grammar-based fuzzing
 pub mod grammar_fuzzer;
+/// Property-based testing
 pub mod property_testing;
+/// Schema-based runtime fuzzing
 pub mod schema_fuzzer;
+/// Statistical analysis utilities
 pub mod statistics;
 
 pub use code_churn::{ChurnAnalyzer, ChurnHotspot, ChurnMetrics, FileChange, RiskLevel};
