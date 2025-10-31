@@ -29,6 +29,7 @@ enum Token {
     Return,
     Struct,
     As,
+    Mut,
 
     // Identifiers and literals
     Identifier(String),
@@ -215,6 +216,7 @@ impl Parser {
                     let token = match ident.as_str() {
                         "fun" => Token::Fun,
                         "let" => Token::Let,
+                        "mut" => Token::Mut,
                         "if" => Token::If,
                         "else" => Token::Else,
                         "while" => Token::While,
@@ -542,6 +544,11 @@ impl Parser {
     /// Parse let declaration
     fn parse_let(&mut self) -> Result<AstNode, ParseError> {
         self.consume(&Token::Let)?;
+
+        // Check for optional 'mut' keyword
+        if self.check(&Token::Mut) {
+            self.advance();
+        }
 
         let name = self.expect_identifier();
 
