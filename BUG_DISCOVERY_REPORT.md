@@ -508,6 +508,87 @@ Error: Evaluation error: Runtime error: Expression type not yet implemented: Mac
 - **Impact**: 4 CRITICAL, 6 HIGH, 5 MEDIUM, 2 LOW
 - **Infrastructure**: validation/memory/memory_safety_validator.ruchy
 
+---
+
+### BUG-049: Parser Infinite Loop on Function Type Annotations (CRITICAL) ✅ FIXED
+
+**Severity**: CRITICAL
+**Discovery Technique**: EXTREME TDD (INTERP-013 RED Phase)
+**Component**: Parser (RuchyRuchy Interpreter)
+**Status**: ✅ FIXED (2025-10-31)
+**GitHub Issue**: #6
+
+**Description**:
+Parser enters infinite loop when encountering function signatures with type annotations (e.g., `fun multiply(x: i32) -> i32`). Tests hung indefinitely (>60 seconds) when parsing any function with parameter types or return type annotations.
+
+**Reproduction Steps**:
+```rust
+use ruchyruchy::interpreter::parser::Parser;
+
+fn main() {
+    // This hangs indefinitely:
+    let source = "fun multiply(x: i32) { x * 2 }";
+    let mut parser = Parser::new(source);
+    let _ = parser.parse(); // HANGS HERE
+}
+```
+
+**Root Cause Analysis**:
+
+1. **Problem 1**: Arrow Token Not Tokenized (lines 236-238)
+   - The `-` character was tokenized as `Token::Minus` without checking for `->`
+   - Result: `->` became TWO tokens (Minus, GreaterThan) instead of one Arrow token
+
+2. **Problem 2**: Infinite Loop in Parameter Parsing (lines 391-401)
+   - Parameter parsing loop had NO WAY to skip unexpected tokens
+   - When encountering Colon token, loop continued WITHOUT advancing position
+   - Result: Infinite loop at same position
+
+**Impact**:
+- Blocked ALL function declarations with type annotations
+- Blocked INTERP-013 (Chapter 3 Functions) GREEN phase
+- Affected 2 out of 4 Chapter 3 function examples
+
+**Fixes Implemented** (commit 26962e0):
+
+1. **Fix 1**: Tokenize arrow correctly (src/interpreter/parser.rs:236-244)
+   ```rust
+   '-' if chars.clone().nth(1) == Some('>') => {
+       chars.next();
+       chars.next();
+       tokens.push(Token::Arrow);
+   }
+   ```
+
+2. **Fix 2**: Handle type annotations in parameter parsing (lines 402-420)
+   ```rust
+   // Skip optional type annotation
+   if self.check(&Token::Colon) {
+       self.advance(); // consume ':'
+       self.advance(); // skip type
+   }
+
+   // Skip optional return type annotation
+   if self.check(&Token::Arrow) {
+       self.advance(); // consume '->'
+       self.advance(); // skip return type
+   }
+   ```
+
+**Test Results**:
+- Before fix: 2/5 tests HUNG (>60s)
+- After fix: 5/5 tests PASSING (<0.01s)
+
+**Related Files**:
+- `src/interpreter/parser.rs:236-244, 402-420` (fixes)
+- `tests/test_interp_013_ch03_examples.rs:112-149, 151-193` (tests)
+- `roadmap.yaml:3964-4002` (ticket INTERP-013)
+
+**Discovery Method**:
+EXTREME TDD RED phase - Tests created first, bug discovered during test execution, STOP THE LINE protocol activated
+
+**Confidence Score**: 1.0 (CRITICAL - 100% reproducible, comprehensive root cause analysis)
+
 ## Recommendations
 
 ### Immediate Actions (CRITICAL)
