@@ -320,18 +320,19 @@ impl Parser {
         Ok(())
     }
 
-    /// Parse a top-level item (function or struct)
+    /// Parse a top-level item (function, struct, or statement)
+    ///
+    /// Supports REPL-style programming by allowing top-level statements
+    /// like `println("Hello")` or `let x = 42` in addition to function/struct declarations.
     fn parse_top_level(&mut self) -> Result<AstNode, ParseError> {
         if self.check(&Token::Fun) {
             self.parse_function()
         } else if self.check(&Token::Struct) {
             self.parse_struct()
         } else {
-            Err(ParseError::InvalidSyntax {
-                message: "Expected 'fun' or 'struct'".to_string(),
-                line: 0,
-                column: 0,
-            })
+            // Allow top-level statements for REPL-style programming
+            // This includes: let declarations, function calls, expressions, etc.
+            self.parse_statement()
         }
     }
 
