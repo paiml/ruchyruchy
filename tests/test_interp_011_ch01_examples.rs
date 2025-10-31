@@ -28,7 +28,9 @@ use ruchyruchy::interpreter::parser::Parser;
 /// Parse and execute a Ruchy program
 fn execute_program(source: &str) -> Result<(), String> {
     let mut parser = Parser::new(source);
-    let ast = parser.parse().map_err(|e| format!("Parse error: {:?}", e))?;
+    let ast = parser
+        .parse()
+        .map_err(|e| format!("Parse error: {:?}", e))?;
 
     let mut evaluator = Evaluator::new();
 
