@@ -22,7 +22,7 @@
 // - Slowdown threshold: 20% (1.2x)
 
 use ruchyruchy::bug_discovery::differential::{
-    CompilerVersion, DifferentialTester, FailureMode,
+    CompilationTarget, CompilerVersion, DifferentialTester, FailureMode,
 };
 use ruchyruchy::bug_discovery::statistics::{cohens_d, welchs_t_test};
 
@@ -175,7 +175,6 @@ fn test_performance_regression_statistical() {
 fn test_confidence_scoring() {
     // RED: This will fail - calculate_confidence() doesn't exist
     //
-    use ruchyruchy::bug_discovery::confidence::ConfidenceScore;
 
     let v146 = CompilerVersion {
         version: "v3.146".to_string(),
@@ -280,7 +279,7 @@ fn test_effect_size_calculation() {
         target: CompilationTarget::Release,
     };
 
-    let tester = DifferentialTester::new(vec![v146.clone(), v147.clone()])
+    let _tester = DifferentialTester::new(vec![v146.clone(), v147.clone()])
         .with_statistical_params(10, 0.05, 1.2); // Use 10 samples to match test data
 
     // This would ideally use mock data matching our baseline/regressed arrays
@@ -292,7 +291,7 @@ fn test_effect_size_calculation() {
 
     // Placeholder assertion for RED phase
     // This will be replaced when analyze_performance() is implemented
-    assert!(true, "Statistics module functions are correct");
+    // Statistics module functions are verified to be correct
 }
 
 /// Test: False Positive Rate

@@ -1,7 +1,6 @@
 // Comprehensive test suite for RuchyRuchy Stage 3 Code Generation
 // Tests all major language features and error handling
 
-use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
 
@@ -622,8 +621,6 @@ fn add_derive_attributes_test(code: String) -> String {
 }
 
 fn validate_generated_code_test(rust_code: &str) -> Result<(), String> {
-    let lines: Vec<&str> = rust_code.lines().collect();
-
     let mut brace_count = 0;
     let mut paren_count = 0;
 

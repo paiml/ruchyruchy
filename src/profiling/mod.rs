@@ -521,6 +521,37 @@ impl Profiler {
                 .to_string(),
         ))
     }
+
+    /// Get the sampling frequency (stub for non-profiling builds)
+    pub fn sampling_frequency(&self) -> u64 {
+        1000
+    }
+
+    /// Check if sampling is enabled (stub for non-profiling builds)
+    pub fn is_sampling_enabled(&self) -> bool {
+        false
+    }
+
+    /// Start profiling (stub for non-profiling builds)
+    pub fn start(&mut self) -> Result<(), ProfilerError> {
+        Err(ProfilerError::StartFailed(
+            "Profiler requires 'profiling' feature".to_string(),
+        ))
+    }
+
+    /// Stop profiling (stub for non-profiling builds)
+    pub fn stop(&mut self) -> Result<(), ProfilerError> {
+        Err(ProfilerError::StopFailed(
+            "Profiler requires 'profiling' feature".to_string(),
+        ))
+    }
+
+    /// Collect samples (stub for non-profiling builds)
+    pub fn collect_samples(&mut self) -> Result<Vec<Sample>, ProfilerError> {
+        Err(ProfilerError::ReadFailed(
+            "Profiler requires 'profiling' feature".to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
