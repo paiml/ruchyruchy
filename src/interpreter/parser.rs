@@ -1163,110 +1163,173 @@ pub enum AstNode {
 
     /// Function definition: fun name(params) { body }
     FunctionDef {
+        /// Function name
         name: String,
+        /// Parameter names
         params: Vec<String>,
+        /// Function body statements
         body: Vec<AstNode>,
     },
 
     /// Variable declaration: let name = expr
-    LetDecl { name: String, value: Box<AstNode> },
+    LetDecl {
+        /// Variable name
+        name: String,
+        /// Initial value expression
+        value: Box<AstNode>
+    },
 
     /// Assignment: name = expr
-    Assignment { name: String, value: Box<AstNode> },
+    Assignment {
+        /// Variable name
+        name: String,
+        /// New value expression
+        value: Box<AstNode>
+    },
 
     /// Function call: name(args)
-    FunctionCall { name: String, args: Vec<AstNode> },
+    FunctionCall {
+        /// Function name
+        name: String,
+        /// Argument expressions
+        args: Vec<AstNode>
+    },
 
     /// If expression: if condition { then_branch } else { else_branch }
     IfExpr {
+        /// Condition expression
         condition: Box<AstNode>,
+        /// Then branch statements
         then_branch: Vec<AstNode>,
+        /// Else branch statements (optional)
         else_branch: Option<Vec<AstNode>>,
     },
 
     /// While loop: while condition { body }
     WhileLoop {
+        /// Loop condition expression
         condition: Box<AstNode>,
+        /// Loop body statements
         body: Vec<AstNode>,
     },
 
     /// For loop: for var in expr { body }
     ForLoop {
+        /// Loop variable name
         var: String,
+        /// Iterable expression
         iterable: Box<AstNode>,
+        /// Loop body statements
         body: Vec<AstNode>,
     },
 
     /// Match expression: match expr { arms }
     MatchExpr {
+        /// Expression to match against
         expr: Box<AstNode>,
+        /// Match arms (patterns and bodies)
         arms: Vec<MatchArm>,
     },
 
     /// Struct definition
     StructDef {
+        /// Struct name
         name: String,
+        /// Struct fields
         fields: Vec<StructField>,
     },
 
     /// Struct instantiation: Name { field: value, ... }
     StructLiteral {
+        /// Struct name
         name: String,
+        /// Field name-value pairs
         fields: Vec<(String, AstNode)>,
     },
 
     /// Field access: expr.field
-    FieldAccess { expr: Box<AstNode>, field: String },
+    FieldAccess {
+        /// Expression to access field from
+        expr: Box<AstNode>,
+        /// Field name
+        field: String
+    },
 
     /// Method call: receiver.method(args)
     MethodCall {
+        /// Receiver expression
         receiver: Box<AstNode>,
+        /// Method name
         method: String,
+        /// Argument expressions
         args: Vec<AstNode>,
     },
 
     /// Vector literal: [elem1, elem2, ...]
-    VectorLiteral { elements: Vec<AstNode> },
+    VectorLiteral {
+        /// Vector elements
+        elements: Vec<AstNode>
+    },
 
     /// HashMap literal: {key1: val1, key2: val2, ...}
-    HashMapLiteral { pairs: Vec<(AstNode, AstNode)> },
+    HashMapLiteral {
+        /// Key-value pairs
+        pairs: Vec<(AstNode, AstNode)>
+    },
 
     /// Tuple literal: (elem1, elem2, ...)
-    TupleLiteral { elements: Vec<AstNode> },
+    TupleLiteral {
+        /// Tuple elements
+        elements: Vec<AstNode>
+    },
 
     /// Index access: expr[index]
     IndexAccess {
+        /// Expression to index into
         expr: Box<AstNode>,
+        /// Index expression
         index: Box<AstNode>,
     },
 
     /// Binary operation: left op right
     BinaryOp {
+        /// Binary operator
         op: BinaryOperator,
+        /// Left operand
         left: Box<AstNode>,
+        /// Right operand
         right: Box<AstNode>,
     },
 
     /// Unary operation: op operand
     UnaryOp {
+        /// Unary operator
         op: UnaryOperator,
+        /// Operand expression
         operand: Box<AstNode>,
     },
 
     /// Type cast: expr as type
     TypeCast {
+        /// Expression to cast
         expr: Box<AstNode>,
+        /// Target type name
         target_type: String,
     },
 
     /// Range expression: start..end
     Range {
+        /// Range start expression
         start: Box<AstNode>,
+        /// Range end expression
         end: Box<AstNode>,
     },
 
     /// Return statement: return expr
-    Return { value: Option<Box<AstNode>> },
+    Return {
+        /// Return value (optional)
+        value: Option<Box<AstNode>>
+    },
 
     /// Identifier reference
     Identifier(String),
@@ -1281,7 +1344,10 @@ pub enum AstNode {
     StringLiteral(String),
 
     /// F-string with interpolation: f"text {expr} more"
-    FString { content: String },
+    FString {
+        /// F-string content with embedded expressions
+        content: String
+    },
 
     /// Boolean literal
     BooleanLiteral(bool),
@@ -1353,48 +1419,71 @@ impl AstNode {
 /// Binary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
-    Add,          // +
-    Subtract,     // -
-    Multiply,     // *
-    Divide,       // /
-    Modulo,       // %
-    Equal,        // ==
-    NotEqual,     // !=
-    LessThan,     // <
-    GreaterThan,  // >
-    LessEqual,    // <=
-    GreaterEqual, // >=
-    And,          // &&
-    Or,           // ||
+    /// Addition operator (+)
+    Add,
+    /// Subtraction operator (-)
+    Subtract,
+    /// Multiplication operator (*)
+    Multiply,
+    /// Division operator (/)
+    Divide,
+    /// Modulo operator (%)
+    Modulo,
+    /// Equality operator (==)
+    Equal,
+    /// Inequality operator (!=)
+    NotEqual,
+    /// Less than operator (<)
+    LessThan,
+    /// Greater than operator (>)
+    GreaterThan,
+    /// Less than or equal operator (<=)
+    LessEqual,
+    /// Greater than or equal operator (>=)
+    GreaterEqual,
+    /// Logical AND operator (&&)
+    And,
+    /// Logical OR operator (||)
+    Or,
 }
 
 /// Unary operators
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOperator {
-    Negate, // - (unary minus)
-    Not,    // ! (logical not)
-    Plus,   // + (unary plus, identity)
+    /// Unary negation operator (-)
+    Negate,
+    /// Logical NOT operator (!)
+    Not,
+    /// Unary plus operator (+, identity)
+    Plus,
 }
 
 /// Match arm in match expression
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
+    /// Pattern to match
     pub pattern: Pattern,
+    /// Statements to execute if pattern matches
     pub body: Vec<AstNode>,
 }
 
 /// Pattern in match arm
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
-    Wildcard,           // _
-    Literal(AstNode),   // 0, "hello", true
-    Identifier(String), // x (binds variable)
+    /// Wildcard pattern (_) - matches anything
+    Wildcard,
+    /// Literal pattern (0, "hello", true) - matches specific value
+    Literal(AstNode),
+    /// Identifier pattern (x) - binds variable
+    Identifier(String),
 }
 
 /// Struct field definition
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructField {
+    /// Field name
     pub name: String,
+    /// Optional type annotation
     pub type_annotation: Option<String>,
 }
 
@@ -1403,9 +1492,13 @@ pub struct StructField {
 pub enum ParseError {
     /// Unexpected token encountered
     UnexpectedToken {
+        /// Expected token description
         expected: String,
+        /// Found token description
         found: String,
+        /// Line number (1-based)
         line: usize,
+        /// Column number (1-based)
         column: usize,
     },
 
@@ -1414,8 +1507,11 @@ pub enum ParseError {
 
     /// Invalid syntax
     InvalidSyntax {
+        /// Error message
         message: String,
+        /// Line number (1-based)
         line: usize,
+        /// Column number (1-based)
         column: usize,
     },
 
