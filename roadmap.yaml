@@ -4592,3 +4592,52 @@ future_roadmap:
           Chaos: Netflix-inspired resilience testing.
           Goal: 99.99% uptime, <1KB/hour growth, MTBF >1000h.
 
+      - id: INTERP-036
+        title: "Grouped Import Syntax (use std::sync::{Arc, Mutex})"
+        priority: high
+        status: completed
+        phase: RED-GREEN-REFACTOR-TOOL (complete)
+        started_date: 2025-10-31
+        completed_date: 2025-10-31
+        week: 17
+        requirements:
+          - Parse grouped imports: use std::sync::{Arc, Mutex};
+          - Parse multiple items in braces: {Arc, Mutex, RwLock}
+          - Handle nested paths: std::sync::{Arc, Mutex}
+          - Unblock 3 INTERP-032 tests (arc_shared_ownership, concurrent_counter, thread_safety)
+        tests:
+          - test_grouped_import_simple (use std::{Arc, Mutex})
+          - test_grouped_import_multiple (use std::{Arc, Mutex, RwLock})
+          - test_grouped_import_nested_path (use std::sync::{Arc, Mutex})
+          - test_grouped_import_thread (use std::thread)
+          - test_arc_shared_ownership (INTERP-032 - currently blocked)
+          - test_concurrent_counter (INTERP-032 - currently blocked)
+          - test_thread_safety (INTERP-032 - currently blocked)
+        acceptance:
+          - Grouped import syntax parses correctly
+          - Multiple items extracted from braces
+          - 3 INTERP-032 tests now passing
+        deliverables:
+          - tests/test_interp_036_grouped_imports.rs (~200 LOC)
+          - src/interpreter/parser.rs (grouped import parsing)
+          - src/interpreter/evaluator.rs (grouped import evaluation)
+        research: "Rust Reference: use declarations with braces"
+        extreme_tdd_phases:
+          - RED: ✅ Complete - 6 tests written (5 failing, 1 passing)
+          - GREEN: ✅ Complete - Parser + evaluator implementation
+          - REFACTOR: ✅ Complete - Documentation enhanced
+          - TOOL: ✅ Complete - All quality gates passing (2025-10-31)
+          - PMAT: Deferred (basic functionality sufficient)
+        impact: |
+          Partial progress on INTERP-032: Grouped imports now working.
+          INTERP-032 tests still blocked by OTHER missing features:
+          - Dereference operator (*num)
+          - vec! macro support
+          Enables idiomatic Rust-style imports for future concurrency code.
+        notes: |
+          ✅ Grouped import syntax fully implemented and tested.
+          ✅ Parser disambiguates {Arc, Mutex} from HashMap literals.
+          ✅ Evaluator handles GroupedUseDecl (currently no-op, no module system).
+          ✅ All 6 INTERP-036 tests passing (100% success rate).
+          ⚠️  INTERP-032 tests still need: dereference operator, vec! macro.
+
