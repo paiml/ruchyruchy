@@ -8,10 +8,15 @@
 /// Overall confidence score for a bug report (0.0-1.0)
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfidenceScore {
+    /// Overall confidence score (0.0-1.0)
     pub overall: f64,
+    /// Weight based on discovery method
     pub discovery_method_weight: f64,
+    /// Score for reproducibility (0.0-1.0)
     pub reproducibility_score: f64,
+    /// Score for quantitative evidence (0.0-1.0)
     pub quantitative_evidence: f64,
+    /// Score for root cause clarity (0.0-1.0)
     pub root_cause_clarity: f64,
 }
 
@@ -65,23 +70,35 @@ impl ConfidenceScore {
 /// Priority levels based on confidence thresholds
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Priority {
-    Critical, // 0.85-1.0
-    High,     // 0.70-0.84
-    Medium,   // 0.50-0.69
-    Low,      // 0.30-0.49
-    Noise,    // <0.30
+    /// Critical priority (confidence 0.85-1.0)
+    Critical,
+    /// High priority (confidence 0.70-0.84)
+    High,
+    /// Medium priority (confidence 0.50-0.69)
+    Medium,
+    /// Low priority (confidence 0.30-0.49)
+    Low,
+    /// Noise/false positive (confidence <0.30)
+    Noise,
 }
 
 /// Discovery method types with their confidence weights
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DiscoveryMethod {
-    DifferentialTestVersionRegression, // 1.0
-    DifferentialTestTargetMismatch,    // 0.9
-    PropertyTestViolation,             // 0.95
-    GrammarFuzzCrashHang,              // 0.85
-    GrammarFuzzIncorrectOutput,        // 0.70
-    MutationFuzzCrash,                 // 0.75
-    CodeChurnHotSpot,                  // 0.60
+    /// Differential test found version regression (weight 1.0)
+    DifferentialTestVersionRegression,
+    /// Differential test found target mismatch (weight 0.9)
+    DifferentialTestTargetMismatch,
+    /// Property test found violation (weight 0.95)
+    PropertyTestViolation,
+    /// Grammar-based fuzzing found crash/hang (weight 0.85)
+    GrammarFuzzCrashHang,
+    /// Grammar-based fuzzing found incorrect output (weight 0.70)
+    GrammarFuzzIncorrectOutput,
+    /// Mutation fuzzing found crash (weight 0.75)
+    MutationFuzzCrash,
+    /// Code churn analysis identified hotspot (weight 0.60)
+    CodeChurnHotSpot,
 }
 
 impl DiscoveryMethod {
@@ -102,14 +119,20 @@ impl DiscoveryMethod {
 /// Reproducibility levels
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Reproducibility {
-    Always,              // 1.0
-    AlwaysLargeTestCase, // 0.9
-    IntermittentHigh,    // 0.7 (>50% failure rate)
-    IntermittentLow,     // 0.5 (<50% failure rate)
-    NonDeterministic,    // 0.3
+    /// Always reproducible (score 1.0)
+    Always,
+    /// Always reproducible but with large test case (score 0.9)
+    AlwaysLargeTestCase,
+    /// Intermittently reproducible >50% (score 0.7)
+    IntermittentHigh,
+    /// Intermittently reproducible <50% (score 0.5)
+    IntermittentLow,
+    /// Non-deterministic (score 0.3)
+    NonDeterministic,
 }
 
 impl Reproducibility {
+    /// Get reproducibility score
     pub fn score(&self) -> f64 {
         match self {
             Reproducibility::Always => 1.0,
@@ -124,13 +147,18 @@ impl Reproducibility {
 /// Quantitative evidence completeness
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EvidenceLevel {
-    Complete, // 1.0 - All metrics collected
-    Partial,  // 0.8 - Missing 1-2 categories
-    Limited,  // 0.6 - Only complexity or churn
-    None,     // 0.4 - No quantitative data
+    /// Complete evidence - all metrics collected (score 1.0)
+    Complete,
+    /// Partial evidence - missing 1-2 categories (score 0.8)
+    Partial,
+    /// Limited evidence - only complexity or churn (score 0.6)
+    Limited,
+    /// No quantitative data (score 0.4)
+    None,
 }
 
 impl EvidenceLevel {
+    /// Get evidence completeness score
     pub fn score(&self) -> f64 {
         match self {
             EvidenceLevel::Complete => 1.0,
@@ -144,14 +172,20 @@ impl EvidenceLevel {
 /// Root cause clarity
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RootCauseClarity {
-    SingleObviousCause,   // 1.0
-    PrimaryWithSecondary, // 0.8
-    MultiplePlausible,    // 0.6
-    UnclearHypothesis,    // 0.4
-    NoRootCause,          // 0.2
+    /// Single obvious root cause (score 1.0)
+    SingleObviousCause,
+    /// Primary cause with secondary factors (score 0.8)
+    PrimaryWithSecondary,
+    /// Multiple plausible causes (score 0.6)
+    MultiplePlausible,
+    /// Unclear hypothesis (score 0.4)
+    UnclearHypothesis,
+    /// No identifiable root cause (score 0.2)
+    NoRootCause,
 }
 
 impl RootCauseClarity {
+    /// Get root cause clarity score
     pub fn score(&self) -> f64 {
         match self {
             RootCauseClarity::SingleObviousCause => 1.0,
