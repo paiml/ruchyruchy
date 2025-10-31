@@ -499,7 +499,7 @@ fn test_mutual_recursion_is_even_is_odd() {
         args: vec![AstNode::IntegerLiteral(4)],
     };
     let result_even_4 = eval.eval(&call_is_even_4).unwrap();
-    assert_eq!(result_even_4.as_boolean().unwrap(), true);
+    assert!(result_even_4.as_boolean().unwrap());
 
     // Test is_odd(4)
     let call_is_odd_4 = AstNode::FunctionCall {
@@ -507,7 +507,7 @@ fn test_mutual_recursion_is_even_is_odd() {
         args: vec![AstNode::IntegerLiteral(4)],
     };
     let result_odd_4 = eval.eval(&call_is_odd_4).unwrap();
-    assert_eq!(result_odd_4.as_boolean().unwrap(), false);
+    assert!(!result_odd_4.as_boolean().unwrap());
 }
 
 // =============================================================================
@@ -722,5 +722,5 @@ fn test_interp_005_completeness() {
     // - Stack overflow: 2 tests
     // - Error cases: 3 tests
     // Total: 17 core tests + 1 meta test = 18 tests
-    assert!(true);
+    // Verification complete - test structure validated
 }

@@ -177,7 +177,7 @@ fn test_find_related_issues() {
     let related = dedup.find_related(&new_issue, 10);
 
     // Should find issues 1 and 2 as related (parser issues)
-    assert!(related.len() >= 1);
+    assert!(!related.is_empty());
 
     // Check that parser issues are in results
     let parser_related = related.iter().any(|r| r.issue_id == 1 || r.issue_id == 2);
