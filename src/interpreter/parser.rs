@@ -28,6 +28,7 @@ enum Token {
     Match,
     Return,
     Struct,
+    As,
 
     // Identifiers and literals
     Identifier(String),
@@ -222,6 +223,7 @@ impl Parser {
                         "match" => Token::Match,
                         "return" => Token::Return,
                         "struct" => Token::Struct,
+                        "as" => Token::As,
                         "true" => Token::True,
                         "false" => Token::False,
                         _ => Token::Identifier(ident),
@@ -755,7 +757,7 @@ impl Parser {
 
     /// Parse factor (* / %)
     fn parse_factor(&mut self) -> Result<AstNode, ParseError> {
-        let mut left = self.parse_primary()?;
+        let mut left = self.parse_cast()?;
 
         while let Some(token) = self.current() {
             let op = match token {
@@ -766,7 +768,7 @@ impl Parser {
             };
 
             self.advance();
-            let right = self.parse_primary()?;
+            let right = self.parse_cast()?;
 
             left = AstNode::BinaryOp {
                 op,
@@ -778,8 +780,80 @@ impl Parser {
         Ok(left)
     }
 
-    /// Parse primary expression
+    /// Parse type cast (as)
+    fn parse_cast(&mut self) -> Result<AstNode, ParseError> {
+        let mut expr = self.parse_primary()?;
+
+        // Check for type cast: expr as type
+        while self.check(&Token::As) {
+            self.advance(); // consume 'as'
+
+            // Parse target type (for now, just expect identifier)
+            let target_type = self.expect_identifier();
+
+            expr = AstNode::TypeCast {
+                expr: Box::new(expr),
+                target_type,
+            };
+        }
+
+        Ok(expr)
+    }
+
+    /// Parse primary expression with postfix operators
     fn parse_primary(&mut self) -> Result<AstNode, ParseError> {
+        // Parse base expression
+        let mut expr = self.parse_primary_base()?;
+
+        // Handle postfix operators: . (method/field), [ (index)
+        loop {
+            if self.check(&Token::Dot) {
+                self.advance();
+                let method_or_field = self.expect_identifier();
+
+                // Check if it's a method call (followed by '(')
+                if self.check(&Token::LeftParen) {
+                    self.advance();
+                    let mut args = Vec::new();
+                    while !self.check(&Token::RightParen) && !self.is_at_end() {
+                        args.push(self.parse_expression()?);
+                        if self.check(&Token::Comma) {
+                            self.advance();
+                        }
+                    }
+                    self.consume(&Token::RightParen)?;
+                    expr = AstNode::MethodCall {
+                        receiver: Box::new(expr),
+                        method: method_or_field,
+                        args,
+                    };
+                } else {
+                    // It's a field access
+                    expr = AstNode::FieldAccess {
+                        expr: Box::new(expr),
+                        field: method_or_field,
+                    };
+                }
+            } else if self.check(&Token::LeftBracket) {
+                // Index access
+                self.advance();
+                let index = Box::new(self.parse_expression()?);
+                self.consume(&Token::RightBracket)?;
+                expr = AstNode::IndexAccess {
+                    expr: Box::new(expr),
+                    index,
+                };
+            } else {
+                // No more postfix operators
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    /// Parse base primary expression (no postfix operators)
+    fn parse_primary_base(&mut self) -> Result<AstNode, ParseError> {
         match self.current() {
             Some(Token::Integer(n)) => {
                 let n = *n;
@@ -855,46 +929,8 @@ impl Parser {
                         // Not a struct literal, just return the identifier
                         Ok(AstNode::Identifier(id))
                     }
-                }
-                // Check for field access or method call
-                else if self.check(&Token::Dot) {
-                    self.advance();
-                    let method_or_field = self.expect_identifier();
-
-                    // Check if it's a method call (followed by '(')
-                    if self.check(&Token::LeftParen) {
-                        self.advance();
-                        let mut args = Vec::new();
-                        while !self.check(&Token::RightParen) && !self.is_at_end() {
-                            args.push(self.parse_expression()?);
-                            if self.check(&Token::Comma) {
-                                self.advance();
-                            }
-                        }
-                        self.consume(&Token::RightParen)?;
-                        Ok(AstNode::MethodCall {
-                            receiver: Box::new(AstNode::Identifier(id)),
-                            method: method_or_field,
-                            args,
-                        })
-                    } else {
-                        // It's a field access
-                        Ok(AstNode::FieldAccess {
-                            expr: Box::new(AstNode::Identifier(id)),
-                            field: method_or_field,
-                        })
-                    }
-                }
-                // Check for index access
-                else if self.check(&Token::LeftBracket) {
-                    self.advance();
-                    let index = Box::new(self.parse_expression()?);
-                    self.consume(&Token::RightBracket)?;
-                    Ok(AstNode::IndexAccess {
-                        expr: Box::new(AstNode::Identifier(id)),
-                        index,
-                    })
                 } else {
+                    // Plain identifier - postfix operators handled by parse_primary
                     Ok(AstNode::Identifier(id))
                 }
             }
@@ -1141,6 +1177,12 @@ pub enum AstNode {
     UnaryOp {
         op: UnaryOperator,
         operand: Box<AstNode>,
+    },
+
+    /// Type cast: expr as type
+    TypeCast {
+        expr: Box<AstNode>,
+        target_type: String,
     },
 
     /// Return statement: return expr
