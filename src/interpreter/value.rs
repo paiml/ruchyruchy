@@ -182,6 +182,7 @@ impl Value {
             Value::String(_) => "String",
             Value::Boolean(_) => "Boolean",
             Value::Vector(_) => "Vector",
+            Value::Tuple(_) => "Tuple",
             Value::HashMap(_) => "HashMap",
             Value::Function { .. } => "Function",
             Value::Nil => "Nil",

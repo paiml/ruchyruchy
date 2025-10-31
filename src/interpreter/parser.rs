@@ -987,11 +987,39 @@ impl Parser {
                 Ok(AstNode::HashMapLiteral { pairs })
             }
             Some(Token::LeftParen) => {
-                // Grouped expression
+                // Grouped expression or tuple literal
                 self.advance();
-                let expr = self.parse_expression()?;
-                self.consume(&Token::RightParen)?;
-                Ok(expr)
+
+                // Check for empty tuple: ()
+                if self.check(&Token::RightParen) {
+                    self.advance();
+                    return Ok(AstNode::TupleLiteral { elements: Vec::new() });
+                }
+
+                // Parse first expression
+                let first_expr = self.parse_expression()?;
+
+                // Check if this is a tuple (has comma) or grouped expression
+                if self.check(&Token::Comma) {
+                    // It's a tuple: (expr, expr, ...)
+                    let mut elements = vec![first_expr];
+                    while self.check(&Token::Comma) {
+                        self.advance(); // consume comma
+
+                        // Allow trailing comma: (1, 2,)
+                        if self.check(&Token::RightParen) {
+                            break;
+                        }
+
+                        elements.push(self.parse_expression()?);
+                    }
+                    self.consume(&Token::RightParen)?;
+                    Ok(AstNode::TupleLiteral { elements })
+                } else {
+                    // It's a grouped expression: (expr)
+                    self.consume(&Token::RightParen)?;
+                    Ok(first_expr)
+                }
             }
             Some(Token::Minus) => {
                 // Unary minus: -expr (negative numbers, negation)
@@ -1182,6 +1210,9 @@ pub enum AstNode {
 
     /// HashMap literal: {key1: val1, key2: val2, ...}
     HashMapLiteral { pairs: Vec<(AstNode, AstNode)> },
+
+    /// Tuple literal: (elem1, elem2, ...)
+    TupleLiteral { elements: Vec<AstNode> },
 
     /// Index access: expr[index]
     IndexAccess {
