@@ -207,6 +207,28 @@ impl Evaluator {
                 Ok(ControlFlow::Value(result))
             }
 
+            // Range expression: start..end
+            // Creates a vector of integers from start to end (inclusive)
+            AstNode::Range { start, end } => {
+                let start_val = self.eval(start)?;
+                let end_val = self.eval(end)?;
+
+                let start_int = start_val.as_integer().map_err(|_| EvalError::UnsupportedOperation {
+                    operation: format!("range start must be integer, got {}", start_val.type_name()),
+                })?;
+                let end_int = end_val.as_integer().map_err(|_| EvalError::UnsupportedOperation {
+                    operation: format!("range end must be integer, got {}", end_val.type_name()),
+                })?;
+
+                // Create vector of integers from start to end (exclusive)
+                let mut elements = Vec::new();
+                for i in start_int..end_int {
+                    elements.push(Value::integer(i));
+                }
+
+                Ok(ControlFlow::Value(Value::vector(elements)))
+            }
+
             // Function definition - register function
             AstNode::FunctionDef { name, params, body } => {
                 self.functions

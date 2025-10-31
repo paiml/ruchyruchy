@@ -68,6 +68,7 @@ enum Token {
     Arrow,
     FatArrow,
     Dot,
+    DotDot,
     Equal,
     Underscore,
 
@@ -294,6 +295,11 @@ impl Parser {
                 ':' => {
                     chars.next();
                     tokens.push(Token::Colon);
+                }
+                '.' if chars.clone().nth(1) == Some('.') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::DotDot);
                 }
                 '.' => {
                     chars.next();
@@ -804,6 +810,16 @@ impl Parser {
             };
         }
 
+        // Check for range: expr..expr
+        if self.check(&Token::DotDot) {
+            self.advance(); // consume '..'
+            let end = Box::new(self.parse_primary()?);
+            expr = AstNode::Range {
+                start: Box::new(expr),
+                end,
+            };
+        }
+
         Ok(expr)
     }
 
@@ -1190,6 +1206,12 @@ pub enum AstNode {
     TypeCast {
         expr: Box<AstNode>,
         target_type: String,
+    },
+
+    /// Range expression: start..end
+    Range {
+        start: Box<AstNode>,
+        end: Box<AstNode>,
     },
 
     /// Return statement: return expr
