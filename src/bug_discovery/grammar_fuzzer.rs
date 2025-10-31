@@ -196,6 +196,7 @@ impl Grammar {
 
 /// Grammar-based fuzzer
 pub struct GrammarFuzzer {
+    /// Grammar definition
     grammar: Grammar,
     /// Random seed for reproducibility
     #[allow(dead_code)]
@@ -302,17 +303,32 @@ impl GrammarFuzzer {
 /// Fuzzing result from testing generated input
 #[derive(Debug, Clone, PartialEq)]
 pub enum FuzzResult {
+    /// Test passed
     Pass,
+    /// Test crashed with error
     Crash(String),
-    Hang { timeout_ms: u64 },
-    IncorrectOutput { expected: String, actual: String },
+    /// Test hung (exceeded timeout)
+    Hang {
+        /// Timeout in milliseconds
+        timeout_ms: u64
+    },
+    /// Test produced incorrect output
+    IncorrectOutput {
+        /// Expected output
+        expected: String,
+        /// Actual output
+        actual: String
+    },
 }
 
 /// Bug found via grammar-based fuzzing
 #[derive(Debug, Clone)]
 pub struct FuzzBug {
+    /// Test case that triggered the bug
     pub test_case: String,
+    /// Fuzzing result (crash, hang, etc.)
     pub result: FuzzResult,
+    /// Confidence score for this bug
     pub confidence: ConfidenceScore,
 }
 
