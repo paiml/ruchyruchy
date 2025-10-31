@@ -2,7 +2,7 @@
 
 use aya::{
     include_bytes_aligned,
-    maps::{MapData, RingBuf},
+    maps::RingBuf,
     programs::TracePoint,
     Ebpf,
 };

@@ -171,8 +171,8 @@ impl Parser {
                     // Check for decimal point
                     if chars.peek() == Some(&'.') {
                         // Look ahead to see if next char is a digit (not a method call like "42.abs()")
-                        let chars_clone = chars.clone();
-                        if let Some(next_ch) = chars_clone.skip(1).next() {
+                        let mut chars_clone = chars.clone();
+                        if let Some(next_ch) = chars_clone.nth(1) {
                             if next_ch.is_ascii_digit() {
                                 is_float = true;
                                 num.push('.');
@@ -196,10 +196,8 @@ impl Parser {
                         if let Ok(f) = num.parse::<f64>() {
                             tokens.push(Token::Float(f));
                         }
-                    } else {
-                        if let Ok(n) = num.parse::<i64>() {
-                            tokens.push(Token::Integer(n));
-                        }
+                    } else if let Ok(n) = num.parse::<i64>() {
+                        tokens.push(Token::Integer(n));
                     }
                 }
 

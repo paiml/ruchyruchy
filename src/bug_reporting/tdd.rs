@@ -124,7 +124,7 @@ impl TddCycle {
         self.test_count = test_count;
         self.passing = passing;
         self.failing = failing;
-        self.coverage = coverage.max(0.0).min(100.0);
+        self.coverage = coverage.clamp(0.0, 100.0);
 
         self.test_result = if failing == 0 && test_count > 0 {
             TestResult::Pass
