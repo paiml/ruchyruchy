@@ -13,6 +13,7 @@ pub struct Position {
 }
 
 impl Position {
+    /// Create a new position
     pub fn new(line: u32, character: u32) -> Self {
         Self { line, character }
     }
@@ -28,6 +29,7 @@ pub struct Range {
 }
 
 impl Range {
+    /// Create a new range
     pub fn new(start: Position, end: Position) -> Self {
         Self { start, end }
     }
@@ -36,9 +38,13 @@ impl Range {
 /// Diagnostic severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DiagnosticSeverity {
+    /// Error severity
     Error = 1,
+    /// Warning severity
     Warning = 2,
+    /// Information severity
     Information = 3,
+    /// Hint severity
     Hint = 4,
 }
 
@@ -58,6 +64,7 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
+    /// Create an error diagnostic
     pub fn error(range: Range, message: String) -> Self {
         Self {
             range,
@@ -68,6 +75,7 @@ impl Diagnostic {
         }
     }
 
+    /// Create a warning diagnostic
     pub fn warning(range: Range, message: String) -> Self {
         Self {
             range,
@@ -82,33 +90,43 @@ impl Diagnostic {
 /// Text document identifier
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextDocumentIdentifier {
+    /// Document URI
     pub uri: String,
 }
 
 /// Versioned text document identifier
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VersionedTextDocumentIdentifier {
+    /// Document URI
     pub uri: String,
+    /// Document version
     pub version: i32,
 }
 
 /// Text document item (full document content)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextDocumentItem {
+    /// Document URI
     pub uri: String,
+    /// Language identifier (e.g., "ruchy")
     pub language_id: String,
+    /// Document version
     pub version: i32,
+    /// Full document text
     pub text: String,
 }
 
 /// Location in a document
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
+    /// Document URI
     pub uri: String,
+    /// Range within the document
     pub range: Range,
 }
 
 impl Location {
+    /// Create a new location
     pub fn new(uri: String, range: Range) -> Self {
         Self { uri, range }
     }
