@@ -1,12 +1,15 @@
 // INTERP-005: Function Calls & Recursion
-// GREEN Phase: Complete implementation with all tests passing
+// INTERP-032: Mock concurrency primitives (GREEN phase)
+// REFACTOR Phase: Optimize and document
 //
 // Research:
 // - Aho et al. (2006) Chapter 8: Expression Evaluation
 // - Aho et al. (2006) Chapter 7: Runtime Environments
+// - Savage et al. (1997) Eraser: Data Race Detection
 //
 // This module implements expression evaluation and function calls for the Ruchy interpreter.
-// Supports function definition, function calls with recursion, control flow, and variable scoping.
+// Supports function definition, function calls with recursion, control flow, variable scoping,
+// and mock concurrency primitives for testing.
 //
 // Design:
 // - Tree-walking evaluator that recursively evaluates AST nodes
@@ -17,6 +20,11 @@
 // - Operator precedence handled by parser (AST structure)
 // - Type safety enforced at runtime through Value operations
 // - Error propagation via Result types
+//
+// Mock Concurrency Support (INTERP-032):
+// - Built-in functions: thread::spawn, Arc::new, Mutex::new, mpsc::channel
+// - Mock methods: lock(), unwrap(), join(), push(), send(), recv()
+// - Note: These are simplified stubs for testing, not actual threading
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -480,18 +488,28 @@ impl Evaluator {
                 } else {
                     // Path expressions without calls evaluate to a placeholder
                     // In a full implementation, this would be a function reference
-                    Ok(ControlFlow::Value(Value::string(format!("<path: {}>", name))))
+                    Ok(ControlFlow::Value(Value::string(format!(
+                        "<path: {}>",
+                        name
+                    ))))
                 }
             }
 
             // Closure - store as a function-like value
             // For now, closures are not first-class values, so we'll return nil
             // Full implementation would require closure values with captured environment
-            AstNode::Closure { is_move, params, body: _ } => {
+            AstNode::Closure {
+                is_move,
+                params,
+                body: _,
+            } => {
                 // TODO: Implement proper closure support with environment capture
                 // For now, return a placeholder value
                 Err(EvalError::UnsupportedOperation {
-                    operation: format!("Closures not yet fully implemented (is_move: {}, params: {:?})", is_move, params),
+                    operation: format!(
+                        "Closures not yet fully implemented (is_move: {}, params: {:?})",
+                        is_move, params
+                    ),
                 })
             }
 
@@ -874,7 +892,6 @@ impl Evaluator {
             }
 
             // Mock concurrency methods
-
             "lock" => {
                 // Mutex::lock() -> LockGuard
                 // Mock: return the inner value
@@ -1087,7 +1104,6 @@ impl Evaluator {
 
             // Mock concurrency primitives for testing
             // These are simplified stubs that don't actually spawn threads
-
             "thread::spawn" => {
                 // thread::spawn(closure) -> ThreadHandle
                 // Mock implementation: just execute closure synchronously

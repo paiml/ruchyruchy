@@ -1,11 +1,18 @@
 // INTERP-001: AST Parser Integration
+// INTERP-032: Concurrency syntax support (use, ::, closures, blocks)
 // REFACTOR Phase: Clean up implementation while keeping tests green
 //
 // Research: Aho et al. (2006) Chapter 4: Syntax Analysis
 //
 // This is a recursive descent parser with operator precedence
 // for Ruchy language syntax. Supports functions, structs, control
-// flow, expressions, and data structures.
+// flow, expressions, data structures, and concurrency primitives.
+//
+// Concurrency features (INTERP-032):
+// - use statements: use std::sync::Mutex;
+// - Path expressions: thread::spawn, Arc::new
+// - Closures: || { }, |x| { }, move || { }
+// - Block expressions: { let x = 1; }
 
 /// Parser for Ruchy source code
 pub struct Parser {
@@ -1079,8 +1086,12 @@ impl Parser {
                 // Check if first token suggests a statement (let, if, while, etc.)
                 let is_block = matches!(
                     self.current(),
-                    Some(Token::Let) | Some(Token::If) | Some(Token::While) |
-                    Some(Token::For) | Some(Token::Match) | Some(Token::Return)
+                    Some(Token::Let)
+                        | Some(Token::If)
+                        | Some(Token::While)
+                        | Some(Token::For)
+                        | Some(Token::Match)
+                        | Some(Token::Return)
                 );
 
                 if is_block {
@@ -1095,7 +1106,9 @@ impl Parser {
                     // In a full implementation, we'd have a BlockExpr AST node
                     // For simplicity, treating it as an expression that evaluates to last statement
                     if body.is_empty() {
-                        Ok(AstNode::TupleLiteral { elements: Vec::new() })
+                        Ok(AstNode::TupleLiteral {
+                            elements: Vec::new(),
+                        })
                     } else {
                         // Return the last expression from the block
                         // This is a simplification - ideally we'd have proper block scoping
