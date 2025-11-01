@@ -367,6 +367,30 @@ impl Evaluator {
         }
     }
 
+    /// Evaluate a complete program (all nodes in an AST)
+    ///
+    /// Convenience method for property testing (DEBUGGER-044).
+    /// Evaluates all nodes in the AST and returns the value of the last expression.
+    ///
+    /// # Example
+    /// ```
+    /// use ruchyruchy::interpreter::{Parser, Evaluator};
+    ///
+    /// let mut parser = Parser::new("1 + 2");
+    /// let ast = parser.parse().unwrap();
+    /// let mut eval = Evaluator::new();
+    /// let result = eval.eval_program(&ast).unwrap();
+    /// ```
+    pub fn eval_program(&mut self, ast: &crate::interpreter::Ast) -> Result<Value, EvalError> {
+        let mut last_value = Value::Nil;
+
+        for node in ast.nodes() {
+            last_value = self.eval(node)?;
+        }
+
+        Ok(last_value)
+    }
+
     /// Internal evaluation with control flow support
     fn eval_internal(&mut self, node: &AstNode) -> Result<ControlFlow, EvalError> {
         match node {
