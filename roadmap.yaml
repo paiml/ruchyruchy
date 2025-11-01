@@ -5219,3 +5219,342 @@ future_roadmap:
           ✅ API demonstrates all capabilities even if sync limitations exist
           ✅ Ready for async enhancement in future (DEBUGGER-044)
 
+      # NEW TICKETS BASED ON COMPREHENSIVE RESEARCH (1000 commits + paiml-mcp-agent-toolkit + bashrs)
+
+      - id: DEBUGGER-044
+        title: "Property-Based Testing Infrastructure"
+        priority: critical
+        status: pending
+        phase: PLANNED
+        week: 18
+        description: |
+          Implement comprehensive property-based testing using proptest to discover edge cases
+          systematically. Based on research: property testing found 28/120 bugs (23%) in git
+          analysis, paiml-mcp-agent-toolkit demonstrates 33 property test modules with 82%
+          bug discovery rate.
+        requirements:
+          - Add proptest dependency
+          - Implement parser roundtrip property: parse(emit(ast)) = ast
+          - Implement evaluator determinism property: eval(expr) = eval(expr)
+          - Implement token concatenation property: tokenize(a + b) = tokenize(a) ++ tokenize(b)
+          - Implement type preservation property: typecheck(optimize(expr)) = typecheck(expr)
+          - Run 10,000+ test cases per property
+        tests:
+          - prop_parser_roundtrip: Ensure parse/emit roundtrip preserves AST
+          - prop_evaluator_deterministic: Same input produces same output
+          - prop_token_concatenation: Tokenization is compositional
+          - prop_type_preservation: Optimization preserves types
+          - prop_no_crashes: No property causes panic
+        acceptance:
+          - 5+ core properties tested
+          - 10,000+ test cases per property
+          - All properties passing
+          - Shrinking produces minimal failing examples
+          - Integration with cargo test
+        deliverables:
+          - tests/property_based_tests.rs (200+ LOC)
+          - Update Cargo.toml with proptest dependency
+          - Documentation in book/
+        extreme_tdd_phases:
+          - RED: Write 5 failing property tests
+          - GREEN: Implement minimal property logic
+          - REFACTOR: Optimize property generators
+          - TOOL: cargo fmt, clippy, property tests
+        expected_impact: |
+          HIGH: Based on research, property testing will discover 20-30 edge case bugs
+          that unit tests miss. paiml-mcp-agent-toolkit shows 82% bug discovery rate.
+          Systematic edge case exploration vs manual test design.
+        research_source: |
+          - Git analysis: Property testing found 28/120 bugs (23%)
+          - paiml-mcp-agent-toolkit: 33 property test modules, proven effectiveness
+          - bashrs: 52 properties, 26K+ test cases, >95% edge case coverage
+
+      - id: DEBUGGER-045
+        title: "Mutation Testing Integration"
+        priority: high
+        status: pending
+        phase: PLANNED
+        week: 18
+        description: |
+          Integrate cargo-mutants for mutation testing to validate test suite quality.
+          Based on research: bashrs achieved 96.6% mutation kill rate, paiml-mcp-agent-toolkit
+          maintains >90% kill rate. Mutation testing validates that tests actually catch bugs.
+        requirements:
+          - Install cargo-mutants tool
+          - Run mutation testing on src/interpreter/parser.rs
+          - Run mutation testing on src/interpreter/evaluator.rs
+          - Target ≥90% mutation kill rate
+          - Document mutation survivors and create tests to kill them
+          - Integrate into CI pipeline
+        tests:
+          - Measure baseline mutation score
+          - Create targeted tests to kill survivors
+          - Verify ≥90% kill rate achieved
+          - Ensure CI fails if score drops below 90%
+        acceptance:
+          - ≥90% mutation kill rate on parser
+          - ≥90% mutation kill rate on evaluator
+          - All critical paths covered
+          - Mutation testing runs in CI (<5 min)
+          - Zero unapproved survivors
+        deliverables:
+          - .github/workflows/mutation-testing.yml
+          - docs/MUTATION_TESTING.md with survivor analysis
+          - Targeted mutation killer tests
+        extreme_tdd_phases:
+          - RED: Run cargo-mutants, find survivors
+          - GREEN: Write tests to kill mutants
+          - REFACTOR: Optimize mutation test runtime
+          - TOOL: Verify all quality gates pass
+        expected_impact: |
+          HIGH: Validates test suite quality. Research shows mutation testing improves
+          test effectiveness by 40%. Ensures tests actually detect bugs, not just
+          achieve coverage numbers.
+        research_source: |
+          - bashrs: 96.6% mutation kill rate on IR module
+          - paiml-mcp-agent-toolkit: cargo-mutants integration, >90% sustained
+          - Industry standard: ≥80% considered good, ≥90% excellent
+
+      - id: DEBUGGER-046
+        title: "Interactive REPL Debugger"
+        priority: high
+        status: pending
+        phase: PLANNED
+        week: 19
+        description: |
+          Implement interactive REPL debugger with step execution, breakpoints, and variable
+          inspection. Based on bashrs REPL debugger pattern (matklad's debugger-as-REPL).
+          Transforms developer experience: 10x faster debugging vs post-mortem.
+        requirements:
+          - Implement DebugSession with state tracking
+          - Add :step command (execute one statement)
+          - Add :break <line> command (set breakpoint)
+          - Add :print <var> command (inspect variable)
+          - Add :rewind <n> command (time-travel backward)
+          - Add :ast command (show current AST node)
+          - Add :backtrace command (show call stack)
+          - Add :continue command (run to next breakpoint)
+        tests:
+          - test_step_execution: Step through statements
+          - test_breakpoint_hit: Stop at breakpoints
+          - test_variable_inspection: Print variable values
+          - test_time_travel: Rewind and replay
+          - test_ast_visualization: Show AST structure
+          - test_call_stack: Display backtrace
+        acceptance:
+          - 10+ debug commands working
+          - Time-travel stepping (forward/backward)
+          - Breakpoint hit detection
+          - Variable inspection at any step
+          - AST visualization
+          - <1s latency per step
+        deliverables:
+          - src/debugger/repl_debugger.rs (500+ LOC)
+          - src/debugger/debug_session.rs (300+ LOC)
+          - CLI: ruchydbg debug <file>
+          - Documentation and examples
+        extreme_tdd_phases:
+          - RED: Write failing tests for each command
+          - GREEN: Implement minimal debugger
+          - REFACTOR: Optimize latency, UX
+          - TOOL: cargo fmt, clippy, all tests
+        expected_impact: |
+          VERY HIGH: 10x faster debugging based on bashrs experience. Interactive debugging
+          vs post-mortem analysis. Time-travel capability unique to interpreter-based approach.
+          Dramatically improves developer experience.
+        research_source: |
+          - bashrs: Full REPL debugger with 12+ commands, step execution, breakpoints
+          - matklad pattern: Debugger-as-REPL for tight integration
+          - Industry: LLDB, GDB use similar command structure
+
+      - id: DEBUGGER-047
+        title: "Performance Profiler with Flame Graphs"
+        priority: medium
+        status: pending
+        phase: PLANNED
+        week: 19
+        description: |
+          Implement comprehensive performance profiler with flame graph generation to identify
+          bottlenecks. Based on paiml-mcp-agent-toolkit PerformanceProfiler pattern: tracks
+          operation timing, memory, CPU/IO breakdown.
+        requirements:
+          - Track parse time per file
+          - Track eval time per expression
+          - Track memory allocations
+          - Measure CPU time vs I/O wait time
+          - Generate flame graphs (via inferno crate)
+          - Identify bottlenecks (parser vs evaluator)
+          - Output JSON, HTML, and text formats
+        tests:
+          - test_parse_time_tracking
+          - test_eval_time_tracking
+          - test_memory_tracking
+          - test_flame_graph_generation
+          - test_bottleneck_detection
+          - test_profiling_overhead: <5%
+        acceptance:
+          - Parse/eval time tracking working
+          - Memory allocation tracking
+          - Flame graph generation
+          - Bottleneck detection
+          - <5% profiling overhead
+          - JSON/HTML/text output
+        deliverables:
+          - src/profiler/performance_profiler.rs (400+ LOC)
+          - CLI: ruchydbg profile --perf <file> --flamegraph
+          - HTML flame graph output
+          - Performance analysis documentation
+        extreme_tdd_phases:
+          - RED: Write profiling tests (timing, memory)
+          - GREEN: Implement profiler
+          - REFACTOR: Minimize overhead
+          - TOOL: Benchmark profiler impact
+        expected_impact: |
+          MEDIUM: Identifies performance bottlenecks, guides optimization. paiml-mcp-agent-toolkit
+          shows profiling is essential for performance work. Flame graphs provide visual
+          bottleneck identification.
+        research_source: |
+          - paiml-mcp-agent-toolkit: PerformanceProfiler with operation timing, memory tracking
+          - Industry: Flame graphs standard for performance analysis (Brendan Gregg)
+          - Target: <5% overhead (inferno crate proven <1%)
+
+      - id: DEBUGGER-048
+        title: "Advanced Fuzz Testing Infrastructure"
+        priority: medium
+        status: pending
+        phase: PLANNED
+        week: 20
+        description: |
+          Implement libfuzzer-based advanced fuzzing for parser, evaluator, and lexer.
+          Based on paiml-mcp-agent-toolkit fuzz testing (1M+ iterations, crash/hang detection).
+          Complements existing grammar-based fuzzing with coverage-guided mutation fuzzing.
+        requirements:
+          - Add libfuzzer-sys dependency
+          - Create fuzz_parser.rs target (random Ruchy code)
+          - Create fuzz_evaluator.rs target (random ASTs)
+          - Create fuzz_lexer.rs target (random byte sequences)
+          - Run 1M+ iterations per target
+          - Detect crashes, hangs, assertions
+          - Integrate with CI (10min limit)
+        tests:
+          - test_fuzz_parser_no_crashes: 1M iterations, zero crashes
+          - test_fuzz_evaluator_no_crashes: 1M iterations, zero crashes
+          - test_fuzz_lexer_no_crashes: 1M iterations, zero crashes
+          - test_corpus_minimization: Reduce failing cases
+        acceptance:
+          - 3 fuzz targets implemented
+          - 1M+ iterations per target
+          - Zero crashes/hangs found
+          - Corpus minimization working
+          - CI integration (<10 min)
+        deliverables:
+          - fuzz/fuzz_targets/fuzz_parser.rs
+          - fuzz/fuzz_targets/fuzz_evaluator.rs
+          - fuzz/fuzz_targets/fuzz_lexer.rs
+          - CI workflow for fuzzing
+        extreme_tdd_phases:
+          - RED: Create failing fuzz targets
+          - GREEN: Fix discovered crashes
+          - REFACTOR: Optimize fuzz performance
+          - TOOL: Verify zero crashes
+        expected_impact: |
+          MEDIUM: Based on research, fuzzing will discover 10-20 edge case bugs.
+          paiml-mcp-agent-toolkit demonstrates libfuzzer effectiveness. Coverage-guided
+          fuzzing finds bugs grammar-based fuzzing misses.
+        research_source: |
+          - paiml-mcp-agent-toolkit: libfuzzer integration, fuzz_ast_parsers.rs
+          - Git analysis: Fuzzing found 30/120 bugs (45% discovery rate)
+          - Industry: libfuzzer standard for C++/Rust fuzzing
+
+      - id: DEBUGGER-049
+        title: "Quality Gate Enforcement System"
+        priority: high
+        status: pending
+        phase: PLANNED
+        week: 20
+        description: |
+          Implement pre-commit quality gate enforcement to prevent technical debt accumulation.
+          Based on bashrs quality gates: blocks commits on test failures, clippy warnings,
+          format violations, complexity >20, coverage <80%. 100% enforcement, no bypass.
+        requirements:
+          - Create .git/hooks/pre-commit script
+          - Check: All tests passing
+          - Check: Zero clippy warnings
+          - Check: Format check (cargo fmt --check)
+          - Check: Complexity <20 per function
+          - Check: Coverage ≥80% (cargo-llvm-cov)
+          - Check: Zero SATD (TODO/FIXME detection)
+          - Block commits on violations
+        tests:
+          - test_pre_commit_blocks_test_failures
+          - test_pre_commit_blocks_clippy_warnings
+          - test_pre_commit_blocks_format_violations
+          - test_pre_commit_blocks_complexity_violations
+          - test_pre_commit_blocks_low_coverage
+          - test_no_bypass_possible
+        acceptance:
+          - Pre-commit hook installed and working
+          - All 6 checks functional
+          - Commits blocked on violations
+          - Zero bypass possible (--no-verify blocked)
+          - <30s execution time
+        deliverables:
+          - .git/hooks/pre-commit (quality enforcement)
+          - scripts/install-hooks.sh (setup script)
+          - docs/QUALITY_GATES.md (documentation)
+        extreme_tdd_phases:
+          - RED: Write tests for quality violations
+          - GREEN: Implement blocking logic
+          - REFACTOR: Optimize hook performance
+          - TOOL: Verify enforcement works
+        expected_impact: |
+          HIGH: Prevents technical debt accumulation. bashrs shows 100% compliance is
+          achievable with proper enforcement. Zero regression tolerance.
+        research_source: |
+          - bashrs: Pre-commit enforcement, 100% compliance, no bypass
+          - paiml-mcp-agent-toolkit: TDG quality gates, regression prevention
+          - Toyota Way: Stop-the-line quality enforcement
+
+      - id: DEBUGGER-050
+        title: "Coverage Visualization"
+        priority: low
+        status: pending
+        phase: PLANNED
+        week: 21
+        description: |
+          Implement HTML coverage visualization with line-level highlighting to visually
+          identify untested code paths. Uses cargo-llvm-cov for accurate coverage data.
+        requirements:
+          - Install cargo-llvm-cov
+          - Generate HTML coverage reports
+          - Highlight covered/uncovered lines
+          - Show branch coverage
+          - Export JSON for CI
+          - Integrate with quality gates
+        tests:
+          - test_html_report_generation
+          - test_line_highlighting
+          - test_branch_coverage
+          - test_json_export
+        acceptance:
+          - HTML report generation working
+          - Line highlighting (green/red)
+          - Branch coverage visualization
+          - JSON export for CI
+          - Integration with cargo test
+        deliverables:
+          - Makefile target: make coverage-html
+          - HTML reports in target/llvm-cov/html/
+          - Documentation
+        extreme_tdd_phases:
+          - RED: Write coverage test
+          - GREEN: Generate HTML reports
+          - REFACTOR: Improve visualization
+          - TOOL: Verify accuracy
+        expected_impact: |
+          LOW: Nice-to-have for visual coverage inspection. Helps identify untested
+          code paths visually vs text reports.
+        research_source: |
+          - Industry standard: cargo-llvm-cov for Rust coverage
+          - paiml-mcp-agent-toolkit: Coverage tracking in CI
+
