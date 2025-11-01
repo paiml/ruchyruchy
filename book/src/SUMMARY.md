@@ -91,6 +91,7 @@
 - [DEBUGGER-043: Regression & Hang Detector](./phase4_debugger/debugger-043-regression-hang-detector.md)
 - [DEBUGGER-044: Property-Based Testing Infrastructure](./phase4_debugger/debugger-044-property-based-testing.md)
 - [DEBUGGER-046: Interactive REPL Debugger](./phase4_debugger/debugger-046-repl-debugger.md)
+- [DEBUGGER-047: Performance Profiler with Flame Graphs](./phase4_debugger/debugger-047-performance-profiler.md)
 
 ## Early Prototypes & Vertical Slices
 
