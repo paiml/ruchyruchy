@@ -2,6 +2,7 @@
 // INTERP-032: Mock concurrency primitives (GREEN phase)
 // INTERP-036: Grouped import evaluation (GREEN phase)
 // INTERP-037: Dereference operator evaluation (GREEN phase)
+// INTERP-038: Compound assignment operators (GREEN phase)
 // REFACTOR Phase: Optimize and document
 //
 // Research:
@@ -11,7 +12,7 @@
 //
 // This module implements expression evaluation and function calls for the Ruchy interpreter.
 // Supports function definition, function calls with recursion, control flow, variable scoping,
-// mock concurrency primitives, import handling, and dereference operations.
+// mock concurrency primitives, import handling, dereference operations, and compound assignment.
 //
 // Design:
 // - Tree-walking evaluator that recursively evaluates AST nodes
@@ -38,6 +39,13 @@
 // - For HashMap with "_inner" key: returns the inner value
 // - For other values: returns value unchanged (identity operation)
 // - Enables Arc<Mutex<T>> pattern: *counter.lock().unwrap()
+//
+// Compound Assignment Operators (INTERP-038):
+// - Compound assignments: +=, -=, *=, /=, %=
+// - Desugared to: lhs = lhs op rhs
+// - Simple form: x += 5 becomes x = x + 5
+// - With dereference: *num += 1 updates _inner field in wrapper HashMap
+// - Unblocks INTERP-032 concurrency tests requiring *num += 1 pattern
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -407,6 +415,66 @@ impl Evaluator {
                     .assign(name, val)
                     .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
                 Ok(ControlFlow::Value(Value::nil()))
+            }
+
+            // Compound assignment: x += 5, *num -= 1
+            // Desugar to: lhs = lhs op rhs
+            AstNode::CompoundAssignment { lhs, op, rhs } => {
+                // Evaluate current value of LHS
+                let current_val = self.eval(lhs)?;
+
+                // Evaluate RHS
+                let rhs_val = self.eval(rhs)?;
+
+                // Apply operation
+                let new_val = self.eval_binary_op(*op, current_val.clone(), rhs_val)?;
+
+                // Update the variable
+                // For simple identifiers: x += 1
+                if let AstNode::Identifier(name) = lhs.as_ref() {
+                    self.scope
+                        .assign(name, new_val)
+                        .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
+                    Ok(ControlFlow::Value(Value::nil()))
+                } else if let AstNode::UnaryOp {
+                    op: UnaryOperator::Dereference,
+                    operand,
+                } = lhs.as_ref()
+                {
+                    // For dereference: *num += 1
+                    // The operand should be an identifier
+                    if let AstNode::Identifier(name) = operand.as_ref() {
+                        // Get the wrapper object (HashMap with _inner)
+                        let wrapper = self
+                            .scope
+                            .get_cloned(name)
+                            .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
+
+                        // Update the _inner value
+                        if let Value::HashMap(mut map) = wrapper {
+                            map.insert("_inner".to_string(), new_val);
+                            self.scope
+                                .assign(name, Value::HashMap(map))
+                                .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
+                            Ok(ControlFlow::Value(Value::nil()))
+                        } else {
+                            // Not a wrapper, just update the variable directly
+                            self.scope
+                                .assign(name, new_val)
+                                .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
+                            Ok(ControlFlow::Value(Value::nil()))
+                        }
+                    } else {
+                        Err(EvalError::UnsupportedOperation {
+                            operation: "compound assignment to complex dereference expression"
+                                .to_string(),
+                        })
+                    }
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!("compound assignment to {}", "complex expression"),
+                    })
+                }
             }
 
             // Vector literal - create vector value
