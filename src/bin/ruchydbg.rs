@@ -32,6 +32,7 @@ fn main() {
     match command {
         "run" => run_ruchy_file(&args),
         "profile" => run_profile(&args),
+        "detect" => run_detect(&args),
         "validate" | "test" => run_validation(),
         "version" | "--version" | "-v" => {
             println!("ruchydbg {VERSION}");
@@ -355,6 +356,126 @@ fn print_profile_help() {
     println!("    - Call stack at maximum depth");
 }
 
+fn run_detect(args: &[String]) {
+    // DEBUGGER-042: Pathological input detector
+    // Usage: ruchydbg detect <file> [--threshold <N>]
+
+    // Check for help
+    if args.len() > 2 && (args[2] == "--help" || args[2] == "-h") {
+        print_detect_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    if args.len() < 3 {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg detect <file> [--threshold <N>]");
+        print_detect_help();
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[2];
+
+    // Parse threshold flag (optional)
+    let threshold = if args.len() >= 5 && args[3] == "--threshold" {
+        args[4].parse::<f64>().unwrap_or(10.0)
+    } else {
+        10.0 // Default threshold
+    };
+
+    // Check if file exists
+    let path = PathBuf::from(file_path);
+    if !path.exists() {
+        eprintln!("Error: File not found: {}", file_path);
+        exit(EXIT_ERROR);
+    }
+
+    // Read file
+    let code = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file {}: {}", file_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Create detector
+    use ruchyruchy::interpreter::pathological_detector::{
+        PathologicalCategory, PathologicalDetector,
+    };
+    let detector = PathologicalDetector::with_threshold(threshold);
+
+    // Auto-detect category based on code patterns
+    let category = if code.contains("((") || code.contains("))") {
+        PathologicalCategory::ParserStress
+    } else if code.contains("let ") && code.lines().filter(|l| l.contains("let ")).count() > 10 {
+        PathologicalCategory::EvaluatorStress
+    } else {
+        PathologicalCategory::ParserStress // Default
+    };
+
+    // Run detection
+    let result = detector.detect(&code, category);
+
+    // Display report
+    println!("\n=== Pathological Input Detection ===\n");
+    println!("File: {}", file_path);
+    println!("Category: {:?}", result.category);
+    println!("Threshold: {:.1}x", threshold);
+    println!();
+    println!("Performance:");
+    println!("  Baseline: {:.2} µs", result.baseline_time_us);
+    println!("  Actual: {:.2} µs", result.actual_time_us);
+    println!("  Slowdown: {:.2}x", result.slowdown_factor);
+    println!();
+
+    if result.is_pathological {
+        println!("⚠️  PATHOLOGICAL INPUT DETECTED!");
+        println!(
+            "    This input causes {:.1}x slowdown vs expected baseline.",
+            result.slowdown_factor
+        );
+        println!("    Consider optimizing or limiting input complexity.");
+        exit(EXIT_ERROR); // Non-zero exit for pathological inputs
+    } else {
+        println!("✅ Performance within acceptable bounds");
+        println!(
+            "    Slowdown {:.1}x is below {:.1}x threshold.",
+            result.slowdown_factor, threshold
+        );
+        exit(EXIT_SUCCESS);
+    }
+}
+
+fn print_detect_help() {
+    println!("USAGE:");
+    println!("    ruchydbg detect <file> [OPTIONS]");
+    println!();
+    println!("DESCRIPTION:");
+    println!("    Detect pathological inputs that cause extreme performance degradation.");
+    println!("    Complements fuzzing (crashes) and benchmarking (average performance)");
+    println!("    by finding specific inputs causing 10x-1000x slowdowns.");
+    println!();
+    println!("OPTIONS:");
+    println!("    --threshold <N>   Slowdown threshold for detection (default: 10.0x)");
+    println!();
+    println!("CATEGORIES:");
+    println!("    Parser Stress     Deeply nested expressions, complex syntax");
+    println!("    Evaluator Stress  Quadratic variable lookup, deep call stacks");
+    println!("    Memory Stress     Allocation bombs, large data structures");
+    println!();
+    println!("EXAMPLES:");
+    println!("    # Detect with default 10x threshold");
+    println!("    ruchydbg detect test.ruchy");
+    println!();
+    println!("    # Detect with custom 15x threshold");
+    println!("    ruchydbg detect test.ruchy --threshold 15");
+    println!();
+    println!("EXIT CODES:");
+    println!("    0    Performance within bounds");
+    println!("    1    Pathological input detected (slowdown > threshold)");
+    println!();
+}
+
 fn run_validation() {
     // Find the validation script relative to the package
     let script_path = find_validation_script();
@@ -429,12 +550,14 @@ fn print_help() {
         "    run <file>        Execute Ruchy code with timeout detection and type-aware tracing"
     );
     println!("    profile <type>    Profile code execution (--stack for call depth analysis)");
+    println!("    detect <file>     Detect pathological inputs causing performance cliffs");
     println!("    validate, test    Run debugging tools validation (default)");
     println!("    version, -v       Print version information");
     println!("    help, -h          Print this help message");
     println!();
     println!("DEBUGGING FEATURES:");
     println!("    - Stack depth profiling (DEBUGGER-041)");
+    println!("    - Pathological input detection (DEBUGGER-042)");
     println!("    - Timeout detection for infinite loops and hangs");
     println!("    - Type-aware tracing (Ruchy v3.149.0+)");
     println!("    - Source map generation and mapping");
@@ -444,6 +567,7 @@ fn print_help() {
     println!("EXAMPLES:");
     println!("    ruchydbg run test.ruchy --timeout 1000 --trace");
     println!("    ruchydbg profile --stack factorial.ruchy");
+    println!("    ruchydbg detect test.ruchy --threshold 15");
     println!("    ruchydbg validate     # Run all validations");
     println!("    ruchydbg --version    # Show version");
     println!();
