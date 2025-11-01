@@ -1,6 +1,7 @@
 // INTERP-001: AST Parser Integration
 // INTERP-032: Concurrency syntax support (use, ::, closures, blocks)
 // INTERP-036: Grouped import syntax (use std::sync::{Arc, Mutex})
+// INTERP-037: Dereference operator (*expr)
 // REFACTOR Phase: Clean up implementation while keeping tests green
 //
 // Research: Aho et al. (2006) Chapter 4: Syntax Analysis
@@ -19,6 +20,11 @@
 // - Grouped use declarations: use std::sync::{Arc, Mutex};
 // - Multiple items in braces: {Arc, Mutex, RwLock}
 // - Nested paths: use std::sync::{Arc, Mutex};
+//
+// Dereference operator (INTERP-037):
+// - Unary dereference: *expr
+// - Extract values from mock wrappers: *counter.lock().unwrap()
+// - Works in expressions: let y = *x + 1;
 
 /// Parser for Ruchy source code
 pub struct Parser {
@@ -1219,6 +1225,16 @@ impl Parser {
                     operand,
                 })
             }
+            Some(Token::Star) => {
+                // Dereference operator: *expr
+                // This handles cases like: *num, *counter.lock().unwrap()
+                self.advance();
+                let operand = Box::new(self.parse_primary()?);
+                Ok(AstNode::UnaryOp {
+                    op: UnaryOperator::Dereference,
+                    operand,
+                })
+            }
             Some(Token::OrOr) => {
                 // Closure with no parameters: || { body }
                 self.advance(); // consume ||
@@ -1710,6 +1726,8 @@ pub enum UnaryOperator {
     Not,
     /// Unary plus operator (+, identity)
     Plus,
+    /// Dereference operator (*) - extract value from pointer/wrapper
+    Dereference,
 }
 
 /// Match arm in match expression

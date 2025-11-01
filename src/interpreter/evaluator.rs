@@ -1,6 +1,7 @@
 // INTERP-005: Function Calls & Recursion
 // INTERP-032: Mock concurrency primitives (GREEN phase)
 // INTERP-036: Grouped import evaluation (GREEN phase)
+// INTERP-037: Dereference operator evaluation (GREEN phase)
 // REFACTOR Phase: Optimize and document
 //
 // Research:
@@ -10,7 +11,7 @@
 //
 // This module implements expression evaluation and function calls for the Ruchy interpreter.
 // Supports function definition, function calls with recursion, control flow, variable scoping,
-// mock concurrency primitives, and import handling.
+// mock concurrency primitives, import handling, and dereference operations.
 //
 // Design:
 // - Tree-walking evaluator that recursively evaluates AST nodes
@@ -31,6 +32,12 @@
 // - UseDecl: Single imports like `use std::thread;`
 // - GroupedUseDecl: Grouped imports like `use std::sync::{Arc, Mutex};`
 // - Both are currently no-ops (no module system yet)
+//
+// Dereference Operator (INTERP-037):
+// - Unary dereference (*expr) extracts values from mock wrappers
+// - For HashMap with "_inner" key: returns the inner value
+// - For other values: returns value unchanged (identity operation)
+// - Enables Arc<Mutex<T>> pattern: *counter.lock().unwrap()
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -648,6 +655,27 @@ impl Evaluator {
             UnaryOperator::Not => {
                 // Logical NOT for booleans
                 Ok(operand.logical_not()?)
+            }
+            UnaryOperator::Dereference => {
+                // Dereference operator: *expr
+                // For mock wrapper objects (HashMap with "_inner"), extract the value
+                // For regular values, return unchanged (dereference is no-op for primitives)
+                match &operand {
+                    Value::HashMap(map) => {
+                        // Check if this is a mock wrapper (has "_inner" key)
+                        if let Some(inner_value) = map.get("_inner") {
+                            Ok(inner_value.clone())
+                        } else {
+                            // Not a wrapper, return as-is
+                            Ok(operand)
+                        }
+                    }
+                    _ => {
+                        // For non-HashMap values, dereference is identity
+                        // This handles cases like: let x = 42; let y = *x;
+                        Ok(operand)
+                    }
+                }
             }
         }
     }
