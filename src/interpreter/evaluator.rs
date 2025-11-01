@@ -1534,7 +1534,7 @@ impl Evaluator {
             // These are simplified stubs that don't actually spawn threads
             "thread::spawn" => {
                 // thread::spawn(closure) -> ThreadHandle
-                // Mock implementation: just execute closure synchronously
+                // INTERP-042: Mock implementation - execute closure synchronously
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "thread::spawn".to_string(),
@@ -1543,10 +1543,42 @@ impl Evaluator {
                     });
                 }
 
-                // For now, just return a mock thread handle (hashmap)
+                // Extract closure body and execute it
+                let result = match &args[0] {
+                    AstNode::Closure {
+                        is_move: _,
+                        params,
+                        body,
+                    } => {
+                        // For mock threading, closures should have no parameters
+                        if !params.is_empty() {
+                            return Err(EvalError::UnsupportedOperation {
+                                operation: format!(
+                                    "thread::spawn closures with parameters not supported (found {} params)",
+                                    params.len()
+                                ),
+                            });
+                        }
+
+                        // Execute closure body synchronously
+                        let mut last_value = Value::nil();
+                        for stmt in body {
+                            last_value = self.eval(stmt)?;
+                        }
+                        last_value
+                    }
+                    _ => {
+                        return Err(EvalError::UnsupportedOperation {
+                            operation: "thread::spawn requires a closure argument".to_string(),
+                        });
+                    }
+                };
+
+                // Return mock thread handle with result
                 use std::collections::HashMap;
                 let mut handle = HashMap::new();
                 handle.insert("_thread_id".to_string(), Value::integer(1));
+                handle.insert("_result".to_string(), result);
                 Ok(Some(Value::HashMap(handle)))
             }
 

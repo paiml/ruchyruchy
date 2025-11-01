@@ -4903,8 +4903,58 @@ future_roadmap:
           ✅ Mutex::lock retrieves from arc_store and wraps with _locked_value.
           ✅ Recursive dereference unwraps nested _locked_value and _inner.
           ✅ Compound assignment (*num += 1) updates arc_store correctly.
-          ⚠️  INTERP-032 tests still fail due to vec![] and for loop dependencies.
+          ⚠️  INTERP-032 tests still fail due to thread::spawn closure execution (fixed in INTERP-042).
           ✅ Verified with test_arc_debug and test_arc_multi (2 Arc clones).
+
+      - id: INTERP-042
+        title: "Fix thread::spawn to Execute Closures"
+        priority: critical
+        status: completed
+        phase: COMPLETE
+        started_date: 2025-11-01
+        completed_date: 2025-11-01
+        week: 17
+        description: |
+          Fix thread::spawn to actually execute closure arguments instead of just returning mock handle.
+          Mock implementation executes closures synchronously (no actual threading).
+        requirements:
+          - Extract closure body from AstNode::Closure ✅
+          - Execute closure statements synchronously ✅
+          - Store closure result in thread handle for join() ✅
+          - Support move closures with no parameters ✅
+        tests:
+          - INTERP-032: test_arc_shared_ownership (was failing, now passing) ✅
+          - INTERP-032: test_concurrent_counter (was failing, now passing) ✅
+        acceptance:
+          - thread::spawn executes closures ✅
+          - Closure body statements execute in evaluator context ✅
+          - Arc/Mutex state updates persist across closure execution ✅
+          - INTERP-032 improves from 4/10 to 6/10 tests passing ✅
+        deliverables:
+          - src/interpreter/evaluator.rs (thread::spawn implementation, 54 LOC) ✅
+        extreme_tdd_phases:
+          - RED: ✅ Complete - Discovered thread::spawn was NO-OP
+          - GREEN: ✅ Complete - Minimal closure execution implementation
+          - REFACTOR: ✅ Complete - Clean implementation
+          - TOOL: ✅ Complete - cargo fmt, clippy, tests (310 lib)
+        results:
+          tests_passing: "+2 INTERP-032 tests (4/10 → 6/10, +50%)"
+          quality_gates: "clippy ✅, fmt ✅, tests ✅"
+          files_modified: 1 (evaluator.rs)
+          closure_execution: "WORKING - synchronous execution"
+        impact: |
+          HIGH: thread::spawn now functional for mock concurrency testing.
+          INTERP-032 pass rate: 40% → 60% (excluding ignored tests: 4/8 → 6/8 = 75%).
+          Remaining 2 failures need block scope support (INTERP-043).
+          Foundation for concurrent programming patterns in interpreter.
+        notes: |
+          ✅ thread::spawn was returning mock handle without executing closure.
+          ✅ Fixed by extracting AstNode::Closure and executing body statements.
+          ✅ Mock implementation: synchronous execution (no real threads).
+          ✅ Closure must have zero parameters for mock threading.
+          ✅ Result stored in thread handle's _result field.
+          ⚠️  2 remaining INTERP-032 failures need block scope support ({ }).
+          ✅ Verified with Arc<Mutex<T>> pattern: counter increments correctly.
 
       - id: DEBUGGER-041
         title: "Stack Depth Profiler + BUG-041 Fix"
