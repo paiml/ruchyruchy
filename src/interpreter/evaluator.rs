@@ -4,6 +4,7 @@
 // INTERP-037: Dereference operator evaluation (GREEN phase)
 // INTERP-038: Compound assignment operators (GREEN phase)
 // INTERP-039: vec! macro evaluation (GREEN phase)
+// INTERP-040: Tuple destructuring evaluation (GREEN phase)
 // REFACTOR Phase: Optimize and document
 //
 // Research:
@@ -55,6 +56,13 @@
 // - vec![0; 10] creates vector with repeated element
 // - Evaluates to Value::Vector
 // - Array methods: .push() mutates array, .len() returns length
+//
+// Tuple Destructuring (INTERP-040):
+// - let (a, b) = tuple extracts elements and binds to variables
+// - Evaluates RHS, checks tuple type and arity
+// - Binds each element to corresponding pattern variable
+// - Unblocks test_channel_communication: let (tx, rx) = mpsc::channel()
+// - Note: Nested patterns not yet supported
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -443,6 +451,47 @@ impl Evaluator {
                         operation: format!("define variable: {}", e),
                     }
                 })?;
+                Ok(ControlFlow::Value(Value::nil()))
+            }
+
+            // Tuple destructuring: let (a, b, c) = expr
+            AstNode::TupleDestruct { names, value } => {
+                // Evaluate RHS to get tuple
+                let tuple_val = self.eval(value)?;
+
+                // Extract tuple elements
+                let elements = match tuple_val {
+                    Value::Tuple(ref elems) => elems.clone(),
+                    _ => {
+                        return Err(EvalError::UnsupportedOperation {
+                            operation: format!(
+                                "tuple destructuring requires tuple, got {}",
+                                tuple_val.type_name()
+                            ),
+                        })
+                    }
+                };
+
+                // Check arity match
+                if names.len() != elements.len() {
+                    return Err(EvalError::UnsupportedOperation {
+                        operation: format!(
+                            "tuple destructuring: expected {} elements, got {}",
+                            names.len(),
+                            elements.len()
+                        ),
+                    });
+                }
+
+                // Bind each element to corresponding pattern variable
+                for (name, elem) in names.iter().zip(elements.iter()) {
+                    self.scope.define(name.clone(), elem.clone()).map_err(|e| {
+                        EvalError::UnsupportedOperation {
+                            operation: format!("define variable in tuple destructuring: {}", e),
+                        }
+                    })?;
+                }
+
                 Ok(ControlFlow::Value(Value::nil()))
             }
 

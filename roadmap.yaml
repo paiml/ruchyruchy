@@ -4800,3 +4800,57 @@ future_roadmap:
           ✅ Special push() handling in MethodCall for mutation semantics.
           ⚠️  INTERP-032 still 3/10 passing due to architectural limitations (not vec!).
 
+      - id: INTERP-040
+        title: "Tuple Destructuring (let (a, b) = tuple)"
+        priority: high
+        status: completed
+        phase: COMPLETE
+        started_date: 2025-11-01
+        completed_date: 2025-11-01
+        week: 17
+        requirements:
+          - Parse tuple destructuring: let (a, b) = expr; ✅
+          - Support 2-tuples, 3-tuples, N-tuples ✅
+          - Evaluate tuple pattern and bind variables ✅
+          - Support nested tuples: let ((a, b), c) = expr; ⚠️ (deferred)
+          - Unblock test_channel_communication (INTERP-032) ✅
+        tests:
+          - test_tuple_destruct_two (let (a, b) = (1, 2)) ✅
+          - test_tuple_destruct_three (let (a, b, c) = (1, 2, 3)) ✅
+          - test_tuple_destruct_nested (let ((a, b), c) = (...)) ⚠️ (ignored - future work)
+          - test_tuple_destruct_function_return (let (x, y) = fn()) ✅
+          - test_tuple_destruct_channel (let (tx, rx) = mpsc::channel()) ✅
+          - test_tuple_destruct_with_expressions (let (sum, product) = ...) ✅
+          - test_interp_040_completeness (meta-test) ✅
+        acceptance:
+          - Tuple destructuring parses correctly ✅
+          - Variables bound to tuple elements ✅
+          - test_channel_communication now passing ✅ (3/10 → 4/10)
+        deliverables:
+          - tests/test_interp_040_tuple_destructuring.rs (235 LOC) ✅
+          - src/interpreter/parser.rs (tuple pattern parsing) ✅
+          - src/interpreter/evaluator.rs (tuple destructuring evaluation) ✅
+        research: "Rust Reference: Patterns - Tuple patterns"
+        extreme_tdd_phases:
+          - RED: ✅ Complete - All tests written and failing
+          - GREEN: ✅ Complete - Parser and evaluator implementation
+          - REFACTOR: ✅ Complete - Documentation updated
+          - TOOL: ✅ Complete - All quality gates passing
+          - PMAT: ✅ Complete - TDG validation passing
+        results:
+          tests_passing: 6/6 (1 ignored for future work)
+          quality_gates: "clippy ✅, fmt ✅, tests ✅"
+          files_modified: 3
+          interp_032_improvement: "3/10 → 4/10 (33% improvement)"
+        impact: |
+          HIGH: test_channel_communication now passing in INTERP-032.
+          Enables idiomatic tuple destructuring: let (tx, rx) = mpsc::channel();
+          Foundation for pattern matching in match expressions.
+          INTERP-032 concurrency tests: 40% pass rate (4/10).
+        notes: |
+          ✅ Flat tuple destructuring fully implemented.
+          ✅ Parser distinguishes let (a, b) = expr from tuple expression.
+          ✅ Evaluator validates tuple type and arity before binding.
+          ⚠️  Nested patterns deferred to future ticket (requires recursive pattern parsing).
+          ✅ Successfully unblocked test_channel_communication.
+
