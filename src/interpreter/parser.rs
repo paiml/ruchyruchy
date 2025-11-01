@@ -4,6 +4,7 @@
 // INTERP-037: Dereference operator (*expr)
 // INTERP-038: Compound assignment operators (+=, -=, *=, /=, %=)
 // INTERP-039: vec! macro support
+// INTERP-040: Tuple destructuring (let (a, b) = tuple)
 // REFACTOR Phase: Clean up implementation while keeping tests green
 //
 // Research: Aho et al. (2006) Chapter 4: Syntax Analysis
@@ -39,6 +40,12 @@
 // - vec![1, 2, 3] (vector with elements)
 // - vec![0; 10] (repeated element)
 // - Enables idiomatic Rust vector literals
+//
+// Tuple destructuring (INTERP-040):
+// - let (a, b) = (1, 2) (2-tuple destructuring)
+// - let (a, b, c) = (1, 2, 3) (3-tuple destructuring)
+// - let (tx, rx) = mpsc::channel() (function return destructuring)
+// - Note: Nested patterns like ((a, b), c) not yet supported
 
 /// Parser for Ruchy source code
 pub struct Parser {
@@ -752,6 +759,30 @@ impl Parser {
             self.advance();
         }
 
+        // Check for tuple destructuring: let (a, b) = expr
+        if self.check(&Token::LeftParen) {
+            self.advance(); // consume (
+
+            let mut names = Vec::new();
+            while !self.check(&Token::RightParen) && !self.is_at_end() {
+                names.push(self.expect_identifier());
+                if self.check(&Token::Comma) {
+                    self.advance();
+                }
+            }
+            self.consume(&Token::RightParen)?;
+
+            self.consume(&Token::Equal)?;
+            let value = Box::new(self.parse_expression()?);
+
+            if self.check(&Token::Semicolon) {
+                self.advance();
+            }
+
+            return Ok(AstNode::TupleDestruct { names, value });
+        }
+
+        // Regular let declaration: let name = expr
         let name = self.expect_identifier();
 
         self.consume(&Token::Equal)?;
@@ -1554,6 +1585,14 @@ pub enum AstNode {
         /// Variable name
         name: String,
         /// Initial value expression
+        value: Box<AstNode>,
+    },
+
+    /// Tuple destructuring: let (a, b, c) = expr
+    TupleDestruct {
+        /// Pattern variables (list of names to bind)
+        names: Vec<String>,
+        /// Value expression (must evaluate to tuple)
         value: Box<AstNode>,
     },
 
