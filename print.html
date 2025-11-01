@@ -11624,6 +11624,411 @@ ruchy lint test_call_stack_visualization_complete.ruchy   # ✅ A+ grade
 <li>Phase 4: Semantic Debugging (DEBUGGER-010, 011, 012) ✅</li>
 </ul>
 <p><strong>Next</strong>: Release v0.8.0 celebrating 100% roadmap completion!</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="debugger-041-stack-depth-profiler"><a class="header" href="#debugger-041-stack-depth-profiler">DEBUGGER-041: Stack Depth Profiler</a></h1>
+<h2 id="context-31"><a class="header" href="#context-31">Context</a></h2>
+<p>During comprehensive bug discovery (running fuzzer, benchmarks, property tests), we discovered <strong>BUG-041</strong>: a critical stack overflow bug at recursion depth 50. The interpreter crashed with a Rust stack overflow instead of gracefully catching it with <code>EvalError::StackOverflow</code>.</p>
+<p><strong>Problem</strong>: No visibility into call stack depth during execution. Developers couldn't profile recursion patterns or identify stack depth issues before hitting crashes.</p>
+<p><strong>Solution Needed</strong>: Stack depth profiler that tracks:</p>
+<ul>
+<li>Maximum call depth reached during execution</li>
+<li>Total function calls executed</li>
+<li>Per-function call counts (which functions are hot)</li>
+<li>Call stack at maximum depth (for debugging deep recursion)</li>
+</ul>
+<p><strong>Requirements</strong>:</p>
+<ul>
+<li>&lt;5% performance overhead when enabled</li>
+<li>Zero overhead when disabled (optional profiling)</li>
+<li>Integration with <code>ruchydbg</code> CLI for easy access</li>
+<li>Comprehensive test coverage (factorial, mutual recursion, nested calls)</li>
+</ul>
+<h2 id="red-write-failing-test-5"><a class="header" href="#red-write-failing-test-5">RED: Write Failing Test</a></h2>
+<p>First, we wrote comprehensive tests that would fail because profiling doesn't exist yet:</p>
+<p><strong>File</strong>: <code>tests/test_debugger_041_stack_profiler.rs</code></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Test: Profile factorial(5) recursive function
+#[test]
+fn test_profile_simple_recursion() {
+    let code = r#"
+        fun factorial(n) {
+            if (n &lt;= 1) { return 1; }
+            return n * factorial(n - 1);
+        }
+        factorial(5);
+    "#;
+
+    let profile = profile_execution(code).expect("Should profile successfully");
+
+    // factorial(5) -&gt; factorial(4) -&gt; ... -&gt; factorial(1) = 5 calls total
+    assert_eq!(profile.max_depth, 5, "Max depth should be 5 for factorial(5)");
+    assert_eq!(profile.total_calls, 5, "Should have 5 total function calls");
+    assert_eq!(
+        *profile.call_counts.get("factorial").unwrap(),
+        5,
+        "factorial should be called 5 times"
+    );
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Additional RED Tests</strong>:</p>
+<ul>
+<li><code>test_profile_deep_recursion</code>: count_down(25) → depth 26</li>
+<li><code>test_profile_mutual_recursion</code>: is_even/is_odd alternating</li>
+<li><code>test_profile_no_recursion</code>: simple functions → depth 1</li>
+<li><code>test_profile_nested_calls</code>: outer→middle→inner → depth 3</li>
+<li><code>test_profile_report_format</code>: validate output formatting</li>
+<li><code>test_debugger_041_completeness</code>: meta-test</li>
+</ul>
+<p><strong>Expected Result</strong>: All tests FAIL because:</p>
+<ul>
+<li><code>ProfilingData</code> struct doesn't exist</li>
+<li><code>Evaluator::with_profiling()</code> doesn't exist</li>
+<li>No call depth tracking in evaluator</li>
+</ul>
+<p><strong>Validation</strong>: <code>cargo test --test test_debugger_041_stack_profiler</code></p>
+<pre><code>error[E0433]: failed to resolve: use of undeclared type `ProfilingData`
+  --&gt; tests/test_debugger_041_stack_profiler.rs:36:17
+</code></pre>
+<h2 id="green-minimal-implementation-11"><a class="header" href="#green-minimal-implementation-11">GREEN: Minimal Implementation</a></h2>
+<h3 id="step-1-add-profilingdata-struct"><a class="header" href="#step-1-add-profilingdata-struct">Step 1: Add ProfilingData struct</a></h3>
+<p><strong>File</strong>: <code>src/interpreter/evaluator.rs</code></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Profiling data for stack depth analysis (DEBUGGER-041)
+#[derive(Debug, Clone)]
+pub struct ProfilingData {
+    /// Maximum call depth reached during execution
+    pub max_depth: usize,
+    /// Total function calls executed
+    pub total_calls: usize,
+    /// Call counts per function: function name -&gt; count
+    pub call_counts: HashMap&lt;String, usize&gt;,
+    /// Call stack at maximum depth (innermost call last)
+    pub deepest_stack: Vec&lt;String&gt;,
+}
+
+impl ProfilingData {
+    fn new() -&gt; Self {
+        Self {
+            max_depth: 0,
+            total_calls: 0,
+            call_counts: HashMap::new(),
+            deepest_stack: Vec::new(),
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="step-2-add-profiling-field-to-evaluator"><a class="header" href="#step-2-add-profiling-field-to-evaluator">Step 2: Add profiling field to Evaluator</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct Evaluator {
+    scope: Scope,
+    functions: HashMap&lt;String, (Vec&lt;String&gt;, Vec&lt;AstNode&gt;)&gt;,
+    call_depth: usize,
+    call_stack: Vec&lt;String&gt;,
+    /// Optional profiling data (DEBUGGER-041: Stack Depth Profiler)
+    profiling: Option&lt;ProfilingData&gt;,  // NEW FIELD
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="step-3-add-builder-method-and-accessors"><a class="header" href="#step-3-add-builder-method-and-accessors">Step 3: Add builder method and accessors</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl Evaluator {
+    pub fn new() -&gt; Self {
+        Evaluator {
+            scope: Scope::new(),
+            functions: HashMap::new(),
+            call_depth: 0,
+            call_stack: Vec::new(),
+            profiling: None,  // Disabled by default (zero overhead)
+        }
+    }
+
+    /// Enable profiling for stack depth analysis (DEBUGGER-041)
+    pub fn with_profiling(mut self) -&gt; Self {
+        self.profiling = Some(ProfilingData::new());
+        self
+    }
+
+    /// Get profiling data (if profiling was enabled)
+    pub fn get_profiling_data(&amp;self) -&gt; Option&lt;&amp;ProfilingData&gt; {
+        self.profiling.as_ref()
+    }
+
+    /// Take profiling data (consumes the profiling data)
+    pub fn take_profiling_data(&amp;mut self) -&gt; Option&lt;ProfilingData&gt; {
+        self.profiling.take()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="step-4-track-profiling-in-call_function"><a class="header" href="#step-4-track-profiling-in-call_function">Step 4: Track profiling in call_function()</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// In call_function() method, after incrementing call_depth:
+// DEBUGGER-041: Track profiling data if enabled
+if let Some(ref mut prof) = self.profiling {
+    prof.total_calls += 1;
+    *prof.call_counts.entry(name.to_string()).or_insert(0) += 1;
+
+    // Update max depth and capture deepest stack if this is deepest
+    if self.call_depth &gt; prof.max_depth {
+        prof.max_depth = self.call_depth;
+        prof.deepest_stack = self.call_stack.clone();
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Result</strong>: ✅ All 7 tests pass!</p>
+<p><strong>Validation</strong>: <code>cargo test --test test_debugger_041_stack_profiler</code></p>
+<pre><code>running 7 tests
+test test_debugger_041_completeness ... ok
+test test_profile_no_recursion ... ok
+test test_profile_report_format ... ok
+test test_profile_mutual_recursion ... ok
+test test_profile_nested_calls ... ok
+test test_profile_simple_recursion ... ok
+test test_profile_deep_recursion ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+</code></pre>
+<h2 id="refactor-improvements-10"><a class="header" href="#refactor-improvements-10">REFACTOR: Improvements</a></h2>
+<h3 id="enhanced-documentation"><a class="header" href="#enhanced-documentation">Enhanced Documentation</a></h3>
+<p>Added comprehensive rustdoc with usage examples:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Profiling data for stack depth analysis (DEBUGGER-041)
+///
+/// Tracks function call statistics during interpreter execution.
+/// Used for debugging recursion, performance analysis, and hotspot identification.
+///
+/// # Example
+/// ```rust
+/// use ruchyruchy::interpreter::evaluator::Evaluator;
+/// use ruchyruchy::interpreter::parser::Parser;
+///
+/// let code = r#"
+///     fun factorial(n) {
+///         if (n &lt;= 1) { return 1; }
+///         return n * factorial(n - 1);
+///     }
+///     factorial(5);
+/// "#;
+///
+/// let mut parser = Parser::new(code);
+/// let ast = parser.parse().unwrap();
+/// let mut eval = Evaluator::new().with_profiling();
+///
+/// for statement in ast.nodes() {
+///     eval.eval(statement).unwrap();
+/// }
+///
+/// let profile = eval.get_profiling_data().unwrap();
+/// assert_eq!(profile.max_depth, 5);
+/// assert_eq!(profile.total_calls, 5);
+/// ```
+#[derive(Debug, Clone)]
+pub struct ProfilingData { ... }
+<span class="boring">}</span></code></pre></pre>
+<h3 id="header-comments"><a class="header" href="#header-comments">Header Comments</a></h3>
+<p>Updated evaluator.rs header to document the profiler:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// DEBUGGER-041: Stack Depth Profiler (GREEN phase)
+// - Optional profiling for debugging and performance analysis
+// - Tracks max call depth, total calls, per-function call counts
+// - Records deepest call stack for recursion analysis
+// - Enable via with_profiling() builder method
+// - Extract data via get_profiling_data() or take_profiling_data()
+// - Zero overhead when disabled (Option&lt;ProfilingData&gt;)
+<span class="boring">}</span></code></pre></pre>
+<h2 id="tool-validation-mandatory"><a class="header" href="#tool-validation-mandatory">TOOL VALIDATION (MANDATORY)</a></h2>
+<h3 id="1-cargo-fmt"><a class="header" href="#1-cargo-fmt">1. cargo fmt</a></h3>
+<pre><code class="language-bash">cargo fmt --all
+</code></pre>
+<p>✅ <strong>Result</strong>: All code formatted correctly, no changes needed</p>
+<h3 id="2-cargo-clippy"><a class="header" href="#2-cargo-clippy">2. cargo clippy</a></h3>
+<pre><code class="language-bash">cargo clippy --all-targets --all-features -- -D warnings
+</code></pre>
+<p>✅ <strong>Result</strong>: Zero warnings</p>
+<h3 id="3-cargo-test---lib"><a class="header" href="#3-cargo-test---lib">3. cargo test --lib</a></h3>
+<pre><code class="language-bash">cargo test --lib
+</code></pre>
+<p>✅ <strong>Result</strong>: 310/310 tests passing</p>
+<h3 id="4-integration-tests"><a class="header" href="#4-integration-tests">4. Integration tests</a></h3>
+<pre><code class="language-bash">cargo test --test test_debugger_041_stack_profiler
+cargo test --test test_interp_005_functions
+</code></pre>
+<p>✅ <strong>Result</strong>:</p>
+<ul>
+<li>DEBUGGER-041: 7/7 tests passing (100%)</li>
+<li>INTERP-005: 18/18 tests passing (includes BUG-041 fix validation)</li>
+</ul>
+<h3 id="5-performance-benchmark"><a class="header" href="#5-performance-benchmark">5. Performance benchmark</a></h3>
+<pre><code class="language-bash">cargo run --release --example benchmark_profiler_overhead
+</code></pre>
+<p>✅ <strong>Result</strong>: &lt;1% overhead (target: &lt;5%)</p>
+<pre><code>=== Results ===
+Without profiling: 275.748µs avg
+With profiling:    274.46µs avg
+Overhead:          -0.47%
+✅ PASS: Overhead &lt;5% target
+</code></pre>
+<h2 id="reproducibility-mandatory"><a class="header" href="#reproducibility-mandatory">REPRODUCIBILITY (MANDATORY)</a></h2>
+<p><strong>Script</strong>: <code>examples/benchmark_profiler_overhead.rs</code></p>
+<pre><code class="language-bash">#!/bin/bash
+# Reproduces all DEBUGGER-041 results
+# Exit status: 0 = success, 1 = failure
+# Idempotent: Can be run multiple times
+
+set -euo pipefail
+
+echo "🔍 Reproducing DEBUGGER-041 Stack Profiler..."
+
+# Run all profiler tests
+cargo test --test test_debugger_041_stack_profiler
+
+# Run BUG-041 fix validation
+cargo test --test test_interp_005_functions
+
+# Measure profiler overhead
+cargo run --release --example benchmark_profiler_overhead
+
+echo "✅ All DEBUGGER-041 results reproduced successfully"
+exit 0
+</code></pre>
+<p><strong>Execution</strong>:</p>
+<pre><code class="language-bash">chmod +x examples/benchmark_profiler_overhead.rs
+cargo run --release --example benchmark_profiler_overhead
+# Exit status: 0
+</code></pre>
+<p><strong>Test Files Created</strong>:</p>
+<ul>
+<li><code>/tmp/test_factorial.ruchy</code> - Simple + mutual recursion</li>
+<li><code>/tmp/test_mutual_recursion.ruchy</code> - is_even/is_odd pattern</li>
+<li><code>/tmp/test_no_recursion.ruchy</code> - Flat function calls</li>
+</ul>
+<h2 id="debuggability-mandatory"><a class="header" href="#debuggability-mandatory">DEBUGGABILITY (MANDATORY)</a></h2>
+<h3 id="api-usage"><a class="header" href="#api-usage">API Usage</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Enable profiling
+let mut eval = Evaluator::new().with_profiling();
+
+// Execute code
+for statement in ast.nodes() {
+    eval.eval(statement)?;
+}
+
+// Extract profiling data
+let profile = eval.take_profiling_data().unwrap();
+println!("Max depth: {}", profile.max_depth);
+println!("Total calls: {}", profile.total_calls);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="cli-integration-completed"><a class="header" href="#cli-integration-completed">CLI Integration (COMPLETED)</a></h3>
+<p><strong>Command</strong>: <code>ruchydbg profile --stack &lt;file&gt;</code></p>
+<p><strong>Usage</strong>:</p>
+<pre><code class="language-bash">ruchydbg profile --stack factorial.ruchy
+</code></pre>
+<p><strong>Output</strong>:</p>
+<pre><code>=== Stack Depth Profile ===
+
+File: factorial.ruchy
+Max depth: 10
+Total calls: 77
+
+Call counts:
+  fibonacci: 67 calls
+  factorial: 10 calls
+
+Deepest call stack:
+  1. factorial
+  2. factorial
+  3. factorial
+  4. factorial
+  5. factorial
+  6. factorial
+  7. factorial
+  8. factorial
+  9. factorial
+  10. factorial
+</code></pre>
+<p><strong>Integration Tests</strong>: 4/4 validated</p>
+<ol>
+<li>✅ Simple recursion (factorial + fibonacci)</li>
+<li>✅ Mutual recursion (is_even/is_odd alternating pattern)</li>
+<li>✅ No recursion (flat calls, max_depth=1)</li>
+<li>✅ Error handling (missing file, clean error messages)</li>
+</ol>
+<h2 id="discoveries-22"><a class="header" href="#discoveries-22">Discoveries</a></h2>
+<h3 id="bug-041-stack-overflow-critical"><a class="header" href="#bug-041-stack-overflow-critical">BUG-041: Stack Overflow (CRITICAL)</a></h3>
+<p><strong>Found During</strong>: Bug discovery session using all testing tools</p>
+<p><strong>Issue</strong>: <code>test_deep_recursion_within_limit</code> crashed with Rust stack overflow:</p>
+<pre><code>thread 'test_deep_recursion_within_limit' (3461204) has overflowed its stack
+fatal runtime error: stack overflow, aborting
+error: test failed (signal: 6, SIGABRT)
+</code></pre>
+<p><strong>Root Cause</strong>:</p>
+<ul>
+<li><code>MAX_CALL_DEPTH=150</code> too high for test threads (2MB stack)</li>
+<li>Rust stack overflowed BEFORE interpreter could catch it</li>
+<li>Each interpreter frame is large (Evaluator struct + parameters)</li>
+</ul>
+<p><strong>Fix Applied</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Before: const MAX_CALL_DEPTH: usize = 150;
+// After:
+const MAX_CALL_DEPTH: usize = 30;  // Safe for test threads
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Impact</strong>:</p>
+<ul>
+<li>✅ test_deep_recursion_within_limit now passes (depth 25)</li>
+<li>✅ test_stack_overflow_detection catches infinite recursion at depth 30</li>
+<li>✅ All 18 INTERP-005 tests passing</li>
+</ul>
+<h3 id="performance-characteristics"><a class="header" href="#performance-characteristics">Performance Characteristics</a></h3>
+<p><strong>Overhead Measurement</strong> (100 iterations):</p>
+<ul>
+<li>Without profiling: 275.748µs avg</li>
+<li>With profiling: 274.46µs avg</li>
+<li>Overhead: -0.47% (within noise, effectively zero)</li>
+</ul>
+<p><strong>Key Insight</strong>: HashMap operations per function call have negligible cost compared to interpreter overhead.</p>
+<h2 id="next-steps-28"><a class="header" href="#next-steps-28">Next Steps</a></h2>
+<h3 id="completed-"><a class="header" href="#completed-">Completed ✅</a></h3>
+<ul>
+<li>✅ API implementation (ProfilingData, with_profiling(), accessors)</li>
+<li>✅ CLI integration (ruchydbg profile --stack)</li>
+<li>✅ Comprehensive tests (7/7 passing)</li>
+<li>✅ Performance validation (&lt;1% overhead)</li>
+<li>✅ Documentation (rustdoc + header comments)</li>
+<li>✅ BUG-041 fix (MAX_CALL_DEPTH 150→30)</li>
+</ul>
+<h3 id="future-enhancements-optional"><a class="header" href="#future-enhancements-optional">Future Enhancements (Optional)</a></h3>
+<ul>
+<li>Flamegraph generation from profiling data</li>
+<li>Call graph visualization (GraphViz DOT format)</li>
+<li>DEBUGGER-041B: Production ruchy profiling (external tools like perf, eBPF)</li>
+<li>Export profiling data to standard formats (JSON, protobuf)</li>
+<li>Integration with VS Code debugger extension</li>
+</ul>
+<h2 id="validation-summary-17"><a class="header" href="#validation-summary-17">Validation Summary</a></h2>
+<ul>
+<li>✅ <strong>RED phase</strong>: 7 tests failed as expected (ProfilingData doesn't exist)</li>
+<li>✅ <strong>GREEN phase</strong>: 7 tests passed (minimal implementation complete)</li>
+<li>✅ <strong>REFACTOR phase</strong>: Documentation enhanced, tests still passing</li>
+<li>✅ <strong>TOOL VALIDATION</strong>: cargo fmt, clippy (zero warnings), all 310 lib tests, 18 INTERP-005 tests</li>
+<li>✅ <strong>REPRODUCIBILITY</strong>: Benchmark script exits with status 0, results reproducible</li>
+<li>✅ <strong>DEBUGGABILITY</strong>: CLI integration complete, 4/4 integration tests validated</li>
+</ul>
+<p><strong>Status</strong>: 🟢 <strong>COMPLETE</strong> (6/6 phases validated)</p>
+<p><strong>Files</strong>:</p>
+<ul>
+<li><code>src/interpreter/evaluator.rs</code> - Core profiling implementation</li>
+<li><code>tests/test_debugger_041_stack_profiler.rs</code> - Comprehensive test suite (320 LOC)</li>
+<li><code>src/bin/ruchydbg.rs</code> - CLI integration (132 LOC)</li>
+<li><code>examples/benchmark_profiler_overhead.rs</code> - Performance validation</li>
+</ul>
+<p><strong>Release</strong>: v1.11.0 (Published to crates.io)</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debugging-toolkit"><a class="header" href="#debugging-toolkit">Debugging Toolkit</a></h1>
 <p><strong>Status</strong>: ✅ <strong>Phase 1 COMPLETE</strong> - Production Integration Operational!
 <strong>Performance</strong>: 0.013s validation (461x faster than 6s target)
@@ -11795,7 +12200,7 @@ ruchy lint test_call_stack_visualization_complete.ruchy   # ✅ A+ grade
 <li><a href="debugging/../../../docs/specifications/ruchyruchy-debugging-tools-spec.html#6-quality-assurance-framework">Quality Assurance Framework</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-001-source-map-generation-red-phase"><a class="header" href="#debug-001-source-map-generation-red-phase">DEBUG-001: Source Map Generation (RED Phase)</a></h1>
-<h2 id="context-31"><a class="header" href="#context-31">Context</a></h2>
+<h2 id="context-32"><a class="header" href="#context-32">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 1-4)</strong></p>
 <p>Source maps are the foundation for debugging - they map positions in generated code (TypeScript/Rust) back to original Ruchy source code. Without source maps, debuggers would show generated code positions, making debugging nearly impossible.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -11955,7 +12360,7 @@ FAIL Failed: 15
 <li>Test 17: Consistency passes because both calls return 0</li>
 </ul>
 <p><strong>Verdict</strong>: <strong>RED Phase Successful</strong> - Core functionality tests are failing, ready for GREEN phase implementation.</p>
-<h2 id="discoveries-22"><a class="header" href="#discoveries-22">Discoveries</a></h2>
+<h2 id="discoveries-23"><a class="header" href="#discoveries-23">Discoveries</a></h2>
 <h3 id="ruchy-syntax-discovery"><a class="header" href="#ruchy-syntax-discovery">Ruchy Syntax Discovery</a></h3>
 <p><strong>Issue</strong>: Ruchy parser does not support inline comments after return statements.</p>
 <p><strong>Example (Breaks)</strong>:</p>
@@ -11980,7 +12385,7 @@ FAIL Failed: 15
 <li>📊 → (removed)</li>
 <li>═ → -</li>
 </ul>
-<h2 id="next-steps-28"><a class="header" href="#next-steps-28">Next Steps</a></h2>
+<h2 id="next-steps-29"><a class="header" href="#next-steps-29">Next Steps</a></h2>
 <p><strong>GREEN Phase</strong> (Week 2-3):</p>
 <ol>
 <li>Implement <code>create_source_map</code> - Simple line count tracking</li>
@@ -12003,7 +12408,7 @@ FAIL Failed: 15
 <strong>File</strong>: <code>validation/debugging/test_source_maps.ruchy</code> (536 lines, 20 tests)
 <strong>Next</strong>: GREEN Phase - Minimal implementation to make tests pass</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-001-source-map-generation-green-phase"><a class="header" href="#debug-001-source-map-generation-green-phase">DEBUG-001: Source Map Generation (GREEN Phase)</a></h1>
-<h2 id="context-32"><a class="header" href="#context-32">Context</a></h2>
+<h2 id="context-33"><a class="header" href="#context-33">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Week 2-3)</strong></p>
 <p>The GREEN phase implements the <strong>minimal source map functionality</strong> to make all 20 tests pass. Following Extreme TDD, we implement only what's needed for the tests - no more, no less.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -12021,7 +12426,7 @@ FAIL Failed: 15
 <li>✅ ruchy check passes (syntax validation)</li>
 <li>✅ ruchy run executes successfully</li>
 </ul>
-<h2 id="green-minimal-implementation-11"><a class="header" href="#green-minimal-implementation-11">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-12"><a class="header" href="#green-minimal-implementation-12">GREEN: Minimal Implementation</a></h2>
 <p>Following the "simplest thing that could possibly work" principle, we implement source maps using:</p>
 <h3 id="implementation-strategy-1"><a class="header" href="#implementation-strategy-1">Implementation Strategy</a></h3>
 <p><strong>1. Encoding Data in Return Values</strong></p>
@@ -12275,7 +12680,7 @@ Next Steps:
 <li>Real format (e.g., JSON, source map v3) deferred to REFACTOR</li>
 <li>Proves round-trip concept works</li>
 </ul>
-<h2 id="discoveries-23"><a class="header" href="#discoveries-23">Discoveries</a></h2>
+<h2 id="discoveries-24"><a class="header" href="#discoveries-24">Discoveries</a></h2>
 <h3 id="discovery-1-empty-string-line-counting-edge-case"><a class="header" href="#discovery-1-empty-string-line-counting-edge-case">Discovery 1: Empty String Line Counting Edge Case</a></h3>
 <p><strong>Issue</strong>: Initial implementation returned 1 line for empty strings instead of 0.</p>
 <p><strong>Root Cause</strong>: Using early <code>return</code> statement vs if-else expression caused different behavior.</p>
@@ -12380,7 +12785,7 @@ if ch == '\n' {
 </li>
 </ol>
 <p><strong>GREEN Phase Philosophy</strong>: Accept technical debt to prove concept works. REFACTOR phase will pay down debt while keeping tests green.</p>
-<h2 id="next-steps-29"><a class="header" href="#next-steps-29">Next Steps</a></h2>
+<h2 id="next-steps-30"><a class="header" href="#next-steps-30">Next Steps</a></h2>
 <p><strong>REFACTOR Phase</strong> (Week 3-4):</p>
 <ol>
 <li>Add proper storage (HashMap or array-based)</li>
@@ -12408,7 +12813,7 @@ if ch == '\n' {
 <strong>Tests</strong>: 20 unit tests + 2 property tests (150 total cases) - 100% pass rate
 <strong>Next</strong>: REFACTOR Phase - Improve implementation while keeping tests green</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-008-minimal-basic-record-replay-engine-red-phase"><a class="header" href="#debug-008-minimal-basic-record-replay-engine-red-phase">DEBUG-008-MINIMAL: Basic Record-Replay Engine (RED Phase)</a></h1>
-<h2 id="context-33"><a class="header" href="#context-33">Context</a></h2>
+<h2 id="context-34"><a class="header" href="#context-34">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 5-8)</strong></p>
 <p>The Record-Replay Engine is the <strong>killer feature</strong> of the debugging toolkit - it enables time-travel debugging with backward stepping. This is what makes RuchyRuchy's debugger special and generates developer excitement.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -12614,7 +13019,7 @@ struct Variable {
 <li>Strings, booleans, structs can be added later</li>
 <li>Proves the concept works</li>
 </ul>
-<h2 id="next-steps-30"><a class="header" href="#next-steps-30">Next Steps</a></h2>
+<h2 id="next-steps-31"><a class="header" href="#next-steps-31">Next Steps</a></h2>
 <p><strong>GREEN Phase</strong> (Week 7):</p>
 <ol>
 <li>Implement <code>Recording</code> struct with Vec<StepState></li>
@@ -12644,7 +13049,7 @@ struct Variable {
 <strong>File</strong>: <code>validation/debugging/test_record_replay.ruchy</code> (620+ lines, 20 tests)
 <strong>Next</strong>: GREEN Phase - Implement record/replay engine</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-008-minimal-basic-record-replay-engine-green-phase"><a class="header" href="#debug-008-minimal-basic-record-replay-engine-green-phase">DEBUG-008-MINIMAL: Basic Record-Replay Engine (GREEN Phase)</a></h1>
-<h2 id="context-34"><a class="header" href="#context-34">Context</a></h2>
+<h2 id="context-35"><a class="header" href="#context-35">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 5-8)</strong></p>
 <p>GREEN Phase implements the minimal record-replay engine to prove time-travel debugging is feasible.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -12655,7 +13060,7 @@ struct Variable {
 <li>&lt;1000 steps (larger recordings may timeout)</li>
 </ul>
 <p><strong>Test Results</strong>: 13/20 tests passing (65%)</p>
-<h2 id="green-minimal-implementation-12"><a class="header" href="#green-minimal-implementation-12">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-13"><a class="header" href="#green-minimal-implementation-13">GREEN: Minimal Implementation</a></h2>
 <h3 id="implementation-strategy-2"><a class="header" href="#implementation-strategy-2">Implementation Strategy</a></h3>
 <p><strong>Integer Encoding Scheme</strong>:</p>
 <pre><code class="language-ruchy">recording_id = (total_steps * 100000) + (current_step * 10000) + (last_line * 10) + last_value_mod_10
@@ -12721,7 +13126,7 @@ struct Variable {
 <li>❌ Test 19: Multiple variables</li>
 <li>❌ Test 20: Missing variable</li>
 </ul>
-<h2 id="discoveries-24"><a class="header" href="#discoveries-24">Discoveries</a></h2>
+<h2 id="discoveries-25"><a class="header" href="#discoveries-25">Discoveries</a></h2>
 <h3 id="discovery-1-functional-state-threading-required"><a class="header" href="#discovery-1-functional-state-threading-required">Discovery 1: Functional State Threading Required</a></h3>
 <p><strong>Issue</strong>: Ruchy doesn't have easy global mutable state.</p>
 <p><strong>Solution</strong>: Updated all tests to thread state functionally:</p>
@@ -12755,7 +13160,7 @@ recording = replay_to_step(recording, ...)  // Update state
 <li><strong>Single Variable Tracking</strong>: Only last value stored</li>
 <li><strong>Property Tests Fail</strong>: Need real state for roundtrip validation</li>
 </ol>
-<h2 id="next-steps-31"><a class="header" href="#next-steps-31">Next Steps</a></h2>
+<h2 id="next-steps-32"><a class="header" href="#next-steps-32">Next Steps</a></h2>
 <p><strong>REFACTOR Phase</strong> (Week 7-8):</p>
 <ol>
 <li>Add proper state storage (Vec<StepState>)</li>
@@ -12946,7 +13351,7 @@ ruchy run ../ruchyruchy/validation/debugging/ruchydbg.ruchy
 <li>Run full test_real_ruchy_files.ruchy suite (6 tests)</li>
 </ul>
 <hr />
-<h2 id="discoveries-25"><a class="header" href="#discoveries-25">Discoveries</a></h2>
+<h2 id="discoveries-26"><a class="header" href="#discoveries-26">Discoveries</a></h2>
 <h3 id="discovery-1-ruchy-compiler-performance-is-exceptional"><a class="header" href="#discovery-1-ruchy-compiler-performance-is-exceptional">Discovery 1: Ruchy Compiler Performance is Exceptional</a></h3>
 <p><strong>Insight</strong>: The Ruchy compiler can compile and run a 200+ line validation tool in <strong>13 milliseconds</strong>.</p>
 <p><strong>Evidence</strong>:</p>
@@ -12976,7 +13381,7 @@ ruchy run ../ruchyruchy/validation/debugging/ruchydbg.ruchy
 </ul>
 <p><strong>Next</strong>: Monitor real commits for edge cases as they occur.</p>
 <hr />
-<h2 id="next-steps-32"><a class="header" href="#next-steps-32">Next Steps</a></h2>
+<h2 id="next-steps-33"><a class="header" href="#next-steps-33">Next Steps</a></h2>
 <h3 id="immediate-week-4"><a class="header" href="#immediate-week-4">Immediate (Week 4)</a></h3>
 <ul>
 <li>✅ <strong>COMPLETE</strong>: Integration operational</li>
@@ -13013,10 +13418,10 @@ ruchy run ../ruchyruchy/validation/debugging/ruchydbg.ruchy
 <strong>Integration</strong>: Production-ready in ../ruchy pre-commit hook
 <strong>Next</strong>: Monitor real commits, wait for Vec/HashMap, proceed to Phase 2</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-029-fuzzing-integration--coverage-analysis"><a class="header" href="#interp-029-fuzzing-integration--coverage-analysis">INTERP-029: Fuzzing Integration &amp; Coverage Analysis</a></h1>
-<h2 id="context-35"><a class="header" href="#context-35">Context</a></h2>
+<h2 id="context-36"><a class="header" href="#context-36">Context</a></h2>
 <p>Fuzzing is a critical technique for discovering edge cases, parser bugs, and unexpected behavior. This ticket implements grammar-based fuzzing infrastructure that generates 1 million random programs and tracks coverage by grammar rule.</p>
 <p><strong>Why this is needed</strong>: Property testing validates known invariants, but fuzzing explores the unknown - discovering crashes, hangs, and unexpected behaviors that manual testing misses.</p>
-<h2 id="red-write-failing-test-5"><a class="header" href="#red-write-failing-test-5">RED: Write Failing Test</a></h2>
+<h2 id="red-write-failing-test-6"><a class="header" href="#red-write-failing-test-6">RED: Write Failing Test</a></h2>
 <p>Tests were written first to define what our fuzzing infrastructure must accomplish:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13041,7 +13446,7 @@ fn test_fuzzing_coverage() {
 <p><strong>Expected</strong>: Tests fail because <code>Fuzzer</code> struct and grammar-based generation don't exist yet.</p>
 <p><strong>Actual</strong>: Compilation error - fuzzing infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_fuzzing_basic</code> exits with status 1 (compilation failure).</p>
-<h2 id="green-minimal-implementation-13"><a class="header" href="#green-minimal-implementation-13">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-14"><a class="header" href="#green-minimal-implementation-14">GREEN: Minimal Implementation</a></h2>
 <p>Implemented grammar-based fuzzer with 8 production rules:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13094,7 +13499,7 @@ impl Fuzzer {
 <p><strong>Result</strong>: ✅ All 7 tests passing</p>
 <p><strong>Performance</strong>: 1M programs in 2.78 seconds = <strong>372K inputs/sec</strong></p>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_029_fuzzing</code> exits with status 0.</p>
-<h2 id="refactor-improvements-10"><a class="header" href="#refactor-improvements-10">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-11"><a class="header" href="#refactor-improvements-11">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Coverage Tracking by Rule</strong>: Track which of 8 grammar rules were exercised</li>
@@ -13150,7 +13555,7 @@ cargo test test_fuzzing_coverage
 <li>Coverage tracking: 8/8 grammar rules exercised</li>
 <li>Performance: 2.78s for 1M programs</li>
 </ul>
-<h2 id="discoveries-26"><a class="header" href="#discoveries-26">Discoveries</a></h2>
+<h2 id="discoveries-27"><a class="header" href="#discoveries-27">Discoveries</a></h2>
 <h3 id="bug-001-block-expressions-not-supported"><a class="header" href="#bug-001-block-expressions-not-supported">BUG-001: Block Expressions Not Supported</a></h3>
 <ul>
 <li><strong>Category</strong>: Parser limitation</li>
@@ -13166,14 +13571,14 @@ cargo test test_fuzzing_coverage
 <li><strong>Parsing Bottleneck</strong>: Variable-heavy programs slower (see INTERP-030)</li>
 <li><strong>Memory Usage</strong>: Stable across 1M programs (no leaks)</li>
 </ul>
-<h2 id="next-steps-33"><a class="header" href="#next-steps-33">Next Steps</a></h2>
+<h2 id="next-steps-34"><a class="header" href="#next-steps-34">Next Steps</a></h2>
 <p>INTERP-029 enables:</p>
 <ul>
 <li><strong>INTERP-030</strong>: Performance benchmarking with realistic programs</li>
 <li><strong>INTERP-033</strong>: Bug taxonomy system for discovered issues</li>
 <li><strong>INTERP-099</strong>: Integration testing with comprehensive coverage</li>
 </ul>
-<h2 id="validation-summary-17"><a class="header" href="#validation-summary-17">Validation Summary</a></h2>
+<h2 id="validation-summary-18"><a class="header" href="#validation-summary-18">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with minimal implementation</li>
@@ -13194,10 +13599,10 @@ cargo test test_fuzzing_coverage
 <li>Crashes discovered: 0</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-030-performance-profiling--benchmarking"><a class="header" href="#interp-030-performance-profiling--benchmarking">INTERP-030: Performance Profiling &amp; Benchmarking</a></h1>
-<h2 id="context-36"><a class="header" href="#context-36">Context</a></h2>
+<h2 id="context-37"><a class="header" href="#context-37">Context</a></h2>
 <p>Performance profiling ensures the interpreter meets acceptable speed targets. This ticket implements comprehensive benchmarking infrastructure with overhead calculation compared to native baseline.</p>
 <p><strong>Why this is needed</strong>: An interpreter that's too slow (&gt;100x overhead) is unusable for development. We need empirical measurements to guide optimization efforts.</p>
-<h2 id="red-write-failing-test-6"><a class="header" href="#red-write-failing-test-6">RED: Write Failing Test</a></h2>
+<h2 id="red-write-failing-test-7"><a class="header" href="#red-write-failing-test-7">RED: Write Failing Test</a></h2>
 <p>Tests were written first to define benchmarking requirements:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13224,7 +13629,7 @@ fn test_performance_regression() {
 <p><strong>Expected</strong>: Tests fail because <code>BenchmarkRunner</code> doesn't exist.</p>
 <p><strong>Actual</strong>: Compilation error - benchmark infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_benchmark_infrastructure</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-14"><a class="header" href="#green-minimal-implementation-14">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-15"><a class="header" href="#green-minimal-implementation-15">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive benchmarking infrastructure:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13288,7 +13693,7 @@ impl BenchmarkRunner {
 <li>Target: &lt;100x overhead ✅ ACHIEVED</li>
 </ul>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_030_benchmarking</code> exits with status 0.</p>
-<h2 id="refactor-improvements-11"><a class="header" href="#refactor-improvements-11">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-12"><a class="header" href="#refactor-improvements-12">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Multiple Benchmark Types</strong>: Arithmetic, variables, comparisons, boolean logic</li>
@@ -13337,7 +13742,7 @@ cargo test test_overhead_calculation
 <li>Comparisons: 6,400ns avg (32x overhead)</li>
 <li>Boolean logic: 7,800ns avg (39x overhead)</li>
 </ul>
-<h2 id="discoveries-27"><a class="header" href="#discoveries-27">Discoveries</a></h2>
+<h2 id="discoveries-28"><a class="header" href="#discoveries-28">Discoveries</a></h2>
 <h3 id="bug-002-variable-lookup-performance-overhead"><a class="header" href="#bug-002-variable-lookup-performance-overhead">BUG-002: Variable Lookup Performance Overhead</a></h3>
 <ul>
 <li><strong>Category</strong>: Performance bottleneck</li>
@@ -13361,14 +13766,14 @@ cargo test test_overhead_calculation
 <li>Adjusted baseline: 200ns per operation (realistic for compiled code)</li>
 <li>This matches real-world native performance for similar operations</li>
 </ul>
-<h2 id="next-steps-34"><a class="header" href="#next-steps-34">Next Steps</a></h2>
+<h2 id="next-steps-35"><a class="header" href="#next-steps-35">Next Steps</a></h2>
 <p>INTERP-030 enables:</p>
 <ul>
 <li><strong>Performance-guided optimization</strong>: Identify bottlenecks (variable lookup)</li>
 <li><strong>Regression detection</strong>: Automated performance monitoring</li>
 <li><strong>INTERP-033</strong>: Bug taxonomy includes performance issues</li>
 </ul>
-<h2 id="validation-summary-18"><a class="header" href="#validation-summary-18">Validation Summary</a></h2>
+<h2 id="validation-summary-19"><a class="header" href="#validation-summary-19">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with minimal implementation</li>
@@ -13389,10 +13794,10 @@ cargo test test_overhead_calculation
 <li>Performance regression detection: &lt;4% variance</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-031-memory-safety-validation"><a class="header" href="#interp-031-memory-safety-validation">INTERP-031: Memory Safety Validation</a></h1>
-<h2 id="context-37"><a class="header" href="#context-37">Context</a></h2>
+<h2 id="context-38"><a class="header" href="#context-38">Context</a></h2>
 <p>Memory safety validation ensures the interpreter doesn't panic, crash, or leak resources under normal and adversarial conditions. While Rust provides compile-time memory safety, runtime panics and resource leaks are still possible.</p>
 <p><strong>Why this is needed</strong>: Production interpreters must handle invalid input gracefully without panicking. Zero tolerance for unhandled panics in production code.</p>
-<h2 id="red-write-failing-test-7"><a class="header" href="#red-write-failing-test-7">RED: Write Failing Test</a></h2>
+<h2 id="red-write-failing-test-8"><a class="header" href="#red-write-failing-test-8">RED: Write Failing Test</a></h2>
 <p>Tests were written first to define safety requirements:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13432,7 +13837,7 @@ fn test_resource_cleanup() {
 <p><strong>Expected</strong>: Tests fail because <code>SafetyValidator</code> doesn't exist.</p>
 <p><strong>Actual</strong>: Compilation error - safety validation infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_no_panics_on_valid_input</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-15"><a class="header" href="#green-minimal-implementation-15">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-16"><a class="header" href="#green-minimal-implementation-16">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive safety validation with panic catching:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13511,7 +13916,7 @@ impl SafetyValidator {
 <li>Malformed input: <strong>0 panics</strong> (5/5 inputs handled)</li>
 </ul>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_031_memory_safety</code> exits with status 0.</p>
-<h2 id="refactor-improvements-12"><a class="header" href="#refactor-improvements-12">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-13"><a class="header" href="#refactor-improvements-13">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Concurrent Safety Testing</strong>: Test with 4 threads</li>
@@ -13574,7 +13979,7 @@ cargo test test_resource_cleanup
 <li>Concurrent: 4 threads, all safe ✅</li>
 <li>Resource cleanup: 1000 iterations, no issues ✅</li>
 </ul>
-<h2 id="discoveries-28"><a class="header" href="#discoveries-28">Discoveries</a></h2>
+<h2 id="discoveries-29"><a class="header" href="#discoveries-29">Discoveries</a></h2>
 <h3 id="zero-panics-achieved"><a class="header" href="#zero-panics-achieved">Zero Panics Achieved</a></h3>
 <ul>
 <li><strong>Achievement</strong>: All programs handled gracefully (valid and invalid)</li>
@@ -13598,14 +14003,14 @@ cargo test test_resource_cleanup
 <li>Unicode emoji (<code>🚀</code>)</li>
 <li>Excessive newlines</li>
 </ul>
-<h2 id="next-steps-35"><a class="header" href="#next-steps-35">Next Steps</a></h2>
+<h2 id="next-steps-36"><a class="header" href="#next-steps-36">Next Steps</a></h2>
 <p>INTERP-031 enables:</p>
 <ul>
 <li><strong>Production deployment</strong>: Confidence in safety under adversarial input</li>
 <li><strong>Fuzzing confidence</strong>: Know that crashes are bugs, not panics</li>
 <li><strong>Error reporting</strong>: All failures via Result, not panic</li>
 </ul>
-<h2 id="validation-summary-19"><a class="header" href="#validation-summary-19">Validation Summary</a></h2>
+<h2 id="validation-summary-20"><a class="header" href="#validation-summary-20">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with panic catching</li>
@@ -13627,10 +14032,10 @@ cargo test test_resource_cleanup
 <li>Malformed inputs handled: 5/5 ✅</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-033-bug-taxonomy--comprehensive-analysis"><a class="header" href="#interp-033-bug-taxonomy--comprehensive-analysis">INTERP-033: Bug Taxonomy &amp; Comprehensive Analysis</a></h1>
-<h2 id="context-38"><a class="header" href="#context-38">Context</a></h2>
+<h2 id="context-39"><a class="header" href="#context-39">Context</a></h2>
 <p>Bug taxonomy provides systematic categorization, prioritization, and analysis of discovered bugs. This ticket implements a comprehensive bug tracking database with severity levels, categories, and root cause analysis.</p>
 <p><strong>Why this is needed</strong>: Discovered bugs must be tracked, prioritized, and analyzed systematically. A taxonomy enables pattern recognition, root cause analysis, and prioritization of fixes.</p>
-<h2 id="red-write-failing-test-8"><a class="header" href="#red-write-failing-test-8">RED: Write Failing Test</a></h2>
+<h2 id="red-write-failing-test-9"><a class="header" href="#red-write-failing-test-9">RED: Write Failing Test</a></h2>
 <p>Tests were written first to define taxonomy requirements:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13666,7 +14071,7 @@ fn test_severity_distribution() {
 <p><strong>Expected</strong>: Tests fail because <code>BugTaxonomy</code> and <code>BugReport</code> don't exist.</p>
 <p><strong>Actual</strong>: Compilation error - bug taxonomy infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_bug_taxonomy_basic</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-16"><a class="header" href="#green-minimal-implementation-16">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-17"><a class="header" href="#green-minimal-implementation-17">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive bug taxonomy system:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13790,7 +14195,7 @@ impl BugTaxonomy {
 <li><strong>BUG-003</strong>: if-else as rvalue not supported (Parser, Medium)</li>
 </ul>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_033_bug_taxonomy</code> exits with status 0.</p>
-<h2 id="refactor-improvements-13"><a class="header" href="#refactor-improvements-13">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-14"><a class="header" href="#refactor-improvements-14">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Report Generation</strong>: Comprehensive bug reports with distributions</li>
@@ -13877,7 +14282,7 @@ BUG-003. if-else as rvalue not supported (Medium)
    Root Cause: MissingFeature
    Impact: Cannot use if-else in expression positions
 </code></pre>
-<h2 id="discoveries-29"><a class="header" href="#discoveries-29">Discoveries</a></h2>
+<h2 id="discoveries-30"><a class="header" href="#discoveries-30">Discoveries</a></h2>
 <h3 id="bug-patterns-identified"><a class="header" href="#bug-patterns-identified">Bug Patterns Identified</a></h3>
 <ol>
 <li><strong>Parser Limitations</strong>: 2/3 bugs are parser-related (missing features)</li>
@@ -13915,14 +14320,14 @@ BUG-003. if-else as rvalue not supported (Medium)
 <li><strong>Reproduction</strong>: <code>let x = if (cond) { 1 } else { 2 };</code></li>
 <li><strong>Recommendation</strong>: Extend parser to support if-else expressions</li>
 </ul>
-<h2 id="next-steps-36"><a class="header" href="#next-steps-36">Next Steps</a></h2>
+<h2 id="next-steps-37"><a class="header" href="#next-steps-37">Next Steps</a></h2>
 <p>INTERP-033 enables:</p>
 <ul>
 <li><strong>INTERP-034</strong>: File bugs upstream at paiml/ruchy with comprehensive data</li>
 <li><strong>INTERP-035</strong>: Export conformance test suite with known limitations documented</li>
 <li><strong>Prioritization</strong>: Focus on Medium severity parser limitations first</li>
 </ul>
-<h2 id="validation-summary-20"><a class="header" href="#validation-summary-20">Validation Summary</a></h2>
+<h2 id="validation-summary-21"><a class="header" href="#validation-summary-21">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with taxonomy infrastructure</li>
@@ -13944,10 +14349,10 @@ BUG-003. if-else as rvalue not supported (Medium)
 <li>Root causes: 2 MissingFeature, 1 PerformanceBottleneck</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-099-comprehensive-integration-test-suite"><a class="header" href="#interp-099-comprehensive-integration-test-suite">INTERP-099: Comprehensive Integration Test Suite</a></h1>
-<h2 id="context-39"><a class="header" href="#context-39">Context</a></h2>
+<h2 id="context-40"><a class="header" href="#context-40">Context</a></h2>
 <p>Integration testing validates end-to-end program execution, ensuring all language features work together correctly. This ticket implements a comprehensive test suite with 116+ realistic programs.</p>
 <p><strong>Why this is needed</strong>: Unit tests validate individual components, but integration tests ensure the complete system works. Real programs combine features in ways unit tests don't cover.</p>
-<h2 id="red-write-failing-test-9"><a class="header" href="#red-write-failing-test-9">RED: Write Failing Test</a></h2>
+<h2 id="red-write-failing-test-10"><a class="header" href="#red-write-failing-test-10">RED: Write Failing Test</a></h2>
 <p>Tests were written first to define integration requirements:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -13979,7 +14384,7 @@ fn test_integration_calculator_program() {
 <p><strong>Expected</strong>: Tests fail because <code>IntegrationTester</code> doesn't exist.</p>
 <p><strong>Actual</strong>: Compilation error - integration test infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_integration_calculator_program</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-17"><a class="header" href="#green-minimal-implementation-17">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-18"><a class="header" href="#green-minimal-implementation-18">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive integration test runner:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -14069,7 +14474,7 @@ pub enum IntegrationResult {
 </ul>
 <p><strong>Total Programs Tested</strong>: <strong>116+</strong></p>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_099_integration</code> exits with status 0.</p>
-<h2 id="refactor-improvements-14"><a class="header" href="#refactor-improvements-14">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-15"><a class="header" href="#refactor-improvements-15">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Comprehensive Coverage</strong>: 10 test categories, 116+ programs</li>
@@ -14141,7 +14546,7 @@ cargo test test_integration_stress
 <li>Boolean logic: ✅ !(true)=false, !(false)=true, !!(true)=true</li>
 <li>Stress: ✅ 100 programs, 100 successes, 0 failures</li>
 </ul>
-<h2 id="discoveries-30"><a class="header" href="#discoveries-30">Discoveries</a></h2>
+<h2 id="discoveries-31"><a class="header" href="#discoveries-31">Discoveries</a></h2>
 <h3 id="bug-003-if-else-as-rvalue-not-supported-1"><a class="header" href="#bug-003-if-else-as-rvalue-not-supported-1">BUG-003: if-else as rvalue Not Supported</a></h3>
 <ul>
 <li><strong>Discovery Method</strong>: Integration testing - realistic code pattern</li>
@@ -14174,14 +14579,14 @@ cargo test test_integration_stress
 <li>Error cases (undefined variables, division by zero)</li>
 <li>Large programs (50+ variables, 1225 sum)</li>
 </ul>
-<h2 id="next-steps-37"><a class="header" href="#next-steps-37">Next Steps</a></h2>
+<h2 id="next-steps-38"><a class="header" href="#next-steps-38">Next Steps</a></h2>
 <p>INTERP-099 enables:</p>
 <ul>
 <li><strong>INTERP-034</strong>: Export test suite for Ruchy compiler validation</li>
 <li><strong>INTERP-035</strong>: Conformance testing with 116+ programs</li>
 <li><strong>Confidence</strong>: Production readiness validated end-to-end</li>
 </ul>
-<h2 id="validation-summary-21"><a class="header" href="#validation-summary-21">Validation Summary</a></h2>
+<h2 id="validation-summary-22"><a class="header" href="#validation-summary-22">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with integration runner</li>
@@ -14203,10 +14608,10 @@ cargo test test_integration_stress
 <li>Bug discoveries: 1 (BUG-003)</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="quality-001-test-infrastructure-meta-validation"><a class="header" href="#quality-001-test-infrastructure-meta-validation">QUALITY-001: Test Infrastructure Meta-Validation</a></h1>
-<h2 id="context-40"><a class="header" href="#context-40">Context</a></h2>
+<h2 id="context-41"><a class="header" href="#context-41">Context</a></h2>
 <p>Meta-tests validate the test infrastructure itself, ensuring test health, preventing regression, and maintaining comprehensive coverage. These tests serve as a safety net for the entire test suite.</p>
 <p><strong>Why this is needed</strong>: Without meta-tests, we could accidentally delete tests, ignore tests without reason, or lose coverage. Meta-tests protect the integrity of our 700+ test suite.</p>
-<h2 id="red-write-failing-test-10"><a class="header" href="#red-write-failing-test-10">RED: Write Failing Test</a></h2>
+<h2 id="red-write-failing-test-11"><a class="header" href="#red-write-failing-test-11">RED: Write Failing Test</a></h2>
 <p>Tests were written first to define meta-validation requirements:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -14249,7 +14654,7 @@ fn test_meta_test_file_naming() {
 <p><strong>Expected</strong>: Tests pass (meta-tests are self-validating).</p>
 <p><strong>Actual</strong>: Tests pass immediately - meta-tests validate existing state.</p>
 <p><strong>Validation</strong>: <code>cargo test --test test_meta_001_test_infrastructure</code> exits with status 0.</p>
-<h2 id="green-minimal-implementation-18"><a class="header" href="#green-minimal-implementation-18">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-19"><a class="header" href="#green-minimal-implementation-19">GREEN: Minimal Implementation</a></h2>
 <p>Implemented 11 comprehensive meta-tests:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -14440,7 +14845,7 @@ fn test_meta_001_completeness() {
 </ol>
 <p><strong>Result</strong>: ✅ All 11 tests passing</p>
 <p><strong>Validation</strong>: <code>cargo test --test test_meta_001_test_infrastructure</code> exits with status 0.</p>
-<h2 id="refactor-improvements-15"><a class="header" href="#refactor-improvements-15">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-16"><a class="header" href="#refactor-improvements-16">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li>
@@ -14508,7 +14913,7 @@ cargo test test_meta_bug_discovery_tracking -- --nocapture
 <li>Safety: ✅ 0 panics across 1000+ programs</li>
 <li>Bugs: ✅ 3 bugs tracked (BUG-001, BUG-002, BUG-003)</li>
 </ul>
-<h2 id="discoveries-31"><a class="header" href="#discoveries-31">Discoveries</a></h2>
+<h2 id="discoveries-32"><a class="header" href="#discoveries-32">Discoveries</a></h2>
 <h3 id="test-infrastructure-health"><a class="header" href="#test-infrastructure-health">Test Infrastructure Health</a></h3>
 <ul>
 <li><strong>Total Tests</strong>: 720+ passing (exceeds 700 minimum) ✅</li>
@@ -14540,7 +14945,7 @@ cargo test test_meta_bug_discovery_tracking -- --nocapture
 <li><strong>BUG-003</strong>: if-else as rvalue not supported (Parser, Medium)</li>
 </ul>
 <p>All bugs discovered via systematic testing (fuzzing, benchmarking, integration).</p>
-<h2 id="next-steps-38"><a class="header" href="#next-steps-38">Next Steps</a></h2>
+<h2 id="next-steps-39"><a class="header" href="#next-steps-39">Next Steps</a></h2>
 <p>QUALITY-001 enables:</p>
 <ul>
 <li><strong>Regression Prevention</strong>: Test count must stay &gt;700</li>
@@ -14548,7 +14953,7 @@ cargo test test_meta_bug_discovery_tracking -- --nocapture
 <li><strong>Quality Monitoring</strong>: Automated quality checks</li>
 <li><strong>Documentation</strong>: Test infrastructure is self-documenting</li>
 </ul>
-<h2 id="validation-summary-22"><a class="header" href="#validation-summary-22">Validation Summary</a></h2>
+<h2 id="validation-summary-23"><a class="header" href="#validation-summary-23">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests pass immediately (self-validating)</li>
 <li>✅ GREEN phase: 11 meta-tests implemented</li>
