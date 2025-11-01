@@ -21,6 +21,8 @@ pub mod evaluator;
 pub mod parser;
 /// Pathological input detector (DEBUGGER-042: Performance cliff detection)
 pub mod pathological_detector;
+/// Regression and hang detector (DEBUGGER-043: Regression & hang detection)
+pub mod regression_hang_detector;
 /// Variable scope management
 pub mod scope;
 /// NASA-level soak and performance testing infrastructure
@@ -34,6 +36,9 @@ pub use evaluator::{EvalError, Evaluator};
 pub use parser::{Ast, AstNode, ParseError, Parser};
 pub use pathological_detector::{
     PathologicalCategory, PathologicalDetection, PathologicalDetector,
+};
+pub use regression_hang_detector::{
+    ExecutionSnapshot, HangDetectionResult, HangType, RegressionHangDetector,
 };
 pub use scope::{Scope, ScopeError};
 pub use soak_test::{
