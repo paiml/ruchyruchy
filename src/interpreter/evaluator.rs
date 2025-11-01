@@ -574,6 +574,37 @@ impl Evaluator {
                 else_branch,
             } => self.eval_if(condition, then_branch, else_branch),
 
+            // Block expression - creates a new scope (INTERP-043)
+            AstNode::Block { statements } => {
+                // Create child scope for block
+                let child_scope = self.scope.create_child();
+                let parent_scope = std::mem::replace(&mut self.scope, child_scope);
+
+                // Evaluate all statements in block scope
+                let mut last_value = Value::nil();
+                let mut early_exit = None; // Track early return or error
+
+                for stmt in statements {
+                    match self.eval_internal(stmt) {
+                        Ok(ControlFlow::Value(v)) => last_value = v,
+                        Ok(ControlFlow::Return(v)) => {
+                            early_exit = Some(Ok(ControlFlow::Return(v)));
+                            break;
+                        }
+                        Err(e) => {
+                            early_exit = Some(Err(e));
+                            break;
+                        }
+                    }
+                }
+
+                // Restore parent scope
+                self.scope = parent_scope;
+
+                // Return early exit if any, otherwise return last value
+                early_exit.unwrap_or(Ok(ControlFlow::Value(last_value)))
+            }
+
             // Let declaration - variable binding
             AstNode::LetDecl { name, value } => {
                 let val = self.eval(value)?;
