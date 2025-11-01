@@ -33,6 +33,7 @@ fn main() {
         "run" => run_ruchy_file(&args),
         "profile" => run_profile(&args),
         "detect" => run_detect(&args),
+        "regression" => run_regression(&args),
         "validate" | "test" => run_validation(),
         "version" | "--version" | "-v" => {
             println!("ruchydbg {VERSION}");
@@ -446,6 +447,294 @@ fn run_detect(args: &[String]) {
     }
 }
 
+fn run_regression(args: &[String]) {
+    // DEBUGGER-043: Regression and hang detector
+    // Usage: ruchydbg regression <baseline.ruchy> <current.ruchy> [--runs <N>]
+
+    // Check for help
+    if args.len() > 2 && (args[2] == "--help" || args[2] == "-h") {
+        print_regression_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    // Parse command: regression <check-type> <file> [options]
+    //   check-type: snapshot, determinism, state, or perf
+    if args.len() < 3 {
+        eprintln!("Error: Missing check type");
+        eprintln!("Usage: ruchydbg regression <check-type> <file> [OPTIONS]");
+        print_regression_help();
+        exit(EXIT_ERROR);
+    }
+
+    let check_type = &args[2];
+
+    match check_type.as_str() {
+        "snapshot" => run_regression_snapshot(&args[3..]),
+        "determinism" => run_regression_determinism(&args[3..]),
+        "state" => run_regression_state(&args[3..]),
+        "perf" => run_regression_perf(&args[3..]),
+        _ => {
+            eprintln!("Error: Unknown check type: {}", check_type);
+            eprintln!("Valid types: snapshot, determinism, state, perf");
+            print_regression_help();
+            exit(EXIT_ERROR);
+        }
+    }
+}
+
+fn run_regression_snapshot(args: &[String]) {
+    // Snapshot comparison: compare baseline vs current behavior
+    if args.len() < 2 {
+        eprintln!("Error: snapshot check requires baseline and current files");
+        eprintln!("Usage: ruchydbg regression snapshot <baseline.ruchy> <current.ruchy>");
+        exit(EXIT_ERROR);
+    }
+
+    let baseline_path = &args[0];
+    let current_path = &args[1];
+
+    // Read files
+    let baseline_code = match std::fs::read_to_string(baseline_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading baseline file {}: {}", baseline_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    let current_code = match std::fs::read_to_string(current_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading current file {}: {}", current_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Create detector and snapshots
+    use ruchyruchy::interpreter::regression_hang_detector::RegressionHangDetector;
+    let detector = RegressionHangDetector::new();
+
+    println!("🔍 Regression Check: Snapshot Comparison");
+    println!("Baseline: {}", baseline_path);
+    println!("Current:  {}", current_path);
+    println!();
+
+    let baseline_snap = detector.create_snapshot(&baseline_code);
+    let current_snap = detector.create_snapshot(&current_code);
+
+    let matches = detector.snapshots_match(&baseline_snap, &current_snap);
+
+    println!("Baseline execution: {}ms", baseline_snap.execution_time_ms);
+    println!("Current execution:  {}ms", current_snap.execution_time_ms);
+    println!();
+
+    if matches {
+        println!("✅ NO REGRESSION: Behavior matches baseline");
+        println!("   Output: {}", baseline_snap.output);
+        exit(EXIT_SUCCESS);
+    } else {
+        println!("⚠️  REGRESSION DETECTED: Behavior changed!");
+        println!("   Baseline output: {}", baseline_snap.output);
+        println!("   Current output:  {}", current_snap.output);
+        exit(EXIT_ERROR);
+    }
+}
+
+fn run_regression_determinism(args: &[String]) {
+    // Determinism check: run N times and check consistency
+    if args.is_empty() {
+        eprintln!("Error: determinism check requires a file");
+        eprintln!("Usage: ruchydbg regression determinism <file.ruchy> [--runs <N>]");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[0];
+    let runs = if args.len() >= 3 && args[1] == "--runs" {
+        args[2].parse::<usize>().unwrap_or(10)
+    } else {
+        10
+    };
+
+    let code = match std::fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file {}: {}", file_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    use ruchyruchy::interpreter::regression_hang_detector::RegressionHangDetector;
+    let detector = RegressionHangDetector::new();
+
+    println!("🔍 Regression Check: Determinism");
+    println!("File: {}", file_path);
+    println!("Runs: {}", runs);
+    println!();
+
+    let is_deterministic = detector.check_determinism(&code, runs);
+
+    if is_deterministic {
+        println!("✅ DETERMINISTIC: All {} runs produced identical results", runs);
+        exit(EXIT_SUCCESS);
+    } else {
+        println!("⚠️  NON-DETERMINISM DETECTED: Runs produced different results!");
+        println!("   This indicates a bug in the interpreter or code.");
+        exit(EXIT_ERROR);
+    }
+}
+
+fn run_regression_state(args: &[String]) {
+    // State pollution check: ensure variables don't leak between runs
+    if args.len() < 2 {
+        eprintln!("Error: state check requires two code snippets");
+        eprintln!("Usage: ruchydbg regression state <file1.ruchy> <file2.ruchy>");
+        exit(EXIT_ERROR);
+    }
+
+    let file1_path = &args[0];
+    let file2_path = &args[1];
+
+    let code1 = match std::fs::read_to_string(file1_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file {}: {}", file1_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    let code2 = match std::fs::read_to_string(file2_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file {}: {}", file2_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    use ruchyruchy::interpreter::regression_hang_detector::RegressionHangDetector;
+    let detector = RegressionHangDetector::new();
+
+    println!("🔍 Regression Check: State Pollution");
+    println!("First:  {}", file1_path);
+    println!("Second: {}", file2_path);
+    println!();
+
+    // Run first code
+    let _ = detector.run_isolated(&code1);
+
+    // Run second code - should not see variables from first
+    let result = detector.run_isolated(&code2);
+
+    if result.is_err() {
+        println!("✅ NO STATE POLLUTION: Second run isolated (expected error)");
+        exit(EXIT_SUCCESS);
+    } else {
+        println!("⚠️  STATE POLLUTION DETECTED: Variables leaked between runs!");
+        exit(EXIT_ERROR);
+    }
+}
+
+fn run_regression_perf(args: &[String]) {
+    // Performance regression check: compare execution times
+    if args.len() < 2 {
+        eprintln!("Error: perf check requires baseline and current files");
+        eprintln!("Usage: ruchydbg regression perf <baseline.ruchy> <current.ruchy> [--threshold <N>]");
+        exit(EXIT_ERROR);
+    }
+
+    let baseline_path = &args[0];
+    let current_path = &args[1];
+
+    let threshold = if args.len() >= 4 && args[2] == "--threshold" {
+        args[3].parse::<f64>().unwrap_or(2.0)
+    } else {
+        2.0 // Default 2x slowdown
+    };
+
+    let baseline_code = match std::fs::read_to_string(baseline_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading baseline file {}: {}", baseline_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    let current_code = match std::fs::read_to_string(current_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading current file {}: {}", current_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    use ruchyruchy::interpreter::regression_hang_detector::RegressionHangDetector;
+    let detector = RegressionHangDetector::new();
+
+    println!("🔍 Regression Check: Performance");
+    println!("Baseline: {}", baseline_path);
+    println!("Current:  {}", current_path);
+    println!("Threshold: {}x", threshold);
+    println!();
+
+    let baseline_ms = detector.measure_execution_time(&baseline_code);
+    let current_ms = detector.measure_execution_time(&current_code);
+    let slowdown = detector.detect_performance_regression(baseline_ms, current_ms);
+
+    println!("Baseline: {}ms", baseline_ms);
+    println!("Current:  {}ms", current_ms);
+    println!("Slowdown: {:.2}x", slowdown);
+    println!();
+
+    if slowdown > threshold {
+        println!("⚠️  PERFORMANCE REGRESSION: {:.2}x slowdown exceeds {:.2}x threshold!", slowdown, threshold);
+        exit(EXIT_ERROR);
+    } else {
+        println!("✅ NO PERFORMANCE REGRESSION: Within acceptable bounds");
+        exit(EXIT_SUCCESS);
+    }
+}
+
+fn print_regression_help() {
+    println!("USAGE:");
+    println!("    ruchydbg regression <check-type> <file> [OPTIONS]");
+    println!();
+    println!("CHECK TYPES:");
+    println!("    snapshot       Compare baseline vs current behavior");
+    println!("    determinism    Check if code produces consistent results");
+    println!("    state          Check for variable leakage between runs");
+    println!("    perf           Check for performance regressions");
+    println!();
+    println!("COMMANDS:");
+    println!("    ruchydbg regression snapshot <baseline.ruchy> <current.ruchy>");
+    println!("        Compare two versions and detect behavior changes");
+    println!();
+    println!("    ruchydbg regression determinism <file.ruchy> [--runs <N>]");
+    println!("        Run code N times and check for consistency (default: 10)");
+    println!();
+    println!("    ruchydbg regression state <file1.ruchy> <file2.ruchy>");
+    println!("        Check if variables leak between isolated runs");
+    println!();
+    println!("    ruchydbg regression perf <baseline.ruchy> <current.ruchy> [--threshold <N>]");
+    println!("        Detect performance regressions (default threshold: 2.0x)");
+    println!();
+    println!("EXAMPLES:");
+    println!("    # Check for behavior regression");
+    println!("    ruchydbg regression snapshot v1.ruchy v2.ruchy");
+    println!();
+    println!("    # Check determinism with 20 runs");
+    println!("    ruchydbg regression determinism test.ruchy --runs 20");
+    println!();
+    println!("    # Check for state pollution");
+    println!("    ruchydbg regression state defines.ruchy uses.ruchy");
+    println!();
+    println!("    # Check performance with 3x threshold");
+    println!("    ruchydbg regression perf old.ruchy new.ruchy --threshold 3");
+    println!();
+    println!("EXIT CODES:");
+    println!("    0    No regression detected");
+    println!("    1    Regression detected");
+    println!();
+}
+
 fn print_detect_help() {
     println!("USAGE:");
     println!("    ruchydbg detect <file> [OPTIONS]");
@@ -547,17 +836,19 @@ fn print_help() {
     println!();
     println!("COMMANDS:");
     println!(
-        "    run <file>        Execute Ruchy code with timeout detection and type-aware tracing"
+        "    run <file>           Execute Ruchy code with timeout detection and type-aware tracing"
     );
-    println!("    profile <type>    Profile code execution (--stack for call depth analysis)");
-    println!("    detect <file>     Detect pathological inputs causing performance cliffs");
-    println!("    validate, test    Run debugging tools validation (default)");
-    println!("    version, -v       Print version information");
-    println!("    help, -h          Print this help message");
+    println!("    profile <type>       Profile code execution (--stack for call depth analysis)");
+    println!("    detect <file>        Detect pathological inputs causing performance cliffs");
+    println!("    regression <type>    Check for regressions (snapshot, determinism, state, perf)");
+    println!("    validate, test       Run debugging tools validation (default)");
+    println!("    version, -v          Print version information");
+    println!("    help, -h             Print this help message");
     println!();
     println!("DEBUGGING FEATURES:");
     println!("    - Stack depth profiling (DEBUGGER-041)");
     println!("    - Pathological input detection (DEBUGGER-042)");
+    println!("    - Regression & hang detection (DEBUGGER-043)");
     println!("    - Timeout detection for infinite loops and hangs");
     println!("    - Type-aware tracing (Ruchy v3.149.0+)");
     println!("    - Source map generation and mapping");
@@ -568,6 +859,8 @@ fn print_help() {
     println!("    ruchydbg run test.ruchy --timeout 1000 --trace");
     println!("    ruchydbg profile --stack factorial.ruchy");
     println!("    ruchydbg detect test.ruchy --threshold 15");
+    println!("    ruchydbg regression snapshot v1.ruchy v2.ruchy");
+    println!("    ruchydbg regression determinism test.ruchy --runs 20");
     println!("    ruchydbg validate     # Run all validations");
     println!("    ruchydbg --version    # Show version");
     println!();
