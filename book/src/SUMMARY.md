@@ -54,7 +54,7 @@
   - [BOOTSTRAP-015: Rust Emitter](./phase3_bootstrap/stage3/bootstrap-015-rust.md)
   - [BOOTSTRAP-016: Self-Compilation](./phase3_bootstrap/stage3/bootstrap-016-self-compilation.md)
 
-# Phase 4: Debugging Tools - 100% COMPLETE! 🏆
+# Phase 4: Debugging Tools - UPDATED! 🏆
 
 ## Interactive Debugging Guide
 
@@ -83,6 +83,10 @@
 - [DEBUGGER-010: Type Error Visualization](./phase4_debugger/debugger-010-type-error-visualization.md)
 - [DEBUGGER-011: Scope Inspector](./phase4_debugger/debugger-011-scope-inspector.md)
 - [DEBUGGER-012: Call Stack Visualization](./phase4_debugger/debugger-012-call-stack-visualization.md)
+
+## Phase 4.5: Performance Profiling (1/1) ✅ NEW!
+
+- [DEBUGGER-041: Stack Depth Profiler + BUG-041 Fix](./phase4_debugger/debugger-041-stack-profiler.md)
 
 ## Early Prototypes & Vertical Slices
 
