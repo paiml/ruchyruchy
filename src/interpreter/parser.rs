@@ -160,6 +160,45 @@ impl Parser {
         Ok(Ast { nodes })
     }
 
+    /// DEBUGGER-047: Parse with performance profiling
+    ///
+    /// Parses source code while tracking timing and operations for performance analysis
+    pub fn parse_with_profiler(
+        &mut self,
+        profiler: &crate::debugger::PerformanceProfiler,
+    ) -> Result<Ast, ParseError> {
+        use std::time::Instant;
+
+        // Track overall parse time
+        profiler.start_parse();
+
+        // Track tokenization
+        let tok_start = Instant::now();
+        self.tokenize()?;
+        let tok_duration = tok_start.elapsed().as_nanos();
+        profiler.record_parse_operation("tokenize".to_string(), tok_duration);
+
+        // Parse top-level declarations
+        let mut nodes = Vec::new();
+
+        while !self.is_at_end() {
+            if self.check(&Token::Eof) {
+                break;
+            }
+
+            let parse_start = Instant::now();
+            let node = self.parse_top_level()?;
+            let parse_duration = parse_start.elapsed().as_nanos();
+            profiler.record_parse_operation("parse_top_level".to_string(), parse_duration);
+
+            nodes.push(node);
+        }
+
+        profiler.end_parse();
+
+        Ok(Ast { nodes })
+    }
+
     /// Tokenize the source code into a vector of tokens
     ///
     /// Handles whitespace, comments, string literals, numbers, identifiers,

@@ -42,7 +42,34 @@
 **Quality Metrics**: Zero SATD, A+ Lint, TDG 97.4 (target: 85), Zero clippy warnings
 **Known Issues**: 1 open (workaround available) - #54: Boolean negation `!` hang (use if/else) 🔴 OPEN
 **Major Updates**:
-- **DEBUGGER-042: Pathological Input Detector** (November 1, 2025) ⭐ **LATEST** ✅ **COMPLETE**
+- **DEBUGGER-047: Performance Profiler with Flame Graphs** (November 1, 2025) ⭐ **LATEST** ✅ **COMPLETE**
+  - **Status**: ✅ **COMPLETE** - RED-GREEN-REFACTOR-TOOL cycle complete
+  - **Test Suite**: 9/9 tests passing (100% success)
+  - **Features**: Parse/eval time tracking, memory allocation tracking, bottleneck detection, flame graph export
+  - **Performance**: <20% profiling overhead (optimized from initial >200%)
+  - **Capabilities**: Function call profiling, hierarchical call stack, JSON/flame graph export
+  - **Bottleneck Detection**: Identifies operations consuming >50% execution time
+  - **Memory Tracking**: Tracks vector allocations (vec![], push operations)
+  - **Tests**: profiler_creation, parse_time_tracking, eval_time_tracking, memory_tracking, bottleneck_detection, flame_graph_generation, profiling_overhead, json_output, completeness
+  - **Quality**: ✅ cargo fmt, ✅ cargo clippy, ✅ all 412 lib tests, ✅ 9/9 DEBUGGER-047 tests
+  - **Module**: src/debugger/performance_profiler.rs (343 LOC)
+  - **Integration**: Parser::parse_with_profiler(), Evaluator::with_profiler()
+  - **Export Formats**: JSON (serde_json), Flame Graph JSON (D3.js-compatible)
+  - **Use Case**: Debug 181x slowdown from ruchy-book Chapter 23 (Ruchy AST vs Python fib benchmark)
+  - **Book Chapter**: book/src/phase4_debugger/debugger-047-performance-profiler.md (1052 LOC)
+  - **Usage Example**:
+    ```rust
+    let profiler = PerformanceProfiler::new();
+    let ast = parser.parse_with_profiler(&profiler)?;
+    let mut eval = Evaluator::new().with_profiler(profiler.clone());
+    eval.eval(&ast)?;
+    let report = profiler.report();
+    println!("Bottlenecks: {:?}", report.bottlenecks());
+    std::fs::write("profile.json", report.to_json())?;
+    std::fs::write("flamegraph.json", report.to_flame_graph_json())?;
+    ```
+
+- **DEBUGGER-042: Pathological Input Detector** (November 1, 2025) ✅ **COMPLETE**
   - **Status**: ✅ **COMPLETE** - RED-GREEN-REFACTOR-TOOL-DEBUGGABILITY-PMAT cycle complete
   - **Test Suite**: 6/6 tests passing (100% success, 1 ignored for DEBUGGER-043)
   - **Features**: Baseline performance database, slowdown detection (>10x threshold), category classification

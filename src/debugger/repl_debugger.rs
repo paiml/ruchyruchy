@@ -72,10 +72,10 @@ impl DebugSession {
 
         let evaluator = Evaluator::new();
 
-        // Save initial state in history
+        // Save initial state in history (deep clone for independent snapshot)
         let initial_snapshot = ExecutionSnapshot {
             line: 0,
-            evaluator: evaluator.clone(),
+            evaluator: evaluator.deep_clone(),
         };
 
         Ok(Self {
@@ -142,7 +142,7 @@ impl DebugSession {
 
         let snapshot = ExecutionSnapshot {
             line: self.current_line,
-            evaluator: self.evaluator.clone(),
+            evaluator: self.evaluator.deep_clone(),
         };
         self.history.push(snapshot);
 
@@ -197,7 +197,7 @@ impl DebugSession {
             self.current_line += 1;
             let snapshot = ExecutionSnapshot {
                 line: self.current_line,
-                evaluator: self.evaluator.clone(),
+                evaluator: self.evaluator.deep_clone(),
             };
             self.history.push(snapshot);
         }
@@ -253,7 +253,7 @@ impl DebugSession {
         // Restore state from snapshot
         let snapshot = &self.history[target_index];
         self.current_line = snapshot.line;
-        self.evaluator = snapshot.evaluator.clone();
+        self.evaluator = snapshot.evaluator.deep_clone();
         self.finished = false;
 
         // Truncate history to this point

@@ -161,6 +161,8 @@ pub struct Evaluator {
     call_stack: Vec<String>,
     /// Optional profiling data (DEBUGGER-041: Stack Depth Profiler)
     profiling: Option<ProfilingData>,
+    /// Optional performance profiler (DEBUGGER-047: Performance Profiler)
+    performance_profiler: Option<crate::debugger::PerformanceProfiler>,
     /// Arc store for shared references (INTERP-041: Fix Arc mock concurrency)
     /// Maps arc_id -> shared value for proper Arc::clone semantics
     arc_store: HashMap<usize, Value>,
@@ -292,9 +294,39 @@ impl Evaluator {
             call_depth: 0,
             call_stack: Vec::new(),
             profiling: None,
+            performance_profiler: None,
             arc_store: HashMap::new(),
             next_arc_id: 0,
         }
+    }
+
+    /// DEBUGGER-046: Deep clone for time-travel debugging
+    ///
+    /// Creates an independent deep copy of this evaluator including deep-copying
+    /// the scope tree. Unlike the derived Clone (which shallow-copies the Scope),
+    /// this creates completely independent state for snapshots.
+    ///
+    /// Used by the REPL debugger to create snapshots that won't be affected by
+    /// future modifications during program execution.
+    pub fn deep_clone(&self) -> Self {
+        Evaluator {
+            scope: self.scope.deep_clone(),
+            functions: self.functions.clone(),
+            call_depth: self.call_depth,
+            call_stack: self.call_stack.clone(),
+            profiling: self.profiling.clone(),
+            performance_profiler: self.performance_profiler.clone(),
+            arc_store: self.arc_store.clone(),
+            next_arc_id: self.next_arc_id,
+        }
+    }
+
+    /// DEBUGGER-047: Enable performance profiling
+    ///
+    /// Attaches a performance profiler to track parse/eval timing and identify bottlenecks
+    pub fn with_profiler(mut self, profiler: crate::debugger::PerformanceProfiler) -> Self {
+        self.performance_profiler = Some(profiler);
+        self
     }
 
     /// Enable profiling for stack depth analysis (DEBUGGER-041)
@@ -362,9 +394,21 @@ impl Evaluator {
     /// assert_eq!(result.as_integer().unwrap(), 5);
     /// ```
     pub fn eval(&mut self, node: &AstNode) -> Result<Value, EvalError> {
-        match self.eval_internal(node)? {
-            ControlFlow::Value(v) => Ok(v),
-            ControlFlow::Return(v) => Ok(v),
+        // DEBUGGER-047: Track overall eval timing (clone once per statement, not per expression)
+        let profiler_opt = self.performance_profiler.clone();
+        if let Some(profiler) = profiler_opt {
+            profiler.start_eval();
+            let result = match self.eval_internal(node)? {
+                ControlFlow::Value(v) => Ok(v),
+                ControlFlow::Return(v) => Ok(v),
+            };
+            profiler.end_eval();
+            result
+        } else {
+            match self.eval_internal(node)? {
+                ControlFlow::Value(v) => Ok(v),
+                ControlFlow::Return(v) => Ok(v),
+            }
         }
     }
 
@@ -606,6 +650,13 @@ impl Evaluator {
                         // Mutate array
                         if let Value::Vector(ref mut arr) = current_val {
                             arr.push(arg_val);
+
+                            // DEBUGGER-047: Track memory allocation for push
+                            if let Some(ref profiler) = self.performance_profiler {
+                                let bytes = std::mem::size_of::<Value>();
+                                profiler.record_memory_allocation(bytes);
+                            }
+
                             // Update scope with mutated array
                             self.scope.assign(var_name, current_val).map_err(|_| {
                                 EvalError::UndefinedVariable {
@@ -1021,6 +1072,14 @@ impl Evaluator {
                         }
                     };
                     let repeated_array = vec![element_value; count];
+
+                    // DEBUGGER-047: Track memory allocation for vector
+                    if let Some(ref profiler) = self.performance_profiler {
+                        // Estimate: each Value is ~32 bytes
+                        let bytes = count * std::mem::size_of::<Value>();
+                        profiler.record_memory_allocation(bytes);
+                    }
+
                     Ok(ControlFlow::Value(Value::Vector(repeated_array)))
                 } else {
                     // Elements form: vec![1, 2, 3] or vec![]
@@ -1029,6 +1088,14 @@ impl Evaluator {
                         let val = self.eval(elem)?;
                         array.push(val);
                     }
+
+                    // DEBUGGER-047: Track memory allocation for vector
+                    if let Some(ref profiler) = self.performance_profiler {
+                        // Estimate: each Value is ~32 bytes
+                        let bytes = array.len() * std::mem::size_of::<Value>();
+                        profiler.record_memory_allocation(bytes);
+                    }
+
                     Ok(ControlFlow::Value(Value::Vector(array)))
                 }
             }
@@ -1217,8 +1284,20 @@ impl Evaluator {
     ///
     /// Returns the last expression value or explicit return value.
     fn call_function(&mut self, name: &str, args: &[AstNode]) -> Result<Value, EvalError> {
+        // DEBUGGER-047: Track function calls if profiler is attached
+        if let Some(ref profiler) = self.performance_profiler {
+            profiler.record_function_call(name);
+            profiler.push_call_stack(name.to_string());
+        }
+
         // 1. Check stack depth before recursing (prevent stack overflow)
         if self.call_depth >= MAX_CALL_DEPTH {
+            // DEBUGGER-047: Pop call stack before early return
+            if let Some(ref profiler) = self.performance_profiler {
+                if let Some((func_name, duration)) = profiler.pop_call_stack() {
+                    profiler.record_eval_operation(func_name, duration);
+                }
+            }
             return Err(EvalError::StackOverflow);
         }
 
@@ -1229,6 +1308,12 @@ impl Evaluator {
         // If try_call_builtin returns Some(value), we found and executed a built-in.
         // If it returns None, we fall through to check user-defined functions below.
         if let Some(result) = self.try_call_builtin(name, args)? {
+            // DEBUGGER-047: Pop call stack before early return
+            if let Some(ref profiler) = self.performance_profiler {
+                if let Some((func_name, duration)) = profiler.pop_call_stack() {
+                    profiler.record_eval_operation(func_name, duration);
+                }
+            }
             return Ok(result);
         }
 
@@ -1312,6 +1397,13 @@ impl Evaluator {
                     self.call_stack.pop(); // Remove current function from active stack
                     self.scope = saved_scope;
 
+                    // DEBUGGER-047: Pop profiler call stack on error
+                    if let Some(ref profiler) = self.performance_profiler {
+                        if let Some((func_name, duration)) = profiler.pop_call_stack() {
+                            profiler.record_eval_operation(func_name, duration);
+                        }
+                    }
+
                     // Wrap error with call stack information for debugging, unless it's
                     // already wrapped (prevents double-wrapping in nested errors)
                     return Err(match e {
@@ -1329,6 +1421,13 @@ impl Evaluator {
         self.call_depth -= 1;
         self.call_stack.pop();
         self.scope = saved_scope;
+
+        // DEBUGGER-047: Pop profiler call stack on success and record timing
+        if let Some(ref profiler) = self.performance_profiler {
+            if let Some((func_name, duration)) = profiler.pop_call_stack() {
+                profiler.record_eval_operation(func_name, duration);
+            }
+        }
 
         Ok(result)
     }
