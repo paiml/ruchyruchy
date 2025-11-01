@@ -1311,18 +1311,9 @@ impl Parser {
                     }
                     self.consume(&Token::RightBrace)?;
 
-                    // For now, represent block as a tuple with special marker
-                    // In a full implementation, we'd have a BlockExpr AST node
-                    // For simplicity, treating it as an expression that evaluates to last statement
-                    if body.is_empty() {
-                        Ok(AstNode::TupleLiteral {
-                            elements: Vec::new(),
-                        })
-                    } else {
-                        // Return the last expression from the block
-                        // This is a simplification - ideally we'd have proper block scoping
-                        Ok(body.into_iter().last().unwrap())
-                    }
+                    // INTERP-043: Return Block node with all statements
+                    // Block creates a new scope and returns the last expression
+                    Ok(AstNode::Block { statements: body })
                 } else {
                     // Try parsing as HashMap
                     let mut pairs = Vec::new();
@@ -1815,6 +1806,13 @@ pub enum AstNode {
         elements: Vec<AstNode>,
         /// Repeat count (for vec![x; n] form, otherwise None)
         repeat_count: Option<Box<AstNode>>,
+    },
+
+    /// Block expression: { stmt1; stmt2; expr }
+    /// INTERP-043: Blocks create new scopes for variables
+    Block {
+        /// Statements in the block
+        statements: Vec<AstNode>,
     },
 }
 
