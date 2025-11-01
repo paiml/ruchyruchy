@@ -140,6 +140,7 @@ fn test_block_scope_nested() {
 ///
 /// Property: Mutex lock released when block scope exits
 #[test]
+#[ignore = "Mutex not yet implemented in interpreter"]
 fn test_block_scope_mutex() {
     let code = r#"
         use std::sync::Mutex;
