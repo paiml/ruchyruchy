@@ -84,12 +84,13 @@
 - [DEBUGGER-011: Scope Inspector](./phase4_debugger/debugger-011-scope-inspector.md)
 - [DEBUGGER-012: Call Stack Visualization](./phase4_debugger/debugger-012-call-stack-visualization.md)
 
-## Phase 4.5: Performance Profiling & Regression Detection (4/4) ✅ NEW!
+## Phase 4.5: Performance Profiling & Regression Detection (5/5) ✅ NEW!
 
 - [DEBUGGER-041: Stack Depth Profiler + BUG-041 Fix](./phase4_debugger/debugger-041-stack-profiler.md)
 - [DEBUGGER-042: Pathological Input Detector + BUG-042 Fix](./phase4_debugger/debugger-042-pathological-detector.md)
 - [DEBUGGER-043: Regression & Hang Detector](./phase4_debugger/debugger-043-regression-hang-detector.md)
 - [DEBUGGER-044: Property-Based Testing Infrastructure](./phase4_debugger/debugger-044-property-based-testing.md)
+- [DEBUGGER-046: Interactive REPL Debugger](./phase4_debugger/debugger-046-repl-debugger.md)
 
 ## Early Prototypes & Vertical Slices
 
