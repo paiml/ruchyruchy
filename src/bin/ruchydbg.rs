@@ -31,6 +31,7 @@ fn main() {
 
     match command {
         "run" => run_ruchy_file(&args),
+        "profile" => run_profile(&args),
         "validate" | "test" => run_validation(),
         "version" | "--version" | "-v" => {
             println!("ruchydbg {VERSION}");
@@ -221,6 +222,139 @@ fn print_run_help() {
     println!("      TRACE: ← square = 25: integer");
 }
 
+fn run_profile(args: &[String]) {
+    // DEBUGGER-041: Stack depth profiler CLI integration
+    // Usage: ruchydbg profile --stack <file>
+
+    // Check for help
+    if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
+        print_profile_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    // Parse subcommand
+    if args.len() < 3 {
+        eprintln!("Error: Missing profile type");
+        eprintln!("Usage: ruchydbg profile <--stack> <file>");
+        print_profile_help();
+        exit(EXIT_ERROR);
+    }
+
+    let profile_type = &args[2];
+
+    match profile_type.as_str() {
+        "--stack" => run_stack_profiler(&args[3..]),
+        _ => {
+            eprintln!("Error: Unknown profile type: {}", profile_type);
+            eprintln!("Available types: --stack");
+            print_profile_help();
+            exit(EXIT_ERROR);
+        }
+    }
+}
+
+fn run_stack_profiler(args: &[String]) {
+    // DEBUGGER-041: Stack depth profiler
+    // Usage: ruchydbg profile --stack <file>
+
+    if args.is_empty() {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg profile --stack <file>");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[0];
+
+    // Check if file exists
+    let path = PathBuf::from(file_path);
+    if !path.exists() {
+        eprintln!("Error: File not found: {}", file_path);
+        exit(EXIT_ERROR);
+    }
+
+    // Read file
+    let code = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file {}: {}", file_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Parse
+    use ruchyruchy::interpreter::parser::Parser;
+    let mut parser = Parser::new(&code);
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(e) => {
+            eprintln!("Parse error: {:?}", e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Execute with profiling enabled
+    use ruchyruchy::interpreter::evaluator::Evaluator;
+    let mut eval = Evaluator::new().with_profiling();
+
+    for statement in ast.nodes() {
+        if let Err(e) = eval.eval(statement) {
+            eprintln!("Evaluation error: {:?}", e);
+            exit(EXIT_ERROR);
+        }
+    }
+
+    // Get profiling data
+    match eval.take_profiling_data() {
+        Some(profile) => {
+            // Display report
+            println!("\n=== Stack Depth Profile ===\n");
+            println!("File: {}", file_path);
+            println!("Max depth: {}", profile.max_depth);
+            println!("Total calls: {}\n", profile.total_calls);
+
+            if !profile.call_counts.is_empty() {
+                println!("Call counts:");
+                let mut counts: Vec<_> = profile.call_counts.iter().collect();
+                counts.sort_by(|a, b| b.1.cmp(a.1)); // Sort by count descending
+                for (func, count) in counts {
+                    println!("  {}: {} calls", func, count);
+                }
+            }
+
+            if !profile.deepest_stack.is_empty() {
+                println!("\nDeepest call stack:");
+                for (i, func) in profile.deepest_stack.iter().enumerate() {
+                    println!("  {}. {}", i + 1, func);
+                }
+            }
+
+            println!();
+            exit(EXIT_SUCCESS);
+        }
+        None => {
+            eprintln!("Error: Profiling was not enabled");
+            exit(EXIT_ERROR);
+        }
+    }
+}
+
+fn print_profile_help() {
+    println!("USAGE:");
+    println!("    ruchydbg profile <TYPE> <file>");
+    println!();
+    println!("TYPES:");
+    println!("    --stack       Stack depth profiler (max depth, call counts, call tree)");
+    println!();
+    println!("EXAMPLES:");
+    println!("    ruchydbg profile --stack factorial.ruchy");
+    println!();
+    println!("OUTPUT:");
+    println!("    - Maximum call depth reached");
+    println!("    - Total function calls executed");
+    println!("    - Per-function call counts (sorted)");
+    println!("    - Call stack at maximum depth");
+}
+
 fn run_validation() {
     // Find the validation script relative to the package
     let script_path = find_validation_script();
@@ -294,11 +428,13 @@ fn print_help() {
     println!(
         "    run <file>        Execute Ruchy code with timeout detection and type-aware tracing"
     );
+    println!("    profile <type>    Profile code execution (--stack for call depth analysis)");
     println!("    validate, test    Run debugging tools validation (default)");
     println!("    version, -v       Print version information");
     println!("    help, -h          Print this help message");
     println!();
     println!("DEBUGGING FEATURES:");
+    println!("    - Stack depth profiling (DEBUGGER-041)");
     println!("    - Timeout detection for infinite loops and hangs");
     println!("    - Type-aware tracing (Ruchy v3.149.0+)");
     println!("    - Source map generation and mapping");
@@ -307,6 +443,7 @@ fn print_help() {
     println!();
     println!("EXAMPLES:");
     println!("    ruchydbg run test.ruchy --timeout 1000 --trace");
+    println!("    ruchydbg profile --stack factorial.ruchy");
     println!("    ruchydbg validate     # Run all validations");
     println!("    ruchydbg --version    # Show version");
     println!();

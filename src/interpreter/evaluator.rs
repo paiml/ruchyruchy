@@ -5,6 +5,8 @@
 // INTERP-038: Compound assignment operators (GREEN phase)
 // INTERP-039: vec! macro evaluation (GREEN phase)
 // INTERP-040: Tuple destructuring evaluation (GREEN phase)
+// DEBUGGER-041: Stack Depth Profiler (GREEN phase)
+// BUG-041: Fixed stack overflow (MAX_CALL_DEPTH 150→30)
 // REFACTOR Phase: Optimize and document
 //
 // Research:
@@ -63,6 +65,20 @@
 // - Binds each element to corresponding pattern variable
 // - Unblocks test_channel_communication: let (tx, rx) = mpsc::channel()
 // - Note: Nested patterns not yet supported
+//
+// Stack Depth Profiler (DEBUGGER-041):
+// - Optional profiling for debugging and performance analysis
+// - Tracks max call depth, total calls, per-function call counts
+// - Records deepest call stack for recursion analysis
+// - Enable via with_profiling() builder method
+// - Extract data via get_profiling_data() or take_profiling_data()
+// - Zero overhead when disabled (Option<ProfilingData>)
+// - Use for: detecting recursion patterns, finding hotspots, performance tuning
+//
+// Bug Fix (BUG-041):
+// - Reduced MAX_CALL_DEPTH from 150 to 30
+// - Prevents Rust stack overflow in test threads (2MB stack limit)
+// - Ensures interpreter catches overflow before Rust runtime crashes
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -78,6 +94,60 @@ use std::fmt;
 /// depth 30 works for both finite and infinite recursion.
 const MAX_CALL_DEPTH: usize = 30;
 
+/// Profiling data for stack depth analysis (DEBUGGER-041)
+///
+/// Tracks function call statistics during interpreter execution.
+/// Used for debugging recursion, performance analysis, and hotspot identification.
+///
+/// # Example
+/// ```rust
+/// use ruchyruchy::interpreter::evaluator::Evaluator;
+/// use ruchyruchy::interpreter::parser::Parser;
+///
+/// let code = r#"
+///     fun factorial(n) {
+///         if (n <= 1) { return 1; }
+///         return n * factorial(n - 1);
+///     }
+///     factorial(5);
+/// "#;
+///
+/// let mut parser = Parser::new(code);
+/// let ast = parser.parse().unwrap();
+/// let mut eval = Evaluator::new().with_profiling();
+///
+/// for statement in ast.nodes() {
+///     eval.eval(statement).unwrap();
+/// }
+///
+/// let profile = eval.get_profiling_data().unwrap();
+/// assert_eq!(profile.max_depth, 5);
+/// assert_eq!(profile.total_calls, 5);
+/// assert_eq!(profile.call_counts.get("factorial"), Some(&5));
+/// ```
+#[derive(Debug, Clone)]
+pub struct ProfilingData {
+    /// Maximum call depth reached during execution
+    pub max_depth: usize,
+    /// Total function calls executed
+    pub total_calls: usize,
+    /// Call counts per function: function name -> count
+    pub call_counts: HashMap<String, usize>,
+    /// Call stack at maximum depth (innermost call last)
+    pub deepest_stack: Vec<String>,
+}
+
+impl ProfilingData {
+    fn new() -> Self {
+        Self {
+            max_depth: 0,
+            total_calls: 0,
+            call_counts: HashMap::new(),
+            deepest_stack: Vec::new(),
+        }
+    }
+}
+
 /// Evaluator executes AST nodes and produces values
 pub struct Evaluator {
     /// Scope for variable lookups
@@ -88,6 +158,8 @@ pub struct Evaluator {
     call_depth: usize,
     /// Call stack for error reporting (tracks function call chain)
     call_stack: Vec<String>,
+    /// Optional profiling data (DEBUGGER-041: Stack Depth Profiler)
+    profiling: Option<ProfilingData>,
 }
 
 /// Internal control flow for handling early returns
@@ -213,7 +285,55 @@ impl Evaluator {
             functions: HashMap::new(),
             call_depth: 0,
             call_stack: Vec::new(),
+            profiling: None,
         }
+    }
+
+    /// Enable profiling for stack depth analysis (DEBUGGER-041)
+    ///
+    /// Enables collection of function call statistics including:
+    /// - Maximum call depth reached
+    /// - Total function calls executed
+    /// - Per-function call counts
+    /// - Call stack at maximum depth
+    ///
+    /// Profiling has minimal overhead (HashMap operations per function call).
+    /// Use for debugging recursion patterns and performance analysis.
+    ///
+    /// # Example
+    /// ```rust
+    /// use ruchyruchy::interpreter::evaluator::Evaluator;
+    ///
+    /// let mut eval = Evaluator::new().with_profiling();
+    /// // ... execute code ...
+    /// let profile = eval.get_profiling_data().unwrap();
+    /// println!("Max depth: {}", profile.max_depth);
+    /// ```
+    pub fn with_profiling(mut self) -> Self {
+        self.profiling = Some(ProfilingData::new());
+        self
+    }
+
+    /// Get profiling data (if profiling was enabled)
+    ///
+    /// Returns a reference to the profiling data collected during execution.
+    /// Returns `None` if profiling was not enabled via `with_profiling()`.
+    ///
+    /// Use this method if you need to inspect profiling data multiple times.
+    /// For consuming the data, use `take_profiling_data()` instead.
+    pub fn get_profiling_data(&self) -> Option<&ProfilingData> {
+        self.profiling.as_ref()
+    }
+
+    /// Take profiling data (consumes the profiling data)
+    ///
+    /// Extracts and returns the profiling data, leaving `None` in its place.
+    /// Returns `None` if profiling was not enabled via `with_profiling()`.
+    ///
+    /// Use this method to extract profiling data for processing or reporting.
+    /// After calling this method, subsequent calls will return `None`.
+    pub fn take_profiling_data(&mut self) -> Option<ProfilingData> {
+        self.profiling.take()
     }
 
     /// Evaluate an AST node and return a value
@@ -1008,6 +1128,18 @@ impl Evaluator {
 
         // Increment call depth for recursion tracking
         self.call_depth += 1;
+
+        // DEBUGGER-041: Track profiling data if enabled
+        if let Some(ref mut prof) = self.profiling {
+            prof.total_calls += 1;
+            *prof.call_counts.entry(name.to_string()).or_insert(0) += 1;
+
+            // Update max depth and capture deepest stack if this is deepest
+            if self.call_depth > prof.max_depth {
+                prof.max_depth = self.call_depth;
+                prof.deepest_stack = self.call_stack.clone();
+            }
+        }
 
         // 7. Execute function body, handling early returns
         let mut result = Value::nil();

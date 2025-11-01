@@ -554,9 +554,16 @@ fn test_stack_overflow_detection() {
             match *error {
                 EvalError::StackOverflow => {
                     // Verify call stack has MAX_CALL_DEPTH (30) entries
-                    assert_eq!(call_stack.len(), 30, "Call stack should have 30 'infinite' entries");
+                    assert_eq!(
+                        call_stack.len(),
+                        30,
+                        "Call stack should have 30 'infinite' entries"
+                    );
                 }
-                _ => panic!("Expected StackOverflow inside WithCallStack, got: {:?}", error),
+                _ => panic!(
+                    "Expected StackOverflow inside WithCallStack, got: {:?}",
+                    error
+                ),
             }
         }
         other => panic!("Expected StackOverflow error, got: {:?}", other),
