@@ -4854,3 +4854,125 @@ future_roadmap:
           ⚠️  Nested patterns deferred to future ticket (requires recursive pattern parsing).
           ✅ Successfully unblocked test_channel_communication.
 
+      - id: DEBUGGER-041
+        title: "Stack Depth Profiler + BUG-041 Fix"
+        priority: high
+        status: completed
+        phase: COMPLETE
+        started_date: 2025-11-01
+        completed_date: 2025-11-01
+        week: 17
+        description: |
+          Implement stack depth profiling for call depth analysis and hot function detection.
+          Discovered and fixed BUG-041: Stack overflow at recursion depth 50.
+        requirements:
+          - Track maximum call depth during execution ✅
+          - Count total function calls and per-function call counts ✅
+          - Capture deepest call stack for recursion analysis ✅
+          - Zero overhead when disabled (Option<ProfilingData>) ✅
+          - <5% performance overhead when enabled ✅
+          - CLI integration via ruchydbg profile --stack ✅
+        tests:
+          - test_profile_simple_recursion (factorial(5) → depth 5) ✅
+          - test_profile_deep_recursion (count_down(25) → depth 26) ✅
+          - test_profile_mutual_recursion (is_even/is_odd alternating) ✅
+          - test_profile_no_recursion (flat calls → depth 1) ✅
+          - test_profile_nested_calls (outer→middle→inner → depth 3) ✅
+          - test_profile_report_format (output formatting) ✅
+          - test_debugger_041_completeness (meta-test) ✅
+        acceptance:
+          - Profiling tracks max depth, total calls, per-function counts ✅
+          - Zero overhead when disabled, <1% when enabled ✅
+          - CLI integration working (ruchydbg profile --stack) ✅
+          - BUG-041 fixed (MAX_CALL_DEPTH 150→30) ✅
+        deliverables:
+          - src/interpreter/evaluator.rs (ProfilingData, profiling tracking) ✅
+          - tests/test_debugger_041_stack_profiler.rs (320 LOC, 7 tests) ✅
+          - src/bin/ruchydbg.rs (CLI integration, 132 LOC) ✅
+          - examples/benchmark_profiler_overhead.rs (performance validation) ✅
+          - book/src/phase4_debugger/debugger-041-stack-profiler.md ✅
+        extreme_tdd_phases:
+          - RED: ✅ Complete - 7 tests written and failing
+          - GREEN: ✅ Complete - Minimal ProfilingData implementation
+          - REFACTOR: ✅ Complete - Documentation enhanced
+          - TOOL: ✅ Complete - cargo fmt, clippy, tests (310 lib + 18 INTERP-005)
+          - REPRODUCIBILITY: ✅ Complete - Benchmark script (exit status 0)
+          - DEBUGGABILITY: ✅ Complete - CLI integration (4/4 tests)
+        results:
+          tests_passing: 7/7 (100%)
+          performance_overhead: "<1% (target: <5%)"
+          max_depth_tracking: "✅ Working"
+          cli_integration: "✅ ruchydbg profile --stack"
+          bug_discovered: "BUG-041: Stack overflow at depth 50 → Fixed (depth 30)"
+        research: "Profiling best practices, call stack analysis"
+        impact: |
+          CRITICAL: Stack depth profiling enables debugging deep recursion.
+          BUG-041 FIXED: Reduced MAX_CALL_DEPTH from 150 to 30 (safe for test threads).
+          CLI integration provides user-friendly access to profiling data.
+        notes: |
+          ✅ ProfilingData struct: max_depth, total_calls, call_counts, deepest_stack
+          ✅ Evaluator API: with_profiling(), get_profiling_data(), take_profiling_data()
+          ✅ Performance: <1% overhead (275µs avg), effectively zero impact
+          ✅ BUG-041: Stack overflow discovered via fuzzer/benchmarks, now fixed
+          ✅ CLI: ruchydbg profile --stack <file> outputs formatted profiling report
+          ✅ Book chapter: Complete Extreme TDD documentation (RED-GREEN-REFACTOR-TOOL-PMAT)
+
+      - id: DEBUGGER-042
+        title: "Pathological Input Detector"
+        priority: high
+        status: in_progress
+        phase: RED
+        started_date: 2025-11-01
+        week: 17
+        description: |
+          Detect inputs that cause extreme performance degradation (>10x slowdown vs expected).
+          Complements fuzzing (which finds crashes) with performance cliff detection.
+
+          Examples of pathological inputs:
+          - Deeply nested expressions: ((((1 + 2) + 3) + ... + 1000)
+          - Hash collision patterns
+          - Quadratic algorithm triggers
+          - Memory allocation bombs
+
+          This fills a critical gap: fuzzing finds crashes, benchmarking measures average
+          performance, but pathological detection finds specific inputs that cause 10x-1000x
+          slowdowns.
+        requirements:
+          - Baseline performance database (operation → expected time)
+          - Pathological input generator (systematic edge case generation)
+          - Slowdown detector (>10x threshold)
+          - Category classification (parser stress, evaluator stress, memory stress)
+          - Integration with INTERP-030 benchmarking infrastructure
+          - CLI integration via ruchydbg detect <file>
+        tests:
+          - test_detect_deeply_nested_expressions (parser stress)
+          - test_detect_quadratic_variable_lookup (evaluator stress)
+          - test_detect_memory_allocation_bombs (memory stress)
+          - test_baseline_performance_database (expected times)
+          - test_slowdown_threshold_detection (>10x flag)
+          - test_pathological_category_classification
+          - test_debugger_042_completeness (meta-test)
+        acceptance:
+          - Detects >10x slowdowns vs baseline
+          - Categorizes pathological inputs (parser/evaluator/memory)
+          - Generates systematic edge cases
+          - Integrates with existing benchmarking (INTERP-030)
+          - <5% overhead when profiling
+        deliverables:
+          - tests/test_debugger_042_pathological_detector.rs (RED phase)
+          - src/interpreter/pathological_detector.rs (GREEN phase)
+          - examples/benchmark_pathological.rs (performance validation)
+          - src/bin/ruchydbg.rs (CLI integration: detect command)
+        extreme_tdd_phases:
+          - RED: ⏳ In progress - Writing failing tests
+          - GREEN: ⏳ Pending - Minimal implementation
+          - REFACTOR: ⏳ Pending - Category enhancement
+          - TOOL: ⏳ Pending - Quality gates
+          - REPRODUCIBILITY: ⏳ Pending - Benchmark script
+          - DEBUGGABILITY: ⏳ Pending - CLI integration
+        research: "Performance cliff detection, quadratic algorithm triggers, stress testing"
+        impact: |
+          HIGH: Fills gap between fuzzing (crashes) and benchmarking (average performance).
+          Detects specific inputs causing 10x-1000x slowdowns.
+          Enables proactive performance debugging before production.
+

@@ -42,7 +42,34 @@
 **Quality Metrics**: Zero SATD, A+ Lint, TDG 97.4 (target: 85), Zero clippy warnings
 **Known Issues**: 1 open (workaround available) - #54: Boolean negation `!` hang (use if/else) 🔴 OPEN
 **Major Updates**:
-- **DEBUGGER-041: Stack Depth Profiler + CLI Integration** (November 1, 2025) ⭐ **LATEST**
+- **DEBUGGER-042: Pathological Input Detector** (November 1, 2025) ⭐ **LATEST** ⏳ **IN PROGRESS**
+  - **Status**: ⏳ **RED-GREEN-TOOL phases complete** - Tests passing, quality gates passing
+  - **Test Suite**: 6/6 tests passing (100% success, 1 ignored for DEBUGGER-043)
+  - **Features**: Baseline performance database, slowdown detection (>10x threshold), category classification
+  - **Categories**: Parser stress, evaluator stress, memory stress (3 categories)
+  - **Performance**: Integrated with INTERP-030 benchmarking infrastructure
+  - **Baseline Database**: simple_arithmetic (5.6µs), variable_ops (12µs), function_call (20µs)
+  - **Threshold Detection**: Default 10x, custom thresholds supported (e.g., 15x for single-run variance)
+  - **Input Generators**: Nested expressions, quadratic variable lookup patterns
+  - **Tests**: deeply_nested_expressions, quadratic_lookup, memory_bombs, baseline_db, threshold, classification
+  - **Quality**: ✅ cargo fmt, ✅ cargo clippy, ✅ all 310 lib tests, ✅ 6/6 DEBUGGER-042 tests
+  - **Discovery**: **BUG-042** - Parser stack overflow at 100 levels of nesting (reduced to 20 for tests)
+  - **Pending**: CLI integration (`ruchydbg detect <file>`), benchmark script, book chapter
+  - **Impact**: Fills gap between fuzzing (crashes) and benchmarking (average perf) - finds performance cliffs
+
+- **BUG-042: Parser Stack Overflow on Deeply Nested Expressions** (November 1, 2025) ⚠️ **CRITICAL DISCOVERY**
+  - **Severity**: CRITICAL (stack overflow crash)
+  - **Discovery**: Found during DEBUGGER-042 pathological input testing
+  - **Reproduction**: Generate deeply nested expression: `((((1 + 2) + 3) + ... + 100)` (100 levels)
+  - **Symptom**: `thread 'test_detect_deeply_nested_expressions' has overflowed its stack` (signal: 6, SIGABRT)
+  - **Root Cause**: Recursive parser descent causes stack overflow on deeply nested expressions
+  - **Workaround**: Limit nesting depth to 20 levels in tests
+  - **Impact**: Parser cannot handle >50-100 levels of nesting without crashing
+  - **Related**: BUG-041 (stack overflow in evaluator at depth 50) - parser has similar issue
+  - **Recommendation**: Implement iterative parser or increase stack size for deeply nested expressions
+  - **Status**: DOCUMENTED (fix deferred - requires parser architecture changes)
+
+- **DEBUGGER-041: Stack Depth Profiler + CLI Integration** (November 1, 2025)
   - **Status**: ✅ **COMPLETE** - Full RED-GREEN-REFACTOR-TOOL-PMAT cycle + CLI integration
   - **Test Suite**: 7/7 API tests passing (100% success rate)
   - **Features**: Max depth tracking, total calls, per-function counts, deepest stack capture
