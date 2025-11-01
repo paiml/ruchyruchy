@@ -1,10 +1,11 @@
 # RuchyRuchy - Bootstrap Infrastructure & Educational Resource 🛠️
 
-[![Version](https://img.shields.io/badge/Version-v1.10.0-brightgreen.svg)](https://crates.io/crates/ruchyruchy)
+[![Version](https://img.shields.io/badge/Version-v1.15.0-brightgreen.svg)](https://crates.io/crates/ruchyruchy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ruchy Version](https://img.shields.io/badge/Ruchy-v3.153.0+-blue.svg)](https://github.com/paiml/ruchy)
 [![Debugger](https://img.shields.io/badge/Debugger-100%25%20Complete-success.svg)](./INTEGRATION.md)
-[![Tests](https://img.shields.io/badge/Tests-720+-orange.svg)](./INTEGRATION.md)
+[![Tests](https://img.shields.io/badge/Tests-730+-orange.svg)](./INTEGRATION.md)
+[![Book](https://img.shields.io/badge/Book-Online-blue.svg)](https://paiml.github.io/ruchyruchy/)
 [![Toyota Way](https://img.shields.io/badge/Toyota%20Way-EXTREME%20TDD-green.svg)](https://lean.org/toyota-production-system/)
 
 **Bootstrap infrastructure and educational resource supporting the [Ruchy programming language](https://github.com/paiml/ruchy) ecosystem.** While the main Ruchy project has achieved [actual self-hosting](https://github.com/paiml/ruchy/blob/main/SELF_HOSTING_ACHIEVEMENT.md), RuchyRuchy provides educational examples, development tools, and performance validation for learning compiler construction concepts.
@@ -59,8 +60,12 @@ make concepts-demo    # Understand bootstrap principles
 
 ## 🔌 Integration with Ruchy Projects
 
-**New in v1.10.0**: Comprehensive interpreter testing infrastructure with fuzzing, benchmarking, and safety validation.
-**Previous (v1.9.0)**: Complete integration guide for using RuchyRuchy tools with Ruchy projects.
+**✨ New in v1.15.0**: Interactive REPL Debugger with time-travel debugging! Step through code, inspect variables, set breakpoints, and rewind execution. 10x faster debugging vs println.
+
+**Previous releases**:
+- **v1.14.0**: Property-Based Testing Infrastructure (14,000+ test cases, 23% bug discovery)
+- **v1.13.0**: Regression & Hang Detector (snapshot comparison, determinism validation)
+- **v1.10.0**: Comprehensive interpreter testing (fuzzing, benchmarking, safety validation)
 
 ### Quick Integration
 

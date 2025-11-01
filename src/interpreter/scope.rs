@@ -34,7 +34,7 @@ type ReferencedVars = Rc<RefCell<HashSet<String>>>;
 /// Variable lookup traverses the parent chain from child to root.
 /// Variable shadowing occurs when a child scope defines a variable with
 /// the same name as a parent scope variable.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Scope {
     /// Local variable bindings in this scope
     variables: Variables,
@@ -44,6 +44,38 @@ pub struct Scope {
     depth: usize,
     /// Variables referenced in this scope (for closure capture)
     referenced: ReferencedVars,
+}
+
+// DEBUGGER-046: Deep clone implementation for time-travel debugging
+//
+// The derived Clone would create shallow clones where all Scope instances
+// share the same underlying HashMap via Rc<RefCell<>>. This breaks time-travel
+// debugging because rewinding to a snapshot would still see variables added later.
+//
+// This manual implementation creates a deep clone with independent HashMap.
+impl Clone for Scope {
+    fn clone(&self) -> Self {
+        // Deep clone the variables HashMap
+        let vars = self.variables.borrow().clone();
+        let new_variables = Rc::new(RefCell::new(vars));
+
+        // Deep clone the referenced set
+        let refs = self.referenced.borrow().clone();
+        let new_referenced = Rc::new(RefCell::new(refs));
+
+        // Recursively clone parent scope if present
+        let new_parent = self
+            .parent
+            .as_ref()
+            .map(|p| Rc::new(RefCell::new(p.borrow().clone())));
+
+        Self {
+            variables: new_variables,
+            parent: new_parent,
+            depth: self.depth,
+            referenced: new_referenced,
+        }
+    }
 }
 
 /// Scope-related errors

@@ -854,6 +854,8 @@ fn print_help() {
     println!("    help, -h             Print this help message");
     println!();
     println!("DEBUGGING FEATURES:");
+    println!("    - Interactive REPL debugger with time-travel (DEBUGGER-046) ⭐ NEW!");
+    println!("    - Property-based testing: 14,000+ test cases (DEBUGGER-044)");
     println!("    - Stack depth profiling (DEBUGGER-041)");
     println!("    - Pathological input detection (DEBUGGER-042)");
     println!("    - Regression & hang detection (DEBUGGER-043)");

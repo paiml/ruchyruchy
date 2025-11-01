@@ -149,6 +149,7 @@ impl ProfilingData {
 }
 
 /// Evaluator executes AST nodes and produces values
+#[derive(Debug, Clone)]
 pub struct Evaluator {
     /// Scope for variable lookups
     scope: Scope,
@@ -389,6 +390,63 @@ impl Evaluator {
         }
 
         Ok(last_value)
+    }
+
+    /// Get variable value from current scope (DEBUGGER-046: REPL Debugger)
+    ///
+    /// Used by the interactive debugger to inspect variable values.
+    /// Looks up the variable in the current scope (including parent scopes).
+    ///
+    /// # Example
+    /// ```
+    /// use ruchyruchy::interpreter::{Parser, Evaluator};
+    ///
+    /// let code = "let x = 42;";
+    /// let mut parser = Parser::new(code);
+    /// let ast = parser.parse().unwrap();
+    /// let mut eval = Evaluator::new();
+    ///
+    /// for statement in ast.nodes() {
+    ///     eval.eval(statement).unwrap();
+    /// }
+    ///
+    /// let x_value = eval.get_variable("x");
+    /// assert!(x_value.is_some());
+    /// ```
+    pub fn get_variable(&self, name: &str) -> Option<Value> {
+        self.scope.get_cloned(name).ok()
+    }
+
+    /// Get current call stack (DEBUGGER-046: REPL Debugger)
+    ///
+    /// Returns the current function call stack for debugging purposes.
+    /// The call stack is maintained during function calls and cleared on return.
+    ///
+    /// # Example
+    /// ```
+    /// use ruchyruchy::interpreter::{Parser, Evaluator};
+    ///
+    /// let code = r#"
+    ///     fun factorial(n) {
+    ///         if (n <= 1) { return 1; }
+    ///         return n * factorial(n - 1);
+    ///     }
+    ///     factorial(3);
+    /// "#;
+    /// let mut parser = Parser::new(code);
+    /// let ast = parser.parse().unwrap();
+    /// let mut eval = Evaluator::new();
+    ///
+    /// for statement in ast.nodes() {
+    ///     eval.eval(statement).unwrap();
+    /// }
+    ///
+    /// // Call stack is empty after function returns
+    /// let stack = eval.get_call_stack();
+    /// assert!(stack.is_empty());
+    /// ```
+    pub fn get_call_stack(&self) -> &[String] {
+        &self.call_stack
     }
 
     /// Internal evaluation with control flow support
