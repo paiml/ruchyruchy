@@ -4854,6 +4854,58 @@ future_roadmap:
           ⚠️  Nested patterns deferred to future ticket (requires recursive pattern parsing).
           ✅ Successfully unblocked test_channel_communication.
 
+      - id: INTERP-041
+        title: "Fix Arc Mock Concurrency (Shared References)"
+        priority: critical
+        status: completed
+        phase: COMPLETE
+        started_date: 2025-11-01
+        completed_date: 2025-11-01
+        week: 17
+        description: |
+          Fix Arc::clone to share references instead of deep cloning, enabling Arc<Mutex<T>> pattern.
+          Implement arc_store with unique IDs for shared reference semantics.
+        requirements:
+          - Arc::new stores value in arc_store with unique ID ✅
+          - Arc::clone returns same ID (shared reference) ✅
+          - Mutex::lock retrieves from arc_store via _arc_id ✅
+          - Compound assignment (*num += 1) updates arc_store ✅
+          - Recursive dereference unwraps _locked_value and _inner ✅
+        tests:
+          - test_arc_debug (single Arc clone, final value = 1) ✅
+          - test_arc_multiple_clones (3 Arc clones, final value = 2) ✅
+        acceptance:
+          - Arc::clone shares references (not deep clone) ✅
+          - Updates via one Arc visible through other Arcs ✅
+          - Recursive dereference works (*lock().unwrap() extracts value) ✅
+        deliverables:
+          - src/interpreter/evaluator.rs (arc_store implementation) ✅
+          - tests/test_arc_debug.rs (28 LOC) ✅
+          - tests/test_arc_multi.rs (37 LOC) ✅
+        extreme_tdd_phases:
+          - RED: ✅ Complete - test_arc_debug written and failing
+          - GREEN: ✅ Complete - arc_store implemented, recursive dereference fixed
+          - REFACTOR: ✅ Complete - Debug output removed, code cleaned
+          - TOOL: ✅ Complete - cargo fmt, clippy, tests passing
+        results:
+          tests_passing: 2/2 (100%)
+          quality_gates: "clippy ✅, fmt ✅, tests ✅"
+          files_modified: 1 (evaluator.rs)
+          arc_concurrency: "FIXED - shared references working"
+        impact: |
+          CRITICAL: Arc<Mutex<T>> pattern now works correctly for shared state.
+          Arc::clone now shares references instead of deep cloning.
+          Enables concurrent programming patterns in interpreter.
+          Foundation for INTERP-032 concurrency tests (blocked on vec![], for loops).
+        notes: |
+          ✅ arc_store HashMap with unique IDs enables shared references.
+          ✅ Arc::new stores value, Arc::clone returns same ID.
+          ✅ Mutex::lock retrieves from arc_store and wraps with _locked_value.
+          ✅ Recursive dereference unwraps nested _locked_value and _inner.
+          ✅ Compound assignment (*num += 1) updates arc_store correctly.
+          ⚠️  INTERP-032 tests still fail due to vec![] and for loop dependencies.
+          ✅ Verified with test_arc_debug and test_arc_multi (2 Arc clones).
+
       - id: DEBUGGER-041
         title: "Stack Depth Profiler + BUG-041 Fix"
         priority: high
