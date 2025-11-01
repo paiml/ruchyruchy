@@ -160,6 +160,11 @@ pub struct Evaluator {
     call_stack: Vec<String>,
     /// Optional profiling data (DEBUGGER-041: Stack Depth Profiler)
     profiling: Option<ProfilingData>,
+    /// Arc store for shared references (INTERP-041: Fix Arc mock concurrency)
+    /// Maps arc_id -> shared value for proper Arc::clone semantics
+    arc_store: HashMap<usize, Value>,
+    /// Next available arc ID
+    next_arc_id: usize,
 }
 
 /// Internal control flow for handling early returns
@@ -286,6 +291,8 @@ impl Evaluator {
             call_depth: 0,
             call_stack: Vec::new(),
             profiling: None,
+            arc_store: HashMap::new(),
+            next_arc_id: 0,
         }
     }
 
@@ -666,21 +673,37 @@ impl Evaluator {
                 } = lhs.as_ref()
                 {
                     // For dereference: *num += 1
-                    // The operand should be an identifier
+                    // INTERP-041: Support both _arc_id (shared ref) and _inner (local)
                     if let AstNode::Identifier(name) = operand.as_ref() {
-                        // Get the wrapper object (HashMap with _inner)
+                        // Get the wrapper object
                         let wrapper = self
                             .scope
                             .get_cloned(name)
                             .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
 
-                        // Update the _inner value
-                        if let Value::HashMap(mut map) = wrapper {
-                            map.insert("_inner".to_string(), new_val);
-                            self.scope
-                                .assign(name, Value::HashMap(map))
-                                .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
-                            Ok(ControlFlow::Value(Value::nil()))
+                        // Update the value (arc_store or _inner)
+                        if let Value::HashMap(map) = wrapper {
+                            // INTERP-041: Check for _arc_id first (shared reference model)
+                            if let Some(Value::Integer(arc_id)) = map.get("_arc_id") {
+                                // Re-wrap new_val in Mutex HashMap structure before storing
+                                // This preserves the Mutex::new wrapper when updating
+                                use std::collections::HashMap;
+                                let mut mutex_wrapper = HashMap::new();
+                                mutex_wrapper.insert("_inner".to_string(), new_val.clone());
+                                self.arc_store
+                                    .insert(*arc_id as usize, Value::HashMap(mutex_wrapper));
+                                Ok(ControlFlow::Value(Value::nil()))
+                            } else {
+                                // Fallback: _inner model (local reference)
+                                let mut new_map = map.clone();
+                                new_map.insert("_inner".to_string(), new_val);
+                                self.scope
+                                    .assign(name, Value::HashMap(new_map))
+                                    .map_err(|_| EvalError::UndefinedVariable {
+                                        name: name.clone(),
+                                    })?;
+                                Ok(ControlFlow::Value(Value::nil()))
+                            }
                         } else {
                             // Not a wrapper, just update the variable directly
                             self.scope
@@ -982,24 +1005,33 @@ impl Evaluator {
             }
             UnaryOperator::Dereference => {
                 // Dereference operator: *expr
-                // For mock wrapper objects (HashMap with "_inner"), extract the value
-                // For regular values, return unchanged (dereference is no-op for primitives)
-                match &operand {
-                    Value::HashMap(map) => {
-                        // Check if this is a mock wrapper (has "_inner" key)
-                        if let Some(inner_value) = map.get("_inner") {
-                            Ok(inner_value.clone())
-                        } else {
-                            // Not a wrapper, return as-is
-                            Ok(operand)
+                // INTERP-041: Recursively unwrap _locked_value and _inner until we hit a non-wrapper
+                let mut current = operand.clone();
+                #[allow(clippy::while_let_loop)]
+                loop {
+                    match &current {
+                        Value::HashMap(map) => {
+                            // Check for _locked_value first (from lock() method)
+                            if let Some(locked_value) = map.get("_locked_value") {
+                                current = locked_value.clone();
+                                continue;
+                            }
+                            // Check for _inner (original mock wrapper)
+                            else if let Some(inner_value) = map.get("_inner") {
+                                current = inner_value.clone();
+                                continue;
+                            } else {
+                                // Not a wrapper, return as-is
+                                break;
+                            }
+                        }
+                        _ => {
+                            // Not a wrapper, done unwrapping
+                            break;
                         }
                     }
-                    _ => {
-                        // For non-HashMap values, dereference is identity
-                        // This handles cases like: let x = 42; let y = *x;
-                        Ok(operand)
-                    }
                 }
+                Ok(current)
             }
         }
     }
@@ -1278,7 +1310,7 @@ impl Evaluator {
             // Mock concurrency methods
             "lock" => {
                 // Mutex::lock() -> LockGuard
-                // Mock: return the inner value
+                // INTERP-041: Look up value in arc_store if _arc_id exists
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "lock".to_string(),
@@ -1287,9 +1319,21 @@ impl Evaluator {
                     });
                 }
 
-                // Extract _inner from mock Mutex
+                // INTERP-041: Look up in arc_store if _arc_id exists, otherwise use _inner
                 match &receiver {
                     Value::HashMap(map) => {
+                        // Check for _arc_id first (new shared ref model)
+                        if let Some(Value::Integer(arc_id)) = map.get("_arc_id") {
+                            if let Some(stored_value) = self.arc_store.get(&(*arc_id as usize)) {
+                                // Return wrapper with _arc_id so dereference can update it
+                                use std::collections::HashMap;
+                                let mut wrapper = HashMap::new();
+                                wrapper.insert("_arc_id".to_string(), Value::integer(*arc_id));
+                                wrapper.insert("_locked_value".to_string(), stored_value.clone());
+                                return Ok(Value::HashMap(wrapper));
+                            }
+                        }
+                        // Fallback: old _inner approach (backwards compatibility)
                         if let Some(inner) = map.get("_inner") {
                             Ok(inner.clone())
                         } else {
@@ -1506,28 +1550,54 @@ impl Evaluator {
                 Ok(Some(Value::HashMap(handle)))
             }
 
-            "Arc::new" | "Mutex::new" => {
-                // Arc::new(value) -> Arc<T>
+            "Mutex::new" => {
                 // Mutex::new(value) -> Mutex<T>
-                // Mock: just return the value wrapped in a hashmap
+                // INTERP-041: Just wrap locally, NO arc_store (only Arc uses arc_store)
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
-                        function: name.to_string(),
+                        function: "Mutex::new".to_string(),
                         expected: 1,
                         actual: args.len(),
                     });
                 }
 
                 let val = self.eval(&args[0])?;
+
+                // Wrap in HashMap with _inner (local wrapper, not shared)
                 use std::collections::HashMap;
                 let mut wrapper = HashMap::new();
                 wrapper.insert("_inner".to_string(), val);
                 Ok(Some(Value::HashMap(wrapper)))
             }
 
+            "Arc::new" => {
+                // Arc::new(value) -> Arc<T>
+                // INTERP-041: Store value in arc_store for shared references
+                if args.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "Arc::new".to_string(),
+                        expected: 1,
+                        actual: args.len(),
+                    });
+                }
+
+                let val = self.eval(&args[0])?;
+
+                // Store value in arc_store
+                let arc_id = self.next_arc_id;
+                self.arc_store.insert(arc_id, val);
+                self.next_arc_id += 1;
+
+                // Return HashMap with _arc_id for Arc::clone to reference
+                use std::collections::HashMap;
+                let mut wrapper = HashMap::new();
+                wrapper.insert("_arc_id".to_string(), Value::integer(arc_id as i64));
+                Ok(Some(Value::HashMap(wrapper)))
+            }
+
             "Arc::clone" => {
                 // Arc::clone(&arc) -> Arc<T>
-                // Mock: just return a clone of the input
+                // INTERP-041: Return HashMap with same _arc_id (shared reference!)
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "Arc::clone".to_string(),
@@ -1537,6 +1607,19 @@ impl Evaluator {
                 }
 
                 let val = self.eval(&args[0])?;
+
+                // Extract _arc_id from the HashMap and return same ID
+                // This makes Arc::clone share the reference instead of deep cloning
+                if let Value::HashMap(ref map) = val {
+                    if let Some(Value::Integer(arc_id)) = map.get("_arc_id") {
+                        use std::collections::HashMap;
+                        let mut wrapper = HashMap::new();
+                        wrapper.insert("_arc_id".to_string(), Value::integer(*arc_id));
+                        return Ok(Some(Value::HashMap(wrapper)));
+                    }
+                }
+
+                // Fallback: if not an Arc, just clone (for backwards compatibility)
                 Ok(Some(val.clone()))
             }
 

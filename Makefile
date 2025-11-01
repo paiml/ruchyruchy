@@ -446,7 +446,12 @@ sprint-commit: tdd-quality-gates validate-100-coverage
 lint:
 	@echo "🔍 Running zero-warning linting..."
 	@if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
-		cargo clippy --all-targets --all-features -- -D warnings; \
+		if [ -f target/bpfel-unknown-none/release/syscall_tracer ]; then \
+			cargo clippy --all-targets --all-features -- -D warnings; \
+		else \
+			echo "⚠️  eBPF binary not found, skipping ebpf feature..."; \
+			cargo clippy --all-targets -- -D warnings; \
+		fi \
 	else \
 		echo "⚠️  Rust linting skipped (no Cargo.toml found yet)"; \
 	fi
