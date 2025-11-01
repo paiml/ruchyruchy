@@ -3,6 +3,7 @@
 // INTERP-036: Grouped import evaluation (GREEN phase)
 // INTERP-037: Dereference operator evaluation (GREEN phase)
 // INTERP-038: Compound assignment operators (GREEN phase)
+// INTERP-039: vec! macro evaluation (GREEN phase)
 // REFACTOR Phase: Optimize and document
 //
 // Research:
@@ -12,7 +13,8 @@
 //
 // This module implements expression evaluation and function calls for the Ruchy interpreter.
 // Supports function definition, function calls with recursion, control flow, variable scoping,
-// mock concurrency primitives, import handling, dereference operations, and compound assignment.
+// mock concurrency primitives, import handling, dereference operations, compound assignment,
+// and vec! macro.
 //
 // Design:
 // - Tree-walking evaluator that recursively evaluates AST nodes
@@ -46,6 +48,13 @@
 // - Simple form: x += 5 becomes x = x + 5
 // - With dereference: *num += 1 updates _inner field in wrapper HashMap
 // - Unblocks INTERP-032 concurrency tests requiring *num += 1 pattern
+//
+// vec! Macro (INTERP-039):
+// - vec![] creates empty vector
+// - vec![1, 2, 3] creates vector with elements
+// - vec![0; 10] creates vector with repeated element
+// - Evaluates to Value::Vector
+// - Array methods: .push() mutates array, .len() returns length
 
 use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, UnaryOperator};
 use crate::interpreter::scope::Scope;
@@ -353,6 +362,48 @@ impl Evaluator {
                 method,
                 args,
             } => {
+                // Special handling for push() - it mutates the array
+                if method == "push" {
+                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
+                        // Get current array
+                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
+                            EvalError::UndefinedVariable {
+                                name: var_name.clone(),
+                            }
+                        })?;
+
+                        // Evaluate argument
+                        if args.len() != 1 {
+                            return Err(EvalError::ArgumentCountMismatch {
+                                function: "push".to_string(),
+                                expected: 1,
+                                actual: args.len(),
+                            });
+                        }
+                        let arg_val = self.eval(&args[0])?;
+
+                        // Mutate array
+                        if let Value::Vector(ref mut arr) = current_val {
+                            arr.push(arg_val);
+                            // Update scope with mutated array
+                            self.scope.assign(var_name, current_val).map_err(|_| {
+                                EvalError::UndefinedVariable {
+                                    name: var_name.clone(),
+                                }
+                            })?;
+                            return Ok(ControlFlow::Value(Value::nil()));
+                        } else {
+                            return Err(EvalError::UnsupportedOperation {
+                                operation: format!(
+                                    "push() requires array, got {}",
+                                    current_val.type_name()
+                                ),
+                            });
+                        }
+                    }
+                }
+
+                // Default method call handling
                 let receiver_val = self.eval(receiver)?;
                 let result = self.call_method(receiver_val, method, args)?;
                 Ok(ControlFlow::Value(result))
@@ -638,6 +689,38 @@ impl Evaluator {
                     _ => Err(EvalError::UnsupportedOperation {
                         operation: format!("field access on {}", value.type_name()),
                     }),
+                }
+            }
+
+            // vec! macro - create array
+            // Forms: vec![], vec![1, 2, 3], vec![0; 10]
+            AstNode::VecMacro {
+                elements,
+                repeat_count,
+            } => {
+                if let Some(count_expr) = repeat_count {
+                    // Repeat form: vec![expr; count]
+                    let element_value = self.eval(&elements[0])?;
+                    let count_value = self.eval(count_expr)?;
+                    let count = match count_value {
+                        Value::Integer(n) if n >= 0 => n as usize,
+                        _ => {
+                            return Err(EvalError::UnsupportedOperation {
+                                operation: "vec! repeat count must be non-negative integer"
+                                    .to_string(),
+                            })
+                        }
+                    };
+                    let repeated_array = vec![element_value; count];
+                    Ok(ControlFlow::Value(Value::Vector(repeated_array)))
+                } else {
+                    // Elements form: vec![1, 2, 3] or vec![]
+                    let mut array = Vec::new();
+                    for elem in elements {
+                        let val = self.eval(elem)?;
+                        array.push(val);
+                    }
+                    Ok(ControlFlow::Value(Value::Vector(array)))
                 }
             }
 
@@ -939,7 +1022,7 @@ impl Evaluator {
         // Dispatch based on method name
         match method {
             "len" => {
-                // String length: "hello".len() => 5
+                // String or Array length: "hello".len() => 5, [1,2,3].len() => 3
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: format!("{}.len()", receiver.type_name()),
@@ -950,6 +1033,8 @@ impl Evaluator {
 
                 if let Ok(s) = receiver.as_string() {
                     Ok(Value::integer(s.len() as i64))
+                } else if let Ok(arr) = receiver.as_vector() {
+                    Ok(Value::integer(arr.len() as i64))
                 } else {
                     Err(EvalError::UnsupportedOperation {
                         operation: format!(
