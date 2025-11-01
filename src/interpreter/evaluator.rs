@@ -72,7 +72,11 @@ use std::fmt;
 
 /// Maximum recursion depth before stack overflow
 /// This is set conservatively to prevent actual Rust stack overflow
-const MAX_CALL_DEPTH: usize = 150;
+/// Test threads have 2MB stack vs 8MB main thread, so this must be low enough
+/// to prevent Rust stack overflow before interpreter can catch it.
+/// Testing shows: depth 50 crashes, depth 40 crashes on infinite recursion,
+/// depth 30 works for both finite and infinite recursion.
+const MAX_CALL_DEPTH: usize = 30;
 
 /// Evaluator executes AST nodes and produces values
 pub struct Evaluator {
