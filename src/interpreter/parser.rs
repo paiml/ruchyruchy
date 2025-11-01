@@ -2,6 +2,7 @@
 // INTERP-032: Concurrency syntax support (use, ::, closures, blocks)
 // INTERP-036: Grouped import syntax (use std::sync::{Arc, Mutex})
 // INTERP-037: Dereference operator (*expr)
+// INTERP-038: Compound assignment operators (+=, -=, *=, /=, %=)
 // REFACTOR Phase: Clean up implementation while keeping tests green
 //
 // Research: Aho et al. (2006) Chapter 4: Syntax Analysis
@@ -25,6 +26,12 @@
 // - Unary dereference: *expr
 // - Extract values from mock wrappers: *counter.lock().unwrap()
 // - Works in expressions: let y = *x + 1;
+//
+// Compound assignment operators (INTERP-038):
+// - Compound assignments: +=, -=, *=, /=, %=
+// - Simple form: x += 5
+// - With dereference: *num += 1
+// - Desugared to: lhs = lhs op rhs
 
 /// Parser for Ruchy source code
 pub struct Parser {
@@ -94,6 +101,11 @@ enum Token {
     Dot,
     DotDot,
     Equal,
+    PlusEqual,    // +=
+    MinusEqual,   // -=
+    StarEqual,    // *=
+    SlashEqual,   // /=
+    PercentEqual, // %=
     Underscore,
 
     // End of file
@@ -275,6 +287,11 @@ impl Parser {
                 }
 
                 // Operators and delimiters
+                '+' if chars.clone().nth(1) == Some('=') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::PlusEqual);
+                }
                 '+' => {
                     chars.next();
                     tokens.push(Token::Plus);
@@ -284,17 +301,37 @@ impl Parser {
                     chars.next();
                     tokens.push(Token::Arrow);
                 }
+                '-' if chars.clone().nth(1) == Some('=') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::MinusEqual);
+                }
                 '-' => {
                     chars.next();
                     tokens.push(Token::Minus);
+                }
+                '*' if chars.clone().nth(1) == Some('=') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::StarEqual);
                 }
                 '*' => {
                     chars.next();
                     tokens.push(Token::Star);
                 }
+                '/' if chars.clone().nth(1) == Some('=') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::SlashEqual);
+                }
                 '/' => {
                     chars.next();
                     tokens.push(Token::Slash);
+                }
+                '%' if chars.clone().nth(1) == Some('=') => {
+                    chars.next();
+                    chars.next();
+                    tokens.push(Token::PercentEqual);
                 }
                 '%' => {
                     chars.next();
@@ -626,10 +663,12 @@ impl Parser {
         } else if self.check(&Token::Return) {
             self.parse_return()
         } else {
-            // Check for assignment: identifier = expr
+            // Check for assignment or compound assignment
             if let Some(Token::Identifier(name)) = self.current().cloned() {
-                // Look ahead to see if next token is =
-                if self.tokens.get(self.pos + 1) == Some(&Token::Equal) {
+                let next_token = self.tokens.get(self.pos + 1);
+
+                // Check for regular assignment: identifier = expr
+                if next_token == Some(&Token::Equal) {
                     self.advance(); // consume identifier
                     self.advance(); // consume =
                     let value = Box::new(self.parse_expression()?);
@@ -638,10 +677,58 @@ impl Parser {
                     }
                     return Ok(AstNode::Assignment { name, value });
                 }
+
+                // Check for compound assignment: identifier += expr
+                if let Some(op_token) = next_token {
+                    let op = match op_token {
+                        Token::PlusEqual => Some(BinaryOperator::Add),
+                        Token::MinusEqual => Some(BinaryOperator::Subtract),
+                        Token::StarEqual => Some(BinaryOperator::Multiply),
+                        Token::SlashEqual => Some(BinaryOperator::Divide),
+                        Token::PercentEqual => Some(BinaryOperator::Modulo),
+                        _ => None,
+                    };
+
+                    if let Some(op) = op {
+                        self.advance(); // consume identifier
+                        self.advance(); // consume compound operator
+                        let lhs = Box::new(AstNode::Identifier(name));
+                        let rhs = Box::new(self.parse_expression()?);
+                        if self.check(&Token::Semicolon) {
+                            self.advance();
+                        }
+                        return Ok(AstNode::CompoundAssignment { lhs, op, rhs });
+                    }
+                }
             }
 
-            // Expression statement
+            // Check for compound assignment with dereference: *expr += value
+            // Parse as expression first, then check for compound operator
             let expr = self.parse_expression()?;
+
+            // Check if this is followed by a compound assignment operator
+            if let Some(op_token) = self.current().cloned() {
+                let op = match op_token {
+                    Token::PlusEqual => Some(BinaryOperator::Add),
+                    Token::MinusEqual => Some(BinaryOperator::Subtract),
+                    Token::StarEqual => Some(BinaryOperator::Multiply),
+                    Token::SlashEqual => Some(BinaryOperator::Divide),
+                    Token::PercentEqual => Some(BinaryOperator::Modulo),
+                    _ => None,
+                };
+
+                if let Some(op) = op {
+                    self.advance(); // consume compound operator
+                    let lhs = Box::new(expr);
+                    let rhs = Box::new(self.parse_expression()?);
+                    if self.check(&Token::Semicolon) {
+                        self.advance();
+                    }
+                    return Ok(AstNode::CompoundAssignment { lhs, op, rhs });
+                }
+            }
+
+            // Regular expression statement
             if self.check(&Token::Semicolon) {
                 self.advance();
             }
@@ -1425,6 +1512,16 @@ pub enum AstNode {
         name: String,
         /// New value expression
         value: Box<AstNode>,
+    },
+
+    /// Compound assignment: x += 5, *num -= 1
+    CompoundAssignment {
+        /// Left-hand side (identifier or expression like *num)
+        lhs: Box<AstNode>,
+        /// Operator (+, -, *, /, %)
+        op: BinaryOperator,
+        /// Right-hand side value
+        rhs: Box<AstNode>,
     },
 
     /// Function call: name(args)

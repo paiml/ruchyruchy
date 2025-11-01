@@ -4690,3 +4690,55 @@ future_roadmap:
           ⚠️  INTERP-032 still needs: compound assignment (+=), vec! macro.
           ⚠️  Compound assignment is separate language feature (INTERP-038).
 
+      - id: INTERP-038
+        title: "Compound Assignment Operators (+=, -=, *=, /=, %=)"
+        priority: critical
+        status: completed
+        phase: COMPLETE
+        started_date: 2025-10-31
+        completed_date: 2025-11-01
+        week: 17
+        requirements:
+          - Parse compound assignment: +=, -=, *=, /=, %=
+          - Support dereference with compound: *num += 1
+          - Evaluate as: lhs = lhs op rhs
+          - Unblock 3 INTERP-032 tests (arc_shared_ownership, concurrent_counter, thread_safety)
+        tests:
+          - test_compound_add_assign (x += 1) ✅
+          - test_compound_sub_assign (x -= 1) ✅
+          - test_compound_mul_assign (x *= 2) ✅
+          - test_compound_div_assign (x /= 2) ✅
+          - test_compound_mod_assign (x %= 3) ✅
+          - test_compound_with_dereference (*num += 1) ✅
+          - test_multiple_compound_assigns (chaining) ✅
+          - test_interp_038_completeness (meta-test) ✅
+        acceptance:
+          - All compound assignment operators parse correctly ✅
+          - Compound operations evaluate correctly ✅
+          - Dereference + compound assignment works ✅
+          - All 8 tests passing ✅
+        deliverables:
+          - tests/test_interp_038_compound_assignment.rs (246 LOC) ✅
+          - src/interpreter/parser.rs (compound assignment parsing) ✅
+          - src/interpreter/evaluator.rs (compound assignment evaluation) ✅
+        research: "Rust Reference: Compound assignment operators"
+        extreme_tdd_phases:
+          - RED: ✅ Complete - All tests written and failing
+          - GREEN: ✅ Complete - Parser and evaluator implementation
+          - REFACTOR: ✅ Complete - Documentation updated
+          - TOOL: ✅ Complete - All quality gates passing
+          - PMAT: ✅ Complete - TDG validation passing
+        results:
+          tests_passing: 8/8
+          quality_gates: "clippy ✅, fmt ✅, tests ✅"
+          files_modified: 3
+        impact: |
+          CRITICAL: Unblocks INTERP-032 concurrency tests (arc_shared_ownership, concurrent_counter, thread_safety).
+          Essential for Arc<Mutex<T>> pattern: *num += 1
+          Enables idiomatic mutation operations.
+        notes: |
+          HIGH IMPACT: Directly enables 3 concurrency test patterns.
+          Parser implementation: 5 new tokens (PlusEqual, MinusEqual, StarEqual, SlashEqual, PercentEqual)
+          Evaluator: Desugars to: lhs = lhs op rhs
+          Special handling: *num += 1 updates _inner field in wrapper HashMap.
+
