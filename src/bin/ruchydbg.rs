@@ -574,7 +574,10 @@ fn run_regression_determinism(args: &[String]) {
     let is_deterministic = detector.check_determinism(&code, runs);
 
     if is_deterministic {
-        println!("✅ DETERMINISTIC: All {} runs produced identical results", runs);
+        println!(
+            "✅ DETERMINISTIC: All {} runs produced identical results",
+            runs
+        );
         exit(EXIT_SUCCESS);
     } else {
         println!("⚠️  NON-DETERMINISM DETECTED: Runs produced different results!");
@@ -637,7 +640,9 @@ fn run_regression_perf(args: &[String]) {
     // Performance regression check: compare execution times
     if args.len() < 2 {
         eprintln!("Error: perf check requires baseline and current files");
-        eprintln!("Usage: ruchydbg regression perf <baseline.ruchy> <current.ruchy> [--threshold <N>]");
+        eprintln!(
+            "Usage: ruchydbg regression perf <baseline.ruchy> <current.ruchy> [--threshold <N>]"
+        );
         exit(EXIT_ERROR);
     }
 
@@ -685,7 +690,10 @@ fn run_regression_perf(args: &[String]) {
     println!();
 
     if slowdown > threshold {
-        println!("⚠️  PERFORMANCE REGRESSION: {:.2}x slowdown exceeds {:.2}x threshold!", slowdown, threshold);
+        println!(
+            "⚠️  PERFORMANCE REGRESSION: {:.2}x slowdown exceeds {:.2}x threshold!",
+            slowdown, threshold
+        );
         exit(EXIT_ERROR);
     } else {
         println!("✅ NO PERFORMANCE REGRESSION: Within acceptable bounds");

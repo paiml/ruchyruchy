@@ -1521,7 +1521,7 @@ impl Parser {
 }
 
 /// Abstract Syntax Tree
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Ast {
     nodes: Vec<AstNode>,
 }
@@ -1545,6 +1545,97 @@ impl Ast {
         for node in &self.nodes {
             callback(node);
             node.visit_children(&mut callback);
+        }
+    }
+
+    /// Emit AST back to source code (DEBUGGER-044: Property-based testing)
+    ///
+    /// Converts the AST back into Ruchy source code. This is used for
+    /// property testing (roundtrip: parse(emit(ast)) = ast).
+    ///
+    /// This is a minimal implementation for property testing. It doesn't
+    /// preserve exact formatting (whitespace, comments), but preserves
+    /// semantic structure.
+    pub fn emit(&self) -> String {
+        self.nodes
+            .iter()
+            .map(|node| self.emit_node(node))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Emit a single AST node to source code
+    fn emit_node(&self, node: &AstNode) -> String {
+        match node {
+            AstNode::Empty => String::new(),
+
+            AstNode::IntegerLiteral(n) => n.to_string(),
+            AstNode::FloatLiteral(f) => f.to_string(),
+            AstNode::StringLiteral(s) => format!("\"{}\"", s),
+            AstNode::BooleanLiteral(b) => b.to_string(),
+            AstNode::Identifier(name) => name.clone(),
+
+            AstNode::BinaryOp { left, op, right } => {
+                format!(
+                    "{} {} {}",
+                    self.emit_node(left),
+                    self.emit_binop(op),
+                    self.emit_node(right)
+                )
+            }
+
+            AstNode::UnaryOp { op, operand } => {
+                format!("{}{}", self.emit_unaryop(op), self.emit_node(operand))
+            }
+
+            AstNode::LetDecl { name, value } => {
+                format!("let {} = {};", name, self.emit_node(value))
+            }
+
+            AstNode::Assignment { name, value } => {
+                format!("{} = {};", name, self.emit_node(value))
+            }
+
+            AstNode::FunctionCall { name, args } => {
+                let args_str = args
+                    .iter()
+                    .map(|arg| self.emit_node(arg))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}({})", name, args_str)
+            }
+
+            // For complex nodes, emit minimal representation
+            _ => format!("/* {:?} */", node),
+        }
+    }
+
+    /// Emit binary operator
+    fn emit_binop(&self, op: &BinaryOperator) -> &'static str {
+        match op {
+            BinaryOperator::Add => "+",
+            BinaryOperator::Subtract => "-",
+            BinaryOperator::Multiply => "*",
+            BinaryOperator::Divide => "/",
+            BinaryOperator::Modulo => "%",
+            BinaryOperator::Equal => "==",
+            BinaryOperator::NotEqual => "!=",
+            BinaryOperator::LessThan => "<",
+            BinaryOperator::LessEqual => "<=",
+            BinaryOperator::GreaterThan => ">",
+            BinaryOperator::GreaterEqual => ">=",
+            BinaryOperator::And => "&&",
+            BinaryOperator::Or => "||",
+        }
+    }
+
+    /// Emit unary operator
+    fn emit_unaryop(&self, op: &UnaryOperator) -> &'static str {
+        match op {
+            UnaryOperator::Negate => "-",
+            UnaryOperator::Not => "!",
+            UnaryOperator::Plus => "+",
+            UnaryOperator::Dereference => "*",
         }
     }
 }
