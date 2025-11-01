@@ -19,6 +19,8 @@ pub mod bug_discovery;
 pub mod evaluator;
 /// Parser and AST definitions
 pub mod parser;
+/// Pathological input detector (DEBUGGER-042: Performance cliff detection)
+pub mod pathological_detector;
 /// Variable scope management
 pub mod scope;
 /// NASA-level soak and performance testing infrastructure
@@ -30,6 +32,9 @@ pub mod value;
 pub use bug_discovery::{BugDiscoveryAnalyzer, InterpreterBugReport};
 pub use evaluator::{EvalError, Evaluator};
 pub use parser::{Ast, AstNode, ParseError, Parser};
+pub use pathological_detector::{
+    PathologicalCategory, PathologicalDetection, PathologicalDetector,
+};
 pub use scope::{Scope, ScopeError};
 pub use soak_test::{
     SoakConfig, SoakResult, SoakTestRunner, TelemetryCollector, TelemetrySnapshot,

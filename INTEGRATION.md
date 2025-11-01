@@ -42,8 +42,8 @@
 **Quality Metrics**: Zero SATD, A+ Lint, TDG 97.4 (target: 85), Zero clippy warnings
 **Known Issues**: 1 open (workaround available) - #54: Boolean negation `!` hang (use if/else) 🔴 OPEN
 **Major Updates**:
-- **DEBUGGER-042: Pathological Input Detector** (November 1, 2025) ⭐ **LATEST** ⏳ **IN PROGRESS**
-  - **Status**: ⏳ **RED-GREEN-TOOL phases complete** - Tests passing, quality gates passing
+- **DEBUGGER-042: Pathological Input Detector** (November 1, 2025) ⭐ **LATEST** ✅ **COMPLETE**
+  - **Status**: ✅ **COMPLETE** - RED-GREEN-REFACTOR-TOOL-DEBUGGABILITY-PMAT cycle complete
   - **Test Suite**: 6/6 tests passing (100% success, 1 ignored for DEBUGGER-043)
   - **Features**: Baseline performance database, slowdown detection (>10x threshold), category classification
   - **Categories**: Parser stress, evaluator stress, memory stress (3 categories)
@@ -53,8 +53,15 @@
   - **Input Generators**: Nested expressions, quadratic variable lookup patterns
   - **Tests**: deeply_nested_expressions, quadratic_lookup, memory_bombs, baseline_db, threshold, classification
   - **Quality**: ✅ cargo fmt, ✅ cargo clippy, ✅ all 310 lib tests, ✅ 6/6 DEBUGGER-042 tests
+  - **CLI Integration**: ✅ **COMPLETE** - `ruchydbg detect <file> [--threshold N]` operational
   - **Discovery**: **BUG-042** - Parser stack overflow at 100 levels of nesting (reduced to 20 for tests)
-  - **Pending**: CLI integration (`ruchydbg detect <file>`), benchmark script, book chapter
+  - **Library Module**: src/interpreter/pathological_detector.rs (public API for external use)
+  - **Usage Examples**:
+    ```bash
+    ruchydbg detect test.ruchy                    # Default 10x threshold
+    ruchydbg detect test.ruchy --threshold 15     # Custom threshold
+    ```
+  - **Pending**: Reproducibility benchmark script, book chapter (optional enhancements)
   - **Impact**: Fills gap between fuzzing (crashes) and benchmarking (average perf) - finds performance cliffs
 
 - **BUG-042: Parser Stack Overflow on Deeply Nested Expressions** (November 1, 2025) ⚠️ **CRITICAL DISCOVERY**
