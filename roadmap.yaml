@@ -4742,3 +4742,61 @@ future_roadmap:
           Evaluator: Desugars to: lhs = lhs op rhs
           Special handling: *num += 1 updates _inner field in wrapper HashMap.
 
+      - id: INTERP-039
+        title: "vec! Macro Support"
+        priority: critical
+        status: completed
+        phase: COMPLETE
+        started_date: 2025-11-01
+        completed_date: 2025-11-01
+        week: 17
+        requirements:
+          - Parse vec![] (empty vector) ✅
+          - Parse vec![expr1, expr2, ...] (vector with elements) ✅
+          - Parse vec![expr; count] (repeated element) ✅
+          - Evaluate to Value::Vector ✅
+          - Support .push() and .len() methods on arrays ✅
+          - Unblock INTERP-032 tests (vec! now working) ✅
+        tests:
+          - test_vec_macro_empty (vec![]) ✅
+          - test_vec_macro_with_elements (vec![1, 2, 3]) ✅
+          - test_vec_macro_repeated (vec![0; 10]) ✅
+          - test_vec_macro_push (arr.push(x)) ✅
+          - test_vec_macro_len (arr.len()) ✅
+          - test_vec_macro_nested (nested vec!) ✅
+          - test_vec_macro_in_function_call (Mutex::new(vec![...])) ✅
+          - test_vec_macro_with_expressions (vec![1+1, 2*2]) ✅
+          - test_interp_039_completeness (meta-test) ✅
+        acceptance:
+          - vec! macro parses all three forms correctly ✅
+          - Evaluates to Value::Vector ✅
+          - .push() mutates array, .len() returns length ✅
+          - All 9 tests passing ✅
+        deliverables:
+          - tests/test_interp_039_vec_macro.rs (273 LOC) ✅
+          - src/interpreter/parser.rs (vec! macro parsing) ✅
+          - src/interpreter/evaluator.rs (vec! evaluation + array methods) ✅
+        research: "Rust Reference: vec! macro"
+        extreme_tdd_phases:
+          - RED: ✅ Complete - All tests written and failing
+          - GREEN: ✅ Complete - Parser and evaluator implementation
+          - REFACTOR: ✅ Complete - Documentation updated
+          - TOOL: ✅ Complete - All quality gates passing
+          - PMAT: ✅ Complete - TDG validation passing
+        results:
+          tests_passing: 9/9
+          quality_gates: "clippy ✅, fmt ✅, tests ✅"
+          files_modified: 3
+        impact: |
+          CRITICAL: vec! macro fully working, enables vector literal syntax.
+          INTERP-032 note: Remaining test failures are due to mock concurrency
+          limitations (lack of reference semantics), NOT missing vec! support.
+          vec! macro successfully unblocks all vec!-dependent code patterns.
+        notes: |
+          ✅ All three vec! forms fully implemented and tested.
+          ✅ Parser recognizes vec! as macro (identifier followed by !).
+          ✅ Evaluator creates Value::Vector for all forms.
+          ✅ Array methods: .push() mutates, .len() returns length.
+          ✅ Special push() handling in MethodCall for mutation semantics.
+          ⚠️  INTERP-032 still 3/10 passing due to architectural limitations (not vec!).
+

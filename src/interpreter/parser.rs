@@ -3,6 +3,7 @@
 // INTERP-036: Grouped import syntax (use std::sync::{Arc, Mutex})
 // INTERP-037: Dereference operator (*expr)
 // INTERP-038: Compound assignment operators (+=, -=, *=, /=, %=)
+// INTERP-039: vec! macro support
 // REFACTOR Phase: Clean up implementation while keeping tests green
 //
 // Research: Aho et al. (2006) Chapter 4: Syntax Analysis
@@ -32,6 +33,12 @@
 // - Simple form: x += 5
 // - With dereference: *num += 1
 // - Desugared to: lhs = lhs op rhs
+//
+// vec! macro (INTERP-039):
+// - vec![] (empty vector)
+// - vec![1, 2, 3] (vector with elements)
+// - vec![0; 10] (repeated element)
+// - Enables idiomatic Rust vector literals
 
 /// Parser for Ruchy source code
 pub struct Parser {
@@ -1099,6 +1106,50 @@ impl Parser {
                 let id = id.clone();
                 self.advance();
 
+                // Check for macro call (e.g., vec![...])
+                if id == "vec" && self.check(&Token::Not) {
+                    self.advance(); // consume !
+                    self.consume(&Token::LeftBracket)?; // consume [
+
+                    // Empty vec![]
+                    if self.check(&Token::RightBracket) {
+                        self.advance();
+                        return Ok(AstNode::VecMacro {
+                            elements: Vec::new(),
+                            repeat_count: None,
+                        });
+                    }
+
+                    // Parse first expression
+                    let first_expr = self.parse_expression()?;
+
+                    // Check for repeat form: vec![expr; count]
+                    if self.check(&Token::Semicolon) {
+                        self.advance(); // consume ;
+                        let count = Box::new(self.parse_expression()?);
+                        self.consume(&Token::RightBracket)?;
+                        return Ok(AstNode::VecMacro {
+                            elements: vec![first_expr],
+                            repeat_count: Some(count),
+                        });
+                    }
+
+                    // Elements form: vec![expr, expr, ...]
+                    let mut elements = vec![first_expr];
+                    while self.check(&Token::Comma) {
+                        self.advance(); // consume ,
+                        if self.check(&Token::RightBracket) {
+                            break; // trailing comma
+                        }
+                        elements.push(self.parse_expression()?);
+                    }
+                    self.consume(&Token::RightBracket)?;
+                    return Ok(AstNode::VecMacro {
+                        elements,
+                        repeat_count: None,
+                    });
+                }
+
                 // Check for path expression (e.g., thread::spawn, Arc::new)
                 if self.check(&Token::ColonColon) {
                     let mut segments = vec![id];
@@ -1717,6 +1768,14 @@ pub enum AstNode {
         params: Vec<String>,
         /// Closure body statements
         body: Vec<AstNode>,
+    },
+
+    /// vec! macro: vec![], vec![1, 2, 3], vec![0; 10]
+    VecMacro {
+        /// Elements (for vec![1, 2, 3] form) or repeat expression (for vec![x; n] form)
+        elements: Vec<AstNode>,
+        /// Repeat count (for vec![x; n] form, otherwise None)
+        repeat_count: Option<Box<AstNode>>,
     },
 }
 
