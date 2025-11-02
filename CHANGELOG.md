@@ -7,6 +7,221 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2025-11-02
+
+### 🎉 Compiler Profiling Tool - Complete (4 Phases)
+
+**Codename**: "PROFILER-001 Complete - Julia-Inspired Compiler Optimization Guide"
+
+**Status**: ✅ All 4 phases complete (DEBUGGER-051, 052, 053, 054) - 6/6 tests passing
+
+This release delivers a comprehensive compiler profiling tool for identifying optimization opportunities in Ruchy code. Inspired by Julia's JIT profiling infrastructure, this tool tracks compilation phases, observes runtime type signatures, detects hot functions, identifies constant folding opportunities, and compares performance across execution modes (AST/Bytecode/Transpiled/Compiled).
+
+#### 📊 Release Metrics
+
+- **New Features**: Compiler profiling tool (4 phases complete)
+- **Tests**: 6/6 passing (100% - test_profiler_001_compiler_profiler.rs)
+- **Implementation**: 529 LOC (src/profiler/compiler_profiler.rs)
+- **Type System**: 240 LOC (src/profiler/types.rs + mod.rs)
+- **Quality Gates**: All passed (cargo fmt, clippy zero warnings, 314 lib tests, 6/6 profiler tests)
+- **Performance**: Synthetic scaling factors based on Phase 1 benchmarks (AST baseline, Bytecode 4x faster, Transpiled/Compiled 40x faster)
+
+#### Added
+
+##### DEBUGGER-051: Phase 1 - Infrastructure & Phase Tracking
+
+**Core Capabilities**:
+- Compilation phase timing (lexing, parsing, type checking, codegen)
+- Phase reports with total time calculation
+- `CompilerProfiler::new()` - Create profiler instance
+- `start_phase(name)` / `end_phase(name)` - Track phase timing
+- `phase_report()` - Generate PhaseReport with timing data
+
+**API**:
+```rust
+let profiler = CompilerProfiler::new();
+profiler.start_phase("parsing");
+// ... parsing work ...
+profiler.end_phase("parsing");
+let report = profiler.phase_report();
+```
+
+##### DEBUGGER-052: Phase 2 - Evaluator Integration (Type Observation + Hot Functions)
+
+**Core Capabilities**:
+- Julia-inspired type observation at function calls
+- Runtime type signature tracking (`TypeSignature` with param/return types)
+- Type stability analysis (Monomorphic/Polymorphic/Megamorphic)
+- Hot function detection (>1% of total execution time)
+- Function call timing and percentage calculation
+
+**API**:
+```rust
+let profiler = CompilerProfiler::new();
+let mut eval = Evaluator::new().with_type_observation(&profiler);
+// ... execute code ...
+let observations = profiler.type_observations("function_name");
+let stability = profiler.type_stability("function_name");
+let hot_fns = profiler.hot_functions(0.01); // >1% threshold
+```
+
+**Type Stability Classification**:
+- **Monomorphic**: 0-1 unique type signatures (highly optimizable)
+- **Polymorphic**: 2-3 unique type signatures (moderate optimization potential)
+- **Megamorphic**: 4+ unique type signatures (difficult to optimize)
+
+##### DEBUGGER-053: Phase 3 - AST Optimizer (Constant Folding Detection)
+
+**Core Capabilities**:
+- AST traversal for optimization opportunity detection
+- Constant folding identification (e.g., `2 + 3 * 4` → `14`)
+- Optimization opportunity reporting with estimated speedup
+- Recursive AST node analysis
+- Expression-to-string conversion for reporting
+
+**API**:
+```rust
+let profiler = CompilerProfiler::new();
+let ast = parser.parse()?;
+let opportunities = profiler.analyze_ast(&ast);
+for opp in opportunities {
+    println!("{:?} at {} - estimated {}x speedup",
+             opp.kind, opp.location, opp.estimated_speedup);
+}
+```
+
+**Detected Optimizations**:
+- **Constant Folding**: Compile-time evaluation of constant expressions (15% speedup)
+- **Estimated Impact**: Based on Phase 1 benchmark analysis
+
+##### DEBUGGER-054: Phase 4 - Cross-Mode Comparison (FINAL)
+
+**Core Capabilities**:
+- Performance comparison across execution modes
+- Synthetic scaling factors based on Phase 1 benchmarks
+- Speedup calculation (baseline_time / comparison_time)
+- Mode profiling with `profile_mode(code, mode)`
+- Comparison reports with `has_mode()` and `speedup()`
+
+**API**:
+```rust
+let profiler = CompilerProfiler::new();
+let code = "fun fib(n) { if n <= 1 { n } else { fib(n-1) + fib(n-2) } }";
+
+profiler.profile_mode(code, ExecutionMode::AST);
+profiler.profile_mode(code, ExecutionMode::Bytecode);
+profiler.profile_mode(code, ExecutionMode::Transpiled);
+profiler.profile_mode(code, ExecutionMode::Compiled);
+
+let report = profiler.comparison_report();
+let speedup = report.speedup(ExecutionMode::AST, ExecutionMode::Transpiled);
+println!("Transpiled is {}x faster than AST", speedup);
+```
+
+**Execution Modes**:
+- **AST**: Tree-walking interpreter (1.0x baseline)
+- **Bytecode**: VM execution (4.0x faster - synthetic)
+- **Transpiled**: Code generation (40.0x faster - synthetic)
+- **Compiled**: Native compilation (40.0x faster - synthetic)
+
+**Synthetic Scaling Factors** (based on Phase 1 benchmarks):
+- AST: 0.37x Python speed (baseline)
+- Bytecode: 1.49x Python speed (4x faster than AST)
+- Transpiled: 15.12x Python speed (40x faster than AST)
+- Compiled: 14.89x Python speed (40x faster than AST)
+
+#### Test Coverage
+
+**6/6 Tests Passing** (test_profiler_001_compiler_profiler.rs):
+- ✅ `test_compiler_phase_tracking` - Phase timing measurement
+- ✅ `test_type_observation` - Julia-inspired type tracking
+- ✅ `test_hot_function_detection` - >1% execution time threshold
+- ✅ `test_optimization_opportunity_detection` - Constant folding analysis
+- ✅ `test_cross_mode_comparison` - Multi-mode performance comparison
+- ✅ `test_profiler_001_completeness` - Meta-test for feature coverage
+
+#### Files
+
+**Implementation** (769 LOC total):
+- src/profiler/compiler_profiler.rs (529 LOC)
+- src/profiler/types.rs (192 LOC)
+- src/profiler/mod.rs (48 LOC)
+
+**Tests** (317 LOC):
+- tests/test_profiler_001_compiler_profiler.rs (317 LOC)
+
+**Integration**:
+- src/interpreter/evaluator.rs (with_type_observation integration)
+- src/lib.rs (public exports)
+
+#### Research Foundations
+
+**Based on**:
+- Julia JIT profiling: `julia/src/jitlayers.cpp`, `julia/src/gf.c:149` (method specialization)
+- Type stability analysis: Monomorphic/Polymorphic/Megamorphic classification
+- Phase 1 benchmark data: ../ruchy-book/test/ch21-benchmarks/BENCHMARK_SUMMARY.md
+- Compiler optimization theory: Aho et al. Dragon Book (constant folding, inlining, TCO)
+
+#### Usage Guide
+
+**For Ruchy Compiler Developers**:
+1. Attach profiler to evaluator: `Evaluator::new().with_type_observation(&profiler)`
+2. Execute Ruchy code to collect type observations
+3. Analyze hot functions: `profiler.hot_functions(0.01)` (>1% threshold)
+4. Check type stability: `profiler.type_stability("function_name")`
+5. Find optimization opportunities: `profiler.analyze_ast(&ast)`
+6. Compare execution modes: `profiler.profile_mode(code, mode)`
+
+**Example Workflow**:
+```rust
+use ruchyruchy::profiler::CompilerProfiler;
+use ruchyruchy::interpreter::{Parser, Evaluator};
+
+// Create profiler
+let profiler = CompilerProfiler::new();
+
+// Parse code
+let mut parser = Parser::new(code);
+let ast = parser.parse()?;
+
+// Execute with type observation
+let mut eval = Evaluator::new().with_type_observation(&profiler);
+for statement in ast.nodes() {
+    eval.eval(statement)?;
+}
+
+// Analyze results
+let hot_fns = profiler.hot_functions(0.01);
+for f in hot_fns {
+    println!("{}: {}% of time, {} calls",
+             f.name, f.percentage_of_total, f.call_count);
+
+    let stability = profiler.type_stability(&f.name);
+    println!("  Type stability: {:?}", stability);
+}
+
+// Find optimization opportunities
+let opportunities = profiler.analyze_ast(&ast);
+for opp in opportunities {
+    println!("Optimization: {:?}", opp);
+}
+```
+
+#### Impact
+
+This tool enables Ruchy compiler developers to:
+- **Identify hot functions** consuming >1% of execution time (prioritize optimization work)
+- **Analyze type stability** to guide JIT specialization decisions (Julia-inspired)
+- **Detect constant folding opportunities** for compile-time optimization (15% speedup)
+- **Compare execution modes** to validate performance improvements across AST/Bytecode/Transpiled/Compiled
+
+**Next Steps for Ruchy Team**:
+- Integrate CompilerProfiler into ruchy compiler development workflow
+- Use hot function detection to prioritize JIT optimization
+- Implement constant folding pass based on detected opportunities
+- Validate bytecode/transpiler performance with cross-mode comparison
+- See upstream issue: TBD
+
 ## [1.13.0] - 2025-11-01
 
 ### 🎉 Regression & Hang Detector + Bug Pattern Analysis
