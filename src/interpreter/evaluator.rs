@@ -168,6 +168,8 @@ pub struct Evaluator {
     arc_store: HashMap<usize, Value>,
     /// Next available arc ID
     next_arc_id: usize,
+    /// Optional compiler profiler (DEBUGGER-052: Type Observation)
+    compiler_profiler: Option<crate::profiler::CompilerProfiler>,
 }
 
 /// Internal control flow for handling early returns
@@ -297,6 +299,7 @@ impl Evaluator {
             performance_profiler: None,
             arc_store: HashMap::new(),
             next_arc_id: 0,
+            compiler_profiler: None,
         }
     }
 
@@ -318,6 +321,7 @@ impl Evaluator {
             performance_profiler: self.performance_profiler.clone(),
             arc_store: self.arc_store.clone(),
             next_arc_id: self.next_arc_id,
+            compiler_profiler: self.compiler_profiler.clone(),
         }
     }
 
@@ -329,10 +333,12 @@ impl Evaluator {
         self
     }
 
-    /// PROFILER-001: Enable type observation (stub for Phase 2)
-    #[allow(dead_code)]
-    pub fn with_type_observation(self, _profiler: &crate::profiler::CompilerProfiler) -> Self {
-        // Stub: will implement in Phase 2
+    /// DEBUGGER-052: Enable type observation (Julia-inspired)
+    ///
+    /// Attaches a compiler profiler to observe type signatures at function calls.
+    /// Used for type stability analysis and optimization opportunity detection.
+    pub fn with_type_observation(mut self, profiler: &crate::profiler::CompilerProfiler) -> Self {
+        self.compiler_profiler = Some(profiler.clone());
         self
     }
 
@@ -1378,6 +1384,9 @@ impl Evaluator {
             }
         }
 
+        // DEBUGGER-052: Start timing for hot function detection
+        let start_time = std::time::Instant::now();
+
         // 7. Execute function body, handling early returns
         let mut result = Value::nil();
         for stmt in &body {
@@ -1434,6 +1443,23 @@ impl Evaluator {
             if let Some((func_name, duration)) = profiler.pop_call_stack() {
                 profiler.record_eval_operation(func_name, duration);
             }
+        }
+
+        // DEBUGGER-052: Observe type signature and record timing for this function call
+        if let Some(ref profiler) = self.compiler_profiler {
+            // Build type signature: param types + return type
+            let param_types: Vec<String> = arg_values
+                .iter()
+                .map(|v| v.type_name().to_string())
+                .collect();
+            let return_type = result.type_name().to_string();
+
+            let signature = crate::profiler::TypeSignature::new(param_types, return_type);
+            profiler.observe_type(name, signature);
+
+            // Record function call timing for hot function detection
+            let duration = start_time.elapsed();
+            profiler.record_function_call(name, duration);
         }
 
         Ok(result)
