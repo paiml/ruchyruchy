@@ -34,6 +34,7 @@ fn main() {
         "profile" => run_profile(&args),
         "detect" => run_detect(&args),
         "regression" => run_regression(&args),
+        "debug" => run_debug(&args),
         "validate" | "test" => run_validation(),
         "version" | "--version" | "-v" => {
             println!("ruchydbg {VERSION}");
@@ -773,6 +774,286 @@ fn print_detect_help() {
     println!();
 }
 
+fn run_debug(args: &[String]) {
+    // DEBUGGER-055: Interactive rust-gdb wrapper for Ruchy debugging
+    // Usage: ruchydbg debug <run|analyze> <file> [--break <function>]
+
+    // Check for help
+    if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
+        print_debug_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    if args.len() < 3 {
+        eprintln!("Error: Missing debug mode");
+        eprintln!("Usage: ruchydbg debug <run|analyze> <file> [OPTIONS]");
+        print_debug_help();
+        exit(EXIT_ERROR);
+    }
+
+    let mode = &args[2];
+
+    match mode.as_str() {
+        "run" => run_debug_interactive(&args[3..]),
+        "analyze" => run_debug_analyze(&args[3..]),
+        _ => {
+            eprintln!("Error: Unknown debug mode: {}", mode);
+            eprintln!("Valid modes: run, analyze");
+            print_debug_help();
+            exit(EXIT_ERROR);
+        }
+    }
+}
+
+fn run_debug_interactive(args: &[String]) {
+    // Interactive rust-gdb session
+    if args.is_empty() {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg debug run <file> [--break <function>]");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[0];
+
+    // Check if file exists
+    if !PathBuf::from(file_path).exists() {
+        eprintln!("Error: File not found: {}", file_path);
+        exit(EXIT_ERROR);
+    }
+
+    // Parse breakpoint flag
+    let breakpoint = if args.len() >= 3 && args[1] == "--break" {
+        &args[2]
+    } else {
+        "dispatch_method_call" // Default breakpoint
+    };
+
+    // Find ruchy binary
+    let ruchy_bin = find_ruchy_binary();
+
+    println!("🔍 Launching interactive rust-gdb session...");
+    println!("📄 File: {}", file_path);
+    println!("🎯 Breakpoint: {}", breakpoint);
+    println!();
+    println!("Commands:");
+    println!("  (gdb) run          - Start execution");
+    println!("  (gdb) bt           - Show backtrace");
+    println!("  (gdb) info locals  - Show local variables");
+    println!("  (gdb) print <var>  - Print variable value");
+    println!("  (gdb) continue     - Continue execution");
+    println!("  (gdb) quit         - Exit debugger");
+    println!();
+
+    // Create temporary gdb commands file
+    let gdb_commands = format!(
+        r#"set print pretty on
+set print array on
+break {}
+run run "{}"
+"#,
+        breakpoint, file_path
+    );
+
+    let temp_file = std::env::temp_dir().join("ruchydbg-gdb-commands.txt");
+    std::fs::write(&temp_file, gdb_commands).expect("Failed to write gdb commands");
+
+    // Launch rust-gdb
+    let status = Command::new("rust-gdb")
+        .arg("-x")
+        .arg(&temp_file)
+        .arg(&ruchy_bin)
+        .status();
+
+    // Cleanup
+    let _ = std::fs::remove_file(temp_file);
+
+    match status {
+        Ok(exit_status) => {
+            if exit_status.success() {
+                exit(EXIT_SUCCESS);
+            } else {
+                exit(exit_status.code().unwrap_or(EXIT_ERROR));
+            }
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to launch rust-gdb: {}", e);
+            eprintln!("Make sure rust-gdb is installed: rustup component add rust-src");
+            exit(EXIT_ERROR);
+        }
+    }
+}
+
+fn run_debug_analyze(args: &[String]) {
+    // Automated debug session with trace capture
+    if args.is_empty() {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg debug analyze <file> [--break <function>]");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[0];
+
+    // Check if file exists
+    if !PathBuf::from(file_path).exists() {
+        eprintln!("Error: File not found: {}", file_path);
+        exit(EXIT_ERROR);
+    }
+
+    // Parse breakpoint flag
+    let breakpoint = if args.len() >= 3 && args[1] == "--break" {
+        &args[2]
+    } else {
+        "dispatch_method_call" // Default breakpoint
+    };
+
+    // Find ruchy binary
+    let ruchy_bin = find_ruchy_binary();
+
+    println!("🔍 Running automated rust-gdb analysis...");
+    println!("📄 File: {}", file_path);
+    println!("🎯 Breakpoint: {}", breakpoint);
+    println!();
+
+    // Create GDB batch commands
+    let gdb_commands = format!(
+        r#"set pagination off
+set print pretty on
+set print array on
+
+break {}
+
+commands 1
+  echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n
+  echo 🔍 BREAKPOINT HIT: {}\n
+  echo ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n
+  echo \n📋 Backtrace:\n
+  bt 10
+  echo \n📊 Local variables:\n
+  info locals
+  echo \n📍 Arguments:\n
+  info args
+  echo \n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n
+  continue
+end
+
+run run "{}"
+quit
+"#,
+        breakpoint, breakpoint, file_path
+    );
+
+    let temp_file = std::env::temp_dir().join("ruchydbg-analyze-commands.txt");
+    std::fs::write(&temp_file, gdb_commands).expect("Failed to write gdb commands");
+
+    // Run rust-gdb in batch mode
+    let output = Command::new("rust-gdb")
+        .arg("-batch")
+        .arg("-x")
+        .arg(&temp_file)
+        .arg(&ruchy_bin)
+        .output();
+
+    // Cleanup
+    let _ = std::fs::remove_file(temp_file);
+
+    match output {
+        Ok(output) => {
+            // Print stdout and stderr
+            print!("{}", String::from_utf8_lossy(&output.stdout));
+            eprint!("{}", String::from_utf8_lossy(&output.stderr));
+
+            println!();
+            println!("✅ Analysis complete");
+            exit(EXIT_SUCCESS);
+        }
+        Err(e) => {
+            eprintln!("❌ Failed to run rust-gdb: {}", e);
+            eprintln!("Make sure rust-gdb is installed: rustup component add rust-src");
+            exit(EXIT_ERROR);
+        }
+    }
+}
+
+fn find_ruchy_binary() -> PathBuf {
+    // Try to find ruchy binary in common locations
+    let candidates = [
+        "../ruchy/target/debug/ruchy",
+        "../ruchy/target/release/ruchy",
+        "../../ruchy/target/debug/ruchy",
+    ];
+
+    for candidate in &candidates {
+        let path = PathBuf::from(candidate);
+        if path.exists() {
+            return path;
+        }
+    }
+
+    // Check if ruchy is in PATH
+    if Command::new("which")
+        .arg("ruchy")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        return PathBuf::from("ruchy");
+    }
+
+    eprintln!("❌ Error: Cannot find ruchy binary");
+    eprintln!("Expected locations:");
+    for candidate in &candidates {
+        eprintln!("  - {}", candidate);
+    }
+    eprintln!("  - ruchy in PATH");
+    eprintln!("\nPlease build ruchy first:");
+    eprintln!("  cd ../ruchy && cargo build --bin ruchy");
+    exit(EXIT_ERROR);
+}
+
+fn print_debug_help() {
+    println!("ruchydbg debug - Interactive rust-gdb wrapper for Ruchy debugging");
+    println!();
+    println!("USAGE:");
+    println!("    ruchydbg debug <MODE> <file> [OPTIONS]");
+    println!();
+    println!("MODES:");
+    println!("    run          Launch interactive rust-gdb session");
+    println!("    analyze      Run automated debug analysis (batch mode)");
+    println!();
+    println!("OPTIONS:");
+    println!(
+        "    --break <function>    Set breakpoint at function (default: dispatch_method_call)"
+    );
+    println!();
+    println!("EXAMPLES:");
+    println!("    # Interactive debugging session");
+    println!("    ruchydbg debug run test.ruchy");
+    println!();
+    println!("    # Interactive with custom breakpoint");
+    println!("    ruchydbg debug run test.ruchy --break eval_method_dispatch");
+    println!();
+    println!("    # Automated trace capture");
+    println!("    ruchydbg debug analyze test.ruchy");
+    println!();
+    println!("    # Automated analysis with custom breakpoint");
+    println!("    ruchydbg debug analyze test.ruchy --break parse_function");
+    println!();
+    println!("COMMON BREAKPOINTS:");
+    println!("    dispatch_method_call     - Method dispatch entry point");
+    println!("    eval_method_dispatch     - Method evaluation");
+    println!("    parse_function           - Function parsing");
+    println!("    eval_expression          - Expression evaluation");
+    println!();
+    println!("GDB COMMANDS (interactive mode):");
+    println!("    run          - Start execution");
+    println!("    bt           - Show backtrace");
+    println!("    info locals  - Show local variables");
+    println!("    print <var>  - Print variable value");
+    println!("    continue     - Continue execution");
+    println!("    quit         - Exit debugger");
+    println!();
+}
+
 fn run_validation() {
     // Find the validation script relative to the package
     let script_path = find_validation_script();
@@ -846,6 +1127,7 @@ fn print_help() {
     println!(
         "    run <file>           Execute Ruchy code with timeout detection and type-aware tracing"
     );
+    println!("    debug <mode>         Interactive rust-gdb wrapper (run, analyze) ⭐ NEW!");
     println!("    profile <type>       Profile code execution (--stack for call depth analysis)");
     println!("    detect <file>        Detect pathological inputs causing performance cliffs");
     println!("    regression <type>    Check for regressions (snapshot, determinism, state, perf)");
@@ -867,6 +1149,8 @@ fn print_help() {
     println!();
     println!("EXAMPLES:");
     println!("    ruchydbg run test.ruchy --timeout 1000 --trace");
+    println!("    ruchydbg debug run test.ruchy              # Interactive debugger ⭐");
+    println!("    ruchydbg debug analyze test.ruchy          # Automated trace capture ⭐");
     println!("    ruchydbg profile --stack factorial.ruchy");
     println!("    ruchydbg detect test.ruchy --threshold 15");
     println!("    ruchydbg regression snapshot v1.ruchy v2.ruchy");

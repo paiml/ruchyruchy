@@ -53,6 +53,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TOOL: Verify all quality gates
 - PMAT: Document final mutation score
 
+#### DEBUGGER-055: Interactive rust-gdb Wrapper (COMPLETE - EXTREME TDD)
+
+**Status**: ✅ Complete - All phases passed (RED-GREEN-REFACTOR-TOOL-PMAT)
+
+**Description**: Enhance ruchydbg to provide interactive debugging by wrapping rust-gdb. Instead of just shelling out to production ruchy binary, launch interactive debugger sessions with pre-configured breakpoints, pretty-printers, and automated instrumentation.
+
+**Phases Complete**:
+- ✅ RED: 6 tests written (5 passing, 1 ignored for manual testing)
+- ✅ GREEN: `ruchydbg debug` subcommand implemented
+- ✅ REFACTOR: Code formatted, tests still passing
+- ✅ TOOL: All quality gates passed (cargo test, clippy, fmt, release build)
+- ✅ PMAT: Ready for v1.18.0 release
+
+**Features**:
+- `ruchydbg debug run <file>` - Interactive rust-gdb session
+- `ruchydbg debug analyze <file>` - Automated trace capture (batch mode)
+- `--break <function>` flag for custom breakpoints (default: dispatch_method_call)
+- Automatic ruchy binary detection (../ruchy/target/debug/ruchy, PATH)
+- Pretty-printing and array display enabled by default
+- Helper commands displayed on launch
+
+**Usage Examples**:
+```bash
+# Interactive debugging
+ruchydbg debug run test.ruchy
+
+# Interactive with custom breakpoint
+ruchydbg debug run test.ruchy --break eval_method_dispatch
+
+# Automated analysis
+ruchydbg debug analyze test.ruchy
+
+# Automated with custom breakpoint
+ruchydbg debug analyze test.ruchy --break parse_function
+```
+
+**Common Breakpoints**:
+- `dispatch_method_call` - Method dispatch entry point
+- `eval_method_dispatch` - Method evaluation
+- `parse_function` - Function parsing
+- `eval_expression` - Expression evaluation
+
+**Tests**:
+- File: tests/test_debugger_055_debug_wrapper.rs
+- Results: 5/5 passing, 1 ignored (interactive test - manual verification)
+- Tests validate: help text, analyze mode, automatic building, breakpoint flags
+
+**Implementation**:
+- File: src/bin/ruchydbg.rs
+- Functions: run_debug(), run_debug_interactive(), run_debug_analyze(), find_ruchy_binary(), print_debug_help()
+- LOC: ~270 lines added
+
+**Prototype Origin**:
+- Discovered during DEBUGGER-045 (Mutation Testing) when debugging File.open() __type marker bug
+- Prototype scripts: scripts/debug-ruchy.sh, scripts/debug-ruchy-auto.sh
+- Successfully debugged upstream Ruchy compiler bug
+- Formalized into ruchydbg CLI integration
+
+**Impact**:
+- Enables interactive debugging of Ruchy compiler issues
+- Replaces manual eprintln!() debugging with proper rust-gdb workflow
+- Automated trace capture for bug reports
+- Discovered and documented File.open() __type marker bug (BUG_REPORT_FILE_OPEN_TYPE_MARKER.md)
+
 ## [1.17.0] - 2025-11-02
 
 ### 🎉 Compiler Profiling Tool - Complete (4 Phases)
