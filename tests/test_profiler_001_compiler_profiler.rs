@@ -192,7 +192,6 @@ fn test_hot_function_detection() {
 ///
 /// Property: Should detect expressions that can be folded at compile-time
 #[test]
-#[ignore = "Requires AST analysis implementation - Phase 2"]
 fn test_optimization_opportunity_detection() {
     let profiler = CompilerProfiler::new();
 

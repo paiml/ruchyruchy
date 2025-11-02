@@ -5720,3 +5720,55 @@ future_roadmap:
           - Julia profiling: jitlayers.cpp statistics collection
           - Zero-overhead profiling: use existing call_depth tracking
 
+      - id: DEBUGGER-053
+        title: "Compiler Profiling Tool - Phase 3: AST Optimizer"
+        priority: high
+        status: in_progress
+        phase: IN_PROGRESS
+        week: 18
+        description: |
+          Phase 3: Implement AST analysis for optimization opportunity detection.
+          Analyze AST to identify constant folding, inlining, TCO opportunities.
+
+          Focus: Static analysis of AST to detect optimization patterns that can
+          improve performance. Based on surprising benchmark findings from Phase 1.
+        requirements:
+          - Implement analyze_ast() for AST traversal
+          - Detect constant folding opportunities (e.g., "2 + 3 * 4" → "14")
+          - Detect inlining candidates (high call count, small functions)
+          - Detect tail-call optimization opportunities
+          - Detect loop unrolling opportunities (constant iteration counts)
+          - Estimate speedup and confidence for each optimization
+          - test_optimization_opportunity_detection must pass
+        tests:
+          - test_optimization_opportunity_detection (currently ignored - make PASS)
+          - test_cross_mode_comparison (deferred to Phase 4)
+        acceptance:
+          - test_optimization_opportunity_detection PASSING (unignore and GREEN)
+          - Constant folding detection working
+          - At least 3 optimization kinds detected
+          - Speedup estimation reasonable (based on benchmarks)
+          - All quality gates passing (fmt, clippy, doc, lint)
+        deliverables:
+          - Implement analyze_ast() in CompilerProfiler
+          - AST visitor pattern for traversal
+          - Constant expression evaluator
+          - Function size analyzer for inlining
+          - Tail-call detector
+          - Documentation for optimization detection algorithms
+        extreme_tdd_phases:
+          - RED: Unignore test_optimization_opportunity_detection - should fail
+          - GREEN: Implement minimal constant folding detection
+          - REFACTOR: Add inlining and TCO detection
+          - TOOL: Quality gates
+          - PMAT: Verify optimization suggestions are actionable
+        expected_impact: |
+          HIGH: Enables automated detection of optimization opportunities.
+          Based on Phase 1 analysis: constant folding (10-20%), inlining (5-30%),
+          TCO (15-25%). Helps developers prioritize optimization work.
+        research_source: |
+          - Constant folding: Compiler design textbooks (Aho et al. Dragon Book)
+          - Inlining heuristics: GCC/LLVM inlining cost models
+          - Tail-call detection: Functional language compiler patterns
+          - Performance estimates: ../ruchy-book benchmarking data
+
