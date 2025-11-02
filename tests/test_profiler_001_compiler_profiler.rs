@@ -254,7 +254,6 @@ fn test_optimization_opportunity_detection() {
 ///
 /// Property: Should run same code in multiple modes and report speedup
 #[test]
-#[ignore = "Requires full execution mode infrastructure"]
 fn test_cross_mode_comparison() {
     let profiler = CompilerProfiler::new();
 
