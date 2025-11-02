@@ -1,17 +1,48 @@
-// DEBUGGER-050: Coverage Visualization - RED Phase
+// DEBUGGER-050: Coverage Visualization - RED+GREEN+REFACTOR Phases
 //
 // Requirements:
-// 1. Install cargo-llvm-cov for accurate coverage data
-// 2. Generate HTML coverage reports with line-level highlighting
-// 3. Show branch coverage statistics
-// 4. Export JSON for CI integration
-// 5. Integrate with quality gates
+// 1. ✅ Install cargo-llvm-cov for accurate coverage data (GREEN: cargo-llvm-cov 0.6.19)
+// 2. ✅ Generate HTML coverage reports with line-level highlighting (GREEN: index.html generated)
+// 3. ⏳ Show branch coverage statistics (GREEN: partial implementation)
+// 4. ⏳ Export JSON for CI integration (GREEN: pending full validation)
+// 5. ⏳ Integrate with quality gates (GREEN: --fail-under-lines flag verified)
 //
-// RED Phase: These tests define the requirements and will fail initially.
+// Phase Status:
+// - RED Phase: ✅ Complete (7 tests written)
+// - GREEN Phase: ✅ Complete (minimal implementation verified)
+// - REFACTOR Phase: 🔄 In Progress (code quality improvements)
 
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+
+/// Constants for file paths and coverage directories
+const COVERAGE_HTML_DIR: &str = "target/coverage";
+const COVERAGE_HTML_INDEX: &str = "target/coverage/html/index.html";
+const COVERAGE_BRANCH_DIR: &str = "target/coverage-branch";
+const COVERAGE_BRANCH_INDEX: &str = "target/coverage-branch/html/index.html";
+const COVERAGE_JSON_PATH: &str = "target/coverage.json";
+const QUALITY_GATE_THRESHOLD: &str = "80"; // 80% line coverage
+
+/// Helper function to run cargo llvm-cov commands with consistent error handling
+fn run_cargo_llvm_cov(args: &[&str]) -> Result<std::process::Output, String> {
+    Command::new("cargo")
+        .arg("llvm-cov")
+        .args(args)
+        .output()
+        .map_err(|e| format!("Failed to run cargo llvm-cov: {}", e))
+}
+
+/// Helper function to assert command success with detailed error messages
+fn assert_command_success(output: &std::process::Output, context: &str) {
+    assert!(
+        output.status.success(),
+        "{} should succeed. Exit code: {:?}, stderr: {}",
+        context,
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 
 /// Test 1: Verify cargo-llvm-cov is available
 /// This test ensures the coverage tool is installed
@@ -41,32 +72,23 @@ fn test_cargo_llvm_cov_installed() {
 #[ignore] // Expensive test - generates full coverage report
 fn test_html_report_generation() {
     // Clean previous coverage data
-    let _ = Command::new("cargo").arg("llvm-cov").arg("clean").output();
+    let _ = run_cargo_llvm_cov(&["clean"]);
 
     // Generate HTML coverage report
-    let output = Command::new("cargo")
-        .arg("llvm-cov")
-        .arg("--html")
-        .arg("--output-dir")
-        .arg("target/coverage")
-        .output()
+    let output = run_cargo_llvm_cov(&["--html", "--output-dir", COVERAGE_HTML_DIR])
         .expect("Failed to run cargo llvm-cov");
 
-    assert!(
-        output.status.success(),
-        "HTML coverage generation should succeed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert_command_success(&output, "HTML coverage generation");
 
     // Verify HTML report exists
     assert!(
-        Path::new("target/coverage/html/index.html").exists(),
-        "HTML coverage report should be generated at target/coverage/html/index.html"
+        Path::new(COVERAGE_HTML_INDEX).exists(),
+        "HTML coverage report should be generated at {}",
+        COVERAGE_HTML_INDEX
     );
 
     // Verify report contains coverage data
-    let html_content =
-        fs::read_to_string("target/coverage/html/index.html").expect("Failed to read HTML report");
+    let html_content = fs::read_to_string(COVERAGE_HTML_INDEX).expect("Failed to read HTML report");
     assert!(
         html_content.contains("Coverage") || html_content.contains("coverage"),
         "HTML report should contain coverage information"
@@ -80,13 +102,14 @@ fn test_html_report_generation() {
 fn test_line_highlighting() {
     // Ensure HTML report exists (prerequisite)
     assert!(
-        Path::new("target/coverage/html/index.html").exists(),
-        "HTML report must exist (run test_html_report_generation first)"
+        Path::new(COVERAGE_HTML_INDEX).exists(),
+        "HTML report must exist at {} (run test_html_report_generation first)",
+        COVERAGE_HTML_INDEX
     );
 
     // Find a Rust source file in the HTML report
-    let html_dir = Path::new("target/coverage/html");
-    let html_files: Vec<_> = fs::read_dir(html_dir)
+    let html_dir = Path::new(COVERAGE_HTML_DIR).join("html");
+    let html_files: Vec<_> = fs::read_dir(&html_dir)
         .expect("Failed to read HTML directory")
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("html"))
@@ -120,19 +143,10 @@ fn test_line_highlighting() {
 #[ignore] // Expensive test - requires coverage analysis
 fn test_branch_coverage() {
     // Generate coverage with branch coverage enabled
-    let output = Command::new("cargo")
-        .arg("llvm-cov")
-        .arg("--branch")
-        .arg("--output-dir")
-        .arg("target/coverage-branch")
-        .output()
+    let output = run_cargo_llvm_cov(&["--branch", "--output-dir", COVERAGE_BRANCH_DIR])
         .expect("Failed to run cargo llvm-cov with branch coverage");
 
-    assert!(
-        output.status.success(),
-        "Branch coverage generation should succeed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert_command_success(&output, "Branch coverage generation");
 
     // Verify branch coverage is reported
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -141,7 +155,7 @@ fn test_branch_coverage() {
 
     let has_branch_info = combined.contains("branch")
         || combined.contains("Branch")
-        || Path::new("target/coverage-branch/html/index.html").exists();
+        || Path::new(COVERAGE_BRANCH_INDEX).exists();
 
     assert!(
         has_branch_info,
@@ -155,29 +169,21 @@ fn test_branch_coverage() {
 #[ignore] // Expensive test - generates JSON export
 fn test_json_export() {
     // Generate JSON coverage data
-    let output = Command::new("cargo")
-        .arg("llvm-cov")
-        .arg("--json")
-        .arg("--output-path")
-        .arg("target/coverage.json")
-        .output()
+    let output = run_cargo_llvm_cov(&["--json", "--output-path", COVERAGE_JSON_PATH])
         .expect("Failed to export JSON coverage");
 
-    assert!(
-        output.status.success(),
-        "JSON coverage export should succeed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert_command_success(&output, "JSON coverage export");
 
     // Verify JSON file exists
     assert!(
-        Path::new("target/coverage.json").exists(),
-        "JSON coverage file should be generated at target/coverage.json"
+        Path::new(COVERAGE_JSON_PATH).exists(),
+        "JSON coverage file should be generated at {}",
+        COVERAGE_JSON_PATH
     );
 
     // Verify JSON is valid and contains coverage data
     let json_content =
-        fs::read_to_string("target/coverage.json").expect("Failed to read JSON coverage file");
+        fs::read_to_string(COVERAGE_JSON_PATH).expect("Failed to read JSON coverage file");
 
     // JSON should be parseable
     let json_result: Result<serde_json::Value, _> = serde_json::from_str(&json_content);
@@ -206,11 +212,7 @@ fn test_json_export() {
 #[ignore] // Expensive test - requires full coverage run
 fn test_quality_gate_integration() {
     // Run coverage with minimum threshold check
-    let output = Command::new("cargo")
-        .arg("llvm-cov")
-        .arg("--fail-under-lines")
-        .arg("80") // 80% line coverage threshold
-        .output()
+    let output = run_cargo_llvm_cov(&["--fail-under-lines", QUALITY_GATE_THRESHOLD])
         .expect("Failed to run coverage with quality gate");
 
     // Note: This may fail if actual coverage < 80%, which is OK for RED phase
@@ -224,7 +226,8 @@ fn test_quality_gate_integration() {
 
     assert!(
         flag_supported,
-        "cargo-llvm-cov should support --fail-under-lines for quality gates"
+        "cargo-llvm-cov should support --fail-under-lines for quality gates ({}% threshold)",
+        QUALITY_GATE_THRESHOLD
     );
 }
 
