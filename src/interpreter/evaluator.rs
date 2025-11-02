@@ -329,6 +329,13 @@ impl Evaluator {
         self
     }
 
+    /// PROFILER-001: Enable type observation (stub for Phase 2)
+    #[allow(dead_code)]
+    pub fn with_type_observation(self, _profiler: &crate::profiler::CompilerProfiler) -> Self {
+        // Stub: will implement in Phase 2
+        self
+    }
+
     /// Enable profiling for stack depth analysis (DEBUGGER-041)
     ///
     /// Enables collection of function call statistics including:
