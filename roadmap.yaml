@@ -5609,3 +5609,59 @@ future_roadmap:
           - Industry standard: cargo-llvm-cov for Rust coverage
           - paiml-mcp-agent-toolkit: Coverage tracking in CI
 
+      - id: DEBUGGER-051
+        title: "Compiler Profiling Tool - Phase 1"
+        priority: high
+        status: completed
+        phase: COMPLETED
+        week: 18
+        description: |
+          Internal tool for Ruchy compiler developers to optimize performance across
+          execution modes (AST/Bytecode/Transpiled/Compiled). Extends DEBUGGER-047
+          PerformanceProfiler with compiler-specific tracking inspired by Julia's JIT.
+
+          Phase 1: Infrastructure for phase tracking, type observation, and optimization discovery.
+        requirements:
+          - Track compilation phases (lexing, parsing, type checking, codegen)
+          - Julia-inspired type observation (Monomorphic/Polymorphic/Megamorphic)
+          - Hot function detection (>1% of total execution time)
+          - Optimization opportunity discovery (constant folding, inlining, TCO)
+          - Cross-mode performance comparison (AST/Bytecode/Transpiled/Compiled)
+          - Comprehensive documentation with Julia JIT analysis
+        tests:
+          - test_compiler_phase_tracking (PASSING)
+          - test_type_observation (Phase 2)
+          - test_hot_function_detection (Phase 2)
+          - test_optimization_opportunity_detection (Phase 2)
+          - test_cross_mode_comparison (Phase 2)
+          - test_profiler_001_completeness (PASSING)
+        acceptance:
+          - Phase tracking infrastructure working
+          - Type signature and stability analysis types defined
+          - Optimization opportunity types defined
+          - Documentation complete (1435 LOC specification)
+          - All quality gates passing (fmt, clippy, doc, lint)
+        deliverables:
+          - src/profiler/mod.rs (module structure)
+          - src/profiler/types.rs (ExecutionMode, TypeSignature, Stability, OptKind)
+          - src/profiler/compiler_profiler.rs (CompilerProfiler implementation)
+          - tests/test_profiler_001_compiler_profiler.rs (2/6 tests passing)
+          - docs/specifications/performance-profiling-compiler-tooling.md (Julia analysis)
+        extreme_tdd_phases:
+          - RED: 6 tests written (2 passing, 4 deferred to Phase 2)
+          - GREEN: Minimal infrastructure implementation
+          - REFACTOR: Documentation and code quality
+          - TOOL: Zero-tolerance quality gates passed
+        expected_impact: |
+          HIGH: Enables Ruchy compiler developers to systematically optimize performance.
+          Based on analysis showing 5 easy wins: opt-level z→3 (28%), TCO (15-25%),
+          constant folding (10-20%), NaN-boxing (30%), inlining (5-30%).
+          Addresses surprising findings: Transpiled beats Compiled (opt-level issue),
+          842x bytecode variance, 181x AST slowdown.
+        research_source: |
+          - Julia JIT architecture: jitlayers.cpp, codegen.cpp, gf.c:149 method cache
+          - ../ruchy-book/test/ch21-benchmarks/BENCHMARK_SUMMARY.md analysis
+          - ../ruchy/docs/specifications/jit-llvm-julia-style-optimization.md
+          - Julia type stability: Monomorphic/Polymorphic/Megamorphic classification
+          - Julia inline caching for polymorphic call sites
+
