@@ -5807,3 +5807,81 @@ future_roadmap:
         research_source: |
           - Phase 1 benchmarking: ../ruchy-book/test/ch21-benchmarks/
 
+      - id: DEBUGGER-055
+        title: "Interactive rust-gdb Wrapper for Ruchy Debugging"
+        priority: high
+        status: prototype_complete
+        phase: IN_PROGRESS
+        week: 19
+        description: |
+          Enhance ruchydbg to provide interactive debugging by wrapping rust-gdb/lldb.
+          Instead of just shelling out to production ruchy binary, launch interactive
+          debugger sessions with pre-configured breakpoints, pretty-printers, and
+          automated instrumentation. Prototype proven successful in debugging
+          File.open() __type marker bug.
+        motivation: |
+          Current ruchydbg just shells out to `ruchy` (src/bin/ruchydbg.rs:129), providing
+          no debugging capabilities. When investigating upstream Ruchy bugs, developers
+          resort to manual eprintln!() debugging instead of proper debuggers. This ticket
+          formalizes the prototype debug wrapper created to debug File.open() issue.
+        requirements:
+          - Interactive wrapper: Launch rust-gdb with pre-configured session
+          - Automated wrapper: Non-interactive batch mode with output capture
+          - Breakpoint setup: Common debug points (dispatch_method_call, eval, etc)
+          - Pretty-printers: Format Ruchy Value enum and common types
+          - Conditional breakpoints: Break on specific method names, types
+          - Automated instrumentation: Run and capture debug traces
+          - Integration with ruchydbg CLI: `ruchydbg debug` subcommand
+        features:
+          - "`ruchydbg debug run <file>` - Interactive rust-gdb session"
+          - "`ruchydbg debug analyze <file>` - Automated trace capture"
+          - "`--break <function>` - Set custom breakpoints"
+          - "`--condition <expr>` - Conditional breakpoints"
+          - "Pretty-print Value enum variants"
+          - "Capture backtraces, locals, arguments automatically"
+        tests:
+          - test_debug_wrapper_builds_ruchy: Automatically builds with debug symbols
+          - test_debug_wrapper_sets_breakpoints: Breakpoints configured correctly
+          - test_debug_wrapper_captures_output: Automated mode captures debug info
+          - test_debug_wrapper_conditional_break: Conditions work (method name, etc)
+          - test_debug_wrapper_pretty_print: Value enum formatted correctly
+        acceptance:
+          - Prototype scripts functional (debug-ruchy.sh, debug-ruchy-auto.sh)
+          - Integrated into ruchydbg CLI as `debug` subcommand
+          - Successfully used to debug File.open() __type marker bug
+          - Documentation with examples
+          - All 5 tests passing
+        deliverables:
+          - scripts/debug-ruchy.sh (interactive wrapper) ✅ DONE
+          - scripts/debug-ruchy-auto.sh (automated wrapper) ✅ DONE
+          - src/bin/ruchydbg.rs: Add `debug` subcommand (pending)
+          - tests/test_debug_wrapper.rs (5 tests) (pending)
+          - docs/DEBUGGING_WITH_GDB.md (user guide) (pending)
+        extreme_tdd_phases:
+          - PROTOTYPE: ✅ COMPLETE - Scripts created and proven on File.open() bug
+          - RED: Write failing tests for CLI integration
+          - GREEN: Integrate into ruchydbg CLI
+          - REFACTOR: Optimize and add features
+          - TOOL: Quality gates
+        expected_impact: |
+          CRITICAL: Transforms debugging experience from eprintln!() to proper interactive
+          debugging. Prototype already successful in identifying File.open() __type marker
+          bug within minutes (vs hours of print debugging). Essential tool for upstream
+          Ruchy bug investigation and ruchyruchy development.
+        research_source: |
+          - Proven in practice: Debugged File.open() __type marker issue
+          - Bug report: BUG_REPORT_FILE_OPEN_TYPE_MARKER.md (detailed findings)
+          - rust-gdb: Standard Rust debugging tool, well-documented
+          - Precedent: All serious compiler projects have debug wrapper tools
+        prototype_success: |
+          ✅ Prototype completed during DEBUGGER-045 (mutation testing)
+          ✅ Successfully debugged File.open() returns object without __type marker
+          ✅ Captured: backtrace, locals, arguments, error location
+          ✅ Debug session output: Identified exact failure point in method dispatch
+          ✅ Result: Comprehensive bug report ready to file at paiml/ruchy/issues
+        next_steps:
+          - Formalize prototype into ruchydbg CLI
+          - Add tests for debug wrapper functionality
+          - Document debugging workflow
+          - File upstream bug report with debug findings
+
