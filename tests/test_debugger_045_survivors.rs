@@ -72,7 +72,10 @@ fn test_survivor_3_function_parsing_logic() {
     // Function without parameters
     let code2 = "fun test() { return 1; }";
     let mut parser2 = Parser::new(code2);
-    assert!(parser2.parse().is_ok(), "Function without params should parse");
+    assert!(
+        parser2.parse().is_ok(),
+        "Function without params should parse"
+    );
 
     // Function with return type
     let code3 = "fun test() -> i32 { return 1; }";
