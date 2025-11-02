@@ -86,7 +86,6 @@ fn test_compiler_phase_tracking() {
 ///
 /// Property: Should track type signatures for each function call
 #[test]
-#[ignore = "Requires Evaluator integration - Phase 2"]
 fn test_type_observation() {
     let profiler = CompilerProfiler::new();
 
@@ -115,12 +114,12 @@ fn test_type_observation() {
 
     // Verify type signatures
     let sig1 = &observations[0];
-    assert_eq!(sig1.param_types(), &["Int32", "Int32"]);
-    assert_eq!(sig1.return_type(), "Int32");
+    assert_eq!(sig1.param_types(), &["Integer", "Integer"]);
+    assert_eq!(sig1.return_type(), "Integer");
 
     let sig2 = &observations[1];
-    assert_eq!(sig2.param_types(), &["Float64", "Float64"]);
-    assert_eq!(sig2.return_type(), "Float64");
+    assert_eq!(sig2.param_types(), &["Float", "Float"]);
+    assert_eq!(sig2.return_type(), "Float");
 
     // Verify type stability analysis
     let stability = profiler.type_stability("add");
@@ -137,7 +136,6 @@ fn test_type_observation() {
 ///
 /// Property: Functions with high call count or high total time should be flagged
 #[test]
-#[ignore = "Requires profiler integration with Evaluator - Phase 2"]
 fn test_hot_function_detection() {
     let profiler = CompilerProfiler::new();
 
@@ -156,8 +154,8 @@ fn test_hot_function_detection() {
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Should parse");
 
-    // Note: Integration with Evaluator will be implemented in Phase 2
-    let mut eval = Evaluator::new();
+    // DEBUGGER-052: Attach profiler to track function calls
+    let mut eval = Evaluator::new().with_type_observation(&profiler);
     for statement in ast.nodes() {
         eval.eval(statement).expect("Should execute");
     }

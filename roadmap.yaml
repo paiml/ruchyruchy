@@ -5665,3 +5665,58 @@ future_roadmap:
           - Julia type stability: Monomorphic/Polymorphic/Megamorphic classification
           - Julia inline caching for polymorphic call sites
 
+      - id: DEBUGGER-052
+        title: "Compiler Profiling Tool - Phase 2: Evaluator Integration"
+        priority: high
+        status: in_progress
+        phase: IN_PROGRESS
+        week: 18
+        description: |
+          Phase 2: Integrate CompilerProfiler with Evaluator for type observation and
+          hot function detection. Make 4 deferred tests from Phase 1 pass.
+
+          Focus: Instrument Evaluator to track function calls, observe type signatures,
+          and detect hot functions consuming >1% of execution time.
+        requirements:
+          - Integrate type observation with Evaluator call_function()
+          - Track function call counts and execution time
+          - Implement hot_functions() to identify >1% functions
+          - Observe TypeSignature at each function call (Julia-inspired)
+          - Calculate type stability (Monomorphic/Polymorphic/Megamorphic)
+          - All 4 deferred tests from Phase 1 must pass
+        tests:
+          - test_type_observation (currently ignored - make PASS)
+          - test_hot_function_detection (currently ignored - make PASS)
+          - test_optimization_opportunity_detection (deferred to Phase 3)
+          - test_cross_mode_comparison (deferred to Phase 3)
+        acceptance:
+          - test_type_observation PASSING (unignore and GREEN)
+          - test_hot_function_detection PASSING (unignore and GREEN)
+          - Type signatures observed at function calls
+          - Type stability correctly classified
+          - Hot functions correctly identified
+          - All quality gates passing (fmt, clippy, doc, lint)
+        deliverables:
+          - Implement with_type_observation() in Evaluator (currently stub)
+          - Add type observation hooks to call_function()
+          - Implement hot_functions() in CompilerProfiler
+          - Update ProfilerData to track call timing
+          - Documentation for new integration points
+        extreme_tdd_phases:
+          - RED: Unignore test_type_observation - should fail
+          - GREEN: Implement minimal type observation
+          - REFACTOR: Clean up integration
+          - TOOL: Quality gates
+          - RED: Unignore test_hot_function_detection - should fail
+          - GREEN: Implement hot function tracking
+          - REFACTOR: Optimize call overhead
+          - TOOL: Verify <1% performance impact
+        expected_impact: |
+          HIGH: Enables real-time type observation and hot function detection during
+          execution. Critical for identifying optimization opportunities in actual code.
+          Julia uses this for JIT specialization decisions.
+        research_source: |
+          - Julia type observation: julia/src/gf.c:149 method specialization
+          - Julia profiling: jitlayers.cpp statistics collection
+          - Zero-overhead profiling: use existing call_depth tracking
+

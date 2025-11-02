@@ -26,16 +26,15 @@ struct ProfilerData {
     // Type observation (Julia-inspired)
     type_observations: HashMap<String, Vec<TypeSignature>>,
 
-    // Hot function tracking (Phase 2 - currently unused)
-    #[allow(dead_code)]
+    // Hot function tracking (DEBUGGER-052)
     function_calls: HashMap<String, CallProfile>,
+    // Total execution time across all tracked functions
+    total_execution_time: Duration,
 }
 
 #[derive(Debug, Clone)]
 struct CallProfile {
-    #[allow(dead_code)]
     count: usize,
-    #[allow(dead_code)]
     total_time: Duration,
 }
 
@@ -48,6 +47,7 @@ impl CompilerProfiler {
                 current_phase: None,
                 type_observations: HashMap::new(),
                 function_calls: HashMap::new(),
+                total_execution_time: Duration::ZERO,
             })),
         }
     }
@@ -117,10 +117,74 @@ impl CompilerProfiler {
         vec![]
     }
 
+    /// Record a function call with its execution time (DEBUGGER-052)
+    ///
+    /// Updates call count and total time for the function, and accumulates
+    /// total execution time for percentage calculation.
+    pub fn record_function_call(&self, function: &str, duration: Duration) {
+        let mut data = self.data.borrow_mut();
+
+        // Update function profile
+        let profile = data
+            .function_calls
+            .entry(function.to_string())
+            .or_insert(CallProfile {
+                count: 0,
+                total_time: Duration::ZERO,
+            });
+
+        profile.count += 1;
+        profile.total_time += duration;
+
+        // Update total execution time
+        data.total_execution_time += duration;
+    }
+
     /// Identify hot functions (>threshold% of total time)
-    pub fn hot_functions(&self, _threshold: f64) -> Vec<HotFunction> {
-        // Placeholder: will implement in follow-up
-        vec![]
+    ///
+    /// Returns functions consuming more than the threshold percentage of total
+    /// execution time. Threshold is a fraction (0.01 = 1%).
+    ///
+    /// # Arguments
+    ///
+    /// * `threshold` - Minimum percentage (as fraction) to be considered "hot" (e.g., 0.01 for 1%)
+    ///
+    /// # Returns
+    ///
+    /// Vector of HotFunction sorted by percentage_of_total (descending)
+    pub fn hot_functions(&self, threshold: f64) -> Vec<HotFunction> {
+        let data = self.data.borrow();
+
+        let total_time_micros = data.total_execution_time.as_micros() as f64;
+        if total_time_micros == 0.0 {
+            return vec![];
+        }
+
+        let mut hot_fns: Vec<HotFunction> = data
+            .function_calls
+            .iter()
+            .map(|(name, profile)| {
+                let func_time_micros = profile.total_time.as_micros() as f64;
+                let percentage = (func_time_micros / total_time_micros) * 100.0;
+
+                HotFunction {
+                    name: name.clone(),
+                    call_count: profile.count,
+                    total_time: profile.total_time,
+                    percentage_of_total: percentage,
+                }
+            })
+            .filter(|f| f.percentage_of_total >= threshold * 100.0)
+            .collect();
+
+        // Sort by percentage descending (hottest first)
+        hot_fns.sort_by(|a, b| {
+            b.percentage_of_total
+                .partial_cmp(&a.percentage_of_total)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        hot_fns
     }
 
     /// Profile code in specific execution mode (stub for Phase 2)
