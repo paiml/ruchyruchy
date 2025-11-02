@@ -359,7 +359,8 @@ impl SoakTestRunner {
         let mut error_count = 0;
 
         // Calculate target delay between programs for rate limiting
-        let target_delay = Duration::from_secs_f64(60.0 / self.config.target_rate as f64);
+        // target_rate is programs per second, so delay = 1/rate
+        let target_delay = Duration::from_secs_f64(1.0 / self.config.target_rate as f64);
         let mut last_sample_elapsed = Duration::ZERO;
 
         // Main workload loop
