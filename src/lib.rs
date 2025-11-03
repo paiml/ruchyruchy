@@ -45,6 +45,8 @@ pub mod conformance;
 pub mod debugger;
 /// Interpreter for runtime bug discovery (INTERP-001 through INTERP-035)
 pub mod interpreter;
+/// JIT compiler infrastructure (INTERP-053 / JIT-002)
+pub mod jit;
 /// Language Server Protocol (LSP) implementation
 pub mod lsp;
 /// Performance benchmarking utilities
