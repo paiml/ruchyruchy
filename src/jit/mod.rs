@@ -1138,9 +1138,10 @@ impl JitCompiler {
             }
 
             // Index access: expr[index]
+            // Supports both array indexing and HashMap lookup
             AstNode::IndexAccess { expr, index } => {
-                // Compile array expression (should return address)
-                let array_addr = Self::compile_expr_with_context(
+                // Compile collection expression (array or hashmap address)
+                let coll_addr = Self::compile_expr_with_context(
                     expr,
                     builder,
                     parameters,
@@ -1151,8 +1152,8 @@ impl JitCompiler {
                     struct_defs,
                 )?;
 
-                // Compile index expression (should return integer)
-                let index_value = Self::compile_expr_with_context(
+                // Compile index/key expression
+                let key_value = Self::compile_expr_with_context(
                     index,
                     builder,
                     parameters,
@@ -1163,19 +1164,138 @@ impl JitCompiler {
                     struct_defs,
                 )?;
 
-                // Calculate byte offset: index * 8 (8 bytes per i64)
-                let eight = builder.ins().iconst(types::I64, 8);
-                let byte_offset = builder.ins().imul(index_value, eight);
+                // Check if this is a HashMap by looking for magic number -9999 at offset 0
+                // HashMap format: [MAGIC=-9999, count, k1, v1, k2, v2, ...]
+                // Array format: [elem0, elem1, elem2, ...]
 
-                // Calculate element address: array_addr + byte_offset
-                let elem_addr = builder.ins().iadd(array_addr, byte_offset);
-
-                // Load value from element address
-                let value = builder
+                // Load potential magic from offset 0
+                let magic_value = builder
                     .ins()
-                    .load(types::I64, MemFlags::trusted(), elem_addr, 0);
+                    .load(types::I64, MemFlags::trusted(), coll_addr, 0);
 
-                Ok(value)
+                // Check if magic == -9999
+                let magic_constant = builder.ins().iconst(types::I64, -9999);
+                let is_hashmap = builder
+                    .ins()
+                    .icmp(IntCC::Equal, magic_value, magic_constant);
+
+                // Create blocks for conditional
+                let hashmap_block = builder.create_block();
+                let array_block = builder.create_block();
+                let merge_block = builder.create_block();
+
+                // Add block parameter for result
+                builder.append_block_param(merge_block, types::I64);
+
+                // Branch based on magic number check
+                builder
+                    .ins()
+                    .brif(is_hashmap, hashmap_block, &[], array_block, &[]);
+
+                // HASHMAP LOOKUP PATH: Linear search through key-value pairs
+                builder.switch_to_block(hashmap_block);
+                builder.seal_block(hashmap_block);
+                {
+                    // Load count from offset 8 (after magic at offset 0)
+                    let count = builder
+                        .ins()
+                        .load(types::I64, MemFlags::trusted(), coll_addr, 8);
+
+                    // Create loop blocks
+                    let loop_header = builder.create_block();
+                    let loop_body = builder.create_block();
+                    let loop_exit = builder.create_block();
+
+                    // Loop variable: index i (0 to count-1)
+                    builder.append_block_param(loop_header, types::I64);
+
+                    // Jump to loop with i=0
+                    let i_init = builder.ins().iconst(types::I64, 0);
+                    builder.ins().jump(loop_header, &[i_init]);
+
+                    // Loop header: check if i < count
+                    builder.switch_to_block(loop_header);
+                    let i = builder.block_params(loop_header)[0];
+                    let i_lt_count = builder.ins().icmp(IntCC::SignedLessThan, i, count);
+                    builder
+                        .ins()
+                        .brif(i_lt_count, loop_body, &[], loop_exit, &[]);
+
+                    // Loop body: check if keys match
+                    builder.switch_to_block(loop_body);
+                    builder.seal_block(loop_body);
+
+                    // Define constants used across blocks in loop body
+                    let one = builder.ins().iconst(types::I64, 1);
+                    let two = builder.ins().iconst(types::I64, 2);
+                    let eight = builder.ins().iconst(types::I64, 8);
+
+                    // Calculate key offset: (2 + i*2) * 8 (account for magic + count)
+                    let i_times_2 = builder.ins().imul(i, two);
+                    let key_index = builder.ins().iadd(two, i_times_2);
+                    let key_offset = builder.ins().imul(key_index, eight);
+                    let key_addr = builder.ins().iadd(coll_addr, key_offset);
+                    let stored_key =
+                        builder
+                            .ins()
+                            .load(types::I64, MemFlags::trusted(), key_addr, 0);
+
+                    // Check if stored_key == search_key
+                    let keys_match = builder.ins().icmp(IntCC::Equal, stored_key, key_value);
+
+                    let found_block = builder.create_block();
+                    let continue_block = builder.create_block();
+                    builder
+                        .ins()
+                        .brif(keys_match, found_block, &[], continue_block, &[]);
+
+                    // Found: load value and jump to merge
+                    builder.switch_to_block(found_block);
+                    builder.seal_block(found_block);
+                    let val_index = builder.ins().iadd(key_index, one);
+                    let val_offset = builder.ins().imul(val_index, eight);
+                    let val_addr = builder.ins().iadd(coll_addr, val_offset);
+                    let found_value =
+                        builder
+                            .ins()
+                            .load(types::I64, MemFlags::trusted(), val_addr, 0);
+                    builder.ins().jump(merge_block, &[found_value]);
+
+                    // Continue: increment i and loop
+                    builder.switch_to_block(continue_block);
+                    builder.seal_block(continue_block);
+                    let i_next = builder.ins().iadd(i, one);
+                    builder.ins().jump(loop_header, &[i_next]);
+
+                    // Seal loop header now that all predecessors are known
+                    builder.seal_block(loop_header);
+
+                    // Loop exit: key not found, return 0
+                    builder.switch_to_block(loop_exit);
+                    builder.seal_block(loop_exit);
+                    let not_found = builder.ins().iconst(types::I64, 0);
+                    builder.ins().jump(merge_block, &[not_found]);
+                }
+
+                // ARRAY PATH: Simple index-based access
+                builder.switch_to_block(array_block);
+                builder.seal_block(array_block);
+                {
+                    let eight = builder.ins().iconst(types::I64, 8);
+                    let byte_offset = builder.ins().imul(key_value, eight);
+                    let elem_addr = builder.ins().iadd(coll_addr, byte_offset);
+                    let value = builder
+                        .ins()
+                        .load(types::I64, MemFlags::trusted(), elem_addr, 0);
+                    builder.ins().jump(merge_block, &[value]);
+                }
+
+                // Merge block: get result from either path
+                builder.switch_to_block(merge_block);
+                builder.seal_block(merge_block);
+                let result = builder.block_params(merge_block)[0];
+
+                Ok(result)
             }
 
             // Compound assignment: lhs op= rhs (e.g., x += 5, arr[i] *= 2)
@@ -1450,6 +1570,100 @@ impl JitCompiler {
 
                 // Return the struct address (as i64)
                 Ok(struct_addr)
+            }
+
+            // HashMap literal: {key1: value1, key2: value2, ...}
+            // Implementation: stack-allocated with format [MAGIC, count, k1, v1, k2, v2, ...]
+            // MAGIC = -9999 distinguishes from arrays
+            // Linear search for lookup (MVP - not efficient but correct)
+            AstNode::HashMapLiteral { pairs } => {
+                if pairs.is_empty() {
+                    // Empty hashmap - allocate minimal structure: [MAGIC, 0]
+                    let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        16, // 8 bytes for magic + 8 bytes for count=0
+                        3,
+                    ));
+                    let hashmap_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+                    let magic = builder.ins().iconst(types::I64, -9999);
+                    let zero = builder.ins().iconst(types::I64, 0);
+                    builder
+                        .ins()
+                        .store(MemFlags::trusted(), magic, hashmap_addr, 0);
+                    builder
+                        .ins()
+                        .store(MemFlags::trusted(), zero, hashmap_addr, 8);
+                    return Ok(hashmap_addr);
+                }
+
+                // Calculate size: magic + count + (key, value) pairs
+                // [MAGIC, count, k1, v1, k2, v2, ...]
+                let hashmap_size = (2 + pairs.len() * 2) * 8; // magic + count + pairs
+
+                // Create stack slot for hashmap
+                let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                    StackSlotKind::ExplicitSlot,
+                    hashmap_size as u32,
+                    3, // 8-byte alignment
+                ));
+
+                // Get address of stack slot
+                let hashmap_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+
+                // Store magic at offset 0
+                let magic = builder.ins().iconst(types::I64, -9999);
+                builder
+                    .ins()
+                    .store(MemFlags::trusted(), magic, hashmap_addr, 0);
+
+                // Store count at offset 8
+                let count = builder.ins().iconst(types::I64, pairs.len() as i64);
+                builder
+                    .ins()
+                    .store(MemFlags::trusted(), count, hashmap_addr, 8);
+
+                // Store each key-value pair
+                for (i, (key_ast, value_ast)) in pairs.iter().enumerate() {
+                    // Compile key
+                    let key_value = Self::compile_expr_with_context(
+                        key_ast,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                        compiled_functions,
+                        string_ctx,
+                        struct_defs,
+                    )?;
+
+                    // Compile value
+                    let val_value = Self::compile_expr_with_context(
+                        value_ast,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                        compiled_functions,
+                        string_ctx,
+                        struct_defs,
+                    )?;
+
+                    // Calculate offsets (account for magic + count = 2 words)
+                    // Pair i: key at offset (2 + i*2) * 8, value at offset (2 + i*2 + 1) * 8
+                    let key_offset = ((2 + i * 2) * 8) as i32;
+                    let val_offset = ((2 + i * 2 + 1) * 8) as i32;
+
+                    // Store key and value
+                    builder
+                        .ins()
+                        .store(MemFlags::trusted(), key_value, hashmap_addr, key_offset);
+                    builder
+                        .ins()
+                        .store(MemFlags::trusted(), val_value, hashmap_addr, val_offset);
+                }
+
+                // Return the hashmap address (as i64)
+                Ok(hashmap_addr)
             }
 
             // Unsupported AST node
