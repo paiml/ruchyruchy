@@ -317,6 +317,76 @@ impl JitCompiler {
                 Ok(result)
             }
 
+            // If expression: if (condition) { then } else { else }
+            AstNode::IfExpr {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                // Create basic blocks
+                let then_block = builder.create_block();
+                let else_block = builder.create_block();
+                let merge_block = builder.create_block();
+
+                // Both branches must return the same type (i64)
+                builder.append_block_param(merge_block, types::I64);
+
+                // Compile condition
+                let cond_value = Self::compile_expr_with_vars(condition, builder, variables)?;
+
+                // Convert to boolean: condition != 0
+                let zero = builder.ins().iconst(types::I64, 0);
+                let is_true = builder.ins().icmp(IntCC::NotEqual, cond_value, zero);
+
+                // Branch: if true, go to then, else go to else
+                builder.ins().brif(is_true, then_block, &[], else_block, &[]);
+
+                // Compile then branch
+                builder.switch_to_block(then_block);
+                builder.seal_block(then_block);
+
+                let then_result = if then_branch.is_empty() {
+                    builder.ins().iconst(types::I64, 0)
+                } else {
+                    let mut result = builder.ins().iconst(types::I64, 0);
+                    for stmt in then_branch {
+                        result = Self::compile_expr_with_vars(stmt, builder, variables)?;
+                    }
+                    result
+                };
+
+                builder.ins().jump(merge_block, &[then_result]);
+
+                // Compile else branch
+                builder.switch_to_block(else_block);
+                builder.seal_block(else_block);
+
+                let else_result = if let Some(else_stmts) = else_branch {
+                    if else_stmts.is_empty() {
+                        builder.ins().iconst(types::I64, 0)
+                    } else {
+                        let mut result = builder.ins().iconst(types::I64, 0);
+                        for stmt in else_stmts {
+                            result = Self::compile_expr_with_vars(stmt, builder, variables)?;
+                        }
+                        result
+                    }
+                } else {
+                    builder.ins().iconst(types::I64, 0)
+                };
+
+                builder.ins().jump(merge_block, &[else_result]);
+
+                // Continue at merge block
+                builder.switch_to_block(merge_block);
+                builder.seal_block(merge_block);
+
+                // Get the result from the merge block parameter
+                let result = builder.block_params(merge_block)[0];
+
+                Ok(result)
+            }
+
             // Unsupported AST node
             _ => Err(JitError::UnsupportedNode(format!(
                 "Cannot compile AST node: {:?}",
