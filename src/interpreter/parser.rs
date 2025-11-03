@@ -144,7 +144,8 @@ impl Parser {
         self.tokenize()?;
 
         // Step 2: Parse top-level declarations
-        let mut nodes = Vec::new();
+        // INTERP-048: Pre-allocate nodes Vec (typical programs have 1-10 top-level items)
+        let mut nodes = Vec::with_capacity(8);
 
         while !self.is_at_end() {
             // Skip any leading noise
@@ -205,7 +206,9 @@ impl Parser {
     /// keywords, and operators/delimiters
     fn tokenize(&mut self) -> Result<(), ParseError> {
         let mut chars = self.source.chars().peekable();
-        let mut tokens = Vec::new();
+        // INTERP-048: Pre-allocate tokens Vec (estimate: 1 token per 4 chars, min 16)
+        let estimated_tokens = (self.source.len() / 4).max(16);
+        let mut tokens = Vec::with_capacity(estimated_tokens);
 
         while let Some(&ch) = chars.peek() {
             match ch {
