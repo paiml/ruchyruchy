@@ -835,7 +835,8 @@ impl Evaluator {
                 let rhs_val = self.eval(rhs)?;
 
                 // Apply operation
-                let new_val = self.eval_binary_op(*op, current_val.clone(), rhs_val)?;
+                // INTERP-OPT-002: Move current_val instead of cloning (not used after binary op)
+                let new_val = self.eval_binary_op(*op, current_val, rhs_val)?;
 
                 // Update the variable
                 // For simple identifiers: x += 1
@@ -1199,19 +1200,20 @@ impl Evaluator {
             UnaryOperator::Dereference => {
                 // Dereference operator: *expr
                 // INTERP-041: Recursively unwrap _locked_value and _inner until we hit a non-wrapper
-                let mut current = operand.clone();
+                // INTERP-OPT-002: Use references to avoid unnecessary clones during unwrapping
+                let mut current = &operand;
                 #[allow(clippy::while_let_loop)]
                 loop {
-                    match &current {
+                    match current {
                         Value::HashMap(map) => {
                             // Check for _locked_value first (from lock() method)
                             if let Some(locked_value) = map.get("_locked_value") {
-                                current = locked_value.clone();
+                                current = locked_value;
                                 continue;
                             }
                             // Check for _inner (original mock wrapper)
                             else if let Some(inner_value) = map.get("_inner") {
-                                current = inner_value.clone();
+                                current = inner_value;
                                 continue;
                             } else {
                                 // Not a wrapper, return as-is
@@ -1224,7 +1226,8 @@ impl Evaluator {
                         }
                     }
                 }
-                Ok(current)
+                // Only clone once at the end
+                Ok(current.clone())
             }
         }
     }
@@ -1592,6 +1595,7 @@ impl Evaluator {
             "unwrap" => {
                 // Result::unwrap() or Option::unwrap()
                 // Mock: just return the receiver
+                // INTERP-OPT-002: Return receiver directly, no need to clone (we own it)
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "unwrap".to_string(),
@@ -1599,7 +1603,7 @@ impl Evaluator {
                         actual: arg_values.len(),
                     });
                 }
-                Ok(receiver.clone())
+                Ok(receiver)
             }
 
             "join" => {
