@@ -242,6 +242,12 @@ impl JitCompiler {
                 Ok(val)
             }
 
+            // Boolean literal: convert to 0 (false) or 1 (true)
+            AstNode::BooleanLiteral(b) => {
+                let val = builder.ins().iconst(types::I64, if *b { 1 } else { 0 });
+                Ok(val)
+            }
+
             // Identifier: lookup variable (parameter)
             AstNode::Identifier(name) => {
                 if let Some(&value) = variables.get(name) {
@@ -317,6 +323,54 @@ impl JitCompiler {
                 Ok(result)
             }
 
+            // While loop: while (condition) { body }
+            AstNode::WhileLoop { condition, body } => {
+                // Create basic blocks for loop structure
+                let loop_header = builder.create_block();
+                let loop_body = builder.create_block();
+                let loop_exit = builder.create_block();
+
+                // Jump to loop header to start
+                builder.ins().jump(loop_header, &[]);
+
+                // Loop header: Evaluate condition and branch
+                builder.switch_to_block(loop_header);
+                // Don't seal yet - has back edge from loop_body
+
+                let cond_value = Self::compile_expr_with_vars(condition, builder, variables)?;
+
+                // Convert condition to boolean: condition != 0
+                let zero = builder.ins().iconst(types::I64, 0);
+                let is_true = builder.ins().icmp(IntCC::NotEqual, cond_value, zero);
+
+                // Branch: if true, execute body; if false, exit loop
+                builder
+                    .ins()
+                    .brif(is_true, loop_body, &[], loop_exit, &[]);
+
+                // Loop body: Execute statements and jump back to header
+                builder.switch_to_block(loop_body);
+                builder.seal_block(loop_body);
+
+                // Execute loop body statements (if any)
+                for stmt in body {
+                    Self::compile_expr_with_vars(stmt, builder, variables)?;
+                }
+
+                // Back edge: Jump back to loop header
+                builder.ins().jump(loop_header, &[]);
+
+                // Now seal loop header (all predecessors known)
+                builder.seal_block(loop_header);
+
+                // Loop exit: Continue after loop, return 0
+                builder.switch_to_block(loop_exit);
+                builder.seal_block(loop_exit);
+
+                let result = builder.ins().iconst(types::I64, 0);
+                Ok(result)
+            }
+
             // If expression: if (condition) { then } else { else }
             AstNode::IfExpr {
                 condition,
@@ -339,7 +393,9 @@ impl JitCompiler {
                 let is_true = builder.ins().icmp(IntCC::NotEqual, cond_value, zero);
 
                 // Branch: if true, go to then, else go to else
-                builder.ins().brif(is_true, then_block, &[], else_block, &[]);
+                builder
+                    .ins()
+                    .brif(is_true, then_block, &[], else_block, &[]);
 
                 // Compile then branch
                 builder.switch_to_block(then_block);
