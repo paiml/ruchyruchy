@@ -196,8 +196,19 @@ impl JitCompiler {
             // Compile body expression with variable context
             let result = Self::compile_expr_with_vars(body, &mut builder, &variables)?;
 
-            // Return the result
-            builder.ins().return_(&[result]);
+            // Check if body ends with explicit return (to avoid double-return error)
+            let has_explicit_return = match body {
+                AstNode::Return { .. } => true,
+                AstNode::Block { statements } => {
+                    statements.last().map_or(false, |stmt| matches!(stmt, AstNode::Return { .. }))
+                }
+                _ => false,
+            };
+
+            // Return the result (only if no explicit return in body)
+            if !has_explicit_return {
+                builder.ins().return_(&[result]);
+            }
 
             // Finalize function
             builder.finalize();
@@ -243,7 +254,13 @@ impl JitCompiler {
         variables: &HashMap<String, Value>,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
-        Self::compile_expr_with_context(ast, builder, variables, &mut HashMap::new(), &mut var_counter)
+        Self::compile_expr_with_context(
+            ast,
+            builder,
+            variables,
+            &mut HashMap::new(),
+            &mut var_counter,
+        )
     }
 
     /// Compile AST expression to Cranelift IR value (with full context)
@@ -255,6 +272,33 @@ impl JitCompiler {
         var_counter: &mut usize,
     ) -> Result<Value, JitError> {
         match ast {
+            // Return statement: early function exit
+            AstNode::Return { value } => {
+                // Create dummy value first (before terminating block)
+                // This is needed because we must return a Value, but after return_
+                // the block is terminated and we can't create new instructions
+                let dummy = builder.ins().iconst(types::I64, 0);
+
+                if let Some(expr) = value {
+                    // Compile return value
+                    let return_value = Self::compile_expr_with_context(
+                        expr,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                    )?;
+                    // Return from function (terminates block)
+                    builder.ins().return_(&[return_value]);
+                } else {
+                    // Return with no value (return 0 by default)
+                    let zero = builder.ins().iconst(types::I64, 0);
+                    builder.ins().return_(&[zero]);
+                }
+                // Return the dummy value (created before block termination)
+                Ok(dummy)
+            }
+
             // Block: sequence of statements, returns last expression value
             AstNode::Block { statements } => {
                 let mut result = builder.ins().iconst(types::I64, 0);
@@ -352,8 +396,20 @@ impl JitCompiler {
 
             // Binary operation: compile left, compile right, apply operator
             AstNode::BinaryOp { left, op, right } => {
-                let lhs = Self::compile_expr_with_context(left, builder, parameters, local_vars, var_counter)?;
-                let rhs = Self::compile_expr_with_context(right, builder, parameters, local_vars, var_counter)?;
+                let lhs = Self::compile_expr_with_context(
+                    left,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
+                let rhs = Self::compile_expr_with_context(
+                    right,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
 
                 let result = match op {
                     // Arithmetic operators
@@ -427,7 +483,13 @@ impl JitCompiler {
                 builder.switch_to_block(loop_header);
                 // Don't seal yet - has back edge from loop_body
 
-                let cond_value = Self::compile_expr_with_context(condition, builder, parameters, local_vars, var_counter)?;
+                let cond_value = Self::compile_expr_with_context(
+                    condition,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
 
                 // Convert condition to boolean: condition != 0
                 let zero = builder.ins().iconst(types::I64, 0);
@@ -442,7 +504,13 @@ impl JitCompiler {
 
                 // Execute loop body statements (if any)
                 for stmt in body {
-                    Self::compile_expr_with_context(stmt, builder, parameters, local_vars, var_counter)?;
+                    Self::compile_expr_with_context(
+                        stmt,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                    )?;
                 }
 
                 // Back edge: Jump back to loop header
@@ -474,7 +542,13 @@ impl JitCompiler {
                 builder.append_block_param(merge_block, types::I64);
 
                 // Compile condition
-                let cond_value = Self::compile_expr_with_context(condition, builder, parameters, local_vars, var_counter)?;
+                let cond_value = Self::compile_expr_with_context(
+                    condition,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
 
                 // Convert to boolean: condition != 0
                 let zero = builder.ins().iconst(types::I64, 0);
@@ -494,12 +568,23 @@ impl JitCompiler {
                 } else {
                     let mut result = builder.ins().iconst(types::I64, 0);
                     for stmt in then_branch {
-                        result = Self::compile_expr_with_context(stmt, builder, parameters, local_vars, var_counter)?;
+                        result = Self::compile_expr_with_context(
+                            stmt,
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                        )?;
                     }
                     result
                 };
 
-                builder.ins().jump(merge_block, &[then_result]);
+                // Only jump to merge if then_branch doesn't end with return
+                let then_has_return = !then_branch.is_empty()
+                    && matches!(then_branch.last().unwrap(), AstNode::Return { .. });
+                if !then_has_return {
+                    builder.ins().jump(merge_block, &[then_result]);
+                }
 
                 // Compile else branch
                 builder.switch_to_block(else_block);
@@ -511,7 +596,13 @@ impl JitCompiler {
                     } else {
                         let mut result = builder.ins().iconst(types::I64, 0);
                         for stmt in else_stmts {
-                            result = Self::compile_expr_with_context(stmt, builder, parameters, local_vars, var_counter)?;
+                            result = Self::compile_expr_with_context(
+                                stmt,
+                                builder,
+                                parameters,
+                                local_vars,
+                                var_counter,
+                            )?;
                         }
                         result
                     }
@@ -519,7 +610,16 @@ impl JitCompiler {
                     builder.ins().iconst(types::I64, 0)
                 };
 
-                builder.ins().jump(merge_block, &[else_result]);
+                // Only jump to merge if else_branch doesn't end with return
+                let else_has_return = if let Some(else_stmts) = else_branch {
+                    !else_stmts.is_empty()
+                        && matches!(else_stmts.last().unwrap(), AstNode::Return { .. })
+                } else {
+                    false
+                };
+                if !else_has_return {
+                    builder.ins().jump(merge_block, &[else_result]);
+                }
 
                 // Continue at merge block
                 builder.switch_to_block(merge_block);
