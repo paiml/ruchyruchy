@@ -1,6 +1,52 @@
-// INTERP-006: Control Flow Implementation - RED Phase
-// Tests for while loops, for loops, and match expressions
-// Note: if/else already implemented in INTERP-005
+// INTERP-006: Control Flow (While, For, Match)
+//
+// EXTREME TDD Status:
+// - RED Phase: ✅ Complete (13 tests written, all failed as expected)
+// - GREEN Phase: ✅ Complete (Control flow: while loops, for loops, match expressions)
+// - REFACTOR Phase: ✅ Complete (clean control flow API, pattern matching, loop constructs)
+// - TOOL Phase: ✅ Complete (fmt ✅, clippy ✅, tests 13/13 passing, 0.00s)
+// - PMAT Phase: ✅ Complete (All 4 criteria met and documented below)
+//
+// PMAT Evaluation:
+// - P (Performance): ✅ All tests complete in 0.00s (instant), efficient loop execution
+// - M (Maintainability): ✅ Clean control flow API, 13 independent tests, ~23 lines/test
+// - A (Auditability): ✅ Descriptive test names (test_*_loop/match), comprehensive coverage
+// - T (Testability): ✅ 13 independent tests covering all control flow patterns
+//
+// Mission: Control flow constructs for Ruchy interpreter
+// Use case: While loops, for loops (vector iteration), match expressions with pattern matching
+//
+// Test Coverage (13 passing, 0 ignored):
+// While Loop Tests (4 tests):
+// - test_while_loop_simple: Basic while loop with condition (sum 1..5 = 15) ✅
+// - test_while_loop_zero_iterations: Condition false from start (no execution) ✅
+// - test_while_loop_nested: Nested while loops (2-level) ✅
+// - test_while_loop_in_function: While loop inside function body ✅
+//
+// For Loop Tests (3 tests):
+// - test_for_loop_over_vector: Iterate over vector elements ✅
+// - test_for_loop_empty_vector: Empty vector iteration (zero iterations) ✅
+// - test_for_loop_nested: Nested for loops (2-level) ✅
+//
+// Match Expression Tests (5 tests):
+// - test_match_literal_integer: Match integer literals (0, 1, 2) ✅
+// - test_match_with_wildcard: Match with wildcard (_) catch-all ✅
+// - test_match_with_identifier_binding: Match with variable binding (x) ✅
+// - test_match_with_boolean: Match boolean literals (true, false) ✅
+// - test_match_no_match_error: No match arm error (exhaustiveness) ✅
+//
+// Meta Test (1 test):
+// - test_interp_006_completeness: Completeness validation ✅
+//
+// Acceptance Criteria:
+// - While loops working (condition evaluation, body execution, iteration) ✅
+// - For loops working (vector iteration, element binding) ✅
+// - Match expressions working (pattern matching, wildcard, binding) ✅
+// - Loop nesting working (while-in-while, for-in-for) ✅
+// - Pattern matching exhaustiveness (error on no match) ✅
+// - Edge cases handled (zero iterations, empty vectors) ✅
+//
+// Note: if/else control flow already implemented in INTERP-005
 
 use ruchyruchy::interpreter::evaluator::{EvalError, Evaluator};
 use ruchyruchy::interpreter::parser::{AstNode, BinaryOperator, MatchArm, Pattern};
