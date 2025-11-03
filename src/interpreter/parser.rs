@@ -841,7 +841,8 @@ impl Parser {
         let condition = Box::new(self.parse_expression()?);
 
         self.consume(&Token::LeftBrace)?;
-        let mut then_branch = Vec::new();
+        // INTERP-OPT-003: Pre-allocate capacity for typical if blocks (4 statements)
+        let mut then_branch = Vec::with_capacity(4);
         while !self.check(&Token::RightBrace) && !self.is_at_end() {
             then_branch.push(self.parse_statement()?);
         }
@@ -859,7 +860,8 @@ impl Parser {
             } else {
                 // Regular 'else { ... }' block
                 self.consume(&Token::LeftBrace)?;
-                let mut else_body = Vec::new();
+                // INTERP-OPT-003: Pre-allocate capacity for typical else blocks (4 statements)
+                let mut else_body = Vec::with_capacity(4);
                 while !self.check(&Token::RightBrace) && !self.is_at_end() {
                     else_body.push(self.parse_statement()?);
                 }
@@ -884,7 +886,8 @@ impl Parser {
         let condition = Box::new(self.parse_expression()?);
 
         self.consume(&Token::LeftBrace)?;
-        let mut body = Vec::new();
+        // INTERP-OPT-003: Pre-allocate capacity for typical loop bodies (4 statements)
+        let mut body = Vec::with_capacity(4);
         while !self.check(&Token::RightBrace) && !self.is_at_end() {
             body.push(self.parse_statement()?);
         }
@@ -904,7 +907,8 @@ impl Parser {
         let iterable = Box::new(self.parse_expression()?);
 
         self.consume(&Token::LeftBrace)?;
-        let mut body = Vec::new();
+        // INTERP-OPT-003: Pre-allocate capacity for typical loop bodies (4 statements)
+        let mut body = Vec::with_capacity(4);
         while !self.check(&Token::RightBrace) && !self.is_at_end() {
             body.push(self.parse_statement()?);
         }
