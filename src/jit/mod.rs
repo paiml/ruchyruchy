@@ -890,6 +890,133 @@ impl JitCompiler {
                 Ok(value)
             }
 
+            // Compound assignment: lhs op= rhs (e.g., x += 5, arr[i] *= 2)
+            AstNode::CompoundAssignment { lhs, op, rhs } => {
+                match lhs.as_ref() {
+                    // Array element compound assignment: arr[index] += value
+                    AstNode::IndexAccess { expr, index } => {
+                        // Compile array address
+                        let array_addr = Self::compile_expr_with_context(
+                            expr,
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                            compiled_functions,
+                        )?;
+
+                        // Compile index
+                        let index_value = Self::compile_expr_with_context(
+                            index,
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                            compiled_functions,
+                        )?;
+
+                        // Calculate element address: array_addr + (index * 8)
+                        let eight = builder.ins().iconst(types::I64, 8);
+                        let byte_offset = builder.ins().imul(index_value, eight);
+                        let elem_addr = builder.ins().iadd(array_addr, byte_offset);
+
+                        // Load current value
+                        let current_value =
+                            builder
+                                .ins()
+                                .load(types::I64, MemFlags::trusted(), elem_addr, 0);
+
+                        // Compile RHS
+                        let rhs_value = Self::compile_expr_with_context(
+                            rhs,
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                            compiled_functions,
+                        )?;
+
+                        // Apply operation
+                        let new_value = match op {
+                            BinaryOperator::Add => builder.ins().iadd(current_value, rhs_value),
+                            BinaryOperator::Subtract => {
+                                builder.ins().isub(current_value, rhs_value)
+                            }
+                            BinaryOperator::Multiply => {
+                                builder.ins().imul(current_value, rhs_value)
+                            }
+                            BinaryOperator::Divide => builder.ins().sdiv(current_value, rhs_value),
+                            BinaryOperator::Modulo => builder.ins().srem(current_value, rhs_value),
+                            _ => {
+                                return Err(JitError::UnsupportedNode(format!(
+                                    "Unsupported compound assignment operator: {:?}",
+                                    op
+                                )))
+                            }
+                        };
+
+                        // Store new value back to array element
+                        builder
+                            .ins()
+                            .store(MemFlags::trusted(), new_value, elem_addr, 0);
+
+                        // Compound assignment returns 0 (it's a statement)
+                        Ok(builder.ins().iconst(types::I64, 0))
+                    }
+
+                    // Variable compound assignment: x += 5
+                    AstNode::Identifier(name) => {
+                        // Look up variable
+                        let var = *local_vars.get(name).ok_or_else(|| {
+                            JitError::UnsupportedNode(format!("Undefined variable: {}", name))
+                        })?;
+
+                        // Get current value
+                        let current_value = builder.use_var(var);
+
+                        // Compile RHS
+                        let rhs_value = Self::compile_expr_with_context(
+                            rhs,
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                            compiled_functions,
+                        )?;
+
+                        // Apply operation
+                        let new_value = match op {
+                            BinaryOperator::Add => builder.ins().iadd(current_value, rhs_value),
+                            BinaryOperator::Subtract => {
+                                builder.ins().isub(current_value, rhs_value)
+                            }
+                            BinaryOperator::Multiply => {
+                                builder.ins().imul(current_value, rhs_value)
+                            }
+                            BinaryOperator::Divide => builder.ins().sdiv(current_value, rhs_value),
+                            BinaryOperator::Modulo => builder.ins().srem(current_value, rhs_value),
+                            _ => {
+                                return Err(JitError::UnsupportedNode(format!(
+                                    "Unsupported compound assignment operator: {:?}",
+                                    op
+                                )))
+                            }
+                        };
+
+                        // Update variable
+                        builder.def_var(var, new_value);
+
+                        // Compound assignment returns 0 (it's a statement)
+                        Ok(builder.ins().iconst(types::I64, 0))
+                    }
+
+                    _ => Err(JitError::UnsupportedNode(format!(
+                        "Unsupported LHS in compound assignment: {:?}",
+                        lhs
+                    ))),
+                }
+            }
+
             // Unsupported AST node
             _ => Err(JitError::UnsupportedNode(format!(
                 "Cannot compile AST node: {:?}",
