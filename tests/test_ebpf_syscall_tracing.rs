@@ -1,6 +1,19 @@
-// DEBUGGER-015: eBPF Syscall Tracing Tests (RED PHASE)
+// DEBUGGER-015: eBPF Syscall Tracing Tests (GREEN PHASE - Environment Dependent)
 //
 // Tests for low-overhead syscall tracing using eBPF (not ptrace)
+//
+// Status: CLI integration complete (src/bin/ruchydbg.rs)
+// - ✅ --trace-syscalls flag parsing
+// - ✅ --trace-output=<path> flag parsing
+// - ✅ SyscallTracer lifecycle management
+// - ✅ JSON output generation
+// - ⚠️  Tests require kernel capabilities (CAP_BPF + CAP_PERFMON on Linux 5.8+)
+//
+// Environment Requirements (BLOCKING):
+// - Linux kernel 5.8+ with eBPF support
+// - CAP_BPF + CAP_PERFMON capabilities OR CAP_SYS_ADMIN
+// - Binary built with --features ebpf
+// - Binary installed with setcap: sudo setcap 'cap_bpf,cap_perfmon=eip' $(which ruchydbg)
 //
 // Expected behavior:
 // - <1% overhead for syscall-heavy workloads
