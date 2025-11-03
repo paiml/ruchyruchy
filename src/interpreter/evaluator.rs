@@ -1352,19 +1352,33 @@ impl Evaluator {
         }
 
         // 5. Evaluate all arguments eagerly (call-by-value semantics)
-        let mut arg_values = Vec::new();
+        // INTERP-046: Pre-allocate capacity for arguments
+        let mut arg_values = Vec::with_capacity(args.len());
         for arg in args {
             arg_values.push(self.eval(arg)?);
         }
 
+        // INTERP-046: Collect param types ONLY if profiler is enabled (avoid overhead)
+        let param_types_for_profiling: Option<Vec<String>> = if self.compiler_profiler.is_some() {
+            Some(
+                arg_values
+                    .iter()
+                    .map(|v| v.type_name().to_string())
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
         // 6. Create new scope and bind parameters to argument values
         let saved_scope = std::mem::take(&mut self.scope);
-        for (param, value) in params.iter().zip(arg_values.iter()) {
-            self.scope
-                .define(param.clone(), value.clone())
-                .map_err(|e| EvalError::UnsupportedOperation {
+        // INTERP-046: Use into_iter() to consume arg_values and avoid cloning
+        for (param, value) in params.iter().zip(arg_values.into_iter()) {
+            self.scope.define(param.clone(), value).map_err(|e| {
+                EvalError::UnsupportedOperation {
                     operation: format!("define parameter: {}", e),
-                })?;
+                }
+            })?;
         }
 
         // Push function name to call stack for error reporting
@@ -1451,10 +1465,8 @@ impl Evaluator {
         // DEBUGGER-052: Observe type signature and record timing for this function call
         if let Some(ref profiler) = self.compiler_profiler {
             // Build type signature: param types + return type
-            let param_types: Vec<String> = arg_values
-                .iter()
-                .map(|v| v.type_name().to_string())
-                .collect();
+            // INTERP-046: Use pre-collected param types (arg_values was consumed)
+            let param_types = param_types_for_profiling.unwrap_or_default();
             let return_type = result.type_name().to_string();
 
             let signature = crate::profiler::TypeSignature::new(param_types, return_type);
