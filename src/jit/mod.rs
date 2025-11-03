@@ -254,6 +254,7 @@ impl JitCompiler {
         compiled_functions: &HashMap<String, *const u8>,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
+
         Self::compile_expr_with_context(
             ast,
             builder,
@@ -272,6 +273,7 @@ impl JitCompiler {
         compiled_functions: &HashMap<String, *const u8>,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
+
         Self::compile_expr_with_context(
             ast,
             builder,
@@ -352,7 +354,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
 
                 // Define the variable with the initial value
@@ -379,7 +381,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
 
                 // Update the variable
@@ -426,7 +428,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
                 let rhs = Self::compile_expr_with_context(
                     right,
@@ -434,7 +436,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
 
                 let result = match op {
@@ -515,7 +517,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
 
                 // Convert condition to boolean: condition != 0
@@ -579,7 +581,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
 
                 // Create loop variable and initialize it
@@ -611,7 +613,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
 
                 // Check condition: var < end
@@ -681,7 +683,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
-                        compiled_functions,
+                    compiled_functions,
                 )?;
 
                 // Convert to boolean: condition != 0
@@ -708,7 +710,7 @@ impl JitCompiler {
                             parameters,
                             local_vars,
                             var_counter,
-                        compiled_functions,
+                            compiled_functions,
                         )?;
                     }
                     result
@@ -737,7 +739,7 @@ impl JitCompiler {
                                 parameters,
                                 local_vars,
                                 var_counter,
-                        compiled_functions,
+                                compiled_functions,
                             )?;
                         }
                         result
@@ -806,6 +808,86 @@ impl JitCompiler {
                 let result = builder.inst_results(call)[0];
 
                 Ok(result)
+            }
+
+            // Vector literal: [elem1, elem2, ...]
+            AstNode::VectorLiteral { elements } => {
+                if elements.is_empty() {
+                    // Empty array - just return 0 for now (future work)
+                    return Ok(builder.ins().iconst(types::I64, 0));
+                }
+
+                // Create stack slot for array (8 bytes per i64 element)
+                let array_size = elements.len() * 8;
+                let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                    StackSlotKind::ExplicitSlot,
+                    array_size as u32,
+                    3, // 8-byte alignment (2^3 = 8)
+                ));
+
+                // Get address of stack slot
+                let array_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+
+                // Store each element at appropriate offset
+                for (i, elem) in elements.iter().enumerate() {
+                    // Compile element value
+                    let elem_value = Self::compile_expr_with_context(
+                        elem,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                        compiled_functions,
+                    )?;
+
+                    // Calculate offset (i * 8 bytes)
+                    let offset = (i * 8) as i32;
+
+                    // Store value at array[i]
+                    builder
+                        .ins()
+                        .store(MemFlags::trusted(), elem_value, array_addr, offset);
+                }
+
+                // Return the array address (as i64)
+                Ok(array_addr)
+            }
+
+            // Index access: expr[index]
+            AstNode::IndexAccess { expr, index } => {
+                // Compile array expression (should return address)
+                let array_addr = Self::compile_expr_with_context(
+                    expr,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                )?;
+
+                // Compile index expression (should return integer)
+                let index_value = Self::compile_expr_with_context(
+                    index,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                )?;
+
+                // Calculate byte offset: index * 8 (8 bytes per i64)
+                let eight = builder.ins().iconst(types::I64, 8);
+                let byte_offset = builder.ins().imul(index_value, eight);
+
+                // Calculate element address: array_addr + byte_offset
+                let elem_addr = builder.ins().iadd(array_addr, byte_offset);
+
+                // Load value from element address
+                let value = builder
+                    .ins()
+                    .load(types::I64, MemFlags::trusted(), elem_addr, 0);
+
+                Ok(value)
             }
 
             // Unsupported AST node
