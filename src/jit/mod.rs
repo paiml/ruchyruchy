@@ -260,16 +260,57 @@ impl JitCompiler {
                 let rhs = Self::compile_expr_with_vars(right, builder, variables)?;
 
                 let result = match op {
+                    // Arithmetic operators
                     BinaryOperator::Add => builder.ins().iadd(lhs, rhs),
                     BinaryOperator::Subtract => builder.ins().isub(lhs, rhs),
                     BinaryOperator::Multiply => builder.ins().imul(lhs, rhs),
                     BinaryOperator::Divide => builder.ins().sdiv(lhs, rhs),
                     BinaryOperator::Modulo => builder.ins().srem(lhs, rhs),
-                    _ => {
-                        return Err(JitError::UnsupportedNode(format!(
-                            "Unsupported binary operator: {:?}",
-                            op
-                        )))
+
+                    // Comparison operators (return 0 or 1 as i64)
+                    BinaryOperator::Equal => {
+                        let cmp = builder.ins().icmp(IntCC::Equal, lhs, rhs);
+                        builder.ins().uextend(types::I64, cmp)
+                    }
+                    BinaryOperator::NotEqual => {
+                        let cmp = builder.ins().icmp(IntCC::NotEqual, lhs, rhs);
+                        builder.ins().uextend(types::I64, cmp)
+                    }
+                    BinaryOperator::LessThan => {
+                        let cmp = builder.ins().icmp(IntCC::SignedLessThan, lhs, rhs);
+                        builder.ins().uextend(types::I64, cmp)
+                    }
+                    BinaryOperator::GreaterThan => {
+                        let cmp = builder.ins().icmp(IntCC::SignedGreaterThan, lhs, rhs);
+                        builder.ins().uextend(types::I64, cmp)
+                    }
+                    BinaryOperator::LessEqual => {
+                        let cmp = builder.ins().icmp(IntCC::SignedLessThanOrEqual, lhs, rhs);
+                        builder.ins().uextend(types::I64, cmp)
+                    }
+                    BinaryOperator::GreaterEqual => {
+                        let cmp = builder
+                            .ins()
+                            .icmp(IntCC::SignedGreaterThanOrEqual, lhs, rhs);
+                        builder.ins().uextend(types::I64, cmp)
+                    }
+
+                    // Boolean operators (treat non-zero as true)
+                    BinaryOperator::And => {
+                        // lhs && rhs: both must be non-zero
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        let lhs_bool = builder.ins().icmp(IntCC::NotEqual, lhs, zero);
+                        let rhs_bool = builder.ins().icmp(IntCC::NotEqual, rhs, zero);
+                        let and = builder.ins().band(lhs_bool, rhs_bool);
+                        builder.ins().uextend(types::I64, and)
+                    }
+                    BinaryOperator::Or => {
+                        // lhs || rhs: at least one must be non-zero
+                        let zero = builder.ins().iconst(types::I64, 0);
+                        let lhs_bool = builder.ins().icmp(IntCC::NotEqual, lhs, zero);
+                        let rhs_bool = builder.ins().icmp(IntCC::NotEqual, rhs, zero);
+                        let or = builder.ins().bor(lhs_bool, rhs_bool);
+                        builder.ins().uextend(types::I64, or)
                     }
                 };
 
