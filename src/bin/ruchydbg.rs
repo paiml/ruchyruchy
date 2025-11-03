@@ -9,6 +9,12 @@ use std::path::PathBuf;
 use std::process::{exit, Command};
 use std::time::Instant;
 
+#[cfg(feature = "ebpf")]
+use std::fs;
+
+#[cfg(feature = "ebpf")]
+use ruchyruchy::tracing::ebpf::SyscallTracer;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Exit codes
@@ -53,7 +59,7 @@ fn main() {
 }
 
 fn run_ruchy_file(args: &[String]) {
-    // Parse arguments: ruchydbg run <file> [--timeout <ms>] [--trace]
+    // Parse arguments: ruchydbg run <file> [--timeout <ms>] [--trace] [--trace-syscalls] [--trace-output <path>]
 
     // Check for help first
     if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
@@ -63,7 +69,7 @@ fn run_ruchy_file(args: &[String]) {
 
     if args.len() < 3 {
         eprintln!("Error: Missing file argument");
-        eprintln!("Usage: ruchydbg run <file> [--timeout <ms>] [--trace]");
+        eprintln!("Usage: ruchydbg run <file> [--timeout <ms>] [--trace] [--trace-syscalls] [--trace-output <path>]");
         exit(EXIT_ERROR);
     }
 
@@ -72,6 +78,8 @@ fn run_ruchy_file(args: &[String]) {
     // Parse timeout and trace flags
     let mut timeout_ms = DEFAULT_TIMEOUT_MS;
     let mut enable_trace = false;
+    let mut enable_syscall_trace = false;
+    let mut trace_output_path: Option<String> = None;
 
     let mut i = 3;
     while i < args.len() {
@@ -88,6 +96,19 @@ fn run_ruchy_file(args: &[String]) {
             "--trace" => {
                 enable_trace = true;
                 i += 1;
+            }
+            "--trace-syscalls" => {
+                enable_syscall_trace = true;
+                i += 1;
+            }
+            "--trace-output" => {
+                if i + 1 < args.len() {
+                    trace_output_path = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    eprintln!("Error: --trace-output requires a value");
+                    exit(EXIT_ERROR);
+                }
             }
             _ => {
                 eprintln!("Error: Unknown flag: {}", args[i]);
@@ -118,7 +139,31 @@ fn run_ruchy_file(args: &[String]) {
     if enable_trace {
         println!("🔍 Type-aware tracing: enabled");
     }
+    if enable_syscall_trace {
+        println!("🔍 eBPF syscall tracing: enabled");
+        if let Some(ref output_path) = trace_output_path {
+            println!("📄 Trace output: {}", output_path);
+        }
+    }
     println!();
+
+    // Start eBPF syscall tracer if requested
+    #[cfg(feature = "ebpf")]
+    let mut tracer = if enable_syscall_trace {
+        match SyscallTracer::new() {
+            Ok(t) => {
+                println!("✅ eBPF tracer started");
+                Some(t)
+            }
+            Err(e) => {
+                eprintln!("⚠️  Warning: Failed to start eBPF tracer: {}", e);
+                eprintln!("    Try running with sudo or ensure CAP_BPF capability");
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     let start = Instant::now();
 
@@ -158,6 +203,53 @@ fn run_ruchy_file(args: &[String]) {
     let status = cmd.status();
 
     let elapsed = start.elapsed();
+
+    // Collect syscall trace if eBPF tracer was running
+    #[cfg(feature = "ebpf")]
+    let syscall_events = if let Some(ref mut tracer) = tracer {
+        // Give tracer a moment to collect final events
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        match tracer.read_events() {
+            Ok(events) => {
+                println!("📊 Captured {} syscall events", events.len());
+                Some(events)
+            }
+            Err(e) => {
+                eprintln!("⚠️  Warning: Failed to read syscall events: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Write syscall trace to JSON if output path specified
+    #[cfg(feature = "ebpf")]
+    if let Some(events) = syscall_events {
+        if let Some(ref output_path) = trace_output_path {
+            // Convert events to JSON
+            let json_events: Vec<_> = events
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "pid": e.pid,
+                        "syscall_nr": e.syscall_nr,
+                        "timestamp_ns": e.timestamp_ns,
+                        "is_enter": e.is_enter == 1,
+                    })
+                })
+                .collect();
+
+            match fs::write(
+                output_path,
+                serde_json::to_string_pretty(&json_events).unwrap(),
+            ) {
+                Ok(_) => println!("✅ Syscall trace written to: {}", output_path),
+                Err(e) => eprintln!("⚠️  Warning: Failed to write trace: {}", e),
+            }
+        }
+    }
 
     match status {
         Ok(exit_status) => {
