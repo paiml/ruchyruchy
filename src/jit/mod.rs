@@ -199,9 +199,9 @@ impl JitCompiler {
             // Check if body ends with explicit return (to avoid double-return error)
             let has_explicit_return = match body {
                 AstNode::Return { .. } => true,
-                AstNode::Block { statements } => {
-                    statements.last().map_or(false, |stmt| matches!(stmt, AstNode::Return { .. }))
-                }
+                AstNode::Block { statements } => statements
+                    .last()
+                    .is_some_and(|stmt| matches!(stmt, AstNode::Return { .. })),
                 _ => false,
             };
 
@@ -512,6 +512,107 @@ impl JitCompiler {
                         var_counter,
                     )?;
                 }
+
+                // Back edge: Jump back to loop header
+                builder.ins().jump(loop_header, &[]);
+
+                // Now seal loop header (all predecessors known)
+                builder.seal_block(loop_header);
+
+                // Loop exit: Continue after loop, return 0
+                builder.switch_to_block(loop_exit);
+                builder.seal_block(loop_exit);
+
+                let result = builder.ins().iconst(types::I64, 0);
+                Ok(result)
+            }
+
+            // For loop: for var in iterable { body }
+            // Desugars to: let var = start; while (var < end) { body; var = var + 1; }
+            AstNode::ForLoop {
+                var,
+                iterable,
+                body,
+            } => {
+                // Extract range start and end from iterable
+                let (start_expr, end_expr) = match &**iterable {
+                    AstNode::Range { start, end } => (start, end),
+                    _ => {
+                        return Err(JitError::UnsupportedNode(
+                            "For loop iterable must be a Range".to_string(),
+                        ))
+                    }
+                };
+
+                // Compile start value
+                let start_value = Self::compile_expr_with_context(
+                    start_expr,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
+
+                // Create loop variable and initialize it
+                let loop_var = Variable::new(*var_counter);
+                *var_counter += 1;
+                builder.declare_var(loop_var, types::I64);
+                builder.def_var(loop_var, start_value);
+                local_vars.insert(var.clone(), loop_var);
+
+                // Create basic blocks for loop structure
+                let loop_header = builder.create_block();
+                let loop_body = builder.create_block();
+                let loop_exit = builder.create_block();
+
+                // Jump to loop header to start
+                builder.ins().jump(loop_header, &[]);
+
+                // Loop header: Check condition (var < end)
+                builder.switch_to_block(loop_header);
+                // Don't seal yet - has back edge from loop_body
+
+                // Get current loop variable value
+                let current_var = builder.use_var(loop_var);
+
+                // Compile end value (may depend on variables)
+                let end_value = Self::compile_expr_with_context(
+                    end_expr,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
+
+                // Check condition: var < end
+                let condition =
+                    builder
+                        .ins()
+                        .icmp(IntCC::SignedLessThan, current_var, end_value);
+
+                // Branch: if true, execute body; if false, exit loop
+                builder.ins().brif(condition, loop_body, &[], loop_exit, &[]);
+
+                // Loop body: Execute statements
+                builder.switch_to_block(loop_body);
+                builder.seal_block(loop_body);
+
+                // Execute loop body statements
+                for stmt in body {
+                    Self::compile_expr_with_context(
+                        stmt,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                    )?;
+                }
+
+                // Increment loop variable: var = var + 1
+                let current_var = builder.use_var(loop_var);
+                let one = builder.ins().iconst(types::I64, 1);
+                let incremented = builder.ins().iadd(current_var, one);
+                builder.def_var(loop_var, incremented);
 
                 // Back edge: Jump back to loop header
                 builder.ins().jump(loop_header, &[]);
