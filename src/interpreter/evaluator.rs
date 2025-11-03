@@ -2051,6 +2051,10 @@ impl Evaluator {
         condition: &AstNode,
         body: &[AstNode],
     ) -> Result<ControlFlow, EvalError> {
+        // INTERP-051: Track loop profiling for OSR
+        let start_time = std::time::Instant::now();
+        let mut iteration_count = 0;
+
         loop {
             // Evaluate condition
             let cond_val = self.eval(condition)?;
@@ -2060,11 +2064,32 @@ impl Evaluator {
                 break; // Exit loop when condition is false
             }
 
+            // Track iteration
+            iteration_count += 1;
+
             // Execute body in child scope
             if let Some(return_value) = self.eval_loop_body_with_scope(body)? {
                 // Early return from enclosing function
+                // Record loop data before returning
+                if let Some(ref profiler) = self.compiler_profiler {
+                    let duration = start_time.elapsed();
+                    let default_name = "<main>".to_string();
+                    let function_name = self.call_stack.last().unwrap_or(&default_name);
+                    // For now, use simple loop indexing (can be improved later)
+                    profiler.record_loop(function_name, 0, iteration_count, duration);
+                }
                 return Ok(ControlFlow::Return(return_value));
             }
+        }
+
+        // INTERP-051: Record loop profiling data
+        if let Some(ref profiler) = self.compiler_profiler {
+            let duration = start_time.elapsed();
+            // Get current function name from call stack
+            let default_name = "<main>".to_string();
+            let function_name = self.call_stack.last().unwrap_or(&default_name);
+            // For now, all loops in a function share index 0 (can track multiple loops later)
+            profiler.record_loop(function_name, 0, iteration_count, duration);
         }
 
         // While loops return nil

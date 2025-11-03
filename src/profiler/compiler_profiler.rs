@@ -33,6 +33,17 @@ struct ProfilerData {
 
     // Cross-mode comparison (DEBUGGER-054)
     mode_times: HashMap<super::ExecutionMode, Duration>,
+
+    // Loop profiling (INTERP-051)
+    // Key: function name, Value: vec of loop profiles
+    loop_profiles: HashMap<String, Vec<LoopProfileData>>,
+}
+
+#[derive(Debug, Clone)]
+struct LoopProfileData {
+    loop_index: usize,
+    iteration_count: usize,
+    total_time: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +63,7 @@ impl CompilerProfiler {
                 function_calls: HashMap::new(),
                 total_execution_time: Duration::ZERO,
                 mode_times: HashMap::new(),
+                loop_profiles: HashMap::new(),
             })),
         }
     }
@@ -263,6 +275,106 @@ impl CompilerProfiler {
             });
 
         data.total_execution_time += duration;
+    }
+
+    /// Record loop execution (INTERP-051)
+    ///
+    /// Track loop iteration count and timing for OSR decisions
+    pub fn record_loop(
+        &self,
+        function: &str,
+        loop_index: usize,
+        iteration_count: usize,
+        duration: Duration,
+    ) {
+        let mut data = self.data.borrow_mut();
+        let loops = data
+            .loop_profiles
+            .entry(function.to_string())
+            .or_default();
+
+        // Find existing loop profile or create new one
+        if let Some(profile) = loops.iter_mut().find(|lp| lp.loop_index == loop_index) {
+            // Update existing loop (e.g., if function called multiple times)
+            profile.iteration_count += iteration_count;
+            profile.total_time += duration;
+        } else {
+            // New loop
+            loops.push(LoopProfileData {
+                loop_index,
+                iteration_count,
+                total_time: duration,
+            });
+        }
+    }
+
+    /// Get loop profiles for a function
+    ///
+    /// Returns all loops tracked in the specified function
+    pub fn loop_profiles(&self, function: &str) -> Vec<super::LoopProfile> {
+        let data = self.data.borrow();
+        data.loop_profiles
+            .get(function)
+            .map(|loops| {
+                loops
+                    .iter()
+                    .map(|lp| {
+                        let avg_time_us = if lp.iteration_count > 0 {
+                            lp.total_time.as_micros() as f64 / lp.iteration_count as f64
+                        } else {
+                            0.0
+                        };
+
+                        super::LoopProfile {
+                            function: function.to_string(),
+                            loop_index: lp.loop_index,
+                            iteration_count: lp.iteration_count,
+                            total_time_us: lp.total_time.as_micros() as f64,
+                            avg_time_per_iteration_us: avg_time_us,
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get OSR candidates (loops with >threshold iterations)
+    ///
+    /// Returns loops that are good candidates for On-Stack Replacement
+    pub fn osr_candidates(&self, iteration_threshold: usize) -> Vec<super::LoopProfile> {
+        let data = self.data.borrow();
+        let mut candidates = Vec::new();
+
+        for (function, loops) in &data.loop_profiles {
+            for lp in loops {
+                if lp.iteration_count >= iteration_threshold {
+                    let avg_time_us = if lp.iteration_count > 0 {
+                        lp.total_time.as_micros() as f64 / lp.iteration_count as f64
+                    } else {
+                        0.0
+                    };
+
+                    candidates.push(super::LoopProfile {
+                        function: function.clone(),
+                        loop_index: lp.loop_index,
+                        iteration_count: lp.iteration_count,
+                        total_time_us: lp.total_time.as_micros() as f64,
+                        avg_time_per_iteration_us: avg_time_us,
+                    });
+                }
+            }
+        }
+
+        candidates
+    }
+
+    /// Get OSR candidates sorted by iteration count (descending)
+    ///
+    /// Returns OSR candidates ranked by hotness
+    pub fn osr_candidates_sorted(&self, iteration_threshold: usize) -> Vec<super::LoopProfile> {
+        let mut candidates = self.osr_candidates(iteration_threshold);
+        candidates.sort_by(|a, b| b.iteration_count.cmp(&a.iteration_count));
+        candidates
     }
 
     /// Analyze AST for optimization opportunities (DEBUGGER-053)
