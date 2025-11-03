@@ -100,6 +100,8 @@ pub struct JitCompiler {
     string_literals: Vec<Box<[u8]>>,
     /// String interning map (content → pointer) for string literal deduplication
     string_intern: HashMap<String, i64>,
+    /// Struct definitions (name → ordered field names)
+    struct_defs: HashMap<String, Vec<String>>,
 }
 
 impl JitCompiler {
@@ -117,6 +119,7 @@ impl JitCompiler {
             compiled_functions: HashMap::new(),
             string_literals: Vec::new(),
             string_intern: HashMap::new(),
+            struct_defs: HashMap::new(),
         })
     }
 
@@ -164,8 +167,13 @@ impl JitCompiler {
                 literals: &mut self.string_literals,
                 intern: &mut self.string_intern,
             };
-            let result =
-                Self::compile_expr(ast, &mut builder, &self.compiled_functions, &mut string_ctx)?;
+            let result = Self::compile_expr(
+                ast,
+                &mut builder,
+                &self.compiled_functions,
+                &mut string_ctx,
+                &mut self.struct_defs,
+            )?;
 
             // Return the result
             builder.ins().return_(&[result]);
@@ -263,6 +271,7 @@ impl JitCompiler {
                 &variables,
                 &self.compiled_functions,
                 &mut string_ctx,
+                &mut self.struct_defs,
             )?;
 
             // Check if body ends with explicit return (to avoid double-return error)
@@ -310,6 +319,7 @@ impl JitCompiler {
         builder: &mut FunctionBuilder,
         compiled_functions: &HashMap<String, *const u8>,
         string_ctx: &mut StringContext,
+        struct_defs: &mut HashMap<String, Vec<String>>,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
 
@@ -321,6 +331,7 @@ impl JitCompiler {
             &mut var_counter,
             compiled_functions,
             string_ctx,
+            struct_defs,
         )
     }
 
@@ -331,6 +342,7 @@ impl JitCompiler {
         variables: &HashMap<String, Value>,
         compiled_functions: &HashMap<String, *const u8>,
         string_ctx: &mut StringContext,
+        struct_defs: &mut HashMap<String, Vec<String>>,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
 
@@ -342,10 +354,12 @@ impl JitCompiler {
             &mut var_counter,
             compiled_functions,
             string_ctx,
+            struct_defs,
         )
     }
 
     /// Compile AST expression to Cranelift IR value (with full context)
+    #[allow(clippy::too_many_arguments)]
     fn compile_expr_with_context(
         ast: &AstNode,
         builder: &mut FunctionBuilder,
@@ -354,6 +368,7 @@ impl JitCompiler {
         var_counter: &mut usize,
         compiled_functions: &HashMap<String, *const u8>,
         string_ctx: &mut StringContext,
+        struct_defs: &mut HashMap<String, Vec<String>>,
     ) -> Result<Value, JitError> {
         match ast {
             // Return statement: early function exit
@@ -373,6 +388,7 @@ impl JitCompiler {
                         var_counter,
                         compiled_functions,
                         string_ctx,
+                        struct_defs,
                     )?;
 
                     // Convert F64 to I64 bits if needed (for float returns)
@@ -407,6 +423,7 @@ impl JitCompiler {
                         var_counter,
                         compiled_functions,
                         string_ctx,
+                        struct_defs,
                     )?;
                 }
                 Ok(result)
@@ -423,6 +440,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Create a new Cranelift variable with the correct type
@@ -459,6 +477,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Update the variable
@@ -525,6 +544,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
                 let rhs = Self::compile_expr_with_context(
                     right,
@@ -534,6 +554,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Check if operands are floats
@@ -657,6 +678,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 let result =
@@ -714,6 +736,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Convert condition to boolean: condition != 0
@@ -737,6 +760,7 @@ impl JitCompiler {
                         var_counter,
                         compiled_functions,
                         string_ctx,
+                        struct_defs,
                     )?;
                 }
 
@@ -780,6 +804,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Create loop variable and initialize it
@@ -813,6 +838,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Check condition: var < end
@@ -839,6 +865,7 @@ impl JitCompiler {
                         var_counter,
                         compiled_functions,
                         string_ctx,
+                        struct_defs,
                     )?;
                 }
 
@@ -885,6 +912,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Convert to boolean: condition != 0
@@ -913,6 +941,7 @@ impl JitCompiler {
                             var_counter,
                             compiled_functions,
                             string_ctx,
+                            struct_defs,
                         )?;
                     }
                     result
@@ -943,6 +972,7 @@ impl JitCompiler {
                                 var_counter,
                                 compiled_functions,
                                 string_ctx,
+                                struct_defs,
                             )?;
                         }
                         result
@@ -990,6 +1020,7 @@ impl JitCompiler {
                         var_counter,
                         compiled_functions,
                         string_ctx,
+                        struct_defs,
                     )?;
                     arg_values.push(arg_value);
                 }
@@ -1043,6 +1074,7 @@ impl JitCompiler {
                         var_counter,
                         compiled_functions,
                         string_ctx,
+                        struct_defs,
                     )?;
 
                     // Calculate offset (i * 8 bytes)
@@ -1088,6 +1120,7 @@ impl JitCompiler {
                         var_counter,
                         compiled_functions,
                         string_ctx,
+                        struct_defs,
                     )?;
 
                     // Calculate offset (i * 8 bytes)
@@ -1115,6 +1148,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Compile index expression (should return integer)
@@ -1126,6 +1160,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Calculate byte offset: index * 8 (8 bytes per i64)
@@ -1157,6 +1192,7 @@ impl JitCompiler {
                             var_counter,
                             compiled_functions,
                             string_ctx,
+                            struct_defs,
                         )?;
 
                         // Compile index
@@ -1168,6 +1204,7 @@ impl JitCompiler {
                             var_counter,
                             compiled_functions,
                             string_ctx,
+                            struct_defs,
                         )?;
 
                         // Calculate element address: array_addr + (index * 8)
@@ -1190,6 +1227,7 @@ impl JitCompiler {
                             var_counter,
                             compiled_functions,
                             string_ctx,
+                            struct_defs,
                         )?;
 
                         // Apply operation
@@ -1239,6 +1277,7 @@ impl JitCompiler {
                             var_counter,
                             compiled_functions,
                             string_ctx,
+                            struct_defs,
                         )?;
 
                         // Apply operation
@@ -1286,6 +1325,7 @@ impl JitCompiler {
                     var_counter,
                     compiled_functions,
                     string_ctx,
+                    struct_defs,
                 )?;
 
                 // Try to parse field as integer index (for tuples: "0", "1", "2", ...)
@@ -1301,12 +1341,115 @@ impl JitCompiler {
 
                     Ok(value)
                 } else {
-                    // Named field access (for structs - not yet implemented)
-                    Err(JitError::UnsupportedNode(format!(
-                        "Named field access not yet supported: .{}",
-                        field
-                    )))
+                    // Named field access (for structs)
+                    // MVP approach: search all registered structs to find field position
+                    // This is not type-safe but works when field names don't collide
+
+                    let mut field_offset: Option<i32> = None;
+
+                    // Search through all struct definitions
+                    for (_struct_name, field_names) in struct_defs.iter() {
+                        if let Some(index) = field_names.iter().position(|f| f == field) {
+                            field_offset = Some((index * 8) as i32);
+                            break;
+                        }
+                    }
+
+                    match field_offset {
+                        Some(offset) => {
+                            // Load value from struct.field
+                            let value = builder.ins().load(
+                                types::I64,
+                                MemFlags::trusted(),
+                                tuple_addr,
+                                offset,
+                            );
+                            Ok(value)
+                        }
+                        None => Err(JitError::UnsupportedNode(format!(
+                            "Field '{}' not found in any registered struct",
+                            field
+                        ))),
+                    }
                 }
+            }
+
+            // Struct definition: struct Name { field1, field2, ... }
+            // Registers the struct type with field names for later use
+            AstNode::StructDef { name, fields } => {
+                // Extract field names from StructField list
+                let field_names: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
+
+                // Register struct definition (name -> ordered field names)
+                struct_defs.insert(name.clone(), field_names);
+
+                // StructDef doesn't produce a runtime value - return 0
+                Ok(builder.ins().iconst(types::I64, 0))
+            }
+
+            // Struct literal: StructName { field1: value1, field2: value2, ... }
+            // Implementation: stack-allocated like tuples, return pointer
+            AstNode::StructLiteral { name, fields } => {
+                // Look up struct definition to get field order (clone to avoid borrow issues)
+                let field_order = struct_defs
+                    .get(name)
+                    .ok_or_else(|| {
+                        JitError::UnsupportedNode(format!("Undefined struct type: {}", name))
+                    })?
+                    .clone();
+
+                if fields.is_empty() {
+                    // Empty struct - just return 0 for now
+                    return Ok(builder.ins().iconst(types::I64, 0));
+                }
+
+                // Create stack slot for struct (8 bytes per field)
+                let struct_size = field_order.len() * 8;
+                let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                    StackSlotKind::ExplicitSlot,
+                    struct_size as u32,
+                    3, // 8-byte alignment (2^3 = 8)
+                ));
+
+                // Get address of stack slot
+                let struct_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+
+                // Store each field at appropriate offset based on field order
+                for (field_name, field_value_ast) in fields {
+                    // Find field position in struct definition
+                    let field_index = field_order
+                        .iter()
+                        .position(|f| f == field_name)
+                        .ok_or_else(|| {
+                            JitError::UnsupportedNode(format!(
+                                "Field '{}' not found in struct '{}'",
+                                field_name, name
+                            ))
+                        })?;
+
+                    // Compile field value
+                    let field_value = Self::compile_expr_with_context(
+                        field_value_ast,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                        compiled_functions,
+                        string_ctx,
+                        struct_defs,
+                    )?;
+
+                    // Calculate byte offset: field_index * 8
+                    let offset = (field_index * 8) as i32;
+
+                    // Store value at struct.field
+                    builder
+                        .ins()
+                        .store(MemFlags::trusted(), field_value, struct_addr, offset);
+                }
+
+                // Return the struct address (as i64)
+                Ok(struct_addr)
             }
 
             // Unsupported AST node
