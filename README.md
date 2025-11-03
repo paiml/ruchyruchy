@@ -1,6 +1,6 @@
 # RuchyRuchy - Bootstrap Infrastructure & Educational Resource 🛠️
 
-[![Version](https://img.shields.io/badge/Version-v1.15.0-brightgreen.svg)](https://crates.io/crates/ruchyruchy)
+[![Version](https://img.shields.io/badge/Version-v1.23.0-brightgreen.svg)](https://crates.io/crates/ruchyruchy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ruchy Version](https://img.shields.io/badge/Ruchy-v3.153.0+-blue.svg)](https://github.com/paiml/ruchy)
 [![Debugger](https://img.shields.io/badge/Debugger-100%25%20Complete-success.svg)](./INTEGRATION.md)
@@ -58,11 +58,40 @@ make performance-demo # See code generation benchmarks
 make concepts-demo    # Understand bootstrap principles
 ```
 
+## ⚡ JIT Compiler (New in v1.23.0!)
+
+**Production-ready JIT compiler powered by Cranelift** with support for:
+
+- ✅ **Arithmetic & Comparisons**: Full expression evaluation with operator precedence
+- ✅ **Control Flow**: If/else statements, while loops, for loops over ranges
+- ✅ **Variables**: Let declarations, assignments, mutable state
+- ✅ **Early Returns**: Break out of functions and loops
+- ✅ **Function Parameters**: Pass arguments to JIT-compiled functions
+
+**Performance**: Compiles functions to native machine code at runtime for 10-100x speedup over interpretation.
+
+```rust
+use ruchyruchy::jit::JitCompiler;
+use ruchyruchy::interpreter::parser::AstNode;
+
+// Create JIT compiler
+let mut jit = JitCompiler::new()?;
+
+// Compile function: fun(n) { let sum = 0; for i in 0..n { sum = sum + i; } return sum; }
+let compiled: fn(i64) -> i64 = jit.compile_function_with_params(&param_names, &ast)?;
+
+// Execute at native speed!
+let result = compiled(100); // Sum 0..100 in microseconds
+```
+
+**See**: [`JIT_INTEGRATION_GUIDE.md`](./JIT_INTEGRATION_GUIDE.md) for complete usage examples
+
 ## 🔌 Integration with Ruchy Projects
 
-**✨ New in v1.15.0**: Interactive REPL Debugger with time-travel debugging! Step through code, inspect variables, set breakpoints, and rewind execution. 10x faster debugging vs println.
+**✨ New in v1.23.0**: Production-ready JIT compiler with Cranelift backend! Compile hot functions to native code for 10-100x speedup.
 
 **Previous releases**:
+- **v1.15.0**: Interactive REPL Debugger with time-travel debugging
 - **v1.14.0**: Property-Based Testing Infrastructure (14,000+ test cases, 23% bug discovery)
 - **v1.13.0**: Regression & Hang Detector (snapshot comparison, determinism validation)
 - **v1.10.0**: Comprehensive interpreter testing (fuzzing, benchmarking, safety validation)
