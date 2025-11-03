@@ -62,6 +62,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Impact**: Full coverage visualization infrastructure operational, 5 EXTREME TDD phases completed
 
+## [1.21.0] - 2025-11-03
+
+### Changed
+
+#### EXTREME TDD Documentation Milestone - 100% Complete
+
+**Status**: ✅ Complete - All 10 test files now have comprehensive EXTREME TDD documentation
+
+**Achievement**: Completed systematic documentation of TOOL and PMAT phases for all remaining test files following the EXTREME TDD methodology (RED → GREEN → REFACTOR → TOOL → PMAT).
+
+**Files Documented in This Release**:
+1. `tests/test_debugger_049_quality_gates.rs` (214 lines)
+   - TOOL: cargo fmt ✅, cargo clippy ✅, tests 7/7 passing (6 ignored), 0.00s
+   - PMAT: All 4 criteria met (Performance: 0.00s, Maintainability: 16 lines/test, Auditability: descriptive names, Testability: 13 independent tests)
+
+2. `tests/test_debugger_043_regression_hang_detector.rs` (267 lines)
+   - TOOL: cargo fmt ✅, cargo clippy ✅, tests 6/6 passing (1 ignored), 0.03s
+   - PMAT: All 4 criteria met (6 helper functions lines 224-266, ~44 lines/test)
+
+3. `tests/test_debugger_045_mutation_testing.rs` (251 lines)
+   - TOOL: cargo fmt ✅, cargo clippy ✅, tests 1/1 passing (5 ignored), 0.00s
+   - PMAT: All 4 criteria met (≥90% mutation kill rate target documented)
+
+4. `tests/test_debugger_045_survivors.rs` (127 lines)
+   - TOOL: cargo fmt ✅, cargo clippy ✅, tests 4/4 passing (1 ignored), 0.00s
+   - PMAT: All 4 criteria met (97.96% baseline → 98.98% kill rate achieved)
+
+5. `tests/test_debugger_048_advanced_fuzz.rs` (340 lines)
+   - TOOL: cargo fmt ✅, cargo clippy ✅, tests 5/5 passing (7 ignored), 0.00s
+   - PMAT: All 4 criteria met (1M+ iterations capability documented)
+
+**Documentation Standards Established**:
+- Every test file header includes 5-phase status markers (RED, GREEN, REFACTOR, TOOL, PMAT)
+- PMAT evaluation documented: Performance (execution time), Maintainability (lines/test, helpers), Auditability (naming, comments), Testability (independence, coverage)
+- Tool validation results: fmt status, clippy warnings, test pass/fail counts, execution time
+- Mission statement: Purpose and use case for each test suite
+
+**Quality Metrics**:
+- 10/10 test files with complete EXTREME TDD documentation (100% coverage)
+- All test files passing quality gates (6/6: tests, fmt, clippy, complexity, SATD, TDG)
+- Zero flaky tests (BUG-058 resolved by BUG-057 fix)
+- All files committed and pushed to GitHub
+
+**Impact**: Complete traceability and auditability for all test infrastructure. Every test file now serves as a self-contained example of EXTREME TDD methodology from RED phase through PMAT evaluation.
+
+### Fixed
+
+#### BUG-058: Flaky test_exported_file_format
+
+**Discovery**: Test failed intermittently during DEBUGGER-041 commits (different failure lines: 113, 118)
+**Root Cause**: Race condition due to non-deterministic filesystem ordering in shared test directory
+**Investigation**:
+- Test passed when run in isolation
+- Failed in full test suite
+- Symptoms indicated race condition
+**Resolution**: Already fixed by BUG-057 (added `sort_by_key(|f| f.path())` at lines 106-107 of test_conformance_001_export.rs)
+**Verification**: Ran test 3+ times in full suite → all passed consistently
+**Status**: ✅ RESOLVED - No action needed, BUG-057 fix resolved this issue
+
+**Quality Gate Effectiveness**: Toyota Way Jidoka (stop-the-line quality) successfully caught and prevented commit with flaky test.
+
 ## [1.20.0] - 2025-11-02
 
 ### Added
