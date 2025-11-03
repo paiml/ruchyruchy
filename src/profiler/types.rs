@@ -312,3 +312,52 @@ pub struct FunctionProfile {
     /// Total execution time in microseconds
     pub total_time_us: f64,
 }
+
+/// Loop-level profiling data for OSR compilation decisions (INTERP-051)
+///
+/// Tracks iteration count, execution time, and location for loops.
+/// Used to identify hot loops for OSR (On-Stack Replacement) JIT compilation.
+///
+/// # OSR (On-Stack Replacement)
+///
+/// OSR compiles loops WHILE they're running:
+/// - Detect hot loop during execution
+/// - Compile to machine code mid-execution
+/// - Replace interpreter with JIT without restarting
+///
+/// # OSR Decision Criteria
+///
+/// A loop is an OSR candidate if:
+/// - **High iteration count**: >1000 iterations
+/// - **High time percentage**: >30% of function time
+/// - **Time per iteration**: >1µs (worth optimizing)
+///
+/// # Example
+///
+/// ```rust
+/// use ruchyruchy::profiler::LoopProfile;
+///
+/// let profile = LoopProfile {
+///     function: "compute".to_string(),
+///     loop_index: 0,
+///     iteration_count: 5000,
+///     total_time_us: 8500.0,
+///     avg_time_per_iteration_us: 1.7,
+/// };
+///
+/// assert_eq!(profile.iteration_count, 5000);
+/// assert!(profile.avg_time_per_iteration_us > 1.0);
+/// ```
+#[derive(Debug, Clone)]
+pub struct LoopProfile {
+    /// Function containing the loop
+    pub function: String,
+    /// Index of loop within function (0 = first loop, 1 = second, etc.)
+    pub loop_index: usize,
+    /// Number of iterations executed
+    pub iteration_count: usize,
+    /// Total execution time in microseconds
+    pub total_time_us: f64,
+    /// Average time per iteration in microseconds
+    pub avg_time_per_iteration_us: f64,
+}

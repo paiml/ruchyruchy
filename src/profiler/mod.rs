@@ -43,6 +43,6 @@ pub mod types;
 
 pub use compiler_profiler::CompilerProfiler;
 pub use types::{
-    ExecutionMode, FunctionProfile, OptKind, OptimizationOpportunity, PhaseReport, Stability,
-    TypeSignature,
+    ExecutionMode, FunctionProfile, LoopProfile, OptKind, OptimizationOpportunity, PhaseReport,
+    Stability, TypeSignature,
 };
