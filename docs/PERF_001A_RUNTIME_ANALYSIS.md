@@ -1,9 +1,43 @@
 # PERF-001A: Runtime Baseline Analysis
 
 **Status**: 🚨 **BLOCKED** by Ruchy Compiler Bug #128
-**Date**: 2025-11-03
+**Date Started**: 2025-11-03
+**Date Updated**: 2025-11-03 (v3.178.0 tested - bug still exists)
 **Objective**: Break down "Ruchy Compiled" 2.64ms runtime into measurable components
 **Blocker**: https://github.com/paiml/ruchy/issues/128
+
+---
+
+## 🔄 Update: v3.178.0 Tested (Bug NOT Fixed)
+
+**Tested Version**: ruchy 3.178.0
+**Date**: 2025-11-03
+**Result**: ❌ Bug still exists, PERF-001A remains blocked
+
+### Test Results
+```bash
+# ❌ ruchy compile FAILS (same error as before)
+$ ruchy compile test.ruchy -o test -O 3
+Error: expected expression, found `+`
+Error: mismatched types (expected `()`, found `i32`)
+
+# ✅ ruchy run WORKS (interpreter path, but conflates metrics)
+$ time ruchy run test.ruchy
+55
+real: 0.004s (includes transpile + compile + runtime)
+
+# ❌ ruchy transpile FAILS
+$ ruchy transpile test.ruchy
+Error: Failed to parse generated tokens as Rust syntax
+```
+
+### GitHub Issue Updated
+- Comment added: https://github.com/paiml/ruchy/issues/128#issuecomment-3480601884
+- Status: Awaiting actual fix
+- Requested: Working `ruchy compile` path or alternative workaround
+
+### Decision: Wait for Actual Fix
+Per user request, we are **waiting** for Bug #128 to be genuinely fixed before proceeding with PERF-001A.
 
 ---
 
@@ -336,7 +370,20 @@ Attempting to measure performance IMMEDIATELY revealed compiler bugs:
 
 ---
 
+## 📅 Timeline
+
+- **2025-11-03 09:00**: PERF-001A implementation started
+- **2025-11-03 10:00**: Bug #128 discovered and filed
+- **2025-11-03 11:00**: Test infrastructure completed (Hello World working)
+- **2025-11-03 12:00**: Commit 0ea6dab (DISCOVERY-001) pushed
+- **2025-11-03 13:00**: User reported v3.178.0 "fixed it"
+- **2025-11-03 13:30**: Tested v3.178.0 - bug still exists
+- **2025-11-03 13:45**: GitHub issue updated, awaiting actual fix
+
+---
+
 **Status**: ⏸️ **PAUSED** - Awaiting Ruchy Compiler Bug #128 Resolution
 **Next Action**: Monitor https://github.com/paiml/ruchy/issues/128 for fix
-**Alternative**: Pivot to PERF-001B (Compiler Throughput) or RuchyRuchy Interpreter optimization
-**Date**: 2025-11-03
+**Decision**: User chose Option 2 (Wait for actual fix)
+**Tested Versions**: v3.178.0 (bug still exists)
+**Last Updated**: 2025-11-03 13:45
