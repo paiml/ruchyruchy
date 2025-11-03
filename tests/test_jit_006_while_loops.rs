@@ -58,8 +58,7 @@ fn test_compile_while_true_condition_compiles() {
         body: vec![],
     };
 
-    let compiled: Result<fn() -> i64, _> = jit
-        .compile_function_with_params(&param_names, &body);
+    let compiled: Result<fn() -> i64, _> = jit.compile_function_with_params(&param_names, &body);
 
     assert!(
         compiled.is_ok(),

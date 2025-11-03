@@ -226,7 +226,14 @@ impl JitCompiler {
 
     /// Compile AST expression to Cranelift IR value (no variables)
     fn compile_expr(ast: &AstNode, builder: &mut FunctionBuilder) -> Result<Value, JitError> {
-        Self::compile_expr_with_vars(ast, builder, &HashMap::new())
+        let mut var_counter = 0;
+        Self::compile_expr_with_context(
+            ast,
+            builder,
+            &HashMap::new(),
+            &mut HashMap::new(),
+            &mut var_counter,
+        )
     }
 
     /// Compile AST expression to Cranelift IR value (with variable context)
@@ -235,7 +242,85 @@ impl JitCompiler {
         builder: &mut FunctionBuilder,
         variables: &HashMap<String, Value>,
     ) -> Result<Value, JitError> {
+        let mut var_counter = 0;
+        Self::compile_expr_with_context(ast, builder, variables, &mut HashMap::new(), &mut var_counter)
+    }
+
+    /// Compile AST expression to Cranelift IR value (with full context)
+    fn compile_expr_with_context(
+        ast: &AstNode,
+        builder: &mut FunctionBuilder,
+        parameters: &HashMap<String, Value>,
+        local_vars: &mut HashMap<String, Variable>,
+        var_counter: &mut usize,
+    ) -> Result<Value, JitError> {
         match ast {
+            // Block: sequence of statements, returns last expression value
+            AstNode::Block { statements } => {
+                let mut result = builder.ins().iconst(types::I64, 0);
+                for stmt in statements {
+                    result = Self::compile_expr_with_context(
+                        stmt,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                    )?;
+                }
+                Ok(result)
+            }
+
+            // Let declaration: create and initialize a variable
+            AstNode::LetDecl { name, value } => {
+                // Create a new Cranelift variable
+                let var = Variable::new(*var_counter);
+                *var_counter += 1;
+
+                // Declare it in the builder
+                builder.declare_var(var, types::I64);
+
+                // Compile the initial value
+                let init_value = Self::compile_expr_with_context(
+                    value,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
+
+                // Define the variable with the initial value
+                builder.def_var(var, init_value);
+
+                // Store in local variables map
+                local_vars.insert(name.clone(), var);
+
+                // Let statements return 0 (they're statements, not expressions)
+                Ok(builder.ins().iconst(types::I64, 0))
+            }
+
+            // Assignment: update an existing variable
+            AstNode::Assignment { name, value } => {
+                // Look up the variable (copy it to avoid borrow checker issues)
+                let var = *local_vars.get(name).ok_or_else(|| {
+                    JitError::UnsupportedNode(format!("Undefined variable: {}", name))
+                })?;
+
+                // Compile the new value
+                let new_value = Self::compile_expr_with_context(
+                    value,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                )?;
+
+                // Update the variable
+                builder.def_var(var, new_value);
+
+                // Assignments return 0 (they're statements, not expressions)
+                Ok(builder.ins().iconst(types::I64, 0))
+            }
+
             // Integer literal: load constant
             AstNode::IntegerLiteral(n) => {
                 let val = builder.ins().iconst(types::I64, *n);
@@ -248,9 +333,14 @@ impl JitCompiler {
                 Ok(val)
             }
 
-            // Identifier: lookup variable (parameter)
+            // Identifier: lookup variable (local or parameter)
             AstNode::Identifier(name) => {
-                if let Some(&value) = variables.get(name) {
+                // Check local variables first
+                if let Some(&var) = local_vars.get(name) {
+                    let value = builder.use_var(var);
+                    Ok(value)
+                // Then check parameters
+                } else if let Some(&value) = parameters.get(name) {
                     Ok(value)
                 } else {
                     Err(JitError::UnsupportedNode(format!(
@@ -262,8 +352,8 @@ impl JitCompiler {
 
             // Binary operation: compile left, compile right, apply operator
             AstNode::BinaryOp { left, op, right } => {
-                let lhs = Self::compile_expr_with_vars(left, builder, variables)?;
-                let rhs = Self::compile_expr_with_vars(right, builder, variables)?;
+                let lhs = Self::compile_expr_with_context(left, builder, parameters, local_vars, var_counter)?;
+                let rhs = Self::compile_expr_with_context(right, builder, parameters, local_vars, var_counter)?;
 
                 let result = match op {
                     // Arithmetic operators
@@ -337,16 +427,14 @@ impl JitCompiler {
                 builder.switch_to_block(loop_header);
                 // Don't seal yet - has back edge from loop_body
 
-                let cond_value = Self::compile_expr_with_vars(condition, builder, variables)?;
+                let cond_value = Self::compile_expr_with_context(condition, builder, parameters, local_vars, var_counter)?;
 
                 // Convert condition to boolean: condition != 0
                 let zero = builder.ins().iconst(types::I64, 0);
                 let is_true = builder.ins().icmp(IntCC::NotEqual, cond_value, zero);
 
                 // Branch: if true, execute body; if false, exit loop
-                builder
-                    .ins()
-                    .brif(is_true, loop_body, &[], loop_exit, &[]);
+                builder.ins().brif(is_true, loop_body, &[], loop_exit, &[]);
 
                 // Loop body: Execute statements and jump back to header
                 builder.switch_to_block(loop_body);
@@ -354,7 +442,7 @@ impl JitCompiler {
 
                 // Execute loop body statements (if any)
                 for stmt in body {
-                    Self::compile_expr_with_vars(stmt, builder, variables)?;
+                    Self::compile_expr_with_context(stmt, builder, parameters, local_vars, var_counter)?;
                 }
 
                 // Back edge: Jump back to loop header
@@ -386,7 +474,7 @@ impl JitCompiler {
                 builder.append_block_param(merge_block, types::I64);
 
                 // Compile condition
-                let cond_value = Self::compile_expr_with_vars(condition, builder, variables)?;
+                let cond_value = Self::compile_expr_with_context(condition, builder, parameters, local_vars, var_counter)?;
 
                 // Convert to boolean: condition != 0
                 let zero = builder.ins().iconst(types::I64, 0);
@@ -406,7 +494,7 @@ impl JitCompiler {
                 } else {
                     let mut result = builder.ins().iconst(types::I64, 0);
                     for stmt in then_branch {
-                        result = Self::compile_expr_with_vars(stmt, builder, variables)?;
+                        result = Self::compile_expr_with_context(stmt, builder, parameters, local_vars, var_counter)?;
                     }
                     result
                 };
@@ -423,7 +511,7 @@ impl JitCompiler {
                     } else {
                         let mut result = builder.ins().iconst(types::I64, 0);
                         for stmt in else_stmts {
-                            result = Self::compile_expr_with_vars(stmt, builder, variables)?;
+                            result = Self::compile_expr_with_context(stmt, builder, parameters, local_vars, var_counter)?;
                         }
                         result
                     }
