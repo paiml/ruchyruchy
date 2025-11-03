@@ -37,6 +37,8 @@ pub mod bug_filing;
 pub mod bug_replication;
 /// Bug reporting module (REPORT-001 through REPORT-004)
 pub mod bug_reporting;
+/// Compiler module (COMPILE-001+): AST → Rust transpiler
+pub mod compiler;
 /// Conformance test suite export (INTERP-035)
 pub mod conformance;
 /// Interactive REPL debugger (DEBUGGER-046)

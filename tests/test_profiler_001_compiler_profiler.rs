@@ -160,29 +160,31 @@ fn test_hot_function_detection() {
         eval.eval(statement).expect("Should execute");
     }
 
-    // Get hot functions
-    let hot_functions = profiler.hot_functions(0.01); // >1% of total time
+    // Get hot functions (>1% of total time)
+    let hot_functions = profiler.hot_functions(1.0); // >1% of total time
 
     // Verify fibonacci is identified as hot
     assert!(
-        hot_functions.iter().any(|f| f.name == "fibonacci"),
+        hot_functions.iter().any(|(name, _)| name == "fibonacci"),
         "fibonacci should be identified as hot function"
     );
 
-    // Verify call count
-    let fib_profile = hot_functions
+    // Verify percentage
+    let (_, fib_percentage) = hot_functions
         .iter()
-        .find(|f| f.name == "fibonacci")
+        .find(|(name, _)| name == "fibonacci")
         .unwrap();
 
     assert!(
-        fib_profile.call_count > 100,
-        "fibonacci(10) should be called 177 times"
+        *fib_percentage > 95.0,
+        "fibonacci should consume >95% of total time"
     );
 
+    // Verify call count separately
+    let fib_profile = profiler.function_profile("fibonacci").unwrap();
     assert!(
-        fib_profile.percentage_of_total > 95.0,
-        "fibonacci should consume >95% of total time"
+        fib_profile.call_count > 100,
+        "fibonacci(10) should be called 177 times"
     );
 }
 

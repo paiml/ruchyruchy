@@ -276,3 +276,39 @@ impl Default for PhaseReport {
         Self::new()
     }
 }
+
+/// Function-level profiling data for JIT compilation decisions (INTERP-049)
+///
+/// Tracks call count, execution time, and percentage of total time for a single function.
+/// Used to identify hot functions that are good candidates for JIT compilation.
+///
+/// # JIT Decision Criteria
+///
+/// A function is a JIT candidate if:
+/// - **High call count**: >1000 calls (indicates hot path)
+/// - **High time percentage**: >30% of total execution time (Amdahl's Law)
+///
+/// # Example
+///
+/// ```rust
+/// use ruchyruchy::profiler::FunctionProfile;
+///
+/// let profile = FunctionProfile {
+///     name: "fibonacci".to_string(),
+///     call_count: 15,
+///     total_time_us: 1234.56,
+/// };
+///
+/// assert_eq!(profile.name, "fibonacci");
+/// assert_eq!(profile.call_count, 15);
+/// assert!(profile.total_time_us > 1000.0);
+/// ```
+#[derive(Debug, Clone)]
+pub struct FunctionProfile {
+    /// Function name
+    pub name: String,
+    /// Number of times this function was called
+    pub call_count: usize,
+    /// Total execution time in microseconds
+    pub total_time_us: f64,
+}

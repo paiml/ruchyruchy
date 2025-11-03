@@ -339,9 +339,10 @@ fn run_profile(args: &[String]) {
 
     match profile_type.as_str() {
         "--stack" => run_stack_profiler(&args[3..]),
+        "--perf" => run_perf_profiler(&args[3..]),
         _ => {
             eprintln!("Error: Unknown profile type: {}", profile_type);
-            eprintln!("Available types: --stack");
+            eprintln!("Available types: --stack, --perf");
             print_profile_help();
             exit(EXIT_ERROR);
         }
@@ -433,17 +434,140 @@ fn run_stack_profiler(args: &[String]) {
     }
 }
 
+fn run_perf_profiler(args: &[String]) {
+    // PERF-001B: Performance profiler
+    // Usage: ruchydbg profile --perf <file> [--iterations N]
+
+    if args.is_empty() {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg profile --perf <file> [--iterations N]");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[0];
+
+    // Parse optional iterations flag
+    let iterations = if args.len() >= 3 && args[1] == "--iterations" {
+        args[2].parse::<usize>().unwrap_or(1000)
+    } else {
+        1000 // Default: 1000 iterations for statistical rigor
+    };
+
+    // Check if file exists
+    let path = PathBuf::from(file_path);
+    if !path.exists() {
+        eprintln!("Error: File not found: {}", file_path);
+        exit(EXIT_ERROR);
+    }
+
+    // Read source file
+    let source = std::fs::read_to_string(&path).unwrap_or_else(|e| {
+        eprintln!("Error reading file: {}", e);
+        exit(EXIT_ERROR);
+    });
+
+    println!("🔍 Performance Profiling: {}", file_path);
+    println!("📊 Iterations: {}", iterations);
+    println!("=============================================================");
+    println!();
+
+    // Profile: Parse phase
+    use ruchyruchy::interpreter::parser::Parser;
+    use std::time::Instant;
+
+    let mut parse_times_us = Vec::with_capacity(iterations);
+    let mut asts = Vec::with_capacity(iterations);
+
+    for _ in 0..iterations {
+        let start = Instant::now();
+        let mut parser = Parser::new(&source);
+        let ast = parser.parse();
+        let duration = start.elapsed();
+
+        parse_times_us.push(duration.as_micros() as f64);
+        if let Ok(ast) = ast {
+            asts.push(ast);
+        }
+    }
+
+    // Profile: Eval phase
+    use ruchyruchy::interpreter::evaluator::Evaluator;
+
+    let mut eval_times_us = Vec::with_capacity(iterations);
+
+    for ast in &asts {
+        let start = Instant::now();
+        let mut eval = Evaluator::new();
+        for statement in ast.nodes() {
+            let _ = eval.eval(statement);
+        }
+        let duration = start.elapsed();
+        eval_times_us.push(duration.as_micros() as f64);
+    }
+
+    // Calculate statistics
+    let parse_mean = parse_times_us.iter().sum::<f64>() / parse_times_us.len() as f64;
+    let eval_mean = eval_times_us.iter().sum::<f64>() / eval_times_us.len() as f64;
+    let total_mean = parse_mean + eval_mean;
+
+    let parse_pct = (parse_mean / total_mean) * 100.0;
+    let eval_pct = (eval_mean / total_mean) * 100.0;
+
+    // Output results
+    println!("Phase Breakdown:");
+    println!("  Parse:    {:>8.2} µs ({:>5.1}%)", parse_mean, parse_pct);
+    println!("  Eval:     {:>8.2} µs ({:>5.1}%)", eval_mean, eval_pct);
+    println!("  Total:    {:>8.2} µs", total_mean);
+    println!();
+
+    // Amdahl's Law Analysis
+    let bottleneck_threshold = 30.0; // Phase taking >30% is considered dominant
+    if parse_pct > bottleneck_threshold && parse_pct > eval_pct {
+        println!("🎯 BOTTLENECK: Parse ({:.1}%)", parse_pct);
+        println!("   Recommendation: Optimize parser (tokenization, AST construction)");
+        println!(
+            "   Amdahl's Law: 50% speedup in parse → {:.1}% overall speedup",
+            (parse_pct / 2.0) * 0.5
+        );
+    } else if eval_pct > bottleneck_threshold && eval_pct > parse_pct {
+        println!("🎯 BOTTLENECK: Eval ({:.1}%)", eval_pct);
+        println!("   Recommendation: Optimize evaluator (cloning, lookups, operations)");
+        println!(
+            "   Amdahl's Law: 50% speedup in eval → {:.1}% overall speedup",
+            (eval_pct / 2.0) * 0.5
+        );
+    } else {
+        println!("✓ Balanced performance (no single dominant bottleneck)");
+    }
+
+    println!();
+    println!("=============================================================");
+    println!("✅ Profiling complete");
+}
+
 fn print_profile_help() {
     println!("USAGE:");
-    println!("    ruchydbg profile <TYPE> <file>");
+    println!("    ruchydbg profile <TYPE> <file> [OPTIONS]");
     println!();
     println!("TYPES:");
+    println!("    --perf             Performance profiling (parse vs eval breakdown)");
     println!("    --stack       Stack depth profiler (max depth, call counts, call tree)");
     println!();
+    println!("OPTIONS (for --perf):");
+    println!("    --iterations N     Number of iterations for statistical rigor (default: 1000)");
+    println!();
     println!("EXAMPLES:");
+    println!("    ruchydbg profile --perf fibonacci.ruchy");
+    println!("    ruchydbg profile --perf test.ruchy --iterations 10000");
     println!("    ruchydbg profile --stack factorial.ruchy");
     println!();
-    println!("OUTPUT:");
+    println!("OUTPUT (--perf):");
+    println!("    - Phase breakdown (Parse, Eval percentages)");
+    println!("    - Bottleneck identification (>30% threshold)");
+    println!("    - Amdahl's Law analysis (optimization potential)");
+    println!("    - Optimization recommendations");
+    println!();
+    println!("OUTPUT (--stack):");
     println!("    - Maximum call depth reached");
     println!("    - Total function calls executed");
     println!("    - Per-function call counts (sorted)");
