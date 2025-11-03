@@ -198,7 +198,11 @@ fn test_compile_for_loop_early_return() {
         .expect("Should compile for loop with early return");
 
     assert_eq!(compiled(10), 3, "Should return 3 when reaching i=3");
-    assert_eq!(compiled(2), -1, "Should return -1 when loop doesn't reach 3");
+    assert_eq!(
+        compiled(2),
+        -1,
+        "Should return -1 when loop doesn't reach 3"
+    );
 }
 
 /// Test: Compile for loop counting down

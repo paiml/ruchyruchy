@@ -585,13 +585,14 @@ impl JitCompiler {
                 )?;
 
                 // Check condition: var < end
-                let condition =
-                    builder
-                        .ins()
-                        .icmp(IntCC::SignedLessThan, current_var, end_value);
+                let condition = builder
+                    .ins()
+                    .icmp(IntCC::SignedLessThan, current_var, end_value);
 
                 // Branch: if true, execute body; if false, exit loop
-                builder.ins().brif(condition, loop_body, &[], loop_exit, &[]);
+                builder
+                    .ins()
+                    .brif(condition, loop_body, &[], loop_exit, &[]);
 
                 // Loop body: Execute statements
                 builder.switch_to_block(loop_body);
