@@ -112,6 +112,159 @@ impl CompilerProfiler {
         }
     }
 
+    /// Get function profile for a specific function (INTERP-049)
+    ///
+    /// Returns call count and timing data for JIT decisions
+    pub fn function_profile(&self, function: &str) -> Option<super::FunctionProfile> {
+        let data = self.data.borrow();
+        data.function_calls
+            .get(function)
+            .map(|profile| super::FunctionProfile {
+                name: function.to_string(),
+                call_count: profile.count,
+                total_time_us: profile.total_time.as_micros() as f64,
+            })
+    }
+
+    /// Get all function profiles sorted by total time (descending)
+    ///
+    /// Returns list of (name, profile) tuples for JIT prioritization
+    pub fn all_function_profiles_sorted(&self) -> Vec<(String, super::FunctionProfile)> {
+        let data = self.data.borrow();
+        let mut profiles: Vec<_> = data
+            .function_calls
+            .iter()
+            .map(|(name, profile)| {
+                (
+                    name.clone(),
+                    super::FunctionProfile {
+                        name: name.clone(),
+                        call_count: profile.count,
+                        total_time_us: profile.total_time.as_micros() as f64,
+                    },
+                )
+            })
+            .collect();
+
+        // Sort by total time descending (hottest first)
+        profiles.sort_by(|a, b| {
+            b.1.total_time_us
+                .partial_cmp(&a.1.total_time_us)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        profiles
+    }
+
+    /// Get percentage of total execution time for a function
+    ///
+    /// Returns percentage (0.0-100.0) for JIT threshold decisions
+    pub fn function_percentage(&self, function: &str) -> f64 {
+        let data = self.data.borrow();
+        let total_us = data.total_execution_time.as_micros() as f64;
+
+        if total_us == 0.0 {
+            return 0.0;
+        }
+
+        if let Some(profile) = data.function_calls.get(function) {
+            let func_us = profile.total_time.as_micros() as f64;
+            (func_us / total_us) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Get hot functions above a percentage threshold
+    ///
+    /// Returns list of (name, percentage) for functions taking >threshold% of time
+    pub fn hot_functions(&self, threshold_percentage: f64) -> Vec<(String, f64)> {
+        let data = self.data.borrow();
+        let total_us = data.total_execution_time.as_micros() as f64;
+
+        if total_us == 0.0 {
+            return Vec::new();
+        }
+
+        let mut hot: Vec<_> = data
+            .function_calls
+            .iter()
+            .map(|(name, profile)| {
+                let func_us = profile.total_time.as_micros() as f64;
+                let percentage = (func_us / total_us) * 100.0;
+                (name.clone(), percentage)
+            })
+            .filter(|(_, pct)| *pct > threshold_percentage)
+            .collect();
+
+        // Sort by percentage descending
+        hot.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        hot
+    }
+
+    /// Identify JIT compilation candidates
+    ///
+    /// Returns functions that meet JIT criteria:
+    /// - High call count (>call_threshold) OR
+    /// - High percentage (>time_threshold% of execution)
+    pub fn jit_candidates(
+        &self,
+        call_threshold: usize,
+        time_threshold_percentage: f64,
+    ) -> Vec<String> {
+        let data = self.data.borrow();
+        let total_us = data.total_execution_time.as_micros() as f64;
+
+        let mut candidates: Vec<_> = data
+            .function_calls
+            .iter()
+            .filter_map(|(name, profile)| {
+                let call_count_high = profile.count >= call_threshold;
+                let time_percentage = if total_us > 0.0 {
+                    (profile.total_time.as_micros() as f64 / total_us) * 100.0
+                } else {
+                    0.0
+                };
+                let time_high = time_percentage > time_threshold_percentage;
+
+                if call_count_high || time_high {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by total time descending (prioritize hottest)
+        candidates.sort_by(|a, b| {
+            let a_time = data.function_calls.get(a).unwrap().total_time;
+            let b_time = data.function_calls.get(b).unwrap().total_time;
+            b_time.cmp(&a_time)
+        });
+
+        candidates
+    }
+
+    /// Record function call (INTERP-049)
+    ///
+    /// Track call count and execution time for JIT decisions
+    pub fn record_function_call(&self, function: &str, duration: Duration) {
+        let mut data = self.data.borrow_mut();
+        data.function_calls
+            .entry(function.to_string())
+            .and_modify(|profile| {
+                profile.count += 1;
+                profile.total_time += duration;
+            })
+            .or_insert(CallProfile {
+                count: 1,
+                total_time: duration,
+            });
+
+        data.total_execution_time += duration;
+    }
+
     /// Analyze AST for optimization opportunities (DEBUGGER-053)
     ///
     /// Traverses the AST to identify optimization opportunities:
@@ -253,76 +406,6 @@ impl CompilerProfiler {
             }
             _ => "?".to_string(),
         }
-    }
-
-    /// Record a function call with its execution time (DEBUGGER-052)
-    ///
-    /// Updates call count and total time for the function, and accumulates
-    /// total execution time for percentage calculation.
-    pub fn record_function_call(&self, function: &str, duration: Duration) {
-        let mut data = self.data.borrow_mut();
-
-        // Update function profile
-        let profile = data
-            .function_calls
-            .entry(function.to_string())
-            .or_insert(CallProfile {
-                count: 0,
-                total_time: Duration::ZERO,
-            });
-
-        profile.count += 1;
-        profile.total_time += duration;
-
-        // Update total execution time
-        data.total_execution_time += duration;
-    }
-
-    /// Identify hot functions (>threshold% of total time)
-    ///
-    /// Returns functions consuming more than the threshold percentage of total
-    /// execution time. Threshold is a fraction (0.01 = 1%).
-    ///
-    /// # Arguments
-    ///
-    /// * `threshold` - Minimum percentage (as fraction) to be considered "hot" (e.g., 0.01 for 1%)
-    ///
-    /// # Returns
-    ///
-    /// Vector of HotFunction sorted by percentage_of_total (descending)
-    pub fn hot_functions(&self, threshold: f64) -> Vec<HotFunction> {
-        let data = self.data.borrow();
-
-        let total_time_micros = data.total_execution_time.as_micros() as f64;
-        if total_time_micros == 0.0 {
-            return vec![];
-        }
-
-        let mut hot_fns: Vec<HotFunction> = data
-            .function_calls
-            .iter()
-            .map(|(name, profile)| {
-                let func_time_micros = profile.total_time.as_micros() as f64;
-                let percentage = (func_time_micros / total_time_micros) * 100.0;
-
-                HotFunction {
-                    name: name.clone(),
-                    call_count: profile.count,
-                    total_time: profile.total_time,
-                    percentage_of_total: percentage,
-                }
-            })
-            .filter(|f| f.percentage_of_total >= threshold * 100.0)
-            .collect();
-
-        // Sort by percentage descending (hottest first)
-        hot_fns.sort_by(|a, b| {
-            b.percentage_of_total
-                .partial_cmp(&a.percentage_of_total)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        hot_fns
     }
 
     /// Profile code in specific execution mode (DEBUGGER-054)
