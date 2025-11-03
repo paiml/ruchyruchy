@@ -18,7 +18,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module};
 use std::collections::HashMap;
 
-use crate::interpreter::parser::{AstNode, BinaryOperator};
+use crate::interpreter::parser::{AstNode, BinaryOperator, UnaryOperator};
 
 /// JIT compilation error
 #[derive(Debug)]
@@ -493,6 +493,44 @@ impl JitCompiler {
                         builder.ins().uextend(types::I64, or)
                     }
                 };
+
+                Ok(result)
+            }
+
+            // Unary operation: op operand (e.g., -x, !x, +x)
+            AstNode::UnaryOp { op, operand } => {
+                // Compile operand
+                let value = Self::compile_expr_with_context(
+                    operand,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                )?;
+
+                let result =
+                    match op {
+                        // Negation: -x
+                        UnaryOperator::Negate => builder.ins().ineg(value),
+
+                        // Logical NOT: !x
+                        // Convert to boolean: x == 0 ? 1 : 0
+                        UnaryOperator::Not => {
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let is_zero = builder.ins().icmp(IntCC::Equal, value, zero);
+                            builder.ins().uextend(types::I64, is_zero)
+                        }
+
+                        // Unary plus: +x (identity operation)
+                        UnaryOperator::Plus => value,
+
+                        // Dereference not supported in MVP JIT
+                        UnaryOperator::Dereference => return Err(JitError::UnsupportedNode(
+                            "Dereference operator not supported in JIT (requires pointer types)"
+                                .to_string(),
+                        )),
+                    };
 
                 Ok(result)
             }
