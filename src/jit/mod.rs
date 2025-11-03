@@ -73,6 +73,13 @@ impl JitCompiler {
         })
     }
 
+    /// Register a compiled function for use in function calls
+    ///
+    /// This allows JIT-compiled code to call other JIT-compiled functions
+    pub fn register_function(&mut self, name: String, func_ptr: *const u8) {
+        self.compiled_functions.insert(name, func_ptr);
+    }
+
     /// Compile an expression to machine code
     ///
     /// Returns a function pointer that evaluates the expression and returns i64
@@ -106,7 +113,7 @@ impl JitCompiler {
             builder.seal_block(entry_block);
 
             // Compile expression to Cranelift IR
-            let result = Self::compile_expr(ast, &mut builder)?;
+            let result = Self::compile_expr(ast, &mut builder, &self.compiled_functions)?;
 
             // Return the result
             builder.ins().return_(&[result]);
@@ -194,7 +201,12 @@ impl JitCompiler {
             }
 
             // Compile body expression with variable context
-            let result = Self::compile_expr_with_vars(body, &mut builder, &variables)?;
+            let result = Self::compile_expr_with_vars(
+                body,
+                &mut builder,
+                &variables,
+                &self.compiled_functions,
+            )?;
 
             // Check if body ends with explicit return (to avoid double-return error)
             let has_explicit_return = match body {
@@ -236,7 +248,11 @@ impl JitCompiler {
     }
 
     /// Compile AST expression to Cranelift IR value (no variables)
-    fn compile_expr(ast: &AstNode, builder: &mut FunctionBuilder) -> Result<Value, JitError> {
+    fn compile_expr(
+        ast: &AstNode,
+        builder: &mut FunctionBuilder,
+        compiled_functions: &HashMap<String, *const u8>,
+    ) -> Result<Value, JitError> {
         let mut var_counter = 0;
         Self::compile_expr_with_context(
             ast,
@@ -244,6 +260,7 @@ impl JitCompiler {
             &HashMap::new(),
             &mut HashMap::new(),
             &mut var_counter,
+            compiled_functions,
         )
     }
 
@@ -252,6 +269,7 @@ impl JitCompiler {
         ast: &AstNode,
         builder: &mut FunctionBuilder,
         variables: &HashMap<String, Value>,
+        compiled_functions: &HashMap<String, *const u8>,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
         Self::compile_expr_with_context(
@@ -260,6 +278,7 @@ impl JitCompiler {
             variables,
             &mut HashMap::new(),
             &mut var_counter,
+            compiled_functions,
         )
     }
 
@@ -270,6 +289,7 @@ impl JitCompiler {
         parameters: &HashMap<String, Value>,
         local_vars: &mut HashMap<String, Variable>,
         var_counter: &mut usize,
+        compiled_functions: &HashMap<String, *const u8>,
     ) -> Result<Value, JitError> {
         match ast {
             // Return statement: early function exit
@@ -287,6 +307,7 @@ impl JitCompiler {
                         parameters,
                         local_vars,
                         var_counter,
+                        compiled_functions,
                     )?;
                     // Return from function (terminates block)
                     builder.ins().return_(&[return_value]);
@@ -309,6 +330,7 @@ impl JitCompiler {
                         parameters,
                         local_vars,
                         var_counter,
+                        compiled_functions,
                     )?;
                 }
                 Ok(result)
@@ -330,6 +352,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
 
                 // Define the variable with the initial value
@@ -356,6 +379,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
 
                 // Update the variable
@@ -402,6 +426,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
                 let rhs = Self::compile_expr_with_context(
                     right,
@@ -409,6 +434,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
 
                 let result = match op {
@@ -489,6 +515,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
 
                 // Convert condition to boolean: condition != 0
@@ -510,6 +537,7 @@ impl JitCompiler {
                         parameters,
                         local_vars,
                         var_counter,
+                        compiled_functions,
                     )?;
                 }
 
@@ -551,6 +579,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
 
                 // Create loop variable and initialize it
@@ -582,6 +611,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
 
                 // Check condition: var < end
@@ -606,6 +636,7 @@ impl JitCompiler {
                         parameters,
                         local_vars,
                         var_counter,
+                        compiled_functions,
                     )?;
                 }
 
@@ -650,6 +681,7 @@ impl JitCompiler {
                     parameters,
                     local_vars,
                     var_counter,
+                        compiled_functions,
                 )?;
 
                 // Convert to boolean: condition != 0
@@ -676,6 +708,7 @@ impl JitCompiler {
                             parameters,
                             local_vars,
                             var_counter,
+                        compiled_functions,
                         )?;
                     }
                     result
@@ -704,6 +737,7 @@ impl JitCompiler {
                                 parameters,
                                 local_vars,
                                 var_counter,
+                        compiled_functions,
                             )?;
                         }
                         result
@@ -729,6 +763,47 @@ impl JitCompiler {
 
                 // Get the result from the merge block parameter
                 let result = builder.block_params(merge_block)[0];
+
+                Ok(result)
+            }
+
+            // Function call: name(args)
+            AstNode::FunctionCall { name, args } => {
+                // Look up function in registry
+                let func_ptr = compiled_functions.get(name).ok_or_else(|| {
+                    JitError::UnsupportedNode(format!("Function '{}' not registered", name))
+                })?;
+
+                // Compile arguments
+                let mut arg_values = Vec::new();
+                for arg in args {
+                    let arg_value = Self::compile_expr_with_context(
+                        arg,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                        compiled_functions,
+                    )?;
+                    arg_values.push(arg_value);
+                }
+
+                // Create function signature based on argument count
+                // Use the function builder's calling convention
+                let mut sig = Signature::new(builder.func.signature.call_conv);
+                for _ in 0..args.len() {
+                    sig.params.push(AbiParam::new(types::I64));
+                }
+                sig.returns.push(AbiParam::new(types::I64));
+
+                // Load function pointer as constant
+                let ptr_value = *func_ptr as i64;
+                let func_addr = builder.ins().iconst(types::I64, ptr_value);
+
+                // Generate indirect call instruction
+                let sig_ref = builder.import_signature(sig);
+                let call = builder.ins().call_indirect(sig_ref, func_addr, &arg_values);
+                let result = builder.inst_results(call)[0];
 
                 Ok(result)
             }
