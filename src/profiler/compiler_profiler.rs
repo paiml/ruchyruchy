@@ -288,10 +288,7 @@ impl CompilerProfiler {
         duration: Duration,
     ) {
         let mut data = self.data.borrow_mut();
-        let loops = data
-            .loop_profiles
-            .entry(function.to_string())
-            .or_default();
+        let loops = data.loop_profiles.entry(function.to_string()).or_default();
 
         // Find existing loop profile or create new one
         if let Some(profile) = loops.iter_mut().find(|lp| lp.loop_index == loop_index) {

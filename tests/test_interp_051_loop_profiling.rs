@@ -128,9 +128,7 @@ fn test_hot_loop_identification() {
 
     // cold_loop should NOT be a candidate
     assert!(
-        !osr_candidates
-            .iter()
-            .any(|lp| lp.function == "cold_loop"),
+        !osr_candidates.iter().any(|lp| lp.function == "cold_loop"),
         "cold_loop should not be OSR candidate (only 10 iterations)"
     );
 }
@@ -262,10 +260,7 @@ fn test_nested_loop_profiling() {
     }
 
     let loop_profiles = profiler.loop_profiles("nested");
-    assert!(
-        !loop_profiles.is_empty(),
-        "Should track nested loops"
-    );
+    assert!(!loop_profiles.is_empty(), "Should track nested loops");
 
     // Currently we aggregate nested loops
     // Outer loop: 10 iterations
@@ -374,8 +369,7 @@ fn test_loop_percentage_of_function_time() {
 
     // Loop should take >90% of function time
     let function_profile = profiler.function_profile("mostly_loop").unwrap();
-    let loop_percentage =
-        (loop_profile.total_time_us / function_profile.total_time_us) * 100.0;
+    let loop_percentage = (loop_profile.total_time_us / function_profile.total_time_us) * 100.0;
 
     assert!(
         loop_percentage > 80.0,
