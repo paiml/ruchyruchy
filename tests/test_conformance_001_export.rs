@@ -102,7 +102,11 @@ fn test_exported_file_format() {
         return;
     }
 
-    let test_file = &test_files[0];
+    // Sort files by name for deterministic ordering (BUG-057 fix)
+    let mut test_files_sorted = test_files;
+    test_files_sorted.sort_by_key(|f| f.path());
+
+    let test_file = &test_files_sorted[0];
     let content = fs::read_to_string(test_file.path()).unwrap();
 
     // Verify metadata format
