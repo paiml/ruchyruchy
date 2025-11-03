@@ -340,9 +340,10 @@ fn run_profile(args: &[String]) {
     match profile_type.as_str() {
         "--stack" => run_stack_profiler(&args[3..]),
         "--perf" => run_perf_profiler(&args[3..]),
+        "--types" => run_types_profiler(&args[3..]),
         _ => {
             eprintln!("Error: Unknown profile type: {}", profile_type);
-            eprintln!("Available types: --stack, --perf");
+            eprintln!("Available types: --stack, --perf, --types");
             print_profile_help();
             exit(EXIT_ERROR);
         }
@@ -545,13 +546,163 @@ fn run_perf_profiler(args: &[String]) {
     println!("✅ Profiling complete");
 }
 
+fn run_types_profiler(args: &[String]) {
+    // INTERP-050: Type stability tracking for JIT
+    // Usage: ruchydbg profile --types <file>
+
+    if args.is_empty() {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg profile --types <file>");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[0];
+
+    // Check if file exists
+    let path = PathBuf::from(file_path);
+    if !path.exists() {
+        eprintln!("Error: File not found: {}", file_path);
+        exit(EXIT_ERROR);
+    }
+
+    // Read file
+    let code = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file {}: {}", file_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Parse
+    use ruchyruchy::interpreter::parser::Parser;
+    let mut parser = Parser::new(&code);
+    let ast = match parser.parse() {
+        Ok(ast) => ast,
+        Err(e) => {
+            eprintln!("Parse error: {:?}", e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Execute with compiler profiler enabled
+    use ruchyruchy::interpreter::evaluator::Evaluator;
+    use ruchyruchy::profiler::{CompilerProfiler, Stability};
+
+    let profiler = CompilerProfiler::new();
+    let mut eval = Evaluator::new().with_type_observation(&profiler);
+
+    for statement in ast.nodes() {
+        if let Err(e) = eval.eval(statement) {
+            eprintln!("Evaluation error: {:?}", e);
+            exit(EXIT_ERROR);
+        }
+    }
+
+    // Display type stability report
+    println!("\n🔍 Type Stability Analysis: {}", file_path);
+    println!("=============================================================");
+    println!();
+
+    // Get all function profiles sorted by total time (hottest first)
+    let all_profiles = profiler.all_function_profiles_sorted();
+
+    if all_profiles.is_empty() {
+        println!("⚠️  No function calls observed");
+        exit(EXIT_SUCCESS);
+    }
+
+    // Get all functions for later hot function analysis
+    let _hot_functions = profiler.hot_functions(0.0); // Get all functions with timing
+
+    for (func_name, profile) in &all_profiles {
+        let stability = profiler.type_stability(func_name);
+        let observations = profiler.type_observations(func_name);
+        let unique_sigs: std::collections::HashSet<_> = observations.iter().collect();
+        let percentage = profiler.function_percentage(func_name);
+
+        println!("Function: {}", func_name);
+        println!("  Calls: {}", profile.call_count);
+        println!(
+            "  Time: {:.2} µs ({:.1}%)",
+            profile.total_time_us, percentage
+        );
+
+        // Show type stability
+        match stability {
+            Stability::Monomorphic => {
+                println!("  Type Stability: ✅ Monomorphic (1 type signature)");
+                println!("    → EXCELLENT JIT candidate (type-stable)");
+            }
+            Stability::Polymorphic => {
+                println!(
+                    "  Type Stability: ⚠️  Polymorphic ({} type signatures)",
+                    unique_sigs.len()
+                );
+                println!("    → MODERATE JIT candidate (use inline cache)");
+            }
+            Stability::Megamorphic => {
+                println!(
+                    "  Type Stability: ❌ Megamorphic ({}+ type signatures)",
+                    unique_sigs.len()
+                );
+                println!("    → POOR JIT candidate (too unstable)");
+            }
+        }
+
+        // Show type signatures
+        if !observations.is_empty() {
+            println!("  Type Signatures:");
+            for sig in unique_sigs {
+                let params = sig.param_types().join(", ");
+                let ret = sig.return_type();
+                println!("    ({}) → {}", params, ret);
+            }
+        }
+
+        println!();
+    }
+
+    // Identify excellent JIT candidates (hot + type-stable)
+    println!("=============================================================");
+    println!("🎯 JIT Compilation Recommendations:");
+    println!();
+
+    let hot_threshold = 30.0; // >30% of total time
+    let hot_funcs = profiler.hot_functions(hot_threshold);
+
+    let excellent_candidates: Vec<_> = hot_funcs
+        .iter()
+        .filter(|(name, _)| profiler.type_stability(name) == Stability::Monomorphic)
+        .collect();
+
+    if excellent_candidates.is_empty() {
+        println!("⚠️  No excellent JIT candidates found");
+        println!(
+            "   (Looking for: hot functions >{}% AND type-stable)",
+            hot_threshold
+        );
+    } else {
+        println!("✅ Excellent JIT Candidates (hot + type-stable):");
+        for (name, pct) in excellent_candidates {
+            println!("   • {} ({:.1}% of time, monomorphic)", name, pct);
+        }
+        println!();
+        println!("💡 These functions should be JIT compiled for maximum speedup!");
+    }
+
+    println!();
+    exit(EXIT_SUCCESS);
+}
+
 fn print_profile_help() {
     println!("USAGE:");
     println!("    ruchydbg profile <TYPE> <file> [OPTIONS]");
     println!();
     println!("TYPES:");
     println!("    --perf             Performance profiling (parse vs eval breakdown)");
-    println!("    --stack       Stack depth profiler (max depth, call counts, call tree)");
+    println!("    --stack            Stack depth profiler (max depth, call counts, call tree)");
+    println!("    --types            Type stability tracking (JIT candidate identification)");
     println!();
     println!("OPTIONS (for --perf):");
     println!("    --iterations N     Number of iterations for statistical rigor (default: 1000)");
@@ -560,6 +711,7 @@ fn print_profile_help() {
     println!("    ruchydbg profile --perf fibonacci.ruchy");
     println!("    ruchydbg profile --perf test.ruchy --iterations 10000");
     println!("    ruchydbg profile --stack factorial.ruchy");
+    println!("    ruchydbg profile --types hot_loop.ruchy");
     println!();
     println!("OUTPUT (--perf):");
     println!("    - Phase breakdown (Parse, Eval percentages)");
