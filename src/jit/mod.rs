@@ -43,6 +43,46 @@ impl std::fmt::Display for JitError {
 
 impl std::error::Error for JitError {}
 
+/// String compilation context (passed through compilation)
+struct StringContext<'a> {
+    /// String literals storage (kept alive for JIT lifetime)
+    literals: &'a mut Vec<Box<[u8]>>,
+    /// String interning map (content → pointer)
+    intern: &'a mut HashMap<String, i64>,
+}
+
+impl<'a> StringContext<'a> {
+    /// Intern a string literal (reuse existing pointer if available)
+    fn intern_string(&mut self, s: &str) -> i64 {
+        // Check if already interned
+        if let Some(&ptr) = self.intern.get(s) {
+            return ptr;
+        }
+
+        // Create new string buffer: [i64 length][data bytes]
+        let str_bytes = s.as_bytes();
+        let total_size = 8 + str_bytes.len();
+        let mut buffer = vec![0u8; total_size];
+
+        // Write length as i64 (little-endian)
+        let len = str_bytes.len() as i64;
+        buffer[0..8].copy_from_slice(&len.to_le_bytes());
+
+        // Write string data
+        buffer[8..].copy_from_slice(str_bytes);
+
+        // Store and get pointer
+        let boxed = buffer.into_boxed_slice();
+        let ptr = boxed.as_ptr() as i64;
+        self.literals.push(boxed);
+
+        // Cache for future lookups
+        self.intern.insert(s.to_string(), ptr);
+
+        ptr
+    }
+}
+
 /// JIT Compiler
 ///
 /// Compiles RuchyRuchy AST to machine code using Cranelift
@@ -55,6 +95,11 @@ pub struct JitCompiler {
     function_counter: usize,
     /// Compiled functions cache (name → pointer)
     compiled_functions: HashMap<String, *const u8>,
+    /// String literals storage (kept alive for JIT lifetime)
+    /// Format: Vec<Box<[u8]>> where each entry is [i64 length][data bytes]
+    string_literals: Vec<Box<[u8]>>,
+    /// String interning map (content → pointer) for string literal deduplication
+    string_intern: HashMap<String, i64>,
 }
 
 impl JitCompiler {
@@ -70,6 +115,8 @@ impl JitCompiler {
             builder_context: FunctionBuilderContext::new(),
             function_counter: 0,
             compiled_functions: HashMap::new(),
+            string_literals: Vec::new(),
+            string_intern: HashMap::new(),
         })
     }
 
@@ -113,7 +160,12 @@ impl JitCompiler {
             builder.seal_block(entry_block);
 
             // Compile expression to Cranelift IR
-            let result = Self::compile_expr(ast, &mut builder, &self.compiled_functions)?;
+            let mut string_ctx = StringContext {
+                literals: &mut self.string_literals,
+                intern: &mut self.string_intern,
+            };
+            let result =
+                Self::compile_expr(ast, &mut builder, &self.compiled_functions, &mut string_ctx)?;
 
             // Return the result
             builder.ins().return_(&[result]);
@@ -201,11 +253,16 @@ impl JitCompiler {
             }
 
             // Compile body expression with variable context
+            let mut string_ctx = StringContext {
+                literals: &mut self.string_literals,
+                intern: &mut self.string_intern,
+            };
             let result = Self::compile_expr_with_vars(
                 body,
                 &mut builder,
                 &variables,
                 &self.compiled_functions,
+                &mut string_ctx,
             )?;
 
             // Check if body ends with explicit return (to avoid double-return error)
@@ -252,6 +309,7 @@ impl JitCompiler {
         ast: &AstNode,
         builder: &mut FunctionBuilder,
         compiled_functions: &HashMap<String, *const u8>,
+        string_ctx: &mut StringContext,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
 
@@ -262,6 +320,7 @@ impl JitCompiler {
             &mut HashMap::new(),
             &mut var_counter,
             compiled_functions,
+            string_ctx,
         )
     }
 
@@ -271,6 +330,7 @@ impl JitCompiler {
         builder: &mut FunctionBuilder,
         variables: &HashMap<String, Value>,
         compiled_functions: &HashMap<String, *const u8>,
+        string_ctx: &mut StringContext,
     ) -> Result<Value, JitError> {
         let mut var_counter = 0;
 
@@ -281,6 +341,7 @@ impl JitCompiler {
             &mut HashMap::new(),
             &mut var_counter,
             compiled_functions,
+            string_ctx,
         )
     }
 
@@ -292,6 +353,7 @@ impl JitCompiler {
         local_vars: &mut HashMap<String, Variable>,
         var_counter: &mut usize,
         compiled_functions: &HashMap<String, *const u8>,
+        string_ctx: &mut StringContext,
     ) -> Result<Value, JitError> {
         match ast {
             // Return statement: early function exit
@@ -310,6 +372,7 @@ impl JitCompiler {
                         local_vars,
                         var_counter,
                         compiled_functions,
+                        string_ctx,
                     )?;
                     // Return from function (terminates block)
                     builder.ins().return_(&[return_value]);
@@ -333,6 +396,7 @@ impl JitCompiler {
                         local_vars,
                         var_counter,
                         compiled_functions,
+                        string_ctx,
                     )?;
                 }
                 Ok(result)
@@ -355,6 +419,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Define the variable with the initial value
@@ -382,6 +447,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Update the variable
@@ -400,6 +466,17 @@ impl JitCompiler {
             // Boolean literal: convert to 0 (false) or 1 (true)
             AstNode::BooleanLiteral(b) => {
                 let val = builder.ins().iconst(types::I64, if *b { 1 } else { 0 });
+                Ok(val)
+            }
+
+            // String literal: intern and return pointer
+            // Format: [i64 length][data bytes]
+            AstNode::StringLiteral(s) => {
+                // Intern the string (reuse pointer if already seen)
+                let ptr = string_ctx.intern_string(s);
+
+                // Return pointer as i64
+                let val = builder.ins().iconst(types::I64, ptr);
                 Ok(val)
             }
 
@@ -429,6 +506,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
                 let rhs = Self::compile_expr_with_context(
                     right,
@@ -437,6 +515,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 let result = match op {
@@ -507,6 +586,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 let result =
@@ -556,6 +636,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Convert condition to boolean: condition != 0
@@ -578,6 +659,7 @@ impl JitCompiler {
                         local_vars,
                         var_counter,
                         compiled_functions,
+                        string_ctx,
                     )?;
                 }
 
@@ -620,6 +702,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Create loop variable and initialize it
@@ -652,6 +735,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Check condition: var < end
@@ -677,6 +761,7 @@ impl JitCompiler {
                         local_vars,
                         var_counter,
                         compiled_functions,
+                        string_ctx,
                     )?;
                 }
 
@@ -722,6 +807,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Convert to boolean: condition != 0
@@ -749,6 +835,7 @@ impl JitCompiler {
                             local_vars,
                             var_counter,
                             compiled_functions,
+                            string_ctx,
                         )?;
                     }
                     result
@@ -778,6 +865,7 @@ impl JitCompiler {
                                 local_vars,
                                 var_counter,
                                 compiled_functions,
+                                string_ctx,
                             )?;
                         }
                         result
@@ -824,6 +912,7 @@ impl JitCompiler {
                         local_vars,
                         var_counter,
                         compiled_functions,
+                        string_ctx,
                     )?;
                     arg_values.push(arg_value);
                 }
@@ -876,6 +965,7 @@ impl JitCompiler {
                         local_vars,
                         var_counter,
                         compiled_functions,
+                        string_ctx,
                     )?;
 
                     // Calculate offset (i * 8 bytes)
@@ -901,6 +991,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Compile index expression (should return integer)
@@ -911,6 +1002,7 @@ impl JitCompiler {
                     local_vars,
                     var_counter,
                     compiled_functions,
+                    string_ctx,
                 )?;
 
                 // Calculate byte offset: index * 8 (8 bytes per i64)
@@ -941,6 +1033,7 @@ impl JitCompiler {
                             local_vars,
                             var_counter,
                             compiled_functions,
+                            string_ctx,
                         )?;
 
                         // Compile index
@@ -951,6 +1044,7 @@ impl JitCompiler {
                             local_vars,
                             var_counter,
                             compiled_functions,
+                            string_ctx,
                         )?;
 
                         // Calculate element address: array_addr + (index * 8)
@@ -972,6 +1066,7 @@ impl JitCompiler {
                             local_vars,
                             var_counter,
                             compiled_functions,
+                            string_ctx,
                         )?;
 
                         // Apply operation
@@ -1020,6 +1115,7 @@ impl JitCompiler {
                             local_vars,
                             var_counter,
                             compiled_functions,
+                            string_ctx,
                         )?;
 
                         // Apply operation
