@@ -1861,6 +1861,51 @@ impl JitCompiler {
                 Ok(result)
             }
 
+            // Tuple destructuring: let (a, b, c) = tuple_expr;
+            // Implementation: Load tuple pointer, then load each field into new variables
+            AstNode::TupleDestruct { names, value } => {
+                // Compile the tuple value expression (returns tuple pointer)
+                let tuple_addr = Self::compile_expr_with_context(
+                    value,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                    string_ctx,
+                    struct_defs,
+                )?;
+
+                // For each pattern name, load the corresponding tuple field
+                for (i, name) in names.iter().enumerate() {
+                    // Calculate byte offset: field i is at offset i * 8
+                    let offset = (i * 8) as i32;
+
+                    // Load value from tuple[i]
+                    let field_value =
+                        builder
+                            .ins()
+                            .load(types::I64, MemFlags::trusted(), tuple_addr, offset);
+
+                    // Create a new Cranelift variable for this pattern name
+                    let var = Variable::new(*var_counter);
+                    *var_counter += 1;
+
+                    // Declare it with the type matching the field value
+                    let value_type = builder.func.dfg.value_type(field_value);
+                    builder.declare_var(var, value_type);
+
+                    // Define the variable with the field value
+                    builder.def_var(var, field_value);
+
+                    // Store in local variables map
+                    local_vars.insert(name.clone(), var);
+                }
+
+                // TupleDestruct doesn't produce a runtime value - return 0
+                Ok(builder.ins().iconst(types::I64, 0))
+            }
+
             // Unsupported AST node
             _ => Err(JitError::UnsupportedNode(format!(
                 "Cannot compile AST node: {:?}",
