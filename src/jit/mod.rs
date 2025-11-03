@@ -1802,6 +1802,65 @@ impl JitCompiler {
                 Ok(result)
             }
 
+            // Method call: receiver.method(args)
+            // Implementation: Desugar to function call with receiver as first argument
+            // receiver.method(arg1, arg2) → method(receiver, arg1, arg2)
+            AstNode::MethodCall {
+                receiver,
+                method,
+                args,
+            } => {
+                // Look up method function in registry
+                let func_ptr = compiled_functions.get(method).ok_or_else(|| {
+                    JitError::UnsupportedNode(format!("Method '{}' not registered", method))
+                })?;
+
+                // Compile the receiver expression (becomes first argument)
+                let receiver_value = Self::compile_expr_with_context(
+                    receiver,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                    string_ctx,
+                    struct_defs,
+                )?;
+
+                // Compile remaining arguments
+                let mut all_args = vec![receiver_value]; // receiver is first argument
+                for arg in args {
+                    let arg_value = Self::compile_expr_with_context(
+                        arg,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                        compiled_functions,
+                        string_ctx,
+                        struct_defs,
+                    )?;
+                    all_args.push(arg_value);
+                }
+
+                // Create function signature: receiver + args → return value
+                let mut sig = Signature::new(builder.func.signature.call_conv);
+                for _ in 0..all_args.len() {
+                    sig.params.push(AbiParam::new(types::I64));
+                }
+                sig.returns.push(AbiParam::new(types::I64));
+
+                // Load function pointer as constant
+                let ptr_value = *func_ptr as i64;
+                let func_addr = builder.ins().iconst(types::I64, ptr_value);
+
+                // Generate indirect call instruction
+                let sig_ref = builder.import_signature(sig);
+                let call = builder.ins().call_indirect(sig_ref, func_addr, &all_args);
+                let result = builder.inst_results(call)[0];
+                Ok(result)
+            }
+
             // Unsupported AST node
             _ => Err(JitError::UnsupportedNode(format!(
                 "Cannot compile AST node: {:?}",
