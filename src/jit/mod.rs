@@ -18,7 +18,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module};
 use std::collections::HashMap;
 
-use crate::interpreter::parser::{AstNode, BinaryOperator, UnaryOperator};
+use crate::interpreter::parser::{AstNode, BinaryOperator, Pattern, UnaryOperator};
 
 /// JIT compilation error
 #[derive(Debug)]
@@ -1664,6 +1664,142 @@ impl JitCompiler {
 
                 // Return the hashmap address (as i64)
                 Ok(hashmap_addr)
+            }
+
+            // Match expression: match expr { pattern => body, ... }
+            // Implementation: Compile to if-else chain checking each pattern in order
+            // Patterns: Literal (compare), Identifier (bind), Wildcard (catch-all)
+            AstNode::MatchExpr { expr, arms } => {
+                // Compile the match expression (value to match against)
+                let match_value = Self::compile_expr_with_context(
+                    expr,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                    string_ctx,
+                    struct_defs,
+                )?;
+
+                // Create merge block (all arms jump here with result)
+                let merge_block = builder.create_block();
+                builder.append_block_param(merge_block, types::I64);
+
+                // Process each arm in order
+                let mut current_block = None;
+                for (arm_index, arm) in arms.iter().enumerate() {
+                    // Create blocks for this arm
+                    let arm_body_block = builder.create_block();
+                    let next_arm_block = if arm_index < arms.len() - 1 {
+                        Some(builder.create_block())
+                    } else {
+                        None
+                    };
+
+                    // If not first arm, switch to current block
+                    if let Some(block) = current_block {
+                        builder.switch_to_block(block);
+                    }
+
+                    // Check if pattern matches
+                    match &arm.pattern {
+                        // Literal pattern: compare match_value == pattern_value
+                        Pattern::Literal(pattern_ast) => {
+                            // Compile the pattern value (constant)
+                            let pattern_value = Self::compile_expr_with_context(
+                                pattern_ast,
+                                builder,
+                                parameters,
+                                local_vars,
+                                var_counter,
+                                compiled_functions,
+                                string_ctx,
+                                struct_defs,
+                            )?;
+
+                            // Check if values match
+                            let matches =
+                                builder.ins().icmp(IntCC::Equal, match_value, pattern_value);
+
+                            // If match, execute body; otherwise try next arm
+                            if let Some(next) = next_arm_block {
+                                builder.ins().brif(matches, arm_body_block, &[], next, &[]);
+                            } else {
+                                // Last arm - if pattern doesn't match, still execute body (for exhaustiveness)
+                                // In a real compiler, this would be a type error if not exhaustive
+                                builder.ins().jump(arm_body_block, &[]);
+                            }
+                        }
+
+                        // Identifier pattern: bind variable, always matches
+                        Pattern::Identifier(_name) => {
+                            // Jump to body unconditionally
+                            builder.ins().jump(arm_body_block, &[]);
+                        }
+
+                        // Wildcard pattern: always matches
+                        Pattern::Wildcard => {
+                            // Jump to body unconditionally
+                            builder.ins().jump(arm_body_block, &[]);
+                        }
+                    }
+
+                    // Seal current block if it exists
+                    if let Some(block) = current_block {
+                        builder.seal_block(block);
+                    }
+
+                    // Compile arm body
+                    builder.switch_to_block(arm_body_block);
+                    builder.seal_block(arm_body_block);
+
+                    // For Identifier pattern, bind the variable
+                    if let Pattern::Identifier(name) = &arm.pattern {
+                        // Create a new Cranelift variable
+                        let var = Variable::new(*var_counter);
+                        *var_counter += 1;
+                        // Declare it with the type matching the match value
+                        let value_type = builder.func.dfg.value_type(match_value);
+                        builder.declare_var(var, value_type);
+                        // Define the variable with the match value
+                        builder.def_var(var, match_value);
+                        // Store in local variables map
+                        local_vars.insert(name.clone(), var);
+                    }
+
+                    // Execute arm body (last expression is the result)
+                    let arm_result = if arm.body.is_empty() {
+                        builder.ins().iconst(types::I64, 0)
+                    } else {
+                        let mut result = builder.ins().iconst(types::I64, 0);
+                        for stmt in &arm.body {
+                            result = Self::compile_expr_with_context(
+                                stmt,
+                                builder,
+                                parameters,
+                                local_vars,
+                                var_counter,
+                                compiled_functions,
+                                string_ctx,
+                                struct_defs,
+                            )?;
+                        }
+                        result
+                    };
+
+                    // Jump to merge with result
+                    builder.ins().jump(merge_block, &[arm_result]);
+
+                    // Move to next arm block
+                    current_block = next_arm_block;
+                }
+
+                // Switch to merge block and return result
+                builder.switch_to_block(merge_block);
+                builder.seal_block(merge_block);
+                let result = builder.block_params(merge_block)[0];
+                Ok(result)
             }
 
             // Unsupported AST node
