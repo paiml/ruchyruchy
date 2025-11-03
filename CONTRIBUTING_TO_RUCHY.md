@@ -479,5 +479,6 @@ The RuchyRuchy project achieved **30%+ interpreter speedup** through systematic 
 ---
 
 **Contact**: Via GitHub issue or RuchyRuchy repository discussions
-**Status**: Ready for review and feedback
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/130
+**Status**: Issue filed, awaiting Ruchy team feedback
 **Date**: 2025-11-03
