@@ -1058,6 +1058,52 @@ impl JitCompiler {
                 Ok(array_addr)
             }
 
+            // Tuple literal: (elem1, elem2, ...)
+            // Implementation: stack-allocated like arrays, return pointer
+            AstNode::TupleLiteral { elements } => {
+                if elements.is_empty() {
+                    // Empty tuple - just return 0 for now (future work)
+                    return Ok(builder.ins().iconst(types::I64, 0));
+                }
+
+                // Create stack slot for tuple (8 bytes per element)
+                let tuple_size = elements.len() * 8;
+                let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                    StackSlotKind::ExplicitSlot,
+                    tuple_size as u32,
+                    3, // 8-byte alignment (2^3 = 8)
+                ));
+
+                // Get address of stack slot
+                let tuple_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+
+                // Store each element at appropriate offset
+                for (i, elem) in elements.iter().enumerate() {
+                    // Compile element value
+                    let elem_value = Self::compile_expr_with_context(
+                        elem,
+                        builder,
+                        parameters,
+                        local_vars,
+                        var_counter,
+                        compiled_functions,
+                        string_ctx,
+                    )?;
+
+                    // Calculate offset (i * 8 bytes)
+                    let offset = (i * 8) as i32;
+
+                    // Store value at tuple[i]
+                    // Note: If elem_value is F64, it's stored as F64 bits
+                    builder
+                        .ins()
+                        .store(MemFlags::trusted(), elem_value, tuple_addr, offset);
+                }
+
+                // Return the tuple address (as i64)
+                Ok(tuple_addr)
+            }
+
             // Index access: expr[index]
             AstNode::IndexAccess { expr, index } => {
                 // Compile array expression (should return address)
@@ -1225,6 +1271,41 @@ impl JitCompiler {
                         "Unsupported LHS in compound assignment: {:?}",
                         lhs
                     ))),
+                }
+            }
+
+            // Field access: expr.field
+            // Used for tuple indexing: tuple.0, tuple.1, etc.
+            AstNode::FieldAccess { expr, field } => {
+                // Compile the expression (should be a tuple/struct pointer)
+                let tuple_addr = Self::compile_expr_with_context(
+                    expr,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                    string_ctx,
+                )?;
+
+                // Try to parse field as integer index (for tuples: "0", "1", "2", ...)
+                if let Ok(field_index) = field.parse::<usize>() {
+                    // Calculate byte offset: field_index * 8
+                    let offset = (field_index * 8) as i32;
+
+                    // Load value from tuple[field_index]
+                    let value =
+                        builder
+                            .ins()
+                            .load(types::I64, MemFlags::trusted(), tuple_addr, offset);
+
+                    Ok(value)
+                } else {
+                    // Named field access (for structs - not yet implemented)
+                    Err(JitError::UnsupportedNode(format!(
+                        "Named field access not yet supported: .{}",
+                        field
+                    )))
                 }
             }
 
