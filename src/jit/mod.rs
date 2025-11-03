@@ -374,6 +374,16 @@ impl JitCompiler {
                         compiled_functions,
                         string_ctx,
                     )?;
+
+                    // Convert F64 to I64 bits if needed (for float returns)
+                    let return_value = if builder.func.dfg.value_type(return_value) == types::F64 {
+                        builder
+                            .ins()
+                            .bitcast(types::I64, MemFlags::new(), return_value)
+                    } else {
+                        return_value
+                    };
+
                     // Return from function (terminates block)
                     builder.ins().return_(&[return_value]);
                 } else {
@@ -404,14 +414,7 @@ impl JitCompiler {
 
             // Let declaration: create and initialize a variable
             AstNode::LetDecl { name, value } => {
-                // Create a new Cranelift variable
-                let var = Variable::new(*var_counter);
-                *var_counter += 1;
-
-                // Declare it in the builder
-                builder.declare_var(var, types::I64);
-
-                // Compile the initial value
+                // Compile the initial value first to determine type
                 let init_value = Self::compile_expr_with_context(
                     value,
                     builder,
@@ -421,6 +424,14 @@ impl JitCompiler {
                     compiled_functions,
                     string_ctx,
                 )?;
+
+                // Create a new Cranelift variable with the correct type
+                let var = Variable::new(*var_counter);
+                *var_counter += 1;
+
+                // Declare it with the type matching the initial value
+                let value_type = builder.func.dfg.value_type(init_value);
+                builder.declare_var(var, value_type);
 
                 // Define the variable with the initial value
                 builder.def_var(var, init_value);
@@ -480,6 +491,13 @@ impl JitCompiler {
                 Ok(val)
             }
 
+            // Float literal: load as F64 constant
+            // Note: F64 values are converted to I64 bits only at return statements
+            AstNode::FloatLiteral(f) => {
+                let f64_val = builder.ins().f64const(*f);
+                Ok(f64_val)
+            }
+
             // Identifier: lookup variable (local or parameter)
             AstNode::Identifier(name) => {
                 // Check local variables first
@@ -518,58 +536,110 @@ impl JitCompiler {
                     string_ctx,
                 )?;
 
-                let result = match op {
-                    // Arithmetic operators
-                    BinaryOperator::Add => builder.ins().iadd(lhs, rhs),
-                    BinaryOperator::Subtract => builder.ins().isub(lhs, rhs),
-                    BinaryOperator::Multiply => builder.ins().imul(lhs, rhs),
-                    BinaryOperator::Divide => builder.ins().sdiv(lhs, rhs),
-                    BinaryOperator::Modulo => builder.ins().srem(lhs, rhs),
+                // Check if operands are floats
+                let lhs_type = builder.func.dfg.value_type(lhs);
+                let rhs_type = builder.func.dfg.value_type(rhs);
+                let is_float = lhs_type == types::F64 || rhs_type == types::F64;
 
-                    // Comparison operators (return 0 or 1 as i64)
-                    BinaryOperator::Equal => {
-                        let cmp = builder.ins().icmp(IntCC::Equal, lhs, rhs);
-                        builder.ins().uextend(types::I64, cmp)
-                    }
-                    BinaryOperator::NotEqual => {
-                        let cmp = builder.ins().icmp(IntCC::NotEqual, lhs, rhs);
-                        builder.ins().uextend(types::I64, cmp)
-                    }
-                    BinaryOperator::LessThan => {
-                        let cmp = builder.ins().icmp(IntCC::SignedLessThan, lhs, rhs);
-                        builder.ins().uextend(types::I64, cmp)
-                    }
-                    BinaryOperator::GreaterThan => {
-                        let cmp = builder.ins().icmp(IntCC::SignedGreaterThan, lhs, rhs);
-                        builder.ins().uextend(types::I64, cmp)
-                    }
-                    BinaryOperator::LessEqual => {
-                        let cmp = builder.ins().icmp(IntCC::SignedLessThanOrEqual, lhs, rhs);
-                        builder.ins().uextend(types::I64, cmp)
-                    }
-                    BinaryOperator::GreaterEqual => {
-                        let cmp = builder
-                            .ins()
-                            .icmp(IntCC::SignedGreaterThanOrEqual, lhs, rhs);
-                        builder.ins().uextend(types::I64, cmp)
-                    }
+                let result = if is_float {
+                    // Float arithmetic operations
+                    match op {
+                        BinaryOperator::Add => builder.ins().fadd(lhs, rhs),
+                        BinaryOperator::Subtract => builder.ins().fsub(lhs, rhs),
+                        BinaryOperator::Multiply => builder.ins().fmul(lhs, rhs),
+                        BinaryOperator::Divide => builder.ins().fdiv(lhs, rhs),
 
-                    // Boolean operators (treat non-zero as true)
-                    BinaryOperator::And => {
-                        // lhs && rhs: both must be non-zero
-                        let zero = builder.ins().iconst(types::I64, 0);
-                        let lhs_bool = builder.ins().icmp(IntCC::NotEqual, lhs, zero);
-                        let rhs_bool = builder.ins().icmp(IntCC::NotEqual, rhs, zero);
-                        let and = builder.ins().band(lhs_bool, rhs_bool);
-                        builder.ins().uextend(types::I64, and)
+                        // Float comparisons (return i64: 0 or 1)
+                        BinaryOperator::Equal => {
+                            let cmp = builder.ins().fcmp(FloatCC::Equal, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::NotEqual => {
+                            let cmp = builder.ins().fcmp(FloatCC::NotEqual, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::LessThan => {
+                            let cmp = builder.ins().fcmp(FloatCC::LessThan, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::GreaterThan => {
+                            let cmp = builder.ins().fcmp(FloatCC::GreaterThan, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::LessEqual => {
+                            let cmp = builder.ins().fcmp(FloatCC::LessThanOrEqual, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::GreaterEqual => {
+                            let cmp = builder.ins().fcmp(FloatCC::GreaterThanOrEqual, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+
+                        BinaryOperator::Modulo => {
+                            return Err(JitError::UnsupportedNode(
+                                "Modulo operator not supported for floats".to_string(),
+                            ))
+                        }
+                        BinaryOperator::And | BinaryOperator::Or => {
+                            return Err(JitError::UnsupportedNode(
+                                "Logical operators not supported for floats".to_string(),
+                            ))
+                        }
                     }
-                    BinaryOperator::Or => {
-                        // lhs || rhs: at least one must be non-zero
-                        let zero = builder.ins().iconst(types::I64, 0);
-                        let lhs_bool = builder.ins().icmp(IntCC::NotEqual, lhs, zero);
-                        let rhs_bool = builder.ins().icmp(IntCC::NotEqual, rhs, zero);
-                        let or = builder.ins().bor(lhs_bool, rhs_bool);
-                        builder.ins().uextend(types::I64, or)
+                } else {
+                    // Integer arithmetic operations
+                    match op {
+                        BinaryOperator::Add => builder.ins().iadd(lhs, rhs),
+                        BinaryOperator::Subtract => builder.ins().isub(lhs, rhs),
+                        BinaryOperator::Multiply => builder.ins().imul(lhs, rhs),
+                        BinaryOperator::Divide => builder.ins().sdiv(lhs, rhs),
+                        BinaryOperator::Modulo => builder.ins().srem(lhs, rhs),
+
+                        // Comparison operators (return 0 or 1 as i64)
+                        BinaryOperator::Equal => {
+                            let cmp = builder.ins().icmp(IntCC::Equal, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::NotEqual => {
+                            let cmp = builder.ins().icmp(IntCC::NotEqual, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::LessThan => {
+                            let cmp = builder.ins().icmp(IntCC::SignedLessThan, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::GreaterThan => {
+                            let cmp = builder.ins().icmp(IntCC::SignedGreaterThan, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::LessEqual => {
+                            let cmp = builder.ins().icmp(IntCC::SignedLessThanOrEqual, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+                        BinaryOperator::GreaterEqual => {
+                            let cmp = builder
+                                .ins()
+                                .icmp(IntCC::SignedGreaterThanOrEqual, lhs, rhs);
+                            builder.ins().uextend(types::I64, cmp)
+                        }
+
+                        // Boolean operators (treat non-zero as true)
+                        BinaryOperator::And => {
+                            // lhs && rhs: both must be non-zero
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let lhs_bool = builder.ins().icmp(IntCC::NotEqual, lhs, zero);
+                            let rhs_bool = builder.ins().icmp(IntCC::NotEqual, rhs, zero);
+                            let and = builder.ins().band(lhs_bool, rhs_bool);
+                            builder.ins().uextend(types::I64, and)
+                        }
+                        BinaryOperator::Or => {
+                            // lhs || rhs: at least one must be non-zero
+                            let zero = builder.ins().iconst(types::I64, 0);
+                            let lhs_bool = builder.ins().icmp(IntCC::NotEqual, lhs, zero);
+                            let rhs_bool = builder.ins().icmp(IntCC::NotEqual, rhs, zero);
+                            let or = builder.ins().bor(lhs_bool, rhs_bool);
+                            builder.ins().uextend(types::I64, or)
+                        }
                     }
                 };
 
@@ -592,7 +662,14 @@ impl JitCompiler {
                 let result =
                     match op {
                         // Negation: -x
-                        UnaryOperator::Negate => builder.ins().ineg(value),
+                        UnaryOperator::Negate => {
+                            let value_type = builder.func.dfg.value_type(value);
+                            if value_type == types::F64 {
+                                builder.ins().fneg(value)
+                            } else {
+                                builder.ins().ineg(value)
+                            }
+                        }
 
                         // Logical NOT: !x
                         // Convert to boolean: x == 0 ? 1 : 0
