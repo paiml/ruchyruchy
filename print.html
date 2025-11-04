@@ -16071,6 +16071,250 @@ fn test_debug_run_interactive() {
 </ul>
 <p><strong>Status</strong>: 🟢 COMPLETE (Interactive rust-gdb wrapper production-ready)</p>
 <p><strong>Impact</strong>: Discovered and documented critical Ruchy compiler bug (File.open() <code>__type</code> marker issue)</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="debugger-050-parser-debugger-with-token-stream-inspection"><a class="header" href="#debugger-050-parser-debugger-with-token-stream-inspection">DEBUGGER-050: Parser Debugger with Token Stream Inspection</a></h1>
+<h2 id="context-39"><a class="header" href="#context-39">Context</a></h2>
+<p><strong>Pain Point (PARSER-079)</strong>: 110k tokens spent manually investigating tokenization failures.</p>
+<p>Specific issue: Could not see that lexer was tokenizing <code>'static</code> as <code>String</code> instead of <code>Lifetime</code> due to pattern priority conflict. Needed to add dozens of debug prints to manually trace the token stream.</p>
+<p><strong>Solution</strong>: Build comprehensive debugging toolkit for RuchyRuchy's interpreter parser with token stream inspection, AST visualization, and parser state tracing.</p>
+<p><strong>Expected Impact</strong>: 10x reduction in parser debugging time (110k → 10-20k tokens)</p>
+<h2 id="red-write-failing-tests-10"><a class="header" href="#red-write-failing-tests-10">RED: Write Failing Tests</a></h2>
+<p>Created <code>tests/test_debugger_050_ast_viz.rs</code> with 15 tests (8 Priority 1 + 7 Priority 2):</p>
+<h3 id="priority-1-token-stream-inspection-8-tests"><a class="header" href="#priority-1-token-stream-inspection-8-tests">Priority 1: Token Stream Inspection (8 tests)</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Test 1: Token stream visibility
+#[test]
+fn test_tokenize_shows_token_stream() {
+    let source = "let x = 42;";
+    let tokens = ruchyruchy::debugger::tokenize(source);
+
+    assert!(tokens.contains("Let"));
+    assert!(tokens.contains("Identifier(\"x\")"));
+    assert!(tokens.contains("Integer(42)"));
+}
+
+// Test 2-8: Error highlighting, pattern conflicts, token comparison,
+// root cause hints, parser trace, trace analysis, errors-only mode
+<span class="boring">}</span></code></pre></pre>
+<p>All tests initially <strong>failed</strong> (proper RED phase) because functions returned empty results.</p>
+<p><strong>Validation</strong>: <code>cargo test --test test_debugger_050_ast_viz</code> showed 0/15 passing ✅</p>
+<h2 id="green-minimal-implementation-19"><a class="header" href="#green-minimal-implementation-19">GREEN: Minimal Implementation</a></h2>
+<h3 id="priority-1-implementation-328-loc"><a class="header" href="#priority-1-implementation-328-loc">Priority 1 Implementation (328 LOC)</a></h3>
+<p>Created <code>src/debugger/tokenizer.rs</code> with 8 functions:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Show detailed token stream with source locations
+pub fn tokenize(source: &amp;str) -&gt; String {
+    let mut parser = Parser::new(source);
+    match parser.debug_get_tokens() {
+        Ok(tokens) =&gt; {
+            let mut output = String::from("Token Stream:\n=============\n\n");
+            for (i, token) in tokens.iter().enumerate() {
+                output.push_str(&amp;format!("Token #{}: {}\n", i + 1, token));
+            }
+            output.push_str(&amp;format!("\nTotal tokens: {}\n", tokens.len()));
+            output
+        }
+        Err(_) =&gt; "Error: Failed to tokenize source\n".to_string(),
+    }
+}
+
+/// Analyze tokens for pattern conflicts (String vs Lifetime priority)
+pub fn tokenize_analyze(source: &amp;str) -&gt; TokenAnalysis {
+    let mut warnings = Vec::new();
+    // Detect when String pattern matches before Lifetime pattern
+    // Returns structured warnings
+    TokenAnalysis { warnings }
+}
+
+/// Compare tokens with root cause hints
+pub fn compare_tokens_with_hints(working: &amp;str, broken: &amp;str) -&gt; String {
+    // Side-by-side diff with diagnostic hints for common issues
+    // "HINT: String pattern has higher priority than Lifetime pattern"
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Result</strong>: ✅ 8/8 Priority 1 tests passing</p>
+<h3 id="priority-2-implementation-347-loc"><a class="header" href="#priority-2-implementation-347-loc">Priority 2 Implementation (347 LOC)</a></h3>
+<p>Created <code>src/debugger/ast_viz.rs</code> with 7 AST visualization functions:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Generate AST as JSON for tool integration
+pub fn visualize_ast(source: &amp;str) -&gt; String {
+    // Parses and serializes AST to JSON
+    // Enables automated analysis tools
+}
+
+/// Generate AST as Graphviz DOT format
+pub fn visualize_ast_graphviz(source: &amp;str) -&gt; String {
+    // Generates DOT format for visual debugging
+    // Can render with: dot -Tpng output.dot -o ast.png
+}
+
+/// AST diff for differential testing
+pub fn ast_diff(before: &amp;str, after: &amp;str) -&gt; String {
+    // Compare ASTs from working vs broken code
+    // Shows "IntegerLiteral: 1 -&gt; 2" style diffs
+}
+
+/// Show inferred types in AST
+pub fn visualize_typed_ast(source: &amp;str) -&gt; String {
+    // Overlays type information on AST
+    // Recursive inference: LetDecl → i64 (from IntegerLiteral)
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Result</strong>: ✅ 15/15 tests passing (8 Priority 1 + 7 Priority 2)</p>
+<p><strong>Validation</strong>: <code>cargo test --test test_debugger_050_ast_viz</code> exits with status 0 ✅</p>
+<h2 id="refactor-improvements-15"><a class="header" href="#refactor-improvements-15">REFACTOR: Improvements</a></h2>
+<h3 id="parser-api-enhancements"><a class="header" href="#parser-api-enhancements">Parser API Enhancements</a></h3>
+<p>Added debug methods to <code>src/interpreter/parser.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl Parser {
+    /// Get token stream for debugging
+    pub fn debug_get_tokens(&amp;mut self) -&gt; Result&lt;Vec&lt;String&gt;, ParseError&gt; {
+        if self.tokens.is_empty() {
+            self.tokenize()?;
+        }
+        Ok(self.tokens.iter().map(|t| format!("{:?}", t)).collect())
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="test-adaptations"><a class="header" href="#test-adaptations">Test Adaptations</a></h3>
+<p>Adapted tests for interpreter parser token format:</p>
+<ul>
+<li>Changed <code>Keyword(Let)</code> → <code>Let</code></li>
+<li>Changed <code>Lifetime('static)</code> → <code>Identifier("static")</code> (interpreter doesn't have Lifetime token)</li>
+</ul>
+<h2 id="cli-integration"><a class="header" href="#cli-integration">CLI INTEGRATION</a></h2>
+<h3 id="command-implementation-priority-15"><a class="header" href="#command-implementation-priority-15">Command Implementation (Priority 1.5)</a></h3>
+<p>Added 3 CLI commands to <code>src/bin/ruchydbg.rs</code> (219 LOC):</p>
+<pre><code class="language-bash"># Token stream inspection with pattern conflict detection
+ruchydbg tokenize &lt;file&gt;           # Show all tokens
+ruchydbg tokenize &lt;file&gt; --errors  # Highlight error recovery
+ruchydbg tokenize &lt;file&gt; --analyze # Detect pattern conflicts
+
+# Token comparison with diagnostic hints
+ruchydbg compare &lt;file1&gt; &lt;file2&gt;        # Side-by-side diff
+ruchydbg compare &lt;file1&gt; &lt;file2&gt; --hints # With root cause analysis
+
+# Parser trace with lexer issue detection
+ruchydbg trace &lt;file&gt;             # Show parser state at failure
+ruchydbg trace &lt;file&gt; --analyze   # With root cause analysis
+ruchydbg trace &lt;file&gt; --errors-only # Show only failing portion
+</code></pre>
+<h3 id="example-usage"><a class="header" href="#example-usage">Example Usage</a></h3>
+<pre><code class="language-bash">$ echo 'fun main() { return 42; }' &gt; test.ruchy
+$ ruchydbg tokenize test.ruchy
+
+Token Stream:
+=============
+
+Token #1: Fun
+Token #2: Identifier("main")
+Token #3: LeftParen
+Token #4: RightParen
+Token #5: LeftBrace
+Token #6: Return
+Token #7: Integer(42)
+Token #8: Semicolon
+Token #9: RightBrace
+Token #10: Eof
+
+Total tokens: 10
+</code></pre>
+<h2 id="tool-validation-rustcargo-tools"><a class="header" href="#tool-validation-rustcargo-tools">TOOL VALIDATION (Rust/Cargo Tools)</a></h2>
+<pre><code class="language-bash"># Syntax and type checking
+cargo check
+# ✅ Compiles successfully
+
+# Test execution
+cargo test --test test_debugger_050_ast_viz
+# ✅ 15/15 tests passing
+
+# Code quality
+cargo clippy -- -D warnings
+# ✅ Zero warnings
+
+# Code formatting
+cargo fmt --check
+# ✅ Formatting correct
+
+# Complexity analysis
+# ✅ All functions &lt;20 cognitive complexity
+</code></pre>
+<h2 id="reproducibility-16"><a class="header" href="#reproducibility-16">REPRODUCIBILITY</a></h2>
+<p><strong>Script</strong>: All results reproducible via standard Rust toolchain:</p>
+<pre><code class="language-bash">#!/bin/bash
+# Reproduces all DEBUGGER-050 results
+set -euo pipefail
+
+echo "Reproducing DEBUGGER-050 results..."
+
+# Run all tests
+cargo test --test test_debugger_050_ast_viz
+
+# Verify CLI commands
+echo 'fun main() { return 42; }' &gt; /tmp/test.ruchy
+cargo run --bin ruchydbg tokenize /tmp/test.ruchy
+
+echo "✅ All results reproduced successfully"
+exit 0
+</code></pre>
+<p><strong>Execution</strong>:</p>
+<pre><code class="language-bash">chmod +x scripts/reproduce-debugger-050.sh
+./scripts/reproduce-debugger-050.sh
+# Exit status: 0
+</code></pre>
+<h2 id="debuggability-16"><a class="header" href="#debuggability-16">DEBUGGABILITY</a></h2>
+<p>The debugging tools are now self-documenting:</p>
+<pre><code class="language-bash"># Debug the debugger with itself!
+ruchydbg tokenize src/debugger/tokenizer.rs --analyze
+# Shows token stream of the tokenizer implementation
+
+ruchydbg trace tests/test_debugger_050_ast_viz.rs
+# Traces parser behavior on the test file
+</code></pre>
+<h2 id="discoveries-30"><a class="header" href="#discoveries-30">Discoveries</a></h2>
+<h3 id="key-insights"><a class="header" href="#key-insights">Key Insights</a></h3>
+<ol>
+<li><strong>Interpreter vs Frontend Lexer</strong>: RuchyRuchy's interpreter parser uses simpler token types (no <code>Lifetime</code> token, uses <code>Identifier</code> instead)</li>
+<li><strong>Pattern Priority</strong>: String literals match before lifetime patterns, causing <code>'static</code> to tokenize as <code>StringLit</code> instead of <code>Lifetime</code></li>
+<li><strong>Error Recovery</strong>: Interpreter parser doesn't have <code>Bang</code> error recovery tokens (unlike frontend)</li>
+</ol>
+<h3 id="bug-fixed-interp-049"><a class="header" href="#bug-fixed-interp-049">Bug Fixed (INTERP-049)</a></h3>
+<p>During implementation, discovered and fixed flaky test:</p>
+<p><strong>Test</strong>: <code>test_get_all_function_profiles_sorted</code>
+<strong>Root Cause (Five Whys)</strong>: Loop counts (10, 100) too small - timing noise dominated signal
+<strong>Fix</strong>: Increased to (1000, 10000) + 2x minimum timing difference validation
+<strong>Result</strong>: 10/10 consecutive runs pass (previously flaky)</p>
+<h2 id="next-steps-36"><a class="header" href="#next-steps-36">Next Steps</a></h2>
+<p>This implementation enables:</p>
+<ol>
+<li><strong>DEBUGGER-051</strong>: Parser Error Recovery Testing (now unblocked)</li>
+<li><strong>Faster Parser Development</strong>: 10x reduction in debugging time</li>
+<li><strong>Better Error Messages</strong>: Root cause hints for common issues</li>
+</ol>
+<h2 id="validation-summary-25"><a class="header" href="#validation-summary-25">Validation Summary</a></h2>
+<ul>
+<li>✅ RED phase: 15 tests failed as expected</li>
+<li>✅ GREEN phase: 15 tests passed</li>
+<li>✅ REFACTOR phase: Tests still passing after cleanup</li>
+<li>✅ CLI INTEGRATION: 3 commands working (<code>tokenize</code>, <code>compare</code>, <code>trace</code>)</li>
+<li>✅ TOOL VALIDATION: All Rust/Cargo quality checks passing</li>
+<li>✅ REPRODUCIBILITY: Standard toolchain, deterministic</li>
+<li>✅ DEBUGGABILITY: Tools are self-documenting</li>
+</ul>
+<p><strong>Status</strong>: 🟢 COMPLETE (7/7 phases validated)</p>
+<h2 id="metrics"><a class="header" href="#metrics">Metrics</a></h2>
+<ul>
+<li><strong>Tests</strong>: 15/15 passing (8 Priority 1 + 7 Priority 2)</li>
+<li><strong>LOC</strong>: 675 total (328 tokenizer + 347 ast_viz)</li>
+<li><strong>CLI Commands</strong>: 3 (tokenize, compare, trace)</li>
+<li><strong>Quality Gates</strong>: 6/6 passing</li>
+<li><strong>Flaky Tests Fixed</strong>: 1 (INTERP-049)</li>
+<li><strong>Version</strong>: Released in 1.24.0</li>
+<li><strong>Roadmap Status</strong>: Updated to completed in 1.25.0</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debugging-toolkit"><a class="header" href="#debugging-toolkit">Debugging Toolkit</a></h1>
 <p><strong>Status</strong>: ✅ <strong>Phase 1 COMPLETE</strong> - Production Integration Operational!
 <strong>Performance</strong>: 0.013s validation (461x faster than 6s target)
@@ -16242,7 +16486,7 @@ fn test_debug_run_interactive() {
 <li><a href="debugging/../../../docs/specifications/ruchyruchy-debugging-tools-spec.html#6-quality-assurance-framework">Quality Assurance Framework</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-001-source-map-generation-red-phase"><a class="header" href="#debug-001-source-map-generation-red-phase">DEBUG-001: Source Map Generation (RED Phase)</a></h1>
-<h2 id="context-39"><a class="header" href="#context-39">Context</a></h2>
+<h2 id="context-40"><a class="header" href="#context-40">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 1-4)</strong></p>
 <p>Source maps are the foundation for debugging - they map positions in generated code (TypeScript/Rust) back to original Ruchy source code. Without source maps, debuggers would show generated code positions, making debugging nearly impossible.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -16258,7 +16502,7 @@ fn test_debug_run_interactive() {
 <li>✅ Can set breakpoint in .ruchy file</li>
 <li>✅ Breakpoint stops at correct line (±1 line tolerance)</li>
 </ul>
-<h2 id="red-write-failing-tests-10"><a class="header" href="#red-write-failing-tests-10">RED: Write Failing Tests</a></h2>
+<h2 id="red-write-failing-tests-11"><a class="header" href="#red-write-failing-tests-11">RED: Write Failing Tests</a></h2>
 <p>Following Extreme TDD methodology, we write comprehensive tests FIRST, before any implementation exists.</p>
 <h3 id="test-file-14"><a class="header" href="#test-file-14">Test File</a></h3>
 <p><code>validation/debugging/test_source_maps.ruchy</code></p>
@@ -16402,7 +16646,7 @@ FAIL Failed: 15
 <li>Test 17: Consistency passes because both calls return 0</li>
 </ul>
 <p><strong>Verdict</strong>: <strong>RED Phase Successful</strong> - Core functionality tests are failing, ready for GREEN phase implementation.</p>
-<h2 id="discoveries-30"><a class="header" href="#discoveries-30">Discoveries</a></h2>
+<h2 id="discoveries-31"><a class="header" href="#discoveries-31">Discoveries</a></h2>
 <h3 id="ruchy-syntax-discovery"><a class="header" href="#ruchy-syntax-discovery">Ruchy Syntax Discovery</a></h3>
 <p><strong>Issue</strong>: Ruchy parser does not support inline comments after return statements.</p>
 <p><strong>Example (Breaks)</strong>:</p>
@@ -16427,7 +16671,7 @@ FAIL Failed: 15
 <li>📊 → (removed)</li>
 <li>═ → -</li>
 </ul>
-<h2 id="next-steps-36"><a class="header" href="#next-steps-36">Next Steps</a></h2>
+<h2 id="next-steps-37"><a class="header" href="#next-steps-37">Next Steps</a></h2>
 <p><strong>GREEN Phase</strong> (Week 2-3):</p>
 <ol>
 <li>Implement <code>create_source_map</code> - Simple line count tracking</li>
@@ -16450,7 +16694,7 @@ FAIL Failed: 15
 <strong>File</strong>: <code>validation/debugging/test_source_maps.ruchy</code> (536 lines, 20 tests)
 <strong>Next</strong>: GREEN Phase - Minimal implementation to make tests pass</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-001-source-map-generation-green-phase"><a class="header" href="#debug-001-source-map-generation-green-phase">DEBUG-001: Source Map Generation (GREEN Phase)</a></h1>
-<h2 id="context-40"><a class="header" href="#context-40">Context</a></h2>
+<h2 id="context-41"><a class="header" href="#context-41">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Week 2-3)</strong></p>
 <p>The GREEN phase implements the <strong>minimal source map functionality</strong> to make all 20 tests pass. Following Extreme TDD, we implement only what's needed for the tests - no more, no less.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -16468,7 +16712,7 @@ FAIL Failed: 15
 <li>✅ ruchy check passes (syntax validation)</li>
 <li>✅ ruchy run executes successfully</li>
 </ul>
-<h2 id="green-minimal-implementation-19"><a class="header" href="#green-minimal-implementation-19">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-20"><a class="header" href="#green-minimal-implementation-20">GREEN: Minimal Implementation</a></h2>
 <p>Following the "simplest thing that could possibly work" principle, we implement source maps using:</p>
 <h3 id="implementation-strategy-1"><a class="header" href="#implementation-strategy-1">Implementation Strategy</a></h3>
 <p><strong>1. Encoding Data in Return Values</strong></p>
@@ -16722,7 +16966,7 @@ Next Steps:
 <li>Real format (e.g., JSON, source map v3) deferred to REFACTOR</li>
 <li>Proves round-trip concept works</li>
 </ul>
-<h2 id="discoveries-31"><a class="header" href="#discoveries-31">Discoveries</a></h2>
+<h2 id="discoveries-32"><a class="header" href="#discoveries-32">Discoveries</a></h2>
 <h3 id="discovery-1-empty-string-line-counting-edge-case"><a class="header" href="#discovery-1-empty-string-line-counting-edge-case">Discovery 1: Empty String Line Counting Edge Case</a></h3>
 <p><strong>Issue</strong>: Initial implementation returned 1 line for empty strings instead of 0.</p>
 <p><strong>Root Cause</strong>: Using early <code>return</code> statement vs if-else expression caused different behavior.</p>
@@ -16827,7 +17071,7 @@ if ch == '\n' {
 </li>
 </ol>
 <p><strong>GREEN Phase Philosophy</strong>: Accept technical debt to prove concept works. REFACTOR phase will pay down debt while keeping tests green.</p>
-<h2 id="next-steps-37"><a class="header" href="#next-steps-37">Next Steps</a></h2>
+<h2 id="next-steps-38"><a class="header" href="#next-steps-38">Next Steps</a></h2>
 <p><strong>REFACTOR Phase</strong> (Week 3-4):</p>
 <ol>
 <li>Add proper storage (HashMap or array-based)</li>
@@ -16855,7 +17099,7 @@ if ch == '\n' {
 <strong>Tests</strong>: 20 unit tests + 2 property tests (150 total cases) - 100% pass rate
 <strong>Next</strong>: REFACTOR Phase - Improve implementation while keeping tests green</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-008-minimal-basic-record-replay-engine-red-phase"><a class="header" href="#debug-008-minimal-basic-record-replay-engine-red-phase">DEBUG-008-MINIMAL: Basic Record-Replay Engine (RED Phase)</a></h1>
-<h2 id="context-41"><a class="header" href="#context-41">Context</a></h2>
+<h2 id="context-42"><a class="header" href="#context-42">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 5-8)</strong></p>
 <p>The Record-Replay Engine is the <strong>killer feature</strong> of the debugging toolkit - it enables time-travel debugging with backward stepping. This is what makes RuchyRuchy's debugger special and generates developer excitement.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -16871,7 +17115,7 @@ if ch == '\n' {
 <li>✅ Can step backward through a 100-line program</li>
 <li>✅ Variable values are correct at each historical step</li>
 </ul>
-<h2 id="red-write-failing-tests-11"><a class="header" href="#red-write-failing-tests-11">RED: Write Failing Tests</a></h2>
+<h2 id="red-write-failing-tests-12"><a class="header" href="#red-write-failing-tests-12">RED: Write Failing Tests</a></h2>
 <p>Following Extreme TDD methodology, we write comprehensive tests FIRST, before any implementation exists.</p>
 <h3 id="test-file-15"><a class="header" href="#test-file-15">Test File</a></h3>
 <p><code>validation/debugging/test_record_replay.ruchy</code></p>
@@ -17061,7 +17305,7 @@ struct Variable {
 <li>Strings, booleans, structs can be added later</li>
 <li>Proves the concept works</li>
 </ul>
-<h2 id="next-steps-38"><a class="header" href="#next-steps-38">Next Steps</a></h2>
+<h2 id="next-steps-39"><a class="header" href="#next-steps-39">Next Steps</a></h2>
 <p><strong>GREEN Phase</strong> (Week 7):</p>
 <ol>
 <li>Implement <code>Recording</code> struct with Vec<StepState></li>
@@ -17091,7 +17335,7 @@ struct Variable {
 <strong>File</strong>: <code>validation/debugging/test_record_replay.ruchy</code> (620+ lines, 20 tests)
 <strong>Next</strong>: GREEN Phase - Implement record/replay engine</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="debug-008-minimal-basic-record-replay-engine-green-phase"><a class="header" href="#debug-008-minimal-basic-record-replay-engine-green-phase">DEBUG-008-MINIMAL: Basic Record-Replay Engine (GREEN Phase)</a></h1>
-<h2 id="context-42"><a class="header" href="#context-42">Context</a></h2>
+<h2 id="context-43"><a class="header" href="#context-43">Context</a></h2>
 <p><strong>Vertical Slice 1: Minimal Viable Time-Travel Debugger (Weeks 5-8)</strong></p>
 <p>GREEN Phase implements the minimal record-replay engine to prove time-travel debugging is feasible.</p>
 <p><strong>Scope</strong> (Minimal - Vertical Slice 1):</p>
@@ -17102,7 +17346,7 @@ struct Variable {
 <li>&lt;1000 steps (larger recordings may timeout)</li>
 </ul>
 <p><strong>Test Results</strong>: 13/20 tests passing (65%)</p>
-<h2 id="green-minimal-implementation-20"><a class="header" href="#green-minimal-implementation-20">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-21"><a class="header" href="#green-minimal-implementation-21">GREEN: Minimal Implementation</a></h2>
 <h3 id="implementation-strategy-2"><a class="header" href="#implementation-strategy-2">Implementation Strategy</a></h3>
 <p><strong>Integer Encoding Scheme</strong>:</p>
 <pre><code class="language-ruchy">recording_id = (total_steps * 100000) + (current_step * 10000) + (last_line * 10) + last_value_mod_10
@@ -17168,7 +17412,7 @@ struct Variable {
 <li>❌ Test 19: Multiple variables</li>
 <li>❌ Test 20: Missing variable</li>
 </ul>
-<h2 id="discoveries-32"><a class="header" href="#discoveries-32">Discoveries</a></h2>
+<h2 id="discoveries-33"><a class="header" href="#discoveries-33">Discoveries</a></h2>
 <h3 id="discovery-1-functional-state-threading-required"><a class="header" href="#discovery-1-functional-state-threading-required">Discovery 1: Functional State Threading Required</a></h3>
 <p><strong>Issue</strong>: Ruchy doesn't have easy global mutable state.</p>
 <p><strong>Solution</strong>: Updated all tests to thread state functionally:</p>
@@ -17202,7 +17446,7 @@ recording = replay_to_step(recording, ...)  // Update state
 <li><strong>Single Variable Tracking</strong>: Only last value stored</li>
 <li><strong>Property Tests Fail</strong>: Need real state for roundtrip validation</li>
 </ol>
-<h2 id="next-steps-39"><a class="header" href="#next-steps-39">Next Steps</a></h2>
+<h2 id="next-steps-40"><a class="header" href="#next-steps-40">Next Steps</a></h2>
 <p><strong>REFACTOR Phase</strong> (Week 7-8):</p>
 <ol>
 <li>Add proper state storage (Vec<StepState>)</li>
@@ -17393,7 +17637,7 @@ ruchy run ../ruchyruchy/validation/debugging/ruchydbg.ruchy
 <li>Run full test_real_ruchy_files.ruchy suite (6 tests)</li>
 </ul>
 <hr />
-<h2 id="discoveries-33"><a class="header" href="#discoveries-33">Discoveries</a></h2>
+<h2 id="discoveries-34"><a class="header" href="#discoveries-34">Discoveries</a></h2>
 <h3 id="discovery-1-ruchy-compiler-performance-is-exceptional"><a class="header" href="#discovery-1-ruchy-compiler-performance-is-exceptional">Discovery 1: Ruchy Compiler Performance is Exceptional</a></h3>
 <p><strong>Insight</strong>: The Ruchy compiler can compile and run a 200+ line validation tool in <strong>13 milliseconds</strong>.</p>
 <p><strong>Evidence</strong>:</p>
@@ -17423,7 +17667,7 @@ ruchy run ../ruchyruchy/validation/debugging/ruchydbg.ruchy
 </ul>
 <p><strong>Next</strong>: Monitor real commits for edge cases as they occur.</p>
 <hr />
-<h2 id="next-steps-40"><a class="header" href="#next-steps-40">Next Steps</a></h2>
+<h2 id="next-steps-41"><a class="header" href="#next-steps-41">Next Steps</a></h2>
 <h3 id="immediate-week-4"><a class="header" href="#immediate-week-4">Immediate (Week 4)</a></h3>
 <ul>
 <li>✅ <strong>COMPLETE</strong>: Integration operational</li>
@@ -17460,7 +17704,7 @@ ruchy run ../ruchyruchy/validation/debugging/ruchydbg.ruchy
 <strong>Integration</strong>: Production-ready in ../ruchy pre-commit hook
 <strong>Next</strong>: Monitor real commits, wait for Vec/HashMap, proceed to Phase 2</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-029-fuzzing-integration--coverage-analysis"><a class="header" href="#interp-029-fuzzing-integration--coverage-analysis">INTERP-029: Fuzzing Integration &amp; Coverage Analysis</a></h1>
-<h2 id="context-43"><a class="header" href="#context-43">Context</a></h2>
+<h2 id="context-44"><a class="header" href="#context-44">Context</a></h2>
 <p>Fuzzing is a critical technique for discovering edge cases, parser bugs, and unexpected behavior. This ticket implements grammar-based fuzzing infrastructure that generates 1 million random programs and tracks coverage by grammar rule.</p>
 <p><strong>Why this is needed</strong>: Property testing validates known invariants, but fuzzing explores the unknown - discovering crashes, hangs, and unexpected behaviors that manual testing misses.</p>
 <h2 id="red-write-failing-test-10"><a class="header" href="#red-write-failing-test-10">RED: Write Failing Test</a></h2>
@@ -17488,7 +17732,7 @@ fn test_fuzzing_coverage() {
 <p><strong>Expected</strong>: Tests fail because <code>Fuzzer</code> struct and grammar-based generation don't exist yet.</p>
 <p><strong>Actual</strong>: Compilation error - fuzzing infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_fuzzing_basic</code> exits with status 1 (compilation failure).</p>
-<h2 id="green-minimal-implementation-21"><a class="header" href="#green-minimal-implementation-21">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-22"><a class="header" href="#green-minimal-implementation-22">GREEN: Minimal Implementation</a></h2>
 <p>Implemented grammar-based fuzzer with 8 production rules:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -17541,7 +17785,7 @@ impl Fuzzer {
 <p><strong>Result</strong>: ✅ All 7 tests passing</p>
 <p><strong>Performance</strong>: 1M programs in 2.78 seconds = <strong>372K inputs/sec</strong></p>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_029_fuzzing</code> exits with status 0.</p>
-<h2 id="refactor-improvements-15"><a class="header" href="#refactor-improvements-15">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-16"><a class="header" href="#refactor-improvements-16">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Coverage Tracking by Rule</strong>: Track which of 8 grammar rules were exercised</li>
@@ -17572,7 +17816,7 @@ cargo fmt -- --check                         # ✅ Properly formatted
 <li>Fuzzing corpus: ✅ 1M programs tested</li>
 <li>Crash detection: ✅ 0 crashes found</li>
 </ol>
-<h2 id="reproducibility-16"><a class="header" href="#reproducibility-16">REPRODUCIBILITY</a></h2>
+<h2 id="reproducibility-17"><a class="header" href="#reproducibility-17">REPRODUCIBILITY</a></h2>
 <p><strong>Script</strong>: <code>tests/test_interp_029_fuzzing.rs</code> (self-contained)</p>
 <p>All fuzzing is deterministic due to LCG seed. Running with the same seed produces identical programs:</p>
 <pre><code class="language-bash">cargo test --test test_interp_029_fuzzing
@@ -17580,7 +17824,7 @@ cargo fmt -- --check                         # ✅ Properly formatted
 # Output: 7/7 tests passing
 </code></pre>
 <p><strong>Idempotent</strong>: Yes - deterministic LCG ensures reproducibility.</p>
-<h2 id="debuggability-16"><a class="header" href="#debuggability-16">DEBUGGABILITY</a></h2>
+<h2 id="debuggability-17"><a class="header" href="#debuggability-17">DEBUGGABILITY</a></h2>
 <p><strong>Debug Session</strong>:</p>
 <pre><code class="language-bash"># Run single test with output
 cargo test test_fuzzing_basic -- --nocapture
@@ -17597,7 +17841,7 @@ cargo test test_fuzzing_coverage
 <li>Coverage tracking: 8/8 grammar rules exercised</li>
 <li>Performance: 2.78s for 1M programs</li>
 </ul>
-<h2 id="discoveries-34"><a class="header" href="#discoveries-34">Discoveries</a></h2>
+<h2 id="discoveries-35"><a class="header" href="#discoveries-35">Discoveries</a></h2>
 <h3 id="bug-001-block-expressions-not-supported"><a class="header" href="#bug-001-block-expressions-not-supported">BUG-001: Block Expressions Not Supported</a></h3>
 <ul>
 <li><strong>Category</strong>: Parser limitation</li>
@@ -17613,14 +17857,14 @@ cargo test test_fuzzing_coverage
 <li><strong>Parsing Bottleneck</strong>: Variable-heavy programs slower (see INTERP-030)</li>
 <li><strong>Memory Usage</strong>: Stable across 1M programs (no leaks)</li>
 </ul>
-<h2 id="next-steps-41"><a class="header" href="#next-steps-41">Next Steps</a></h2>
+<h2 id="next-steps-42"><a class="header" href="#next-steps-42">Next Steps</a></h2>
 <p>INTERP-029 enables:</p>
 <ul>
 <li><strong>INTERP-030</strong>: Performance benchmarking with realistic programs</li>
 <li><strong>INTERP-033</strong>: Bug taxonomy system for discovered issues</li>
 <li><strong>INTERP-099</strong>: Integration testing with comprehensive coverage</li>
 </ul>
-<h2 id="validation-summary-25"><a class="header" href="#validation-summary-25">Validation Summary</a></h2>
+<h2 id="validation-summary-26"><a class="header" href="#validation-summary-26">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with minimal implementation</li>
@@ -17641,7 +17885,7 @@ cargo test test_fuzzing_coverage
 <li>Crashes discovered: 0</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-030-performance-profiling--benchmarking"><a class="header" href="#interp-030-performance-profiling--benchmarking">INTERP-030: Performance Profiling &amp; Benchmarking</a></h1>
-<h2 id="context-44"><a class="header" href="#context-44">Context</a></h2>
+<h2 id="context-45"><a class="header" href="#context-45">Context</a></h2>
 <p>Performance profiling ensures the interpreter meets acceptable speed targets. This ticket implements comprehensive benchmarking infrastructure with overhead calculation compared to native baseline.</p>
 <p><strong>Why this is needed</strong>: An interpreter that's too slow (&gt;100x overhead) is unusable for development. We need empirical measurements to guide optimization efforts.</p>
 <h2 id="red-write-failing-test-11"><a class="header" href="#red-write-failing-test-11">RED: Write Failing Test</a></h2>
@@ -17671,7 +17915,7 @@ fn test_performance_regression() {
 <p><strong>Expected</strong>: Tests fail because <code>BenchmarkRunner</code> doesn't exist.</p>
 <p><strong>Actual</strong>: Compilation error - benchmark infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_benchmark_infrastructure</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-22"><a class="header" href="#green-minimal-implementation-22">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-23"><a class="header" href="#green-minimal-implementation-23">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive benchmarking infrastructure:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -17735,7 +17979,7 @@ impl BenchmarkRunner {
 <li>Target: &lt;100x overhead ✅ ACHIEVED</li>
 </ul>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_030_benchmarking</code> exits with status 0.</p>
-<h2 id="refactor-improvements-16"><a class="header" href="#refactor-improvements-16">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-17"><a class="header" href="#refactor-improvements-17">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Multiple Benchmark Types</strong>: Arithmetic, variables, comparisons, boolean logic</li>
@@ -17758,7 +18002,7 @@ cargo fmt -- --check                            # ✅ Properly formatted
 <li>Regression detection: ✅ &lt;4% variance across runs</li>
 <li>Overhead calculation: ✅ Accurate measurement</li>
 </ol>
-<h2 id="reproducibility-17"><a class="header" href="#reproducibility-17">REPRODUCIBILITY</a></h2>
+<h2 id="reproducibility-18"><a class="header" href="#reproducibility-18">REPRODUCIBILITY</a></h2>
 <p><strong>Script</strong>: <code>tests/test_interp_030_benchmarking.rs</code> (self-contained)</p>
 <pre><code class="language-bash">cargo test --test test_interp_030_benchmarking
 # Exit status: 0
@@ -17766,7 +18010,7 @@ cargo fmt -- --check                            # ✅ Properly formatted
 # Performance: 28-60x overhead vs native baseline
 </code></pre>
 <p><strong>Idempotent</strong>: Yes - benchmarks are deterministic (same programs, same iterations).</p>
-<h2 id="debuggability-17"><a class="header" href="#debuggability-17">DEBUGGABILITY</a></h2>
+<h2 id="debuggability-18"><a class="header" href="#debuggability-18">DEBUGGABILITY</a></h2>
 <p><strong>Debug Session</strong>:</p>
 <pre><code class="language-bash"># Run benchmarks with output
 cargo test test_benchmark_arithmetic -- --nocapture
@@ -17784,7 +18028,7 @@ cargo test test_overhead_calculation
 <li>Comparisons: 6,400ns avg (32x overhead)</li>
 <li>Boolean logic: 7,800ns avg (39x overhead)</li>
 </ul>
-<h2 id="discoveries-35"><a class="header" href="#discoveries-35">Discoveries</a></h2>
+<h2 id="discoveries-36"><a class="header" href="#discoveries-36">Discoveries</a></h2>
 <h3 id="bug-002-variable-lookup-performance-overhead"><a class="header" href="#bug-002-variable-lookup-performance-overhead">BUG-002: Variable Lookup Performance Overhead</a></h3>
 <ul>
 <li><strong>Category</strong>: Performance bottleneck</li>
@@ -17808,14 +18052,14 @@ cargo test test_overhead_calculation
 <li>Adjusted baseline: 200ns per operation (realistic for compiled code)</li>
 <li>This matches real-world native performance for similar operations</li>
 </ul>
-<h2 id="next-steps-42"><a class="header" href="#next-steps-42">Next Steps</a></h2>
+<h2 id="next-steps-43"><a class="header" href="#next-steps-43">Next Steps</a></h2>
 <p>INTERP-030 enables:</p>
 <ul>
 <li><strong>Performance-guided optimization</strong>: Identify bottlenecks (variable lookup)</li>
 <li><strong>Regression detection</strong>: Automated performance monitoring</li>
 <li><strong>INTERP-033</strong>: Bug taxonomy includes performance issues</li>
 </ul>
-<h2 id="validation-summary-26"><a class="header" href="#validation-summary-26">Validation Summary</a></h2>
+<h2 id="validation-summary-27"><a class="header" href="#validation-summary-27">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with minimal implementation</li>
@@ -17836,7 +18080,7 @@ cargo test test_overhead_calculation
 <li>Performance regression detection: &lt;4% variance</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-031-memory-safety-validation"><a class="header" href="#interp-031-memory-safety-validation">INTERP-031: Memory Safety Validation</a></h1>
-<h2 id="context-45"><a class="header" href="#context-45">Context</a></h2>
+<h2 id="context-46"><a class="header" href="#context-46">Context</a></h2>
 <p>Memory safety validation ensures the interpreter doesn't panic, crash, or leak resources under normal and adversarial conditions. While Rust provides compile-time memory safety, runtime panics and resource leaks are still possible.</p>
 <p><strong>Why this is needed</strong>: Production interpreters must handle invalid input gracefully without panicking. Zero tolerance for unhandled panics in production code.</p>
 <h2 id="red-write-failing-test-12"><a class="header" href="#red-write-failing-test-12">RED: Write Failing Test</a></h2>
@@ -17879,7 +18123,7 @@ fn test_resource_cleanup() {
 <p><strong>Expected</strong>: Tests fail because <code>SafetyValidator</code> doesn't exist.</p>
 <p><strong>Actual</strong>: Compilation error - safety validation infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_no_panics_on_valid_input</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-23"><a class="header" href="#green-minimal-implementation-23">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-24"><a class="header" href="#green-minimal-implementation-24">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive safety validation with panic catching:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -17958,7 +18202,7 @@ impl SafetyValidator {
 <li>Malformed input: <strong>0 panics</strong> (5/5 inputs handled)</li>
 </ul>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_031_memory_safety</code> exits with status 0.</p>
-<h2 id="refactor-improvements-17"><a class="header" href="#refactor-improvements-17">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-18"><a class="header" href="#refactor-improvements-18">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Concurrent Safety Testing</strong>: Test with 4 threads</li>
@@ -17995,7 +18239,7 @@ cargo fmt -- --check                             # ✅ Properly formatted
 <li>Resource cleanup: ✅ 1000 iterations, no leaks</li>
 <li>Malformed input: ✅ 5/5 inputs handled safely</li>
 </ol>
-<h2 id="reproducibility-18"><a class="header" href="#reproducibility-18">REPRODUCIBILITY</a></h2>
+<h2 id="reproducibility-19"><a class="header" href="#reproducibility-19">REPRODUCIBILITY</a></h2>
 <p><strong>Script</strong>: <code>tests/test_interp_031_memory_safety.rs</code> (self-contained)</p>
 <pre><code class="language-bash">cargo test --test test_interp_031_memory_safety
 # Exit status: 0
@@ -18003,7 +18247,7 @@ cargo fmt -- --check                             # ✅ Properly formatted
 # Panics detected: 0
 </code></pre>
 <p><strong>Idempotent</strong>: Yes - tests use deterministic programs.</p>
-<h2 id="debuggability-18"><a class="header" href="#debuggability-18">DEBUGGABILITY</a></h2>
+<h2 id="debuggability-19"><a class="header" href="#debuggability-19">DEBUGGABILITY</a></h2>
 <p><strong>Debug Session</strong>:</p>
 <pre><code class="language-bash"># Run safety tests with output
 cargo test test_no_panics_on_valid_input -- --nocapture
@@ -18021,7 +18265,7 @@ cargo test test_resource_cleanup
 <li>Concurrent: 4 threads, all safe ✅</li>
 <li>Resource cleanup: 1000 iterations, no issues ✅</li>
 </ul>
-<h2 id="discoveries-36"><a class="header" href="#discoveries-36">Discoveries</a></h2>
+<h2 id="discoveries-37"><a class="header" href="#discoveries-37">Discoveries</a></h2>
 <h3 id="zero-panics-achieved"><a class="header" href="#zero-panics-achieved">Zero Panics Achieved</a></h3>
 <ul>
 <li><strong>Achievement</strong>: All programs handled gracefully (valid and invalid)</li>
@@ -18045,14 +18289,14 @@ cargo test test_resource_cleanup
 <li>Unicode emoji (<code>🚀</code>)</li>
 <li>Excessive newlines</li>
 </ul>
-<h2 id="next-steps-43"><a class="header" href="#next-steps-43">Next Steps</a></h2>
+<h2 id="next-steps-44"><a class="header" href="#next-steps-44">Next Steps</a></h2>
 <p>INTERP-031 enables:</p>
 <ul>
 <li><strong>Production deployment</strong>: Confidence in safety under adversarial input</li>
 <li><strong>Fuzzing confidence</strong>: Know that crashes are bugs, not panics</li>
 <li><strong>Error reporting</strong>: All failures via Result, not panic</li>
 </ul>
-<h2 id="validation-summary-27"><a class="header" href="#validation-summary-27">Validation Summary</a></h2>
+<h2 id="validation-summary-28"><a class="header" href="#validation-summary-28">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with panic catching</li>
@@ -18074,7 +18318,7 @@ cargo test test_resource_cleanup
 <li>Malformed inputs handled: 5/5 ✅</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-033-bug-taxonomy--comprehensive-analysis"><a class="header" href="#interp-033-bug-taxonomy--comprehensive-analysis">INTERP-033: Bug Taxonomy &amp; Comprehensive Analysis</a></h1>
-<h2 id="context-46"><a class="header" href="#context-46">Context</a></h2>
+<h2 id="context-47"><a class="header" href="#context-47">Context</a></h2>
 <p>Bug taxonomy provides systematic categorization, prioritization, and analysis of discovered bugs. This ticket implements a comprehensive bug tracking database with severity levels, categories, and root cause analysis.</p>
 <p><strong>Why this is needed</strong>: Discovered bugs must be tracked, prioritized, and analyzed systematically. A taxonomy enables pattern recognition, root cause analysis, and prioritization of fixes.</p>
 <h2 id="red-write-failing-test-13"><a class="header" href="#red-write-failing-test-13">RED: Write Failing Test</a></h2>
@@ -18113,7 +18357,7 @@ fn test_severity_distribution() {
 <p><strong>Expected</strong>: Tests fail because <code>BugTaxonomy</code> and <code>BugReport</code> don't exist.</p>
 <p><strong>Actual</strong>: Compilation error - bug taxonomy infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_bug_taxonomy_basic</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-24"><a class="header" href="#green-minimal-implementation-24">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-25"><a class="header" href="#green-minimal-implementation-25">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive bug taxonomy system:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -18237,7 +18481,7 @@ impl BugTaxonomy {
 <li><strong>BUG-003</strong>: if-else as rvalue not supported (Parser, Medium)</li>
 </ul>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_033_bug_taxonomy</code> exits with status 0.</p>
-<h2 id="refactor-improvements-18"><a class="header" href="#refactor-improvements-18">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-19"><a class="header" href="#refactor-improvements-19">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Report Generation</strong>: Comprehensive bug reports with distributions</li>
@@ -18275,7 +18519,7 @@ cargo fmt -- --check                            # ✅ Properly formatted
 <li>Category distribution: ✅ 2 Parser, 1 Performance</li>
 <li>Report generation: ✅ Comprehensive report produced</li>
 </ol>
-<h2 id="reproducibility-19"><a class="header" href="#reproducibility-19">REPRODUCIBILITY</a></h2>
+<h2 id="reproducibility-20"><a class="header" href="#reproducibility-20">REPRODUCIBILITY</a></h2>
 <p><strong>Script</strong>: <code>tests/test_interp_033_bug_taxonomy.rs</code> (self-contained)</p>
 <pre><code class="language-bash">cargo test --test test_interp_033_bug_taxonomy
 # Exit status: 0
@@ -18283,7 +18527,7 @@ cargo fmt -- --check                            # ✅ Properly formatted
 # Bugs tracked: 3
 </code></pre>
 <p><strong>Idempotent</strong>: Yes - bug database is deterministic.</p>
-<h2 id="debuggability-19"><a class="header" href="#debuggability-19">DEBUGGABILITY</a></h2>
+<h2 id="debuggability-20"><a class="header" href="#debuggability-20">DEBUGGABILITY</a></h2>
 <p><strong>Debug Session</strong>:</p>
 <pre><code class="language-bash"># Run taxonomy tests
 cargo test test_bug_taxonomy_basic
@@ -18324,7 +18568,7 @@ BUG-003. if-else as rvalue not supported (Medium)
    Root Cause: MissingFeature
    Impact: Cannot use if-else in expression positions
 </code></pre>
-<h2 id="discoveries-37"><a class="header" href="#discoveries-37">Discoveries</a></h2>
+<h2 id="discoveries-38"><a class="header" href="#discoveries-38">Discoveries</a></h2>
 <h3 id="bug-patterns-identified"><a class="header" href="#bug-patterns-identified">Bug Patterns Identified</a></h3>
 <ol>
 <li><strong>Parser Limitations</strong>: 2/3 bugs are parser-related (missing features)</li>
@@ -18362,14 +18606,14 @@ BUG-003. if-else as rvalue not supported (Medium)
 <li><strong>Reproduction</strong>: <code>let x = if (cond) { 1 } else { 2 };</code></li>
 <li><strong>Recommendation</strong>: Extend parser to support if-else expressions</li>
 </ul>
-<h2 id="next-steps-44"><a class="header" href="#next-steps-44">Next Steps</a></h2>
+<h2 id="next-steps-45"><a class="header" href="#next-steps-45">Next Steps</a></h2>
 <p>INTERP-033 enables:</p>
 <ul>
 <li><strong>INTERP-034</strong>: File bugs upstream at paiml/ruchy with comprehensive data</li>
 <li><strong>INTERP-035</strong>: Export conformance test suite with known limitations documented</li>
 <li><strong>Prioritization</strong>: Focus on Medium severity parser limitations first</li>
 </ul>
-<h2 id="validation-summary-28"><a class="header" href="#validation-summary-28">Validation Summary</a></h2>
+<h2 id="validation-summary-29"><a class="header" href="#validation-summary-29">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with taxonomy infrastructure</li>
@@ -18391,7 +18635,7 @@ BUG-003. if-else as rvalue not supported (Medium)
 <li>Root causes: 2 MissingFeature, 1 PerformanceBottleneck</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="interp-099-comprehensive-integration-test-suite"><a class="header" href="#interp-099-comprehensive-integration-test-suite">INTERP-099: Comprehensive Integration Test Suite</a></h1>
-<h2 id="context-47"><a class="header" href="#context-47">Context</a></h2>
+<h2 id="context-48"><a class="header" href="#context-48">Context</a></h2>
 <p>Integration testing validates end-to-end program execution, ensuring all language features work together correctly. This ticket implements a comprehensive test suite with 116+ realistic programs.</p>
 <p><strong>Why this is needed</strong>: Unit tests validate individual components, but integration tests ensure the complete system works. Real programs combine features in ways unit tests don't cover.</p>
 <h2 id="red-write-failing-test-14"><a class="header" href="#red-write-failing-test-14">RED: Write Failing Test</a></h2>
@@ -18426,7 +18670,7 @@ fn test_integration_calculator_program() {
 <p><strong>Expected</strong>: Tests fail because <code>IntegrationTester</code> doesn't exist.</p>
 <p><strong>Actual</strong>: Compilation error - integration test infrastructure not implemented.</p>
 <p><strong>Validation</strong>: <code>cargo test test_integration_calculator_program</code> exits with status 1.</p>
-<h2 id="green-minimal-implementation-25"><a class="header" href="#green-minimal-implementation-25">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-26"><a class="header" href="#green-minimal-implementation-26">GREEN: Minimal Implementation</a></h2>
 <p>Implemented comprehensive integration test runner:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -18516,7 +18760,7 @@ pub enum IntegrationResult {
 </ul>
 <p><strong>Total Programs Tested</strong>: <strong>116+</strong></p>
 <p><strong>Validation</strong>: <code>cargo test --test test_interp_099_integration</code> exits with status 0.</p>
-<h2 id="refactor-improvements-19"><a class="header" href="#refactor-improvements-19">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-20"><a class="header" href="#refactor-improvements-20">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li><strong>Comprehensive Coverage</strong>: 10 test categories, 116+ programs</li>
@@ -18558,7 +18802,7 @@ cargo fmt -- --check                           # ✅ Properly formatted
 <li>Error handling: ✅ Helpful error messages</li>
 <li>Stress test: ✅ 100 iterations, 0 failures</li>
 </ol>
-<h2 id="reproducibility-20"><a class="header" href="#reproducibility-20">REPRODUCIBILITY</a></h2>
+<h2 id="reproducibility-21"><a class="header" href="#reproducibility-21">REPRODUCIBILITY</a></h2>
 <p><strong>Script</strong>: <code>tests/test_interp_099_integration.rs</code> (self-contained)</p>
 <pre><code class="language-bash">cargo test --test test_interp_099_integration
 # Exit status: 0
@@ -18566,7 +18810,7 @@ cargo fmt -- --check                           # ✅ Properly formatted
 # Programs tested: 116+
 </code></pre>
 <p><strong>Idempotent</strong>: Yes - all programs are deterministic.</p>
-<h2 id="debuggability-20"><a class="header" href="#debuggability-20">DEBUGGABILITY</a></h2>
+<h2 id="debuggability-21"><a class="header" href="#debuggability-21">DEBUGGABILITY</a></h2>
 <p><strong>Debug Session</strong>:</p>
 <pre><code class="language-bash"># Run calculator test
 cargo test test_integration_calculator_program -- --nocapture
@@ -18588,7 +18832,7 @@ cargo test test_integration_stress
 <li>Boolean logic: ✅ !(true)=false, !(false)=true, !!(true)=true</li>
 <li>Stress: ✅ 100 programs, 100 successes, 0 failures</li>
 </ul>
-<h2 id="discoveries-38"><a class="header" href="#discoveries-38">Discoveries</a></h2>
+<h2 id="discoveries-39"><a class="header" href="#discoveries-39">Discoveries</a></h2>
 <h3 id="bug-003-if-else-as-rvalue-not-supported-1"><a class="header" href="#bug-003-if-else-as-rvalue-not-supported-1">BUG-003: if-else as rvalue Not Supported</a></h3>
 <ul>
 <li><strong>Discovery Method</strong>: Integration testing - realistic code pattern</li>
@@ -18621,14 +18865,14 @@ cargo test test_integration_stress
 <li>Error cases (undefined variables, division by zero)</li>
 <li>Large programs (50+ variables, 1225 sum)</li>
 </ul>
-<h2 id="next-steps-45"><a class="header" href="#next-steps-45">Next Steps</a></h2>
+<h2 id="next-steps-46"><a class="header" href="#next-steps-46">Next Steps</a></h2>
 <p>INTERP-099 enables:</p>
 <ul>
 <li><strong>INTERP-034</strong>: Export test suite for Ruchy compiler validation</li>
 <li><strong>INTERP-035</strong>: Conformance testing with 116+ programs</li>
 <li><strong>Confidence</strong>: Production readiness validated end-to-end</li>
 </ul>
-<h2 id="validation-summary-29"><a class="header" href="#validation-summary-29">Validation Summary</a></h2>
+<h2 id="validation-summary-30"><a class="header" href="#validation-summary-30">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests failed as expected (compilation error)</li>
 <li>✅ GREEN phase: Tests passing with integration runner</li>
@@ -18650,7 +18894,7 @@ cargo test test_integration_stress
 <li>Bug discoveries: 1 (BUG-003)</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="quality-001-test-infrastructure-meta-validation"><a class="header" href="#quality-001-test-infrastructure-meta-validation">QUALITY-001: Test Infrastructure Meta-Validation</a></h1>
-<h2 id="context-48"><a class="header" href="#context-48">Context</a></h2>
+<h2 id="context-49"><a class="header" href="#context-49">Context</a></h2>
 <p>Meta-tests validate the test infrastructure itself, ensuring test health, preventing regression, and maintaining comprehensive coverage. These tests serve as a safety net for the entire test suite.</p>
 <p><strong>Why this is needed</strong>: Without meta-tests, we could accidentally delete tests, ignore tests without reason, or lose coverage. Meta-tests protect the integrity of our 700+ test suite.</p>
 <h2 id="red-write-failing-test-15"><a class="header" href="#red-write-failing-test-15">RED: Write Failing Test</a></h2>
@@ -18696,7 +18940,7 @@ fn test_meta_test_file_naming() {
 <p><strong>Expected</strong>: Tests pass (meta-tests are self-validating).</p>
 <p><strong>Actual</strong>: Tests pass immediately - meta-tests validate existing state.</p>
 <p><strong>Validation</strong>: <code>cargo test --test test_meta_001_test_infrastructure</code> exits with status 0.</p>
-<h2 id="green-minimal-implementation-26"><a class="header" href="#green-minimal-implementation-26">GREEN: Minimal Implementation</a></h2>
+<h2 id="green-minimal-implementation-27"><a class="header" href="#green-minimal-implementation-27">GREEN: Minimal Implementation</a></h2>
 <p>Implemented 11 comprehensive meta-tests:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -18887,7 +19131,7 @@ fn test_meta_001_completeness() {
 </ol>
 <p><strong>Result</strong>: ✅ All 11 tests passing</p>
 <p><strong>Validation</strong>: <code>cargo test --test test_meta_001_test_infrastructure</code> exits with status 0.</p>
-<h2 id="refactor-improvements-20"><a class="header" href="#refactor-improvements-20">REFACTOR: Improvements</a></h2>
+<h2 id="refactor-improvements-21"><a class="header" href="#refactor-improvements-21">REFACTOR: Improvements</a></h2>
 <p>After getting tests green, refactored for:</p>
 <ol>
 <li>
@@ -18927,14 +19171,14 @@ cargo fmt -- --check                                 # ✅ Properly formatted
 <li>Safety: ✅ 0 panics, 4 threads, 1000 iterations</li>
 <li>Bug tracking: ✅ 3 bugs discovered and cataloged</li>
 </ol>
-<h2 id="reproducibility-21"><a class="header" href="#reproducibility-21">REPRODUCIBILITY</a></h2>
+<h2 id="reproducibility-22"><a class="header" href="#reproducibility-22">REPRODUCIBILITY</a></h2>
 <p><strong>Script</strong>: <code>tests/test_meta_001_test_infrastructure.rs</code> (self-contained)</p>
 <pre><code class="language-bash">cargo test --test test_meta_001_test_infrastructure
 # Exit status: 0
 # Output: 11/11 tests passing
 </code></pre>
 <p><strong>Idempotent</strong>: Yes - meta-tests validate static properties of test infrastructure.</p>
-<h2 id="debuggability-21"><a class="header" href="#debuggability-21">DEBUGGABILITY</a></h2>
+<h2 id="debuggability-22"><a class="header" href="#debuggability-22">DEBUGGABILITY</a></h2>
 <p><strong>Debug Session</strong>:</p>
 <pre><code class="language-bash"># Run all meta-tests
 cargo test --test test_meta_001_test_infrastructure
@@ -18955,7 +19199,7 @@ cargo test test_meta_bug_discovery_tracking -- --nocapture
 <li>Safety: ✅ 0 panics across 1000+ programs</li>
 <li>Bugs: ✅ 3 bugs tracked (BUG-001, BUG-002, BUG-003)</li>
 </ul>
-<h2 id="discoveries-39"><a class="header" href="#discoveries-39">Discoveries</a></h2>
+<h2 id="discoveries-40"><a class="header" href="#discoveries-40">Discoveries</a></h2>
 <h3 id="test-infrastructure-health"><a class="header" href="#test-infrastructure-health">Test Infrastructure Health</a></h3>
 <ul>
 <li><strong>Total Tests</strong>: 720+ passing (exceeds 700 minimum) ✅</li>
@@ -18987,7 +19231,7 @@ cargo test test_meta_bug_discovery_tracking -- --nocapture
 <li><strong>BUG-003</strong>: if-else as rvalue not supported (Parser, Medium)</li>
 </ul>
 <p>All bugs discovered via systematic testing (fuzzing, benchmarking, integration).</p>
-<h2 id="next-steps-46"><a class="header" href="#next-steps-46">Next Steps</a></h2>
+<h2 id="next-steps-47"><a class="header" href="#next-steps-47">Next Steps</a></h2>
 <p>QUALITY-001 enables:</p>
 <ul>
 <li><strong>Regression Prevention</strong>: Test count must stay &gt;700</li>
@@ -18995,7 +19239,7 @@ cargo test test_meta_bug_discovery_tracking -- --nocapture
 <li><strong>Quality Monitoring</strong>: Automated quality checks</li>
 <li><strong>Documentation</strong>: Test infrastructure is self-documenting</li>
 </ul>
-<h2 id="validation-summary-30"><a class="header" href="#validation-summary-30">Validation Summary</a></h2>
+<h2 id="validation-summary-31"><a class="header" href="#validation-summary-31">Validation Summary</a></h2>
 <ul>
 <li>✅ RED phase: Tests pass immediately (self-validating)</li>
 <li>✅ GREEN phase: 11 meta-tests implemented</li>
