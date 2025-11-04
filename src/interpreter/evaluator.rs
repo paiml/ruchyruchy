@@ -1214,22 +1214,21 @@ impl Evaluator {
                 }
             }
 
-            // Closure - store as a function-like value
-            // For now, closures are not first-class values, so we'll return nil
-            // Full implementation would require closure values with captured environment
+            // Closure - create closure value with captured environment
             AstNode::Closure {
-                is_move,
+                is_move: _, // TODO: Implement move semantics in future
                 params,
-                body: _,
+                body,
             } => {
-                // TODO: Implement proper closure support with environment capture
-                // For now, return a placeholder value
-                Err(EvalError::UnsupportedOperation {
-                    operation: format!(
-                        "Closures not yet fully implemented (is_move: {}, params: {:?})",
-                        is_move, params
-                    ),
-                })
+                // Capture current environment for closure
+                let captured_env = self.scope.capture();
+
+                // Return closure value with captured environment
+                Ok(ControlFlow::Value(Value::Closure {
+                    params: params.clone(),
+                    body: body.clone(),
+                    captured_env,
+                }))
             }
 
             // Struct definition - register struct schema
@@ -1534,7 +1533,18 @@ impl Evaluator {
             return Ok(result);
         }
 
-        // 3. Look up function in user-defined registry
+        // 3. Check if name refers to a closure variable (before checking function registry)
+        if let Ok(Value::Closure {
+            params,
+            body,
+            captured_env,
+        }) = self.scope.get_cloned(name)
+        {
+            // Call the closure with its captured environment
+            return self.call_closure(&params, &body, &captured_env, args);
+        }
+
+        // 4. Look up function in user-defined registry
         let (params, body) =
             self.functions
                 .get(name)
@@ -1677,6 +1687,79 @@ impl Evaluator {
             let duration = start_time.elapsed();
             profiler.record_function_call(name, duration);
         }
+
+        Ok(result)
+    }
+
+    /// Call a closure with captured environment
+    ///
+    /// Implements closure call semantics:
+    /// 1. Check argument count matches parameter count
+    /// 2. Evaluate all arguments eagerly (call-by-value)
+    /// 3. Create new scope with captured environment
+    /// 4. Bind parameters to argument values
+    /// 5. Execute closure body
+    /// 6. Restore previous scope
+    ///
+    /// Returns the last expression value from the closure body.
+    fn call_closure(
+        &mut self,
+        params: &[String],
+        body: &[AstNode],
+        captured_env: &std::collections::HashMap<String, Value>,
+        args: &[AstNode],
+    ) -> Result<Value, EvalError> {
+        // 1. Check argument count matches parameter count
+        if args.len() != params.len() {
+            return Err(EvalError::ArgumentCountMismatch {
+                function: "<closure>".to_string(),
+                expected: params.len(),
+                actual: args.len(),
+            });
+        }
+
+        // 2. Evaluate all arguments eagerly (call-by-value semantics)
+        let mut arg_values = Vec::with_capacity(args.len());
+        for arg in args {
+            arg_values.push(self.eval(arg)?);
+        }
+
+        // 3. Save current scope and create new child scope
+        let child_scope = self.scope.create_child();
+        let saved_scope = std::mem::replace(&mut self.scope, child_scope);
+
+        // 4. Restore captured environment into the new scope
+        for (name, value) in captured_env {
+            let _ = self.scope.define(name.clone(), value.clone());
+        }
+
+        // 5. Bind parameters to argument values
+        for (param, arg_val) in params.iter().zip(arg_values.iter()) {
+            let _ = self.scope.define(param.clone(), arg_val.clone());
+        }
+
+        // 6. Execute closure body
+        let mut result = Value::nil();
+        for stmt in body {
+            match self.eval_internal(stmt) {
+                Ok(ControlFlow::Value(v)) => {
+                    result = v;
+                }
+                Ok(ControlFlow::Return(v)) => {
+                    // Early return from closure
+                    result = v;
+                    break;
+                }
+                Err(e) => {
+                    // Error occurred - restore scope before propagating
+                    self.scope = saved_scope;
+                    return Err(e);
+                }
+            }
+        }
+
+        // 7. Restore previous scope
+        self.scope = saved_scope;
 
         Ok(result)
     }

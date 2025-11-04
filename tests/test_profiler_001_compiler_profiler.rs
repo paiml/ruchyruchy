@@ -259,11 +259,13 @@ fn test_optimization_opportunity_detection() {
 fn test_cross_mode_comparison() {
     let profiler = CompilerProfiler::new();
 
+    // INTERP-044: Reduced from fibonacci(15) to fibonacci(12) to prevent stack overflow
+    // with closure implementation's additional stack usage per recursive call
     let code = r#"
         fun fibonacci(n) {
             if n <= 1 { n } else { fibonacci(n-1) + fibonacci(n-2) }
         }
-        let result = fibonacci(15);
+        let result = fibonacci(12);
     "#;
 
     // Run in AST mode

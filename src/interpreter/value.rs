@@ -27,12 +27,21 @@ pub enum Value {
     Vector(Vec<Value>),
     /// HashMap (dictionary) value
     HashMap(HashMap<String, Value>),
-    /// Function value (closure)
+    /// Function value (named function without capture)
     Function {
         /// Function parameter names
         params: Vec<String>,
         /// Function body statements
         body: Vec<AstNode>,
+    },
+    /// Closure value (anonymous function with environment capture)
+    Closure {
+        /// Closure parameter names
+        params: Vec<String>,
+        /// Closure body statements
+        body: Vec<AstNode>,
+        /// Captured environment (variables from outer scope)
+        captured_env: HashMap<String, Value>,
     },
     /// Tuple value (ordered collection of heterogeneous values)
     Tuple(Vec<Value>),
@@ -203,6 +212,7 @@ impl Value {
             Value::Tuple(_) => "Tuple",
             Value::HashMap(_) => "HashMap",
             Value::Function { .. } => "Function",
+            Value::Closure { .. } => "Closure",
             Value::Nil => "Nil",
         }
     }
@@ -574,6 +584,9 @@ impl fmt::Display for Value {
             }
             Value::Function { params, .. } => {
                 write!(f, "fun({})", params.join(", "))
+            }
+            Value::Closure { params, .. } => {
+                write!(f, "|{}| {{ <closure> }}", params.join(", "))
             }
             Value::Nil => write!(f, "nil"),
         }
