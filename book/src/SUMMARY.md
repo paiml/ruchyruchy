@@ -107,6 +107,10 @@
 
 - [DEBUGGER-053: Differential Testing Framework (Interpreter vs JIT)](./phase4_debugger/debugger-053-differential.md)
 
+## Phase 4.9: Quality Gates (1/1) ✅ NEW!
+
+- [DEBUGGER-054: Automated Quality Gates for Debugger Tools](./phase4_debugger/debugger-054-quality-gates.md)
+
 ## Early Prototypes & Vertical Slices
 
 - [Debugging Toolkit](./debugging/chapter.md)
