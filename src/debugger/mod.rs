@@ -22,6 +22,9 @@ pub mod jit;
 /// DEBUGGER-053: Differential testing framework (Interpreter vs JIT) (RED Phase)
 pub mod differential;
 
+/// DEBUGGER-054: Automated quality gates for debugger tools (RED Phase)
+pub mod quality_gates;
+
 // Re-export main types for convenience
 pub use performance_profiler::{PerformanceProfiler, ProfileReport};
 pub use repl_debugger::{DebugCommand, DebugSession, StepResult};
