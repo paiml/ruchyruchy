@@ -1906,6 +1906,65 @@ impl JitCompiler {
                 Ok(builder.ins().iconst(types::I64, 0))
             }
 
+            // Type cast: expr as target_type
+            // Implementation: Convert between i64 and f64 types
+            AstNode::TypeCast { expr, target_type } => {
+                // Compile the expression to cast
+                let value = Self::compile_expr_with_context(
+                    expr,
+                    builder,
+                    parameters,
+                    local_vars,
+                    var_counter,
+                    compiled_functions,
+                    string_ctx,
+                    struct_defs,
+                )?;
+
+                // Get the source type from the value
+                let source_type = builder.func.dfg.value_type(value);
+
+                // Perform type conversion based on target type
+                match target_type.as_str() {
+                    "f64" => {
+                        // Cast to f64
+                        if source_type == types::I64 {
+                            // i64 → f64: signed integer to float
+                            let float_value = builder.ins().fcvt_from_sint(types::F64, value);
+                            Ok(float_value)
+                        } else if source_type == types::F64 {
+                            // f64 → f64: no-op
+                            Ok(value)
+                        } else {
+                            Err(JitError::UnsupportedNode(format!(
+                                "Cannot cast {:?} to f64",
+                                source_type
+                            )))
+                        }
+                    }
+                    "i64" => {
+                        // Cast to i64
+                        if source_type == types::F64 {
+                            // f64 → i64: float to signed integer (truncates toward zero)
+                            let int_value = builder.ins().fcvt_to_sint_sat(types::I64, value);
+                            Ok(int_value)
+                        } else if source_type == types::I64 {
+                            // i64 → i64: no-op
+                            Ok(value)
+                        } else {
+                            Err(JitError::UnsupportedNode(format!(
+                                "Cannot cast {:?} to i64",
+                                source_type
+                            )))
+                        }
+                    }
+                    _ => Err(JitError::UnsupportedNode(format!(
+                        "Unknown target type for cast: {}",
+                        target_type
+                    ))),
+                }
+            }
+
             // Unsupported AST node
             _ => Err(JitError::UnsupportedNode(format!(
                 "Cannot compile AST node: {:?}",
