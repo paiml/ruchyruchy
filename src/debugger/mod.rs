@@ -13,6 +13,9 @@ pub mod performance_profiler;
 /// DEBUGGER-050: Tokenization debugging tools (GREEN phase)
 pub mod tokenizer;
 
+/// DEBUGGER-050: AST visualization tools (GREEN Phase Priority 2)
+pub mod ast_viz;
+
 // Re-export main types for convenience
 pub use performance_profiler::{PerformanceProfiler, ProfileReport};
 pub use repl_debugger::{DebugCommand, DebugSession, StepResult};
@@ -63,45 +66,38 @@ pub fn parser_trace_errors_only(source: &str) -> String {
     tokenizer::parser_trace_errors_only(source)
 }
 
-// Priority 2: AST visualization tools (RED Phase stubs)
-/// Generate AST as JSON (DEBUGGER-050 Priority 2 - not yet implemented)
-pub fn visualize_ast(_source: &str) -> String {
-    // RED Phase stub - will implement in GREEN phase
-    todo!("DEBUGGER-050: Implement visualize_ast")
+// Priority 2: AST visualization tools (GREEN Phase)
+/// Generate AST as JSON (DEBUGGER-050 Priority 2)
+pub fn visualize_ast(source: &str) -> String {
+    ast_viz::visualize_ast(source)
 }
 
-/// Generate AST as Graphviz DOT format (DEBUGGER-050 Priority 2 - not yet implemented)
-pub fn visualize_ast_graphviz(_source: &str) -> String {
-    // RED Phase stub - will implement in GREEN phase
-    todo!("DEBUGGER-050: Implement visualize_ast_graphviz")
+/// Generate AST as Graphviz DOT format (DEBUGGER-050 Priority 2)
+pub fn visualize_ast_graphviz(source: &str) -> String {
+    ast_viz::visualize_ast_graphviz(source)
 }
 
-/// Visualize AST with source locations (DEBUGGER-050 Priority 2 - not yet implemented)
-pub fn visualize_ast_with_locations(_source: &str) -> String {
-    // RED Phase stub - will implement in GREEN phase
-    todo!("DEBUGGER-050: Implement visualize_ast_with_locations")
+/// Visualize AST with source locations (DEBUGGER-050 Priority 2)
+pub fn visualize_ast_with_locations(source: &str) -> String {
+    ast_viz::visualize_ast_with_locations(source)
 }
 
-/// Show partial AST on parse error (DEBUGGER-050 Priority 2 - not yet implemented)
-pub fn visualize_ast_partial(_source: &str) -> Result<String, String> {
-    // RED Phase stub - will implement in GREEN phase
-    todo!("DEBUGGER-050: Implement visualize_ast_partial")
+/// Show partial AST on parse error (DEBUGGER-050 Priority 2)
+pub fn visualize_ast_partial(source: &str) -> Result<String, String> {
+    ast_viz::visualize_ast_partial(source)
 }
 
-/// Compare ASTs from two code versions (DEBUGGER-050 Priority 2 - not yet implemented)
-pub fn ast_diff(_before: &str, _after: &str) -> String {
-    // RED Phase stub - will implement in GREEN phase
-    todo!("DEBUGGER-050: Implement ast_diff")
+/// Compare ASTs from two code versions (DEBUGGER-050 Priority 2)
+pub fn ast_diff(before: &str, after: &str) -> String {
+    ast_viz::ast_diff(before, after)
 }
 
-/// Show AST construction step-by-step (DEBUGGER-050 Priority 2 - not yet implemented)
-pub fn visualize_ast_steps(_source: &str) -> Vec<String> {
-    // RED Phase stub - will implement in GREEN phase
-    todo!("DEBUGGER-050: Implement visualize_ast_steps")
+/// Show AST construction step-by-step (DEBUGGER-050 Priority 2)
+pub fn visualize_ast_steps(source: &str) -> Vec<String> {
+    ast_viz::visualize_ast_steps(source)
 }
 
-/// Show AST with inferred types (DEBUGGER-050 Priority 2 - not yet implemented)
-pub fn visualize_typed_ast(_source: &str) -> String {
-    // RED Phase stub - will implement in GREEN phase
-    todo!("DEBUGGER-050: Implement visualize_typed_ast")
+/// Show AST with inferred types (DEBUGGER-050 Priority 2)
+pub fn visualize_typed_ast(source: &str) -> String {
+    ast_viz::visualize_typed_ast(source)
 }
