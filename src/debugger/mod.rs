@@ -16,6 +16,9 @@ pub mod tokenizer;
 /// DEBUGGER-050: AST visualization tools (GREEN Phase Priority 2)
 pub mod ast_viz;
 
+/// DEBUGGER-052: JIT compiler debugger with Cranelift IR inspection (RED Phase)
+pub mod jit;
+
 // Re-export main types for convenience
 pub use performance_profiler::{PerformanceProfiler, ProfileReport};
 pub use repl_debugger::{DebugCommand, DebugSession, StepResult};
