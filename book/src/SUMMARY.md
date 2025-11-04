@@ -95,9 +95,13 @@
 - [DEBUGGER-047: Performance Profiler with Flame Graphs](./phase4_debugger/debugger-047-performance-profiler.md)
 - [DEBUGGER-055: Interactive rust-gdb Wrapper](./phase4_debugger/debugger-055-interactive-rust-gdb.md)
 
-## Phase 4.6: Parser Debugging Tools (1/1) ✅ NEW!
+## Phase 4.6: Parser Debugging Tools (1/1) ✅
 
 - [DEBUGGER-050: Parser Debugger with Token Stream Inspection & AST Visualization](./phase4_debugger/debugger-050-parser-token-inspection.md)
+
+## Phase 4.7: JIT Debugging Tools (1/1) ✅ NEW!
+
+- [DEBUGGER-052: JIT Compiler Debugger with Cranelift IR Inspection](./phase4_debugger/debugger-052-jit-debug.md)
 
 ## Early Prototypes & Vertical Slices
 
