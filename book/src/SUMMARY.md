@@ -99,9 +99,13 @@
 
 - [DEBUGGER-050: Parser Debugger with Token Stream Inspection & AST Visualization](./phase4_debugger/debugger-050-parser-token-inspection.md)
 
-## Phase 4.7: JIT Debugging Tools (1/1) ✅ NEW!
+## Phase 4.7: JIT Debugging Tools (1/1) ✅
 
 - [DEBUGGER-052: JIT Compiler Debugger with Cranelift IR Inspection](./phase4_debugger/debugger-052-jit-debug.md)
+
+## Phase 4.8: Differential Testing (1/1) ✅ NEW!
+
+- [DEBUGGER-053: Differential Testing Framework (Interpreter vs JIT)](./phase4_debugger/debugger-053-differential.md)
 
 ## Early Prototypes & Vertical Slices
 
