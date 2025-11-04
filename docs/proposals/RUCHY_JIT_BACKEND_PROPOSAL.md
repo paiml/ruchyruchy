@@ -2,6 +2,7 @@
 
 **RFC: Add Cranelift JIT Compilation Backend to Ruchy**
 
+**GitHub Issue**: https://github.com/paiml/ruchy/issues/131
 **Author**: Claude Code (via Noah Gift)
 **Date**: 2025-11-04
 **Status**: Proposal / Request for Comments
@@ -17,7 +18,7 @@ We propose adding an optional **Cranelift-based JIT compilation backend** to Ruc
 - ✅ **1,544x faster** on nested loops (3µs vs 4,634µs per iteration)
 - ✅ **265µs compilation overhead** (negligible)
 - ✅ **89% feature coverage** (25/28 AST nodes implemented)
-- ✅ **163 tests passing** (160 unit + 3 integration)
+- ✅ **172 tests passing** (out of 175 total, 3 ignored for multi-function support)
 - ✅ **Zero regressions** in existing interpreter
 
 **Proposed User Experience:**
@@ -600,7 +601,7 @@ jobs:
 
 1. **Feature Flag:** JIT is opt-in via `--features jit`
 2. **Fallback:** Interpreter always available as backup
-3. **Testing:** 163 tests ensure correctness
+3. **Testing:** 172 tests (out of 175 total) ensure correctness
 4. **Benchmarking:** Continuous performance monitoring
 5. **Documentation:** Comprehensive user guide
 
