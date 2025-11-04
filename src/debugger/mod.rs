@@ -10,6 +10,98 @@ pub mod repl_debugger;
 /// Performance profiler with flame graph generation
 pub mod performance_profiler;
 
+/// DEBUGGER-050: Tokenization debugging tools (GREEN phase)
+pub mod tokenizer;
+
 // Re-export main types for convenience
 pub use performance_profiler::{PerformanceProfiler, ProfileReport};
 pub use repl_debugger::{DebugCommand, DebugSession, StepResult};
+
+// DEBUGGER-050: Parser Debugger with Token Stream Inspection (GREEN Phase)
+// Priority 1: Tokenization tools (GitHub issue #13)
+// Toyota Way: Genchi Genbutsu - Every function addresses real debugging pain from PARSER-079
+
+pub use tokenizer::TokenAnalysis;
+
+/// Show detailed token stream with source locations (DEBUGGER-050 Priority 1)
+pub fn tokenize(source: &str) -> String {
+    tokenizer::tokenize(source)
+}
+
+/// Show token stream with error highlighting (DEBUGGER-050 Priority 1)
+pub fn tokenize_with_errors(source: &str) -> String {
+    tokenizer::tokenize_with_errors(source)
+}
+
+/// Analyze tokens for pattern conflicts (DEBUGGER-050 Priority 1)
+pub fn tokenize_analyze(source: &str) -> TokenAnalysis {
+    tokenizer::tokenize_analyze(source)
+}
+
+/// Side-by-side token comparison (DEBUGGER-050 Priority 1)
+pub fn compare_tokens(working: &str, broken: &str) -> String {
+    tokenizer::compare_tokens(working, broken)
+}
+
+/// Compare tokens with root cause hints (DEBUGGER-050 Priority 1)
+pub fn compare_tokens_with_hints(working: &str, broken: &str) -> String {
+    tokenizer::compare_tokens_with_hints(working, broken)
+}
+
+/// Show parser state at failure (DEBUGGER-050 Priority 1)
+pub fn parser_trace(source: &str) -> String {
+    tokenizer::parser_trace(source)
+}
+
+/// Parser trace with root cause analysis (DEBUGGER-050 Priority 1)
+pub fn parser_trace_with_analysis(source: &str) -> String {
+    tokenizer::parser_trace_with_analysis(source)
+}
+
+/// Show only failing portion of parse trace (DEBUGGER-050 Priority 1)
+pub fn parser_trace_errors_only(source: &str) -> String {
+    tokenizer::parser_trace_errors_only(source)
+}
+
+// Priority 2: AST visualization tools (RED Phase stubs)
+/// Generate AST as JSON (DEBUGGER-050 Priority 2 - not yet implemented)
+pub fn visualize_ast(_source: &str) -> String {
+    // RED Phase stub - will implement in GREEN phase
+    todo!("DEBUGGER-050: Implement visualize_ast")
+}
+
+/// Generate AST as Graphviz DOT format (DEBUGGER-050 Priority 2 - not yet implemented)
+pub fn visualize_ast_graphviz(_source: &str) -> String {
+    // RED Phase stub - will implement in GREEN phase
+    todo!("DEBUGGER-050: Implement visualize_ast_graphviz")
+}
+
+/// Visualize AST with source locations (DEBUGGER-050 Priority 2 - not yet implemented)
+pub fn visualize_ast_with_locations(_source: &str) -> String {
+    // RED Phase stub - will implement in GREEN phase
+    todo!("DEBUGGER-050: Implement visualize_ast_with_locations")
+}
+
+/// Show partial AST on parse error (DEBUGGER-050 Priority 2 - not yet implemented)
+pub fn visualize_ast_partial(_source: &str) -> Result<String, String> {
+    // RED Phase stub - will implement in GREEN phase
+    todo!("DEBUGGER-050: Implement visualize_ast_partial")
+}
+
+/// Compare ASTs from two code versions (DEBUGGER-050 Priority 2 - not yet implemented)
+pub fn ast_diff(_before: &str, _after: &str) -> String {
+    // RED Phase stub - will implement in GREEN phase
+    todo!("DEBUGGER-050: Implement ast_diff")
+}
+
+/// Show AST construction step-by-step (DEBUGGER-050 Priority 2 - not yet implemented)
+pub fn visualize_ast_steps(_source: &str) -> Vec<String> {
+    // RED Phase stub - will implement in GREEN phase
+    todo!("DEBUGGER-050: Implement visualize_ast_steps")
+}
+
+/// Show AST with inferred types (DEBUGGER-050 Priority 2 - not yet implemented)
+pub fn visualize_typed_ast(_source: &str) -> String {
+    // RED Phase stub - will implement in GREEN phase
+    todo!("DEBUGGER-050: Implement visualize_typed_ast")
+}
