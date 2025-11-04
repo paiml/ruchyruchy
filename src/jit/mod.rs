@@ -581,6 +581,19 @@ impl JitCompiler {
                 Ok(val)
             }
 
+            // Path expression: std::sync::Arc, Module::function, etc.
+            // MVP: Return placeholder value (0) for qualified names
+            // Full implementation would need module/namespace resolution
+            AstNode::PathExpr { segments } => {
+                // Join segments to create qualified name
+                let _qualified_name = segments.join("::");
+
+                // For MVP: Path expressions evaluate to placeholder value (0)
+                // This allows syntax to compile without full module system
+                let val = builder.ins().iconst(types::I64, 0);
+                Ok(val)
+            }
+
             // Float literal: load as F64 constant
             // Note: F64 values are converted to I64 bits only at return statements
             AstNode::FloatLiteral(f) => {
