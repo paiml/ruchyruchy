@@ -164,6 +164,103 @@ assert_eq!(mismatches.len(), 0, "Jidoka violation!");
 
 ---
 
+### 6. **Five Whys Interactive Debugging** (DEBUGGER-056) - NEW! 🎉
+
+Root cause analysis using Toyota Way principles.
+
+**Use Case**: Trace from symptom to root cause for interpreter/compiler/transpiler bugs
+
+```rust
+use ruchyruchy::debugger::five_whys;
+
+// Analyze interpreter panic
+let bug_report = five_whys::BugReport {
+    category: five_whys::BugCategory::InterpreterRuntime,
+    symptom: "Panic: index out of bounds accessing vector".to_string(),
+    source_code: r#"
+fun main() {
+    let vec = [1, 2, 3];
+    let x = vec[5];  // Out of bounds
+    println(x);
+}
+"#.to_string(),
+    error_message: Some("index out of bounds: the len is 3 but the index is 5".to_string()),
+    stack_trace: Some(vec![
+        "at interpreter::evaluate_index_access".to_string(),
+        "at interpreter::evaluate_expression".to_string(),
+    ]),
+};
+
+// Run Five Whys analysis
+let analysis = five_whys::analyze_bug(&bug_report)?;
+
+// View results
+println!("Five Whys Analysis:");
+for (i, why) in analysis.whys.iter().enumerate() {
+    println!("  Why {}: {}", i + 1, why.question);
+    println!("  Answer: {}", why.answer);
+}
+println!("Root Cause: {:?}", analysis.root_cause);
+println!("Fix: {}", analysis.recommended_fix);
+```
+
+**Interactive Mode** (with user feedback):
+```rust
+// Create interactive session
+let mut session = five_whys::InteractiveSession::new(bug_report);
+
+// Step through each "why" question
+for i in 0..5 {
+    if let Some(question) = session.next_question() {
+        println!("Why {}: {}", i + 1, question);
+
+        // Get user input (in real code, use stdin)
+        let user_context = get_user_input();
+        session.add_user_context(user_context);
+    }
+}
+
+// Get final analysis
+let analysis = session.finalize()?;
+```
+
+**Knowledge Base Pattern Detection**:
+```rust
+let mut knowledge_base = five_whys::KnowledgeBase::new();
+
+// Analyze multiple bugs
+for bug in &bugs {
+    let analysis = five_whys::analyze_bug(bug)?;
+    knowledge_base.add_analysis(&analysis);
+}
+
+// Detect recurring patterns
+let patterns = knowledge_base.detect_patterns();
+
+for pattern in &patterns {
+    println!("Pattern: {}", pattern.symptom_pattern);
+    println!("  Occurrences: {}", pattern.occurrence_count);
+    println!("  Prevention: {}", pattern.prevention_strategy);
+}
+```
+
+**Features**:
+- ✅ **Bug Categories**: InterpreterRuntime, Compiler, Transpiler
+- ✅ **Root Causes**: MissingValidation, IncorrectLogic, TypeSystemLimitation, SemanticMismatch, MissingBaseCase, ProcessGap
+- ✅ **Interactive Mode**: Step-by-step with user feedback
+- ✅ **Knowledge Base**: Pattern detection for recurring bugs
+- ✅ **Actionable Fixes**: Specific recommendations for each root cause
+- ✅ **Performance**: <1ms per analysis
+
+**Toyota Way Principles**:
+- **Genchi Genbutsu** (Go and See): Examine actual bug in context
+- **Five Whys**: Ask "why" 5 times to find root cause
+- **Jidoka**: Stop and fix problems immediately
+- **Kaizen**: Continuous improvement through learning
+- **Hansei**: Reflect on failures to prevent recurrence
+
+---
+
 ## CLI Tool: `ruchydbg`
 
 **Note**: The `ruchydbg` CLI wraps the production `ruchy` compiler (not the educational interpreter). Use it for debugging production Ruchy code.
@@ -194,6 +291,7 @@ Add to your `.github/workflows/ci.yml`:
     cargo test --package ruchyruchy --test test_debugger_054_quality_gates
     cargo test --package ruchyruchy --test test_debugger_051_error_recovery
     cargo test --package ruchyruchy --test test_debugger_053_differential
+    cargo test --package ruchyruchy --test test_debugger_056_five_whys
 ```
 
 ---
@@ -276,4 +374,6 @@ Found a bug? Want a feature?
 
 **Version**: 1.27.0
 **Last Updated**: 2025-11-04
-**New in v1.27.0**: Parser Error Recovery (DEBUGGER-051) with typo suggestions and panic-mode recovery
+**New in v1.27.0**:
+- Parser Error Recovery (DEBUGGER-051) with typo suggestions and panic-mode recovery
+- Five Whys Interactive Debugging (DEBUGGER-056) with Toyota Way root cause analysis
