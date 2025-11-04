@@ -688,6 +688,138 @@ impl Evaluator {
                     }
                 }
 
+                // Special handling for pop() - it mutates the array
+                if method == "pop" {
+                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
+                        // Get current array
+                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
+                            EvalError::UndefinedVariable {
+                                name: var_name.clone(),
+                            }
+                        })?;
+
+                        // pop() takes no arguments
+                        if !args.is_empty() {
+                            return Err(EvalError::ArgumentCountMismatch {
+                                function: "pop".to_string(),
+                                expected: 0,
+                                actual: args.len(),
+                            });
+                        }
+
+                        // Mutate array
+                        if let Value::Vector(ref mut arr) = current_val {
+                            let popped = arr.pop().unwrap_or(Value::nil());
+
+                            // Update scope with mutated array
+                            self.scope.assign(var_name, current_val).map_err(|_| {
+                                EvalError::UndefinedVariable {
+                                    name: var_name.clone(),
+                                }
+                            })?;
+                            return Ok(ControlFlow::Value(popped));
+                        } else {
+                            return Err(EvalError::UnsupportedOperation {
+                                operation: format!(
+                                    "pop() requires array, got {}",
+                                    current_val.type_name()
+                                ),
+                            });
+                        }
+                    }
+                }
+
+                // Special handling for push_str() - it mutates the string
+                if method == "push_str" {
+                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
+                        // Get current string
+                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
+                            EvalError::UndefinedVariable {
+                                name: var_name.clone(),
+                            }
+                        })?;
+
+                        // push_str() takes exactly one argument (string to append)
+                        if args.len() != 1 {
+                            return Err(EvalError::ArgumentCountMismatch {
+                                function: "push_str".to_string(),
+                                expected: 1,
+                                actual: args.len(),
+                            });
+                        }
+
+                        // Evaluate the argument
+                        let arg_val = self.eval(&args[0])?;
+                        let to_append = arg_val.as_string()?;
+
+                        // Mutate string
+                        if let Value::String(ref mut s) = current_val {
+                            s.push_str(&to_append);
+
+                            // Update scope with mutated string
+                            self.scope.assign(var_name, current_val).map_err(|_| {
+                                EvalError::UndefinedVariable {
+                                    name: var_name.clone(),
+                                }
+                            })?;
+                            return Ok(ControlFlow::Value(Value::nil()));
+                        } else {
+                            return Err(EvalError::UnsupportedOperation {
+                                operation: format!(
+                                    "push_str() requires string, got {}",
+                                    current_val.type_name()
+                                ),
+                            });
+                        }
+                    }
+                }
+
+                // Special handling for insert() - it mutates the HashMap
+                if method == "insert" {
+                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
+                        // Get current HashMap
+                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
+                            EvalError::UndefinedVariable {
+                                name: var_name.clone(),
+                            }
+                        })?;
+
+                        // insert() takes exactly two arguments (key, value)
+                        if args.len() != 2 {
+                            return Err(EvalError::ArgumentCountMismatch {
+                                function: "insert".to_string(),
+                                expected: 2,
+                                actual: args.len(),
+                            });
+                        }
+
+                        // Evaluate the arguments
+                        let key_val = self.eval(&args[0])?;
+                        let key = key_val.as_string()?;
+                        let value_val = self.eval(&args[1])?;
+
+                        // Mutate HashMap
+                        if let Value::HashMap(ref mut map) = current_val {
+                            map.insert(key.to_string(), value_val);
+
+                            // Update scope with mutated HashMap
+                            self.scope.assign(var_name, current_val).map_err(|_| {
+                                EvalError::UndefinedVariable {
+                                    name: var_name.clone(),
+                                }
+                            })?;
+                            return Ok(ControlFlow::Value(Value::nil()));
+                        } else {
+                            return Err(EvalError::UnsupportedOperation {
+                                operation: format!(
+                                    "insert() requires HashMap, got {}",
+                                    current_val.type_name()
+                                ),
+                            });
+                        }
+                    }
+                }
+
                 // Default method call handling
                 let receiver_val = self.eval(receiver)?;
                 let result = self.call_method(receiver_val, method, args)?;
@@ -1521,6 +1653,29 @@ impl Evaluator {
                     })
                 }
             }
+            "is_empty" => {
+                // String or Array is_empty: "".is_empty() => true, [].is_empty() => true
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: format!("{}.is_empty()", receiver.type_name()),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+
+                if let Ok(s) = receiver.as_string() {
+                    Ok(Value::boolean(s.is_empty()))
+                } else if let Ok(arr) = receiver.as_vector() {
+                    Ok(Value::boolean(arr.is_empty()))
+                } else {
+                    Err(EvalError::UnsupportedOperation {
+                        operation: format!(
+                            "method 'is_empty' not supported on type {}",
+                            receiver.type_name()
+                        ),
+                    })
+                }
+            }
             "contains" => {
                 // String contains: "hello".contains('e') => true
                 if arg_values.len() != 1 {
@@ -1669,6 +1824,54 @@ impl Evaluator {
                     });
                 }
                 Ok(Value::string("Hello from thread!".to_string()))
+            }
+
+            "to_string" => {
+                // "value".to_string() -> String
+                // Convert any value to a String
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "to_string".to_string(),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+
+                // For strings, just return as-is (already a String)
+                // For other types, convert to their string representation
+                if let Ok(s) = receiver.as_string() {
+                    Ok(Value::string(s.to_string()))
+                } else {
+                    Ok(Value::string(receiver.to_println_string()))
+                }
+            }
+
+            "get" => {
+                // HashMap.get(key) -> Option<Value>
+                // Get value from HashMap by key
+                if arg_values.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "get".to_string(),
+                        expected: 1,
+                        actual: arg_values.len(),
+                    });
+                }
+
+                match receiver {
+                    Value::HashMap(ref map) => {
+                        let key = arg_values[0].as_string()?;
+                        match map.get(key) {
+                            Some(value) => Ok(value.clone()),
+                            None => Ok(Value::nil()),
+                        }
+                    }
+                    _ => Err(EvalError::UnsupportedOperation {
+                        operation: format!(
+                            "method 'get' not supported on type {}",
+                            receiver.type_name()
+                        ),
+                    }),
+                }
             }
 
             _ => Err(EvalError::UnsupportedOperation {
@@ -1947,6 +2150,49 @@ impl Evaluator {
                     elements.push(self.eval(arg)?);
                 }
                 Ok(Some(Value::vector(elements)))
+            }
+
+            "String::new" => {
+                // String::new() -> String
+                // Create an empty string
+                if !args.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "String::new".to_string(),
+                        expected: 0,
+                        actual: args.len(),
+                    });
+                }
+                Ok(Some(Value::string(String::new())))
+            }
+
+            "String::from" => {
+                // String::from(s: &str) -> String
+                // Convert string slice to String
+                if args.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "String::from".to_string(),
+                        expected: 1,
+                        actual: args.len(),
+                    });
+                }
+
+                let val = self.eval(&args[0])?;
+                let s = val.as_string()?;
+                Ok(Some(Value::string(s.to_string())))
+            }
+
+            "HashMap::new" => {
+                // HashMap::new() -> HashMap<K, V>
+                // Create an empty HashMap
+                if !args.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "HashMap::new".to_string(),
+                        expected: 0,
+                        actual: args.len(),
+                    });
+                }
+                use std::collections::HashMap;
+                Ok(Some(Value::HashMap(HashMap::new())))
             }
 
             _ => {
