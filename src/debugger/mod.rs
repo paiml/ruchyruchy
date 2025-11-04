@@ -28,6 +28,9 @@ pub mod quality_gates;
 /// DEBUGGER-051: Parser error recovery testing (RED Phase)
 pub mod error_recovery;
 
+/// DEBUGGER-056: Five Whys interactive debugging (Toyota Way)
+pub mod five_whys;
+
 // Re-export main types for convenience
 pub use performance_profiler::{PerformanceProfiler, ProfileReport};
 pub use repl_debugger::{DebugCommand, DebugSession, StepResult};
