@@ -1965,6 +1965,156 @@ impl JitCompiler {
                 }
             }
 
+            // vec![] macro: vec![elem1, elem2] or vec![value; count]
+            // Implementation: Desugar to array allocation and initialization
+            AstNode::VecMacro {
+                elements,
+                repeat_count,
+            } => {
+                match repeat_count {
+                    None => {
+                        // List form: vec![elem1, elem2, elem3]
+                        // Desugar to VectorLiteral logic
+                        if elements.is_empty() {
+                            // Empty vec![] - allocate minimal stack slot for consistency
+                            let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                                StackSlotKind::ExplicitSlot,
+                                8, // Minimal 8 bytes
+                                3,
+                            ));
+                            let array_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+                            return Ok(array_addr);
+                        }
+
+                        // Create stack slot for array (8 bytes per element)
+                        let array_size = elements.len() * 8;
+                        let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            array_size as u32,
+                            3, // 8-byte alignment
+                        ));
+
+                        // Get address of stack slot
+                        let array_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+
+                        // Store each element at appropriate offset
+                        for (i, elem) in elements.iter().enumerate() {
+                            // Compile element value
+                            let elem_value = Self::compile_expr_with_context(
+                                elem,
+                                builder,
+                                parameters,
+                                local_vars,
+                                var_counter,
+                                compiled_functions,
+                                string_ctx,
+                                struct_defs,
+                            )?;
+
+                            // Calculate offset (i * 8 bytes)
+                            let offset = (i * 8) as i32;
+
+                            // Store value at array[i]
+                            builder.ins().store(
+                                MemFlags::trusted(),
+                                elem_value,
+                                array_addr,
+                                offset,
+                            );
+                        }
+
+                        // Return the array address
+                        Ok(array_addr)
+                    }
+                    Some(count_expr) => {
+                        // Repeat form: vec![value; count]
+                        // Compile the value expression once
+                        let value = Self::compile_expr_with_context(
+                            &elements[0],
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                            compiled_functions,
+                            string_ctx,
+                            struct_defs,
+                        )?;
+
+                        // Compile the count expression
+                        let count = Self::compile_expr_with_context(
+                            count_expr,
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                            compiled_functions,
+                            string_ctx,
+                            struct_defs,
+                        )?;
+
+                        // For MVP, use a fixed max size since dynamic allocation is complex
+                        // Allocate max 1024 elements (8192 bytes)
+                        let max_size = 1024 * 8;
+                        let stack_slot = builder.create_sized_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            max_size,
+                            3, // 8-byte alignment
+                        ));
+
+                        // Get address of stack slot
+                        let array_addr = builder.ins().stack_addr(types::I64, stack_slot, 0);
+
+                        // Create loop to fill array: for i in 0..count
+                        let loop_header = builder.create_block();
+                        let loop_body = builder.create_block();
+                        let loop_exit = builder.create_block();
+
+                        // Loop variable i (block parameter)
+                        builder.append_block_param(loop_header, types::I64);
+
+                        // Initialize i = 0 and jump to loop header
+                        let i_init = builder.ins().iconst(types::I64, 0);
+                        builder.ins().jump(loop_header, &[i_init]);
+
+                        // Loop header: check if i < count
+                        builder.switch_to_block(loop_header);
+                        let i = builder.block_params(loop_header)[0];
+                        let i_lt_count = builder.ins().icmp(IntCC::SignedLessThan, i, count);
+                        builder
+                            .ins()
+                            .brif(i_lt_count, loop_body, &[], loop_exit, &[]);
+
+                        // Loop body: store value at array[i]
+                        builder.switch_to_block(loop_body);
+                        builder.seal_block(loop_body);
+
+                        // Calculate byte offset: i * 8
+                        let eight = builder.ins().iconst(types::I64, 8);
+                        let byte_offset = builder.ins().imul(i, eight);
+                        let elem_addr = builder.ins().iadd(array_addr, byte_offset);
+
+                        // Store value at array[i]
+                        builder
+                            .ins()
+                            .store(MemFlags::trusted(), value, elem_addr, 0);
+
+                        // Increment i and jump back to loop header
+                        let one = builder.ins().iconst(types::I64, 1);
+                        let i_next = builder.ins().iadd(i, one);
+                        builder.ins().jump(loop_header, &[i_next]);
+
+                        // Now seal loop_header after all predecessors are known
+                        builder.seal_block(loop_header);
+
+                        // Loop exit: return array address
+                        builder.switch_to_block(loop_exit);
+                        builder.seal_block(loop_exit);
+
+                        Ok(array_addr)
+                    }
+                }
+            }
+
             // Unsupported AST node
             _ => Err(JitError::UnsupportedNode(format!(
                 "Cannot compile AST node: {:?}",
