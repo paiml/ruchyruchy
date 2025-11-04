@@ -3,6 +3,8 @@
 **Date**: 2025-11-04
 **Status**: Proposal - Extreme TDD Implementation Plan
 **Priority**: HIGH - Addresses critical gap in parser/compile debugging
+**GitHub Issue**: https://github.com/paiml/ruchyruchy/issues/13
+**Motivation**: Real-world debugging pain from PARSER-079 (110k tokens spent on manual investigation)
 
 ---
 
@@ -98,6 +100,49 @@ ruchydbg run test.ruchy     # ❌ Doesn't even use JIT!
 
 #### DEBUGGER-050: AST Visualization Tool
 
+**Real-World Motivation** (from GitHub issue #13):
+
+During PARSER-079 debugging, 110k tokens were spent manually investigating tokenization failures. Three specific commands would have reduced this to 10-20k tokens (10x faster):
+
+1. **`ruchydbg tokenize <file>`** - Token Stream Inspection
+   - Shows detailed token stream with error detection
+   - Highlights error tokens (Bang = error recovery)
+   - Provides hints about pattern conflicts
+   - Example output:
+     ```
+     Token #3: String("'static") at 1:14-1:22
+     Token #4: Bang (ERROR RECOVERY TRIGGERED) at 1:22
+     ^^ DIAGNOSTIC: Pattern conflict detected
+     ```
+
+2. **`ruchydbg compare-tokens <file1> <file2>`** - Token Diff
+   - Compares tokenization between working and broken code
+   - Side-by-side token comparison
+   - Highlights mismatches with diagnostic hints
+   - Suggests potential root causes (pattern priority issues)
+   - Example output:
+     ```
+     Position 3:
+       Working:    Lifetime("'static") at 1:14-1:22
+       Broken:     String("'static") at 1:14-1:22 ⚠️  MISMATCH
+     ^^ HINT: String pattern has higher priority than Lifetime
+     ```
+
+3. **`ruchydbg parser-trace <file> [--error-only]`** - Parser State Inspection
+   - Shows parser state at failure point
+   - Step-by-step parser execution trace
+   - Current/expected token information
+   - Root cause analysis with lexer hints
+   - Example output:
+     ```
+     Parser trace (showing last 5 tokens before error):
+     [3] String("'static") - consumed by parse_lifetime() ← ERROR HERE
+     Expected: Lifetime, Got: String
+     Root Cause: Lexer tokenized lifetime as string (pattern priority)
+     ```
+
+**Impact**: These commands would catch 80%+ of lexer bugs immediately, reducing debugging time by 10x.
+
 **RED Phase** - Write Failing Tests First
 ```rust
 // tests/test_debugger_050_ast_viz.rs
@@ -175,6 +220,106 @@ fn test_ast_viz_with_types() {
 
     assert!(typed_ast.contains("type: i64"));
 }
+
+// NEW: Tests for GitHub issue #13 commands
+
+#[test]
+fn test_tokenize_shows_token_stream() {
+    // Test: ruchydbg tokenize shows all tokens with spans
+    let source = "let x = 'static;";
+    let tokens = ruchyruchy::debugger::tokenize(source);
+
+    assert!(tokens.contains("Keyword(Let)"));
+    assert!(tokens.contains("Identifier(x)"));
+    assert!(tokens.contains("Lifetime('static)"));
+    assert!(tokens.contains("at"));  // Source locations
+}
+
+#[test]
+fn test_tokenize_highlights_errors() {
+    // Test: ruchydbg tokenize highlights error tokens
+    let source = "let x = 'static;";  // If lexer treats 'static as string
+    let tokens = ruchyruchy::debugger::tokenize_with_errors(source);
+
+    // Should highlight if Bang (error recovery) triggered
+    if tokens.contains("Bang") {
+        assert!(tokens.contains("ERROR RECOVERY"));
+        assert!(tokens.contains("DIAGNOSTIC:"));
+    }
+}
+
+#[test]
+fn test_tokenize_shows_pattern_conflicts() {
+    // Test: ruchydbg tokenize detects pattern conflicts
+    let source = "'static";
+    let analysis = ruchyruchy::debugger::tokenize_analyze(source);
+
+    // Should detect if String pattern has higher priority than Lifetime
+    assert!(analysis.warnings.len() > 0);
+    assert!(analysis.warnings[0].contains("pattern") ||
+            analysis.warnings[0].contains("priority"));
+}
+
+#[test]
+fn test_compare_tokens_shows_diff() {
+    // Test: ruchydbg compare-tokens shows token differences
+    let working = "let x: &'static str = \"test\";";
+    let broken = "let x = 'static;";
+
+    let diff = ruchyruchy::debugger::compare_tokens(working, broken);
+
+    assert!(diff.contains("MISMATCH"));
+    assert!(diff.contains("Position"));
+    assert!(diff.contains("HINT"));
+}
+
+#[test]
+fn test_compare_tokens_identifies_root_cause() {
+    // Test: compare-tokens suggests root cause
+    let working = "let x = 'a';";  // Character literal
+    let broken = "let x = 'static';";  // String literal (if bug exists)
+
+    let diff = ruchyruchy::debugger::compare_tokens_with_hints(working, broken);
+
+    // Should suggest pattern priority issue
+    assert!(diff.contains("String pattern") ||
+            diff.contains("Lifetime pattern") ||
+            diff.contains("priority"));
+}
+
+#[test]
+fn test_parser_trace_shows_state() {
+    // Test: ruchydbg parser-trace shows parser state at error
+    let source = "let x = 'static;";  // Parse error
+    let trace = ruchyruchy::debugger::parser_trace(source);
+
+    assert!(trace.contains("Parser trace"));
+    assert!(trace.contains("Expected:"));
+    assert!(trace.contains("Got:"));
+}
+
+#[test]
+fn test_parser_trace_shows_root_cause() {
+    // Test: parser-trace provides root cause analysis
+    let source = "let x = 'static;";
+    let trace = ruchyruchy::debugger::parser_trace_with_analysis(source);
+
+    assert!(trace.contains("Root Cause:"));
+    assert!(trace.contains("Lexer") || trace.contains("tokenized"));
+}
+
+#[test]
+fn test_parser_trace_error_only_mode() {
+    // Test: parser-trace --error-only shows only failing portion
+    let source = "let a = 1; let b = 'static; let c = 3;";
+    let trace = ruchyruchy::debugger::parser_trace_errors_only(source);
+
+    // Should only show context around the error
+    assert!(trace.contains("'static"));
+    assert!(trace.contains("ERROR"));
+    // Should NOT show all successful parses
+    assert!(!trace.contains("Parse successful for"));
+}
 ```
 
 **Implementation Strategy**:
@@ -229,7 +374,13 @@ impl AstVisualizer {
 
 **CLI Integration**:
 ```bash
-# New command: ruchydbg parse-debug
+# New commands from GitHub issue #13 (PRIORITY - addresses real debugging pain)
+ruchydbg tokenize test.ruchy                  # Show token stream with error detection
+ruchydbg compare-tokens working.ruchy broken.ruchy  # Diff tokens with hints
+ruchydbg parser-trace test.ruchy              # Show parser state at error
+ruchydbg parser-trace test.ruchy --error-only # Only show failing portion
+
+# AST visualization commands
 ruchydbg parse-debug test.ruchy --format json
 ruchydbg parse-debug test.ruchy --format graphviz > ast.dot
 ruchydbg parse-debug test.ruchy --show-locations
@@ -738,10 +889,11 @@ echo "✅ All debugger quality gates passed!"
 ## Implementation Timeline
 
 ### Sprint 1 (1-2 weeks): DEBUGGER-050 - Parser Debugger
-- RED: Write 7 failing tests for AST visualization
-- GREEN: Implement JSON and Graphviz output
-- REFACTOR: Add performance optimizations
-- COMMIT: "DEBUGGER-050: Add AST visualization debugger"
+- RED: Write 15 failing tests (7 AST viz + 8 from GitHub issue #13)
+- GREEN: Implement tokenize, compare-tokens, parser-trace commands (PRIORITY)
+- GREEN: Implement JSON and Graphviz output for AST visualization
+- REFACTOR: Add performance optimizations and caching
+- COMMIT: "DEBUGGER-050: Add parser debugger with tokenization tools"
 
 ### Sprint 2 (1-2 weeks): DEBUGGER-051 - Error Recovery
 - RED: Write 5 failing tests for error recovery
@@ -830,7 +982,13 @@ echo "✅ All debugger quality gates passed!"
 ## Appendix A: CLI Command Reference
 
 ```bash
-# Parser Debugging
+# Token/Parser Debugging (GitHub issue #13 - HIGH PRIORITY)
+ruchydbg tokenize <file>                      # Show token stream with error detection
+ruchydbg compare-tokens <file1> <file2>       # Diff tokens with diagnostic hints
+ruchydbg parser-trace <file>                  # Show parser state at error
+ruchydbg parser-trace <file> --error-only     # Show only failing portion
+
+# Parser Debugging (AST Visualization)
 ruchydbg parse-debug <file> [--format json|graphviz|tree]
 ruchydbg parse-debug <file> --show-locations
 ruchydbg parse-debug <file> --step-by-step
@@ -901,11 +1059,24 @@ DEBUGGER-054 (Quality Gates) ← depends on all above
 This specification addresses the critical gap where `ruchydbg` only tests runtime behavior and provides no tools for debugging RuchyRuchy's own parser, evaluator, or JIT compiler.
 
 **Key Deliverables**:
-1. Parser debugger with AST visualization
-2. JIT debugger with IR inspection
-3. Differential testing framework
-4. Automated quality gates
+1. **Parser debugger** with tokenization tools (GitHub issue #13) - HIGH PRIORITY
+   - `ruchydbg tokenize` - Token stream inspection
+   - `ruchydbg compare-tokens` - Token diff with hints
+   - `ruchydbg parser-trace` - Parser state inspection
+2. **AST visualization** with JSON/Graphviz output
+3. **JIT debugger** with Cranelift IR inspection
+4. **Differential testing** framework (interpreter vs JIT)
+5. **Automated quality gates** for CI/CD
+
+**Test Coverage**: 37 RED phase tests across 5 tickets
+- DEBUGGER-050: 15 tests (7 AST viz + 8 tokenization from issue #13)
+- DEBUGGER-051: 5 tests (error recovery)
+- DEBUGGER-052: 7 tests (JIT debugging)
+- DEBUGGER-053: 6 tests (differential testing)
+- DEBUGGER-054: 4 tests (quality gates)
 
 **Timeline**: 6-10 weeks following EXTREME TDD methodology
+
+**Impact**: Expected 10x reduction in parser debugging time (110k tokens → 10-20k tokens)
 
 **Status**: Ready for implementation - all tickets defined with RED-GREEN-REFACTOR cycles
