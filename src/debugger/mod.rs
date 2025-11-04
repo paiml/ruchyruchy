@@ -19,6 +19,9 @@ pub mod ast_viz;
 /// DEBUGGER-052: JIT compiler debugger with Cranelift IR inspection (RED Phase)
 pub mod jit;
 
+/// DEBUGGER-053: Differential testing framework (Interpreter vs JIT) (RED Phase)
+pub mod differential;
+
 // Re-export main types for convenience
 pub use performance_profiler::{PerformanceProfiler, ProfileReport};
 pub use repl_debugger::{DebugCommand, DebugSession, StepResult};
