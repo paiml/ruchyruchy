@@ -84,7 +84,7 @@
 - [DEBUGGER-011: Scope Inspector](./phase4_debugger/debugger-011-scope-inspector.md)
 - [DEBUGGER-012: Call Stack Visualization](./phase4_debugger/debugger-012-call-stack-visualization.md)
 
-## Phase 4.5: Performance Profiling & Regression Detection (7/7) ✅ NEW!
+## Phase 4.5: Performance Profiling & Regression Detection (7/7) ✅
 
 - [DEBUGGER-041: Stack Depth Profiler + BUG-041 Fix](./phase4_debugger/debugger-041-stack-profiler.md)
 - [DEBUGGER-042: Pathological Input Detector + BUG-042 Fix](./phase4_debugger/debugger-042-pathological-detector.md)
@@ -94,6 +94,10 @@
 - [DEBUGGER-046: Interactive REPL Debugger](./phase4_debugger/debugger-046-repl-debugger.md)
 - [DEBUGGER-047: Performance Profiler with Flame Graphs](./phase4_debugger/debugger-047-performance-profiler.md)
 - [DEBUGGER-055: Interactive rust-gdb Wrapper](./phase4_debugger/debugger-055-interactive-rust-gdb.md)
+
+## Phase 4.6: Parser Debugging Tools (1/1) ✅ NEW!
+
+- [DEBUGGER-050: Parser Debugger with Token Stream Inspection & AST Visualization](./phase4_debugger/debugger-050-parser-token-inspection.md)
 
 ## Early Prototypes & Vertical Slices
 
