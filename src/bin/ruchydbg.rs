@@ -41,6 +41,9 @@ fn main() {
         "detect" => run_detect(&args),
         "regression" => run_regression(&args),
         "debug" => run_debug(&args),
+        "tokenize" => run_tokenize(&args),
+        "compare" => run_compare(&args),
+        "trace" => run_trace(&args),
         "validate" | "test" => run_validation(),
         "version" | "--version" | "-v" => {
             println!("ruchydbg {VERSION}");
@@ -1422,6 +1425,212 @@ fn print_debug_help() {
     println!();
 }
 
+// DEBUGGER-050: Tokenization debugging commands
+
+fn run_tokenize(args: &[String]) {
+    // Parse arguments: ruchydbg tokenize <file> [--errors] [--analyze]
+
+    if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
+        print_tokenize_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    if args.len() < 3 {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg tokenize <file> [--errors] [--analyze]");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[2];
+
+    // Read source file
+    let source = match std::fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", file_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Check for flags
+    let show_errors = args.iter().any(|a| a == "--errors");
+    let analyze = args.iter().any(|a| a == "--analyze");
+
+    // Run appropriate tokenization function
+    if analyze {
+        let analysis = ruchyruchy::debugger::tokenize_analyze(&source);
+        println!("Token Pattern Analysis");
+        println!("======================\n");
+
+        if analysis.warnings.is_empty() {
+            println!("✅ No pattern conflicts detected");
+        } else {
+            println!("⚠️  {} warning(s) detected:\n", analysis.warnings.len());
+            for (i, warning) in analysis.warnings.iter().enumerate() {
+                println!("{}. {}", i + 1, warning);
+            }
+        }
+    } else if show_errors {
+        let output = ruchyruchy::debugger::tokenize_with_errors(&source);
+        print!("{}", output);
+    } else {
+        let output = ruchyruchy::debugger::tokenize(&source);
+        print!("{}", output);
+    }
+}
+
+fn run_compare(args: &[String]) {
+    // Parse arguments: ruchydbg compare <file1> <file2> [--hints]
+
+    if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
+        print_compare_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    if args.len() < 4 {
+        eprintln!("Error: Missing file arguments");
+        eprintln!("Usage: ruchydbg compare <file1> <file2> [--hints]");
+        exit(EXIT_ERROR);
+    }
+
+    let file1_path = &args[2];
+    let file2_path = &args[3];
+
+    // Read source files
+    let source1 = match std::fs::read_to_string(file1_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", file1_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    let source2 = match std::fs::read_to_string(file2_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", file2_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Check for hints flag
+    let show_hints = args.iter().any(|a| a == "--hints");
+
+    // Run comparison
+    let output = if show_hints {
+        ruchyruchy::debugger::compare_tokens_with_hints(&source1, &source2)
+    } else {
+        ruchyruchy::debugger::compare_tokens(&source1, &source2)
+    };
+
+    print!("{}", output);
+}
+
+fn run_trace(args: &[String]) {
+    // Parse arguments: ruchydbg trace <file> [--analyze] [--errors-only]
+
+    if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
+        print_trace_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    if args.len() < 3 {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg trace <file> [--analyze] [--errors-only]");
+        exit(EXIT_ERROR);
+    }
+
+    let file_path = &args[2];
+
+    // Read source file
+    let source = match std::fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", file_path, e);
+            exit(EXIT_ERROR);
+        }
+    };
+
+    // Check for flags
+    let analyze = args.iter().any(|a| a == "--analyze");
+    let errors_only = args.iter().any(|a| a == "--errors-only");
+
+    // Run appropriate trace function
+    let output = if analyze {
+        ruchyruchy::debugger::parser_trace_with_analysis(&source)
+    } else if errors_only {
+        ruchyruchy::debugger::parser_trace_errors_only(&source)
+    } else {
+        ruchyruchy::debugger::parser_trace(&source)
+    };
+
+    print!("{}", output);
+}
+
+fn print_tokenize_help() {
+    println!("DEBUGGER-050: Token stream inspection");
+    println!();
+    println!("USAGE:");
+    println!("    ruchydbg tokenize <file> [OPTIONS]");
+    println!();
+    println!("OPTIONS:");
+    println!("    --errors     Highlight error recovery tokens");
+    println!("    --analyze    Detect pattern conflicts (String vs Lifetime priority)");
+    println!("    -h, --help   Show this help message");
+    println!();
+    println!("DESCRIPTION:");
+    println!("    Show the token stream for a Ruchy source file.");
+    println!("    Addresses PARSER-079 pain: 'Couldn't see raw token stream'");
+    println!();
+    println!("EXAMPLES:");
+    println!("    ruchydbg tokenize test.ruchy");
+    println!("    ruchydbg tokenize test.ruchy --errors");
+    println!("    ruchydbg tokenize test.ruchy --analyze");
+    println!();
+}
+
+fn print_compare_help() {
+    println!("DEBUGGER-050: Token comparison");
+    println!();
+    println!("USAGE:");
+    println!("    ruchydbg compare <file1> <file2> [OPTIONS]");
+    println!();
+    println!("OPTIONS:");
+    println!("    --hints      Show root cause hints for mismatches");
+    println!("    -h, --help   Show this help message");
+    println!();
+    println!("DESCRIPTION:");
+    println!("    Compare token streams between two Ruchy source files.");
+    println!("    Addresses PARSER-079 pain: 'Manual comparison took hours'");
+    println!();
+    println!("EXAMPLES:");
+    println!("    ruchydbg compare working.ruchy broken.ruchy");
+    println!("    ruchydbg compare v1.ruchy v2.ruchy --hints");
+    println!();
+}
+
+fn print_trace_help() {
+    println!("DEBUGGER-050: Parser trace");
+    println!();
+    println!("USAGE:");
+    println!("    ruchydbg trace <file> [OPTIONS]");
+    println!();
+    println!("OPTIONS:");
+    println!("    --analyze       Show root cause analysis");
+    println!("    --errors-only   Show only error context");
+    println!("    -h, --help      Show this help message");
+    println!();
+    println!("DESCRIPTION:");
+    println!("    Show parser state at failure points.");
+    println!("    Addresses PARSER-079 pain: 'Root cause hidden from parser error'");
+    println!();
+    println!("EXAMPLES:");
+    println!("    ruchydbg trace test.ruchy");
+    println!("    ruchydbg trace test.ruchy --analyze");
+    println!("    ruchydbg trace test.ruchy --errors-only");
+    println!();
+}
+
 fn run_validation() {
     // Find the validation script relative to the package
     let script_path = find_validation_script();
@@ -1496,6 +1705,9 @@ fn print_help() {
         "    run <file>           Execute Ruchy code with timeout detection and type-aware tracing"
     );
     println!("    debug <mode>         Interactive rust-gdb wrapper (run, analyze) ⭐ NEW!");
+    println!("    tokenize <file>      Show token stream with pattern conflict detection ⭐ NEW!");
+    println!("    compare <f1> <f2>    Compare token streams between two files ⭐ NEW!");
+    println!("    trace <file>         Show parser trace with root cause analysis ⭐ NEW!");
     println!("    profile <type>       Profile code execution (--stack for call depth analysis)");
     println!("    detect <file>        Detect pathological inputs causing performance cliffs");
     println!("    regression <type>    Check for regressions (snapshot, determinism, state, perf)");
@@ -1505,6 +1717,9 @@ fn print_help() {
     println!();
     println!("DEBUGGING FEATURES:");
     println!("    - Interactive REPL debugger with time-travel (DEBUGGER-046) ⭐ NEW!");
+    println!("    - Token stream inspection & pattern conflict detection (DEBUGGER-050) ⭐ NEW!");
+    println!("    - Token comparison with root cause hints (DEBUGGER-050) ⭐ NEW!");
+    println!("    - Parser trace with lexer issue detection (DEBUGGER-050) ⭐ NEW!");
     println!("    - Property-based testing: 14,000+ test cases (DEBUGGER-044)");
     println!("    - Stack depth profiling (DEBUGGER-041)");
     println!("    - Pathological input detection (DEBUGGER-042)");
@@ -1519,6 +1734,10 @@ fn print_help() {
     println!("    ruchydbg run test.ruchy --timeout 1000 --trace");
     println!("    ruchydbg debug run test.ruchy              # Interactive debugger ⭐");
     println!("    ruchydbg debug analyze test.ruchy          # Automated trace capture ⭐");
+    println!("    ruchydbg tokenize test.ruchy               # Show token stream ⭐");
+    println!("    ruchydbg tokenize test.ruchy --analyze     # Detect pattern conflicts ⭐");
+    println!("    ruchydbg compare working.ruchy broken.ruchy --hints  # Compare tokens ⭐");
+    println!("    ruchydbg trace test.ruchy --analyze        # Parser trace with root cause ⭐");
     println!("    ruchydbg profile --stack factorial.ruchy");
     println!("    ruchydbg detect test.ruchy --threshold 15");
     println!("    ruchydbg regression snapshot v1.ruchy v2.ruchy");
