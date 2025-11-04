@@ -258,12 +258,15 @@ fn test_function_percentage_calculation() {
 /// Test: Get all function profiles sorted by time
 ///
 /// Validates that we can get ranked list of hot functions
+///
+/// ROOT CAUSE FIX: Previous loop counts (10, 100) were too small, causing timing noise
+/// to dominate. Increased to (1000, 10000) to ensure unambiguous timing differences.
 #[test]
 fn test_get_all_function_profiles_sorted() {
     let source = r#"
         fun fast() { return 1; }
-        fun medium() { let i = 0; while (i < 10) { i = i + 1; } return i; }
-        fun slow() { let i = 0; while (i < 100) { i = i + 1; } return i; }
+        fun medium() { let i = 0; while (i < 1000) { i = i + 1; } return i; }
+        fun slow() { let i = 0; while (i < 10000) { i = i + 1; } return i; }
 
         let r1 = fast();
         let r2 = medium();
@@ -284,6 +287,41 @@ fn test_get_all_function_profiles_sorted() {
     let profiles = profiler.all_function_profiles_sorted();
 
     assert_eq!(profiles.len(), 3, "Should have 3 function profiles");
+
+    // Verify timing differences are significant (defense-in-depth)
+    // slow (10000 loops) should be ~10x slower than medium (1000 loops)
+    // medium should be >> fast (immediate return)
+    let slow_time = profiles
+        .iter()
+        .find(|(name, _)| name == "slow")
+        .unwrap()
+        .1
+        .total_time_us;
+    let medium_time = profiles
+        .iter()
+        .find(|(name, _)| name == "medium")
+        .unwrap()
+        .1
+        .total_time_us;
+    let fast_time = profiles
+        .iter()
+        .find(|(name, _)| name == "fast")
+        .unwrap()
+        .1
+        .total_time_us;
+
+    assert!(
+        slow_time > medium_time * 2.0,
+        "slow ({:?}) should be >2x slower than medium ({:?})",
+        slow_time,
+        medium_time
+    );
+    assert!(
+        medium_time > fast_time * 2.0,
+        "medium ({:?}) should be >2x slower than fast ({:?})",
+        medium_time,
+        fast_time
+    );
 
     // Should be sorted by time (descending)
     assert_eq!(profiles[0].0, "slow", "slow should be first (hottest)");
