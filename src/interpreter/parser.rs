@@ -1564,6 +1564,33 @@ impl Parser {
             String::new()
         }
     }
+
+    // DEBUGGER-050: Token debugging methods (GREEN Phase Priority 1)
+
+    /// Get the internal token list for debugging
+    ///
+    /// DEBUGGER-050: Exposes token stream for inspection
+    pub fn debug_get_tokens(&mut self) -> Result<Vec<String>, ParseError> {
+        if self.tokens.is_empty() {
+            self.tokenize()?;
+        }
+        Ok(self.tokens.iter().map(|t| format!("{:?}", t)).collect())
+    }
+
+    /// Check if a token at the given position looks like an error recovery token
+    ///
+    /// DEBUGGER-050: Error detection (no Bang token in this parser, return false)
+    pub fn debug_is_error_token(&self, _index: usize) -> bool {
+        // This interpreter parser doesn't have Bang/error recovery tokens
+        false
+    }
+
+    /// Get source code that's being parsed
+    ///
+    /// DEBUGGER-050: Access to source for comparison
+    pub fn debug_get_source(&self) -> &str {
+        &self.source
+    }
 }
 
 /// Abstract Syntax Tree

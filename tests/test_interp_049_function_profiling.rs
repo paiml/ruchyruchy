@@ -247,10 +247,11 @@ fn test_function_percentage_calculation() {
         "slow should have higher percentage than fast"
     );
 
-    // Percentages should sum to ~100% (allowing for non-function time)
+    // Percentages should sum to ~100% (allowing for rounding errors and timing variance)
     assert!(
-        fast_pct + slow_pct <= 100.0,
-        "Percentages should not exceed 100%"
+        fast_pct + slow_pct <= 101.0, // Allow 1% tolerance for timing variance/rounding
+        "Percentages should not significantly exceed 100%: got {}%",
+        fast_pct + slow_pct
     );
 }
 

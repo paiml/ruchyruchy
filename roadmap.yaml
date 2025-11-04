@@ -5919,3 +5919,325 @@ future_roadmap:
           - Document debugging workflow
           - File upstream bug report with debug findings
 
+  # SPRINT: Compiler Pipeline Debugger (Week TBD)
+  - id: sprint-debugger
+    name: "Compiler Pipeline Debugger Enhancement"
+    goal: "Build comprehensive debugging tools for RuchyRuchy's parser, JIT, and AST transformation pipeline"
+    duration: 6_to_10_weeks
+    github_issue: "https://github.com/paiml/ruchyruchy/issues/13"
+    motivation: |
+      PARSER-079 debugging consumed 110k tokens of manual investigation due to lack of tokenization
+      inspection tools. ruchydbg currently shells out to production ruchy (src/bin/ruchydbg.rs:178)
+      and provides ZERO debugging for RuchyRuchy's own parser, evaluator, or JIT compiler.
+
+      This sprint addresses the critical gap by building dedicated debugging tools for the
+      RuchyRuchy compilation pipeline itself, implementing Toyota Way principles (Genchi Genbutsu,
+      Jidoka, Kaizen, Heijunka) throughout.
+    toyota_way_principles:
+      genchi_genbutsu: "Every feature grounded in documented debugging pain (PARSER-079: 110k tokens)"
+      jidoka: "Differential test failures are line-stopping CRITICAL failures"
+      kaizen: "Formal retrospection after each sprint to refine tools"
+      heijunka: "Features prioritized to prevent overburden and waste"
+    specification: "docs/specifications/debugger-enhancements.md"
+    tickets:
+      - id: DEBUGGER-050
+        title: "Parser Debugger with Token Stream Inspection"
+        priority: critical
+        status: pending
+        blocked_by: []
+        spec_reference: "debugger-enhancements.md#DEBUGGER-050"
+        github_issue_motivation: "https://github.com/paiml/ruchyruchy/issues/13"
+        real_world_pain: |
+          PARSER-079: 110k tokens spent manually investigating tokenization failures.
+          Specific pain: Could not see that lexer was tokenizing 'static as String instead
+          of Lifetime due to pattern priority conflict. Needed to add dozens of debug prints
+          to trace token stream.
+        expected_impact: "10x reduction in parser debugging time (110k → 10-20k tokens)"
+        description: |
+          Build debugging tools for RuchyRuchy's parser implementation. Focus on token stream
+          inspection, AST visualization, and parser state tracing. Implements Heijunka by
+          prioritizing features based on demonstrated need.
+
+          Priority 1 (Must-Have - Sprint 1a): GitHub Issue #13 Commands
+          - ruchydbg tokenize <file> - Show detailed token stream with error detection
+          - ruchydbg compare-tokens <file1> <file2> - Diff tokens with diagnostic hints
+          - ruchydbg parser-trace <file> - Show parser state at failure point
+
+          Priority 2 (Should-Have - Sprint 1b): Programmatic Outputs
+          - JSON AST serialization for tool integration
+          - AST diff mode for comparing versions
+          - Source location tracking in all outputs
+
+          Priority 3 (Nice-to-Have - Future): Human Visualizations
+          - Graphviz DOT format generation
+          - Step-by-step parser visualization
+          - Typed AST display with inferred types
+        requirements:
+          - Token stream inspection with error highlighting (Bang = error recovery)
+          - Pattern conflict detection (String vs Lifetime priority)
+          - Side-by-side token comparison with root cause suggestions
+          - Parser execution trace with expected vs actual tokens
+          - JSON AST serialization
+          - Source location metadata in all outputs
+        features:
+          - "ruchydbg tokenize <file> - Token stream with diagnostics"
+          - "ruchydbg compare-tokens <file1> <file2> - Token diff with hints"
+          - "ruchydbg parser-trace <file> [--error-only] - Parser state inspection"
+          - "ruchydbg parse-debug <file> --format json - AST as JSON"
+          - "ruchydbg parse-debug <file> --format graphviz - AST as DOT"
+        tests:
+          - test_tokenize_shows_token_stream: Shows all tokens with source locations
+          - test_tokenize_highlights_errors: Highlights Bang (error recovery) tokens
+          - test_tokenize_shows_pattern_conflicts: Detects String vs Lifetime conflicts
+          - test_compare_tokens_shows_diff: Side-by-side token comparison
+          - test_compare_tokens_identifies_root_cause: Suggests pattern priority issues
+          - test_parser_trace_shows_state: Parser state at error with expected/actual
+          - test_parser_trace_shows_root_cause: Root cause analysis with lexer hints
+          - test_parser_trace_error_only_mode: Shows only failing portion
+          - test_ast_viz_generates_json: AST serialized to JSON
+          - test_ast_viz_generates_graphviz: AST in Graphviz DOT format
+          - test_ast_viz_shows_source_locations: Line/column info included
+          - test_ast_viz_handles_parse_errors: Partial AST on error
+          - test_ast_viz_diff_mode: Compare ASTs from two versions
+          - test_ast_viz_step_by_step: Show AST construction steps
+          - test_ast_viz_with_types: Show inferred types in AST
+        acceptance:
+          - All 15 tests passing (8 tokenization + 7 AST visualization)
+          - ruchydbg tokenize catches 80%+ of lexer bugs immediately
+          - compare-tokens identifies pattern priority conflicts automatically
+          - parser-trace shows root cause for parser failures
+          - JSON output parseable by external tools
+        deliverables:
+          - src/debugger/mod.rs: Module exports
+          - src/debugger/tokenizer.rs: Token stream inspection (~200 LOC)
+          - src/debugger/ast_visualizer.rs: AST visualization (~300 LOC)
+          - src/debugger/parser_tracer.rs: Parser state tracing (~200 LOC)
+          - src/bin/ruchydbg.rs: Add tokenize, compare-tokens, parser-trace, parse-debug commands
+          - tests/test_debugger_050_ast_viz.rs: 15 tests
+          - docs/kaizen/sprint-1-retrospective.md: Kaizen learnings
+        extreme_tdd_phases:
+          - RED: Write 15 failing tests (Priority 1 first: 8 tokenization tests)
+          - GREEN_1A: Implement Priority 1 (tokenize, compare-tokens, parser-trace)
+          - GREEN_1B: Implement Priority 2 (JSON, AST diff, source locations)
+          - REFACTOR: Add caching, optimize for large ASTs
+          - TOOL: Quality gates, performance validation
+          - KAIZEN: Sprint retrospection, document learnings
+        kaizen_questions:
+          - "Did these parser tools help us debug DEBUGGER-051 implementation?"
+          - "What new parser debugging pain did we discover while building this?"
+          - "Can we refine tokenize/compare-tokens output based on what we learned?"
+          - "Document findings in docs/kaizen/sprint-1-retrospective.md"
+
+      - id: DEBUGGER-051
+        title: "Parser Error Recovery Testing"
+        priority: high
+        status: pending
+        blocked_by: [DEBUGGER-050]
+        spec_reference: "debugger-enhancements.md#DEBUGGER-051"
+        description: |
+          Build tools to test RuchyRuchy parser's resilience to malformed input. Validate error
+          recovery strategies (skip to next statement, insert missing tokens, suggest corrections).
+        requirements:
+          - Test parser recovery from missing parens, semicolons
+          - Suggest corrections for typos ("retrun" -> "Did you mean 'return'?")
+          - Report multiple errors, not just first
+          - Provide helpful error messages with context
+        features:
+          - Parse with recovery: Continue after errors, collect all issues
+          - Error quality validation: Line/column, message, help text
+          - Suggestion engine: Typo correction, common mistake detection
+        tests:
+          - test_parser_recovers_from_missing_paren: Continues parsing after error
+          - test_parser_recovers_from_missing_semicolon: Implicit semicolon insertion
+          - test_parser_suggests_fix: "Did you mean 'return'?" for "retrun"
+          - test_parser_multiple_errors: Reports all errors, not just first
+          - test_parser_error_quality: Line/column/message/help_text present
+        acceptance:
+          - All 5 tests passing
+          - Parser recovers from common syntax errors
+          - Error messages are helpful and actionable
+          - Multiple errors reported in single pass
+        deliverables:
+          - src/debugger/error_recovery.rs: Error recovery strategies (~200 LOC)
+          - tests/test_debugger_051_error_recovery.rs: 5 tests
+          - docs/kaizen/sprint-2-retrospective.md: Kaizen learnings
+        extreme_tdd_phases:
+          - RED: Write 5 failing tests
+          - GREEN: Implement basic error recovery (skip to next statement)
+          - REFACTOR: Improve error messages and suggestions
+          - TOOL: Quality gates
+          - KAIZEN: Sprint retrospection
+        kaizen_questions:
+          - "Did parser-trace from Sprint 1 help debug error recovery implementation?"
+          - "Should error recovery tool output match parser-trace format?"
+          - "What patterns emerged in parser errors that we can generalize?"
+
+      - id: DEBUGGER-052
+        title: "JIT Compiler Debugger with Cranelift IR Inspection"
+        priority: high
+        status: pending
+        blocked_by: []
+        spec_reference: "debugger-enhancements.md#DEBUGGER-052"
+        genchi_genbutsu_pain_points: |
+          JIT-024 (FString compilation): Significant time debugging why f-string interpolations
+          compiled but produced incorrect results. Root cause unclear without IR inspection -
+          couldn't see that interpolated expressions were evaluated but results discarded.
+
+          JIT-011 (Array indexing): Array bounds checks were missing in generated code, causing
+          silent memory corruption. Without disassembly, couldn't verify bounds checks were emitted.
+
+          JIT-020 (Method calls): Method dispatch failing intermittently. Needed to inspect
+          generated calling convention but had no tools to view actual machine code.
+
+          Measured Impact: Average 2-3 days per JIT bug due to lack of IR/disassembly tools.
+        description: |
+          Build debugging tools for RuchyRuchy's JIT compilation pipeline. Inspect Cranelift IR,
+          view generated machine code, profile compilation stages. Makes JIT compilation observable.
+        requirements:
+          - Extract and format Cranelift IR for functions
+          - Disassemble JIT-compiled native code (x86-64 assembly)
+          - Show compilation stages (AST → IR → Native)
+          - Profile compilation time and memory usage
+          - Handle compilation errors with detailed messages
+        features:
+          - "ruchydbg jit-debug <file> --function <name> --show-ir - Cranelift IR"
+          - "ruchydbg jit-debug <file> --function <name> --disassemble - Native assembly"
+          - "ruchydbg jit-debug <file> --function <name> --stages - Full pipeline"
+          - "ruchydbg jit-debug <file> --function <name> --profile - Compilation metrics"
+        tests:
+          - test_jit_shows_cranelift_ir: IR formatted and displayed
+          - test_jit_shows_compilation_stages: AST, IR, and native code
+          - test_jit_disassembly: x86-64 assembly output
+          - test_jit_optimization_levels: Compare IR at different opt levels
+          - test_jit_compilation_errors: Detailed error messages
+          - test_jit_performance_profile: Compilation time metrics
+          - test_jit_memory_usage: Track memory during compilation
+        acceptance:
+          - All 7 tests passing
+          - Cranelift IR viewable for any function
+          - Disassembly shows actual machine code
+          - Compilation errors provide actionable feedback
+        deliverables:
+          - src/debugger/jit_inspector.rs: JIT debugging (~400 LOC)
+          - tests/test_debugger_052_jit_debug.rs: 7 tests
+          - docs/kaizen/sprint-3-retrospective.md: Kaizen learnings
+        extreme_tdd_phases:
+          - RED: Write 7 failing tests
+          - GREEN: Implement IR extraction and disassembly
+          - REFACTOR: Add profiling and optimization level comparison
+          - TOOL: Quality gates
+          - KAIZEN: Sprint retrospection
+        kaizen_questions:
+          - "Did AST visualization help understand JIT compilation stages?"
+          - "Should IR output include AST context for easier debugging?"
+          - "What JIT bugs did we encounter while building the JIT debugger?"
+
+      - id: DEBUGGER-053
+        title: "Differential Testing Framework (Interpreter vs JIT)"
+        priority: critical
+        status: pending
+        blocked_by: [DEBUGGER-052]
+        spec_reference: "debugger-enhancements.md#DEBUGGER-053"
+        jidoka_stop_the_line: |
+          CRITICAL POLICY: Differential test failures represent fundamental breaks in compiler
+          correctness and MUST be treated as line-stopping failures.
+
+          Stop-the-Line Policy:
+          1. Blocking Failures: Any mismatch between interpreter and JIT = CRITICAL failure blocks ALL merges
+          2. Zero Tolerance: Known discrepancies must NEVER be knowingly passed forward
+          3. Immediate Resolution: Differential failures trigger immediate investigation, not backlog tickets
+          4. CI/CD Integration: Pre-commit hooks and CI must fail HARD on any differential mismatch
+
+          Rationale (Hoare Logic - "An Axiomatic Basis for Computer Programming", 1969):
+          The interpreter serves as formal "specification" of correct behavior. The JIT is an
+          "implementation" that must provably produce equivalent results. Any deviation is not
+          a minor bug—it's a proof failure that invalidates correctness guarantees.
+        description: |
+          Automatically compare interpreter vs JIT execution to catch discrepancies. Implements
+          Jidoka by blocking merges on any mismatch (correctness violations are line-stopping).
+        requirements:
+          - Run same code through interpreter and JIT
+          - Compare return values for exact match
+          - Support parameterized functions with arguments
+          - Fuzz testing with random inputs (1000+ iterations)
+          - Performance comparison (timing both paths)
+          - Coverage-guided test generation for all AST nodes
+        features:
+          - "ruchydbg diff-test <file> --function <name> - Basic differential test"
+          - "ruchydbg diff-test <file> --function <name> --args <args> - With parameters"
+          - "ruchydbg diff-test <file> --fuzz --iterations <N> - Fuzz testing"
+          - "ruchydbg diff-test <file> --coverage-report - Coverage analysis"
+        tests:
+          - test_differential_simple_arithmetic: 10 + 5 matches interpreter and JIT
+          - test_differential_catches_jit_bug: Detects when results differ
+          - test_differential_with_params: Tests functions with arguments
+          - test_differential_fuzzing: 100 random inputs, all match
+          - test_differential_performance_comparison: Timing both paths
+          - test_differential_coverage: All AST nodes tested
+        acceptance:
+          - All 6 tests passing
+          - Zero interpreter/JIT mismatches in test suite
+          - Fuzzing finds no discrepancies (10,000+ inputs)
+          - Pre-commit hook blocks on any mismatch
+        deliverables:
+          - src/debugger/differential.rs: Differential testing (~300 LOC)
+          - tests/test_debugger_053_differential.rs: 6 tests
+          - .git/hooks/pre-commit: Add differential check (BLOCKING)
+          - docs/kaizen/sprint-4-retrospective.md: Kaizen learnings
+        extreme_tdd_phases:
+          - RED: Write 6 failing tests
+          - GREEN: Implement interpreter vs JIT comparison
+          - REFACTOR: Add fuzzing and coverage-guided testing
+          - TOOL: Quality gates, integrate into pre-commit hook as BLOCKING check
+          - KAIZEN: Sprint retrospection
+        kaizen_questions:
+          - "Did jit-debug tools from Sprint 3 help debug differential failures?"
+          - "Can we auto-generate minimal repro cases using AST simplification?"
+          - "What percentage of JIT bugs would differential testing have caught earlier?"
+
+      - id: DEBUGGER-054
+        title: "Automated Quality Gates for Debugger Tools"
+        priority: high
+        status: pending
+        blocked_by: [DEBUGGER-050, DEBUGGER-051, DEBUGGER-052, DEBUGGER-053]
+        spec_reference: "debugger-enhancements.md#DEBUGGER-054"
+        description: |
+          Run all debugger validations automatically in CI/CD pipeline. Ensure all parser tests
+          produce valid AST visualizations, all JIT tests have IR dumps, differential coverage
+          is complete, and no known mismatches exist.
+        requirements:
+          - Script to run all debugger-related tests
+          - Integrate with pre-commit hooks
+          - Generate coverage reports
+          - CI/CD pipeline integration
+          - HTML report generation
+        features:
+          - "scripts/run-debugger-quality-gates.sh - Run all debugger tests"
+          - "CI/CD integration: Automated test runs"
+          - "HTML reports: Published on test completion"
+        tests:
+          - test_all_parser_tests_visualized: All parser tests produce valid AST viz
+          - test_all_jit_tests_inspected: All JIT tests produce valid IR dumps
+          - test_differential_coverage_complete: 100% AST node coverage
+          - test_no_interpreter_jit_mismatches: Zero known discrepancies
+        acceptance:
+          - All 4 tests passing
+          - Quality gate script runs in < 5 minutes
+          - CI/CD blocks on any failure
+          - HTML reports published automatically
+        deliverables:
+          - scripts/run-debugger-quality-gates.sh: Quality gate runner (~100 LOC bash)
+          - tests/test_debugger_054_quality_gates.rs: 4 tests
+          - .github/workflows/debugger-quality.yml: CI integration
+          - docs/kaizen/final-retrospective.md: Complete findings
+        extreme_tdd_phases:
+          - RED: Write 4 failing tests for automation
+          - GREEN: Implement quality gate scripts
+          - REFACTOR: Add CI/CD integration and HTML reports
+          - TOOL: Quality gates
+          - KAIZEN: Final retrospection across all sprints
+        kaizen_questions:
+          - "Which debugger tools were used most frequently during development?"
+          - "What debugging workflows emerged that we didn't anticipate?"
+          - "What's the measured reduction in debugging time vs baseline?"
+          - "Document complete findings in docs/kaizen/final-retrospective.md"
