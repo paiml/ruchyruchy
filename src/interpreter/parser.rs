@@ -78,6 +78,7 @@ enum Token {
     Integer(i64),
     Float(f64),
     StringLit(String),
+    CharLit(char),   // Character literal: 'a'
     FString(String), // F-string with interpolation: f"text {expr}"
     True,
     False,
@@ -242,6 +243,19 @@ impl Parser {
                         string.push(ch);
                     }
                     tokens.push(Token::StringLit(string));
+                }
+
+                // Character literals: 'a', '!', etc.
+                '\'' => {
+                    chars.next(); // Opening '
+                    if let Some(&ch) = chars.peek() {
+                        let character = ch;
+                        chars.next(); // consume character
+                        if chars.peek() == Some(&'\'') {
+                            chars.next(); // consume closing '
+                            tokens.push(Token::CharLit(character));
+                        }
+                    }
                 }
 
                 // Numbers (integers and floats)
@@ -903,7 +917,18 @@ impl Parser {
     fn parse_for(&mut self) -> Result<AstNode, ParseError> {
         self.consume(&Token::For)?;
 
-        let var = self.expect_identifier();
+        // Check for tuple destructuring: for (a, b) in ...
+        let var = if self.check(&Token::LeftParen) {
+            self.advance(); // consume (
+            let first = self.expect_identifier();
+            self.consume(&Token::Comma)?;
+            let second = self.expect_identifier();
+            self.consume(&Token::RightParen)?;
+            // Create compound identifier for tuple destructuring
+            format!("({}, {})", first, second)
+        } else {
+            self.expect_identifier()
+        };
 
         self.consume(&Token::In)?;
 
@@ -1165,6 +1190,11 @@ impl Parser {
                 let s = s.clone();
                 self.advance();
                 Ok(AstNode::StringLiteral(s))
+            }
+            Some(Token::CharLit(c)) => {
+                let c = *c;
+                self.advance();
+                Ok(AstNode::CharLiteral(c))
             }
             Some(Token::FString(content)) => {
                 let content = content.clone();
@@ -1924,6 +1954,9 @@ pub enum AstNode {
 
     /// String literal
     StringLiteral(String),
+
+    /// Character literal: 'a', '!', etc.
+    CharLiteral(char),
 
     /// F-string with interpolation: f"text {expr} more"
     FString {

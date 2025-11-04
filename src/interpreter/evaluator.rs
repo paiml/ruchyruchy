@@ -513,6 +513,7 @@ impl Evaluator {
             AstNode::IntegerLiteral(n) => Ok(ControlFlow::Value(Value::integer(*n))),
             AstNode::FloatLiteral(f) => Ok(ControlFlow::Value(Value::float(*f))),
             AstNode::StringLiteral(s) => Ok(ControlFlow::Value(Value::string(s.clone()))),
+            AstNode::CharLiteral(c) => Ok(ControlFlow::Value(Value::string(c.to_string()))),
             AstNode::BooleanLiteral(b) => Ok(ControlFlow::Value(Value::boolean(*b))),
 
             // F-string with interpolation: f"text {expr} more"
@@ -660,17 +661,85 @@ impl Evaluator {
                         }
                         let arg_val = self.eval(&args[0])?;
 
-                        // Mutate array
-                        if let Value::Vector(ref mut arr) = current_val {
-                            arr.push(arg_val);
+                        // Mutate array or string
+                        match current_val {
+                            Value::Vector(ref mut arr) => {
+                                arr.push(arg_val);
 
-                            // DEBUGGER-047: Track memory allocation for push
-                            if let Some(ref profiler) = self.performance_profiler {
-                                let bytes = std::mem::size_of::<Value>();
-                                profiler.record_memory_allocation(bytes);
+                                // DEBUGGER-047: Track memory allocation for push
+                                if let Some(ref profiler) = self.performance_profiler {
+                                    let bytes = std::mem::size_of::<Value>();
+                                    profiler.record_memory_allocation(bytes);
+                                }
+
+                                // Update scope with mutated array
+                                self.scope.assign(var_name, current_val).map_err(|_| {
+                                    EvalError::UndefinedVariable {
+                                        name: var_name.clone(),
+                                    }
+                                })?;
+                                return Ok(ControlFlow::Value(Value::nil()));
                             }
+                            Value::String(ref mut s) => {
+                                // String::push(char) - append character to string
+                                let char_str = arg_val.as_string().map_err(|_| {
+                                    EvalError::UnsupportedOperation {
+                                        operation: "push() on String requires char argument"
+                                            .to_string(),
+                                    }
+                                })?;
+                                s.push_str(char_str);
 
-                            // Update scope with mutated array
+                                // Update scope with mutated string
+                                self.scope.assign(var_name, current_val).map_err(|_| {
+                                    EvalError::UndefinedVariable {
+                                        name: var_name.clone(),
+                                    }
+                                })?;
+                                return Ok(ControlFlow::Value(Value::nil()));
+                            }
+                            _ => {
+                                return Err(EvalError::UnsupportedOperation {
+                                    operation: format!(
+                                        "push() requires array or String, got {}",
+                                        current_val.type_name()
+                                    ),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Special handling for push_str() - appends string to string
+                if method == "push_str" {
+                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
+                        // Get current string
+                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
+                            EvalError::UndefinedVariable {
+                                name: var_name.clone(),
+                            }
+                        })?;
+
+                        // Evaluate argument
+                        if args.len() != 1 {
+                            return Err(EvalError::ArgumentCountMismatch {
+                                function: "push_str".to_string(),
+                                expected: 1,
+                                actual: args.len(),
+                            });
+                        }
+                        let arg_val = self.eval(&args[0])?;
+
+                        // Mutate string
+                        if let Value::String(ref mut s) = current_val {
+                            let str_arg = arg_val.as_string().map_err(|_| {
+                                EvalError::UnsupportedOperation {
+                                    operation: "push_str() requires String argument".to_string(),
+                                }
+                            })?;
+                            s.push_str(str_arg);
+
+                            // Update scope with mutated string
                             self.scope.assign(var_name, current_val).map_err(|_| {
                                 EvalError::UndefinedVariable {
                                     name: var_name.clone(),
@@ -680,7 +749,7 @@ impl Evaluator {
                         } else {
                             return Err(EvalError::UnsupportedOperation {
                                 operation: format!(
-                                    "push() requires array, got {}",
+                                    "push_str() requires String, got {}",
                                     current_val.type_name()
                                 ),
                             });
@@ -754,7 +823,7 @@ impl Evaluator {
 
                         // Mutate string
                         if let Value::String(ref mut s) = current_val {
-                            s.push_str(&to_append);
+                            s.push_str(to_append);
 
                             // Update scope with mutated string
                             self.scope.assign(var_name, current_val).map_err(|_| {
@@ -2352,8 +2421,23 @@ impl Evaluator {
         // Evaluate iterable expression
         let iterable_val = self.eval(iterable)?;
 
-        // Get vector elements
-        let elements = iterable_val.as_vector()?.clone();
+        // Get elements - support both Vector and HashMap iteration
+        let elements = match &iterable_val {
+            Value::Vector(_) => iterable_val.as_vector()?.clone(),
+            Value::HashMap(map) => {
+                // Convert HashMap to vector of (key, value) tuples
+                map.iter()
+                    .map(|(k, v)| Value::Vector(vec![Value::string(k.clone()), v.clone()]))
+                    .collect()
+            }
+            _ => {
+                return Err(EvalError::ValueError(ValueError::TypeMismatch {
+                    expected: "Vector or HashMap".to_string(),
+                    found: iterable_val.type_name().to_string(),
+                    operation: "for-in iteration".to_string(),
+                }))
+            }
+        };
 
         // Iterate over elements
         for element in elements.iter() {
@@ -2362,11 +2446,37 @@ impl Evaluator {
             let old_scope = std::mem::replace(&mut self.scope, child_scope);
 
             // Define loop variable in child scope
-            self.scope
-                .define(var.to_string(), element.clone())
-                .map_err(|e| EvalError::UnsupportedOperation {
-                    operation: format!("define loop variable: {}", e),
-                })?;
+            // Check for tuple destructuring: (key, value)
+            if var.starts_with('(') && var.contains(',') {
+                // Parse tuple pattern: "(key, value)"
+                let inner = var.trim_start_matches('(').trim_end_matches(')');
+                let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+
+                if parts.len() == 2 {
+                    // Element should be a tuple (Vector with 2 elements)
+                    if let Value::Vector(tuple_elements) = element {
+                        if tuple_elements.len() >= 2 {
+                            self.scope
+                                .define(parts[0].to_string(), tuple_elements[0].clone())
+                                .map_err(|e| EvalError::UnsupportedOperation {
+                                    operation: format!("define loop variable {}: {}", parts[0], e),
+                                })?;
+                            self.scope
+                                .define(parts[1].to_string(), tuple_elements[1].clone())
+                                .map_err(|e| EvalError::UnsupportedOperation {
+                                    operation: format!("define loop variable {}: {}", parts[1], e),
+                                })?;
+                        }
+                    }
+                }
+            } else {
+                // Simple identifier
+                self.scope
+                    .define(var.to_string(), element.clone())
+                    .map_err(|e| EvalError::UnsupportedOperation {
+                        operation: format!("define loop variable: {}", e),
+                    })?;
+            }
 
             // Execute body and check for early return
             let return_value = self.eval_loop_body_impl(body)?;
