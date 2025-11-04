@@ -18,8 +18,10 @@
 // Why 4: Why wasn't it caught earlier?
 // Why 5: What systemic issue enabled this?
 
+use serde::{Deserialize, Serialize};
+
 /// Bug category for classification
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BugCategory {
     /// Interpreter/runtime execution bugs
     InterpreterRuntime,
@@ -30,7 +32,7 @@ pub enum BugCategory {
 }
 
 /// Bug report with context for Five Whys analysis
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BugReport {
     /// Bug category
     pub category: BugCategory,
@@ -45,7 +47,7 @@ pub struct BugReport {
 }
 
 /// Root cause category identified by Five Whys
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RootCause {
     /// Missing input validation
     MissingValidation,
@@ -62,7 +64,7 @@ pub enum RootCause {
 }
 
 /// One iteration of "why" question and answer
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhyIteration {
     /// The "why" question asked
     pub question: String,
@@ -71,7 +73,7 @@ pub struct WhyIteration {
 }
 
 /// Complete Five Whys analysis result
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FiveWhysAnalysis {
     /// The 5 "why" iterations
     pub whys: Vec<WhyIteration>,
