@@ -18,7 +18,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module};
 use std::collections::HashMap;
 
-use crate::interpreter::parser::{AstNode, BinaryOperator, Pattern, UnaryOperator};
+use crate::interpreter::parser::{AstNode, BinaryOperator, Parser, Pattern, UnaryOperator};
 
 /// JIT compilation error
 #[derive(Debug)]
@@ -506,6 +506,77 @@ impl JitCompiler {
                 let ptr = string_ctx.intern_string(s);
 
                 // Return pointer as i64
+                let val = builder.ins().iconst(types::I64, ptr);
+                Ok(val)
+            }
+
+            // F-string with interpolation: f"text {expr} more"
+            // MVP: Parse expressions, evaluate them, but for now just intern placeholder
+            AstNode::FString { content } => {
+                // Parse the content to extract {expr} parts
+                let mut result = String::new();
+                let mut chars = content.chars().peekable();
+
+                while let Some(ch) = chars.next() {
+                    if ch == '{' {
+                        // Extract expression until '}'
+                        let mut expr_str = String::new();
+                        let mut depth = 1;
+                        for ch in chars.by_ref() {
+                            if ch == '{' {
+                                depth += 1;
+                                expr_str.push(ch);
+                            } else if ch == '}' {
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                                expr_str.push(ch);
+                            } else {
+                                expr_str.push(ch);
+                            }
+                        }
+
+                        // Parse and compile the expression
+                        // For MVP, we just ensure it compiles (no actual string formatting)
+                        let mut parser = Parser::new(&expr_str);
+                        let expr_ast_vec = parser.parse().map_err(|e| {
+                            JitError::UnsupportedNode(format!(
+                                "Failed to parse f-string expression '{}': {:?}",
+                                expr_str, e
+                            ))
+                        })?;
+
+                        // Get the first (and should be only) AST node
+                        let expr_ast = expr_ast_vec.nodes().first().ok_or_else(|| {
+                            JitError::UnsupportedNode(format!(
+                                "Empty AST from f-string expression '{}'",
+                                expr_str
+                            ))
+                        })?;
+
+                        // Compile the expression (validates it compiles correctly)
+                        let _expr_value = Self::compile_expr_with_context(
+                            expr_ast,
+                            builder,
+                            parameters,
+                            local_vars,
+                            var_counter,
+                            compiled_functions,
+                            string_ctx,
+                            struct_defs,
+                        )?;
+
+                        // For MVP: append placeholder
+                        result.push_str("<value>");
+                    } else {
+                        // Literal character
+                        result.push(ch);
+                    }
+                }
+
+                // Intern the result string (placeholder for MVP)
+                let ptr = string_ctx.intern_string(&result);
                 let val = builder.ins().iconst(types::I64, ptr);
                 Ok(val)
             }
