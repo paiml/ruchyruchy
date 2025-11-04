@@ -25,6 +25,9 @@ pub mod differential;
 /// DEBUGGER-054: Automated quality gates for debugger tools (RED Phase)
 pub mod quality_gates;
 
+/// DEBUGGER-051: Parser error recovery testing (RED Phase)
+pub mod error_recovery;
+
 // Re-export main types for convenience
 pub use performance_profiler::{PerformanceProfiler, ProfileReport};
 pub use repl_debugger::{DebugCommand, DebugSession, StepResult};
