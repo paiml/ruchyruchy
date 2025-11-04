@@ -5,12 +5,11 @@
 //! easily accessible via the `ruchydbg` command.
 
 use std::env;
+use std::fs;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::{exit, Command};
 use std::time::Instant;
-
-#[cfg(feature = "ebpf")]
-use std::fs;
 
 #[cfg(feature = "ebpf")]
 use ruchyruchy::tracing::ebpf::SyscallTracer;
@@ -44,6 +43,7 @@ fn main() {
         "tokenize" => run_tokenize(&args),
         "compare" => run_compare(&args),
         "trace" => run_trace(&args),
+        "five-whys" => run_five_whys(&args),
         "validate" | "test" => run_validation(),
         "version" | "--version" | "-v" => {
             println!("ruchydbg {VERSION}");
@@ -1694,6 +1694,269 @@ fn find_validation_script() -> PathBuf {
     exit(1);
 }
 
+fn run_five_whys(args: &[String]) {
+    use ruchyruchy::debugger::five_whys::{self, BugReport, KnowledgeBase};
+
+    // Check for help first
+    if args.len() >= 3 && (args[2] == "--help" || args[2] == "-h") {
+        print_five_whys_help();
+        exit(EXIT_SUCCESS);
+    }
+
+    // Parse arguments
+    let mut files: Vec<String> = Vec::new();
+    let mut format = "text"; // text or json
+    let mut output_file: Option<String> = None;
+    let mut interactive = false;
+    let mut use_knowledge_base = false;
+
+    let mut i = 2;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--format" => {
+                if i + 1 < args.len() {
+                    format = &args[i + 1];
+                    i += 2;
+                } else {
+                    eprintln!("Error: --format requires a value (text or json)");
+                    exit(EXIT_ERROR);
+                }
+            }
+            "--output" | "-o" => {
+                if i + 1 < args.len() {
+                    output_file = Some(args[i + 1].clone());
+                    i += 2;
+                } else {
+                    eprintln!("Error: --output requires a file path");
+                    exit(EXIT_ERROR);
+                }
+            }
+            "--interactive" | "-i" => {
+                interactive = true;
+                i += 1;
+            }
+            "--knowledge-base" | "-k" => {
+                use_knowledge_base = true;
+                i += 1;
+            }
+            arg if !arg.starts_with("--") => {
+                files.push(arg.to_string());
+                i += 1;
+            }
+            unknown => {
+                eprintln!("Error: Unknown option: {}", unknown);
+                print_five_whys_help();
+                exit(EXIT_ERROR);
+            }
+        }
+    }
+
+    // Validate files
+    if files.is_empty() {
+        eprintln!("Error: Missing file argument");
+        eprintln!("Usage: ruchydbg five-whys <bug-report.json> [options]");
+        eprintln!("Try 'ruchydbg five-whys --help' for more information");
+        exit(EXIT_ERROR);
+    }
+
+    // Process bugs
+    let mut analyses = Vec::new();
+    let mut knowledge_base = if use_knowledge_base {
+        Some(KnowledgeBase::new())
+    } else {
+        None
+    };
+
+    for file_path in &files {
+        // Read file
+        let content = match fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Error: Failed to read file '{}': {}", file_path, e);
+                exit(EXIT_ERROR);
+            }
+        };
+
+        // Parse JSON
+        let bug_report: BugReport = match serde_json::from_str(&content) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("Error: Failed to parse JSON from '{}': {}", file_path, e);
+                exit(EXIT_ERROR);
+            }
+        };
+
+        // Perform analysis
+        let analysis = if interactive && files.len() == 1 {
+            // Interactive mode
+            run_interactive_analysis(bug_report)
+        } else {
+            // Non-interactive analysis
+            match five_whys::analyze_bug(&bug_report) {
+                Ok(a) => a,
+                Err(e) => {
+                    eprintln!("Error: Analysis failed: {}", e);
+                    exit(EXIT_ERROR);
+                }
+            }
+        };
+
+        analyses.push(analysis.clone());
+
+        // Add to knowledge base
+        if let Some(ref mut kb) = knowledge_base {
+            kb.add_analysis(&analysis);
+        }
+    }
+
+    // Generate output
+    let output = if format == "json" {
+        // JSON output
+        if analyses.len() == 1 {
+            serde_json::to_string_pretty(&analyses[0]).unwrap()
+        } else {
+            serde_json::to_string_pretty(&analyses).unwrap()
+        }
+    } else {
+        // Human-readable text output
+        let mut result = String::new();
+        for (idx, analysis) in analyses.iter().enumerate() {
+            if analyses.len() > 1 {
+                result.push_str(&format!("\n=== Analysis {} ===\n\n", idx + 1));
+            }
+            result.push_str("Five Whys Analysis:\n");
+            for (i, why) in analysis.whys.iter().enumerate() {
+                result.push_str(&format!("  Why {}: {}\n", i + 1, why.question));
+                result.push_str(&format!("  Answer: {}\n\n", why.answer));
+            }
+            result.push_str(&format!("Root Cause: {:?}\n", analysis.root_cause));
+            result.push_str(&format!("Recommended Fix: {}\n", analysis.recommended_fix));
+        }
+
+        // Add knowledge base patterns if requested
+        if let Some(ref kb) = knowledge_base {
+            let patterns = kb.detect_patterns();
+            if !patterns.is_empty() {
+                result.push_str("\n=== Detected Patterns ===\n\n");
+                for pattern in &patterns {
+                    result.push_str(&format!("Pattern: {}\n", pattern.symptom_pattern));
+                    result.push_str(&format!("  Occurrences: {}\n", pattern.occurrence_count));
+                    result.push_str(&format!(
+                        "  Prevention: {}\n\n",
+                        pattern.prevention_strategy
+                    ));
+                }
+            }
+        }
+
+        result
+    };
+
+    // Write output
+    if let Some(ref path) = output_file {
+        match fs::write(path, &output) {
+            Ok(_) => {
+                println!("Analysis written to {}", path);
+                exit(EXIT_SUCCESS);
+            }
+            Err(e) => {
+                eprintln!("Error: Failed to write to '{}': {}", path, e);
+                exit(EXIT_ERROR);
+            }
+        }
+    } else {
+        print!("{}", output);
+        exit(EXIT_SUCCESS);
+    }
+}
+
+fn run_interactive_analysis(
+    bug_report: ruchyruchy::debugger::five_whys::BugReport,
+) -> ruchyruchy::debugger::five_whys::FiveWhysAnalysis {
+    use ruchyruchy::debugger::five_whys::InteractiveSession;
+
+    let mut session = InteractiveSession::new(bug_report);
+
+    println!("=== Interactive Five Whys Analysis ===\n");
+
+    for i in 0..5 {
+        if let Some(question) = session.next_question() {
+            println!("Why {}: {}", i + 1, question);
+            print!("Your answer: ");
+            io::stdout().flush().unwrap();
+
+            let mut user_input = String::new();
+            io::stdin()
+                .read_line(&mut user_input)
+                .expect("Failed to read input");
+
+            session.add_user_context(user_input.trim().to_string());
+            println!();
+        }
+    }
+
+    match session.finalize() {
+        Ok(analysis) => analysis,
+        Err(e) => {
+            eprintln!("Error: Interactive session failed: {}", e);
+            exit(EXIT_ERROR);
+        }
+    }
+}
+
+fn print_five_whys_help() {
+    println!("Five Whys Interactive Debugging (Toyota Way)");
+    println!();
+    println!("USAGE:");
+    println!("    ruchydbg five-whys <bug-report.json> [options]");
+    println!("    ruchydbg five-whys <bug1.json> <bug2.json> ... --knowledge-base");
+    println!();
+    println!("DESCRIPTION:");
+    println!("    Perform root cause analysis using Toyota Way Five Whys methodology.");
+    println!("    Trace from symptom to root cause by asking 'why' 5 times.");
+    println!();
+    println!("OPTIONS:");
+    println!("    --format <type>        Output format: 'text' or 'json' (default: text)");
+    println!("    --output, -o <file>    Write analysis to file instead of stdout");
+    println!("    --interactive, -i      Interactive mode with user feedback");
+    println!("    --knowledge-base, -k   Detect patterns across multiple bug reports");
+    println!("    --help, -h             Show this help message");
+    println!();
+    println!("BUG REPORT FORMAT (JSON):");
+    println!(
+        r#"    {{
+      "category": "InterpreterRuntime" | "Compiler" | "Transpiler",
+      "symptom": "Brief description of the bug",
+      "source_code": "Code that triggers the bug",
+      "error_message": "Optional: Error message",
+      "stack_trace": ["Optional: Stack trace lines"]
+    }}"#
+    );
+    println!();
+    println!("EXAMPLES:");
+    println!("    # Basic analysis");
+    println!("    ruchydbg five-whys bug-report.json");
+    println!();
+    println!("    # JSON output");
+    println!("    ruchydbg five-whys bug-report.json --format json");
+    println!();
+    println!("    # Save to file");
+    println!("    ruchydbg five-whys bug-report.json --output analysis.txt");
+    println!();
+    println!("    # Interactive mode");
+    println!("    ruchydbg five-whys bug-report.json --interactive");
+    println!();
+    println!("    # Pattern detection across multiple bugs");
+    println!("    ruchydbg five-whys bug1.json bug2.json bug3.json --knowledge-base");
+    println!();
+    println!("TOYOTA WAY PRINCIPLES:");
+    println!("    - Genchi Genbutsu: Go and see actual bug in context");
+    println!("    - Five Whys: Ask why 5 times to find root cause");
+    println!("    - Jidoka: Stop and fix problems immediately");
+    println!("    - Kaizen: Continuous improvement through learning");
+    println!("    - Hansei: Reflect on failures to prevent recurrence");
+}
+
 fn print_help() {
     println!("RuchyRuchy Debugging Tools CLI v{VERSION}");
     println!();
@@ -1705,6 +1968,7 @@ fn print_help() {
         "    run <file>           Execute Ruchy code with timeout detection and type-aware tracing"
     );
     println!("    debug <mode>         Interactive rust-gdb wrapper (run, analyze) ⭐ NEW!");
+    println!("    five-whys <file>     Five Whys root cause analysis (Toyota Way) ⭐ NEW!");
     println!("    tokenize <file>      Show token stream with pattern conflict detection ⭐ NEW!");
     println!("    compare <f1> <f2>    Compare token streams between two files ⭐ NEW!");
     println!("    trace <file>         Show parser trace with root cause analysis ⭐ NEW!");
@@ -1717,6 +1981,7 @@ fn print_help() {
     println!();
     println!("DEBUGGING FEATURES:");
     println!("    - Interactive REPL debugger with time-travel (DEBUGGER-046) ⭐ NEW!");
+    println!("    - Five Whys root cause analysis with knowledge base (DEBUGGER-056) ⭐ NEW!");
     println!("    - Token stream inspection & pattern conflict detection (DEBUGGER-050) ⭐ NEW!");
     println!("    - Token comparison with root cause hints (DEBUGGER-050) ⭐ NEW!");
     println!("    - Parser trace with lexer issue detection (DEBUGGER-050) ⭐ NEW!");
@@ -1734,6 +1999,9 @@ fn print_help() {
     println!("    ruchydbg run test.ruchy --timeout 1000 --trace");
     println!("    ruchydbg debug run test.ruchy              # Interactive debugger ⭐");
     println!("    ruchydbg debug analyze test.ruchy          # Automated trace capture ⭐");
+    println!("    ruchydbg five-whys bug-report.json         # Five Whys analysis ⭐");
+    println!("    ruchydbg five-whys bug-report.json --interactive  # Interactive mode ⭐");
+    println!("    ruchydbg five-whys bug1.json bug2.json --knowledge-base  # Pattern detection ⭐");
     println!("    ruchydbg tokenize test.ruchy               # Show token stream ⭐");
     println!("    ruchydbg tokenize test.ruchy --analyze     # Detect pattern conflicts ⭐");
     println!("    ruchydbg compare working.ruchy broken.ruchy --hints  # Compare tokens ⭐");

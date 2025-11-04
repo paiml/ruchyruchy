@@ -272,11 +272,40 @@ ruchydbg debug run test.ruchy
 # Automated trace capture
 ruchydbg debug analyze test.ruchy
 
+# Five Whys root cause analysis (NEW!)
+ruchydbg five-whys bug-report.json
+
+# Five Whys with JSON output
+ruchydbg five-whys bug-report.json --format json
+
+# Interactive Five Whys mode
+ruchydbg five-whys bug-report.json --interactive
+
+# Pattern detection across multiple bugs
+ruchydbg five-whys bug1.json bug2.json bug3.json --knowledge-base
+
+# Save analysis to file
+ruchydbg five-whys bug-report.json --output analysis.txt
+
 # Run with timeout detection
 ruchydbg run test.ruchy --timeout 5s
 
 # Trace execution
 ruchydbg trace test.ruchy
+```
+
+**Five Whys Bug Report Format** (JSON):
+```json
+{
+  "category": "InterpreterRuntime",
+  "symptom": "Panic: index out of bounds accessing vector",
+  "source_code": "fun main() { let vec = [1, 2, 3]; let x = vec[5]; }",
+  "error_message": "index out of bounds: the len is 3 but the index is 5",
+  "stack_trace": [
+    "at interpreter::evaluate_index_access",
+    "at interpreter::evaluate_expression"
+  ]
+}
 ```
 
 ---
