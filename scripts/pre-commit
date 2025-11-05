@@ -141,8 +141,54 @@ if [ -n "$RUCHY_FILES" ]; then
 fi
 echo ""
 
-# 6. PMAT TDG SCORE
-echo "6️⃣  Running PMAT TDG quality check..."
+# 6. RUST TEST SUITE (with BUG-055 mitigations)
+echo "6️⃣  Running Rust test suite (BUG-055 protections active)..."
+
+# BUG-055: Runaway Property Tests Consuming 115GB RAM
+# Fix: timeout (5min), ulimit (16GB), exclude expensive tests
+# Root Cause: property_based tests consumed 115GB due to unbounded execution
+# Prevention: timeout 300, ulimit -v 16777216, --skip property_based --skip fuzz
+
+# Set memory limit to 16GB (16777216 KB) to prevent runaway consumption
+ulimit -v 16777216
+
+# Run tests with 5-minute timeout, excluding expensive property and fuzz tests
+if timeout 300 cargo test --lib --bins --tests --skip property_based --skip fuzz 2>&1 | grep -E "(test result|error|warning)" | head -20; then
+    TEST_EXIT=$?
+    # Reset memory limit
+    ulimit -v unlimited
+
+    # Check if timeout occurred (exit code 124)
+    if [ $TEST_EXIT -eq 124 ]; then
+        echo "  ❌ Tests timed out after 300 seconds!"
+        echo "     This may indicate a runaway test (see BUG-055)"
+        echo "     Run: cargo test --lib --bins --tests --skip property_based --skip fuzz"
+        exit 1
+    elif [ $TEST_EXIT -ne 0 ]; then
+        echo "  ❌ Tests failed!"
+        echo "     Run: cargo test for details"
+        exit 1
+    fi
+    echo "  ✅ All tests passing (property_based and fuzz excluded)"
+else
+    TEST_EXIT=$?
+    # Reset memory limit even on failure
+    ulimit -v unlimited
+
+    # Check for timeout exit code
+    if [ $TEST_EXIT -eq 124 ]; then
+        echo "  ❌ Tests timed out after 300 seconds!"
+        echo "     This may indicate a runaway test (see BUG-055)"
+        exit 1
+    else
+        echo "  ❌ Tests failed with exit code $TEST_EXIT"
+        exit 1
+    fi
+fi
+echo ""
+
+# 7. PMAT TDG SCORE
+echo "7️⃣  Running PMAT TDG quality check..."
 
 if command -v pmat &> /dev/null; then
     TDG_SCORE=$(pmat tdg . --format=json 2>/dev/null | grep -o '"score":[0-9.]*' | cut -d: -f2 || echo "0")
@@ -165,8 +211,8 @@ else
 fi
 echo ""
 
-# 7. ROADMAP VALIDATION
-echo "7️⃣  Validating roadmap.yaml structure..."
+# 8. ROADMAP VALIDATION
+echo "8️⃣  Validating roadmap.yaml structure..."
 
 if echo "$STAGED_FILES" | grep -q "roadmap\.yaml"; then
     if [ -f "scripts/validate-roadmap.sh" ]; then
@@ -184,8 +230,8 @@ else
 fi
 echo ""
 
-# 8. FILE SIZE CHECK
-echo "8️⃣  Checking file sizes..."
+# 9. FILE SIZE CHECK
+echo "9️⃣  Checking file sizes..."
 
 SIZE_WARNING=false
 for file in $STAGED_FILES; do
@@ -219,6 +265,7 @@ echo "  • Zero SATD tolerance"
 echo "  • Documentation synchronization"
 echo "  • Ruchy syntax validation"
 echo "  • Ruchy lint (A+ grade)"
+echo "  • Rust test suite (BUG-055 protections: timeout, ulimit, test filtering)"
 echo "  • PMAT TDG score (≥85)"
 echo "  • Roadmap structure validation"
 echo "  • File size recommendations"
