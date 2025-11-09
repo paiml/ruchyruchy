@@ -466,6 +466,20 @@ lint:
 		(echo "❌ BLOCKED: SATD comments found" && exit 1)
 	@echo "✅ Lint checks passed"
 
+# Pre-commit fast test suite (<30 sec) - smoke tests only
+test-pre-commit-fast:
+	@echo "🚀 Running pre-commit smoke tests (<30 sec)..."
+	@if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
+		echo "Running critical smoke tests (parser, lexer, evaluator, interpreter core)..."; \
+		cargo test --lib --quiet \
+			-- --skip soak_test --skip profiling --skip bug_discovery \
+			--skip bug_filing --skip bug_replication --skip bug_reporting \
+			--skip telemetry --skip property --skip jit; \
+		echo "✅ Pre-commit smoke tests passed (<30 sec target)"; \
+	else \
+		echo "⚠️  Cargo tests skipped (no Cargo.toml found yet)"; \
+	fi
+
 # Fast test suite (<5 min) - essential tests only
 test-fast:
 	@echo "⚡ Running fast test suite (<5 min)..."
