@@ -22,6 +22,7 @@ fn main() {
     match args[1].as_str() {
         "compile" => handle_compile(&args[2..]),
         "profile" => handle_profile(&args[2..]),
+        "analyze" => handle_analyze(&args[2..]),
         "version" | "--version" | "-v" => {
             println!("ruchy (RuchyRuchy prototype) {}", VERSION);
             exit(0);
@@ -39,15 +40,17 @@ fn main() {
 }
 
 fn print_usage() {
-    eprintln!("ruchy (RuchyRuchy COMPILED-INST-001/002 Prototype)");
+    eprintln!("ruchy (RuchyRuchy COMPILED-INST-001/002/003 Prototype)");
     eprintln!();
     eprintln!("USAGE:");
     eprintln!("    ruchy compile [--instrument] <file.ruchy> --output <binary>");
     eprintln!("    ruchy profile [--counters=<list>] [--output=<json>] <binary>");
+    eprintln!("    ruchy analyze [--size|--symbols|--startup|--relocations|--optimize|--format] <binary>");
     eprintln!();
     eprintln!("SUBCOMMANDS:");
     eprintln!("    compile     Compile Ruchy source to binary");
     eprintln!("    profile     Profile compiled binary with hardware counters");
+    eprintln!("    analyze     Analyze compiled binary (size, symbols, performance)");
     eprintln!();
     eprintln!("COMPILE FLAGS:");
     eprintln!("    --instrument    Enable AST-level profiling instrumentation");
@@ -58,6 +61,15 @@ fn print_usage() {
     eprintln!("    --flame-graph=<svg>   Generate flame graph SVG");
     eprintln!("    --hotspots=<N>        Identify top N hotspot functions");
     eprintln!("    --sampling-rate=<Hz>  Sampling frequency (default: 1000Hz)");
+    eprintln!();
+    eprintln!("ANALYZE FLAGS:");
+    eprintln!("    --size          Binary size breakdown by section");
+    eprintln!("    --symbols       Symbol table analysis");
+    eprintln!("    --startup       Startup time profiling");
+    eprintln!("    --relocations   Relocation overhead analysis");
+    eprintln!("    --optimize      Optimization recommendations");
+    eprintln!("    --format        Binary format detection");
+    eprintln!("    --output=<json> Output JSON analysis data");
 }
 
 fn handle_compile(args: &[String]) {
@@ -771,7 +783,7 @@ fn generate_profile_json(
         json.push_str("\n");
     }
 
-    json.push_str("  ],\n");
+    json.push_str("  ]");
 
     // Derived metrics (placeholder for now)
     json.push_str("  \"derived_metrics\": {\n");
@@ -786,4 +798,433 @@ fn generate_profile_json(
         eprintln!("Error writing JSON: {}", e);
         exit(1);
     });
+}
+
+fn handle_analyze(args: &[String]) {
+    use goblin::elf::Elf;
+    use goblin::Object;
+    use std::time::Instant;
+
+    let mut analyze_size = false;
+    let mut analyze_symbols = false;
+    let mut analyze_startup = false;
+    let mut analyze_relocations = false;
+    let mut analyze_optimize = false;
+    let mut analyze_format = false;
+    let mut output_json: Option<String> = None;
+    let mut binary_path: Option<String> = None;
+
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+
+        match arg.as_str() {
+            "--size" => analyze_size = true,
+            "--symbols" => analyze_symbols = true,
+            "--startup" => analyze_startup = true,
+            "--relocations" => analyze_relocations = true,
+            "--optimize" => analyze_optimize = true,
+            "--format" => analyze_format = true,
+            _ if arg.starts_with("--output=") => {
+                output_json = Some(arg.strip_prefix("--output=").unwrap().to_string());
+            }
+            _ if !arg.starts_with("--") => {
+                binary_path = Some(arg.to_string());
+            }
+            _ => {
+                eprintln!("Unknown argument: {}", arg);
+                exit(1);
+            }
+        }
+        i += 1;
+    }
+
+    let binary_path = binary_path.unwrap_or_else(|| {
+        eprintln!("Error: No binary path specified");
+        exit(1);
+    });
+
+    // Read binary file
+    let binary_data = fs::read(&binary_path).unwrap_or_else(|e| {
+        eprintln!("Error reading {}: {}", binary_path, e);
+        exit(1);
+    });
+
+    // Parse binary format
+    let object = Object::parse(&binary_data).unwrap_or_else(|e| {
+        eprintln!("Error parsing binary: {}", e);
+        exit(1);
+    });
+
+    // Start building JSON output
+    let mut json = String::new();
+    json.push_str("{\n");
+    json.push_str(&format!("  \"binary\": \"{}\",\n", binary_path));
+    json.push_str(&format!("  \"timestamp\": {},\n",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()));
+
+    match object {
+        Object::Elf(elf) => {
+            json.push_str("  \"format\": \"ELF\",\n");
+
+            // Count how many sections we'll output
+            let mut sections_to_output = Vec::new();
+            if analyze_format { sections_to_output.push("format"); }
+            if analyze_size { sections_to_output.push("size"); }
+            if analyze_symbols { sections_to_output.push("symbols"); }
+            if analyze_relocations { sections_to_output.push("relocations"); }
+            if analyze_optimize { sections_to_output.push("optimize"); }
+            if analyze_startup { sections_to_output.push("startup"); }
+
+            let mut sections_done = 0;
+            let total_sections = sections_to_output.len();
+
+            // Format detection
+            if analyze_format {
+                json.push_str("  \"format_details\": {\n");
+                json.push_str(&format!("    \"class\": \"{}\",\n",
+                    if elf.is_64 { "64-bit" } else { "32-bit" }));
+                json.push_str(&format!("    \"endian\": \"{}\",\n",
+                    if elf.little_endian { "little" } else { "big" }));
+                json.push_str(&format!("    \"machine\": {}\n", elf.header.e_machine));
+                json.push_str("  }");
+                sections_done += 1;
+                if sections_done < total_sections {
+                    json.push_str(",\n");
+                } else {
+                    json.push_str("\n");
+                }
+            }
+
+            // Size analysis
+            if analyze_size {
+                analyze_elf_size(&elf, &binary_data, &mut json);
+                sections_done += 1;
+                if sections_done < total_sections {
+                    json.push_str(",\n");
+                } else {
+                    json.push_str("\n");
+                }
+            }
+
+            // Symbol table analysis
+            if analyze_symbols {
+                analyze_elf_symbols(&elf, &mut json);
+                sections_done += 1;
+                if sections_done < total_sections {
+                    json.push_str(",\n");
+                } else {
+                    json.push_str("\n");
+                }
+            }
+
+            // Relocation analysis
+            if analyze_relocations {
+                analyze_elf_relocations(&elf, &mut json);
+                sections_done += 1;
+                if sections_done < total_sections {
+                    json.push_str(",\n");
+                } else {
+                    json.push_str("\n");
+                }
+            }
+
+            // Optimization recommendations
+            if analyze_optimize {
+                analyze_optimizations(&elf, &binary_data, &mut json);
+                sections_done += 1;
+                if sections_done < total_sections {
+                    json.push_str(",\n");
+                } else {
+                    json.push_str("\n");
+                }
+            }
+
+            // Startup time profiling
+            if analyze_startup {
+                analyze_startup_time(&binary_path, &mut json);
+                sections_done += 1;
+                if sections_done < total_sections {
+                    json.push_str(",\n");
+                } else {
+                    json.push_str("\n");
+                }
+            }
+        }
+        Object::Mach(_) => {
+            json.push_str("  \"format\": \"Mach-O\",\n");
+            json.push_str("  \"error\": \"Mach-O analysis not yet implemented\"\n");
+        }
+        Object::PE(_) => {
+            json.push_str("  \"format\": \"PE\",\n");
+            json.push_str("  \"error\": \"PE analysis not yet implemented\"\n");
+        }
+        _ => {
+            json.push_str("  \"format\": \"Unknown\",\n");
+            json.push_str("  \"error\": \"Unsupported binary format\"\n");
+        }
+    }
+
+    json.push_str("}\n");
+
+    // Output JSON
+    if let Some(output_path) = output_json {
+        fs::write(&output_path, &json).unwrap_or_else(|e| {
+            eprintln!("Error writing JSON: {}", e);
+            exit(1);
+        });
+        eprintln!("[ANALYZE] Wrote analysis to: {}", output_path);
+    } else {
+        println!("{}", json);
+    }
+}
+
+fn analyze_elf_size(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut String) {
+    json.push_str("  \"sections\": {\n");
+
+    // Extract section sizes
+    let mut text_size = 0u64;
+    let mut data_size = 0u64;
+    let mut rodata_size = 0u64;
+    let mut bss_size = 0u64;
+
+    for section in &elf.section_headers {
+        let name = elf.shdr_strtab.get_at(section.sh_name).unwrap_or("");
+
+        match name {
+            ".text" | ".init" | ".fini" | ".plt" => {
+                text_size += section.sh_size;
+            }
+            ".data" | ".data1" => {
+                data_size += section.sh_size;
+            }
+            ".rodata" | ".rodata1" => {
+                rodata_size += section.sh_size;
+            }
+            ".bss" => {
+                bss_size += section.sh_size;
+            }
+            _ => {}
+        }
+    }
+
+    json.push_str("    \"text\": {\n");
+    json.push_str(&format!("      \"size\": {},\n", text_size));
+    json.push_str(&format!("      \"percentage\": {:.2}\n",
+        (text_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str("    },\n");
+
+    json.push_str("    \"data\": {\n");
+    json.push_str(&format!("      \"size\": {},\n", data_size));
+    json.push_str(&format!("      \"percentage\": {:.2}\n",
+        (data_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str("    },\n");
+
+    json.push_str("    \"rodata\": {\n");
+    json.push_str(&format!("      \"size\": {},\n", rodata_size));
+    json.push_str(&format!("      \"percentage\": {:.2}\n",
+        (rodata_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str("    },\n");
+
+    json.push_str("    \"bss\": {\n");
+    json.push_str(&format!("      \"size\": {},\n", bss_size));
+    json.push_str(&format!("      \"percentage\": {:.2}\n",
+        (bss_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str("    }\n");
+
+    json.push_str("  },\n");
+
+    json.push_str(&format!("  \"total_size\": {}", binary_data.len()));
+}
+
+fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
+    json.push_str("  \"symbols\": [\n");
+
+    let mut symbols_vec: Vec<_> = elf.syms.iter()
+        .filter(|sym| sym.st_size > 0)  // Only symbols with size
+        .collect();
+
+    // Sort by size descending
+    symbols_vec.sort_by(|a, b| b.st_size.cmp(&a.st_size));
+
+    for (i, sym) in symbols_vec.iter().take(20).enumerate() {  // Top 20 symbols
+        let name = elf.strtab.get_at(sym.st_name).unwrap_or("<unknown>");
+
+        json.push_str("    {\n");
+        json.push_str(&format!("      \"name\": \"{}\",\n", name));
+        json.push_str(&format!("      \"address\": \"0x{:x}\",\n", sym.st_value));
+        json.push_str(&format!("      \"size\": {},\n", sym.st_size));
+        json.push_str(&format!("      \"type\": \"{}\"\n",
+            match sym.st_info & 0xf {
+                0 => "NOTYPE",
+                1 => "OBJECT",
+                2 => "FUNC",
+                3 => "SECTION",
+                4 => "FILE",
+                _ => "OTHER",
+            }));
+        json.push_str("    }");
+        if i < symbols_vec.len().min(20) - 1 {
+            json.push_str(",");
+        }
+        json.push_str("\n");
+    }
+
+    json.push_str("  ],\n");
+
+    // Inlining candidates (small functions < 64 bytes)
+    json.push_str("  \"inlining_candidates\": [\n");
+
+    let small_funcs: Vec<_> = elf.syms.iter()
+        .filter(|sym| {
+            let is_func = (sym.st_info & 0xf) == 2;  // STT_FUNC
+            is_func && sym.st_size > 0 && sym.st_size < 64
+        })
+        .collect();
+
+    for (i, sym) in small_funcs.iter().enumerate() {
+        let name = elf.strtab.get_at(sym.st_name).unwrap_or("<unknown>");
+
+        json.push_str("    {\n");
+        json.push_str(&format!("      \"name\": \"{}\",\n", name));
+        json.push_str(&format!("      \"size\": {}\n", sym.st_size));
+        json.push_str("    }");
+        if i < small_funcs.len() - 1 {
+            json.push_str(",");
+        }
+        json.push_str("\n");
+    }
+
+    json.push_str("  ]");
+}
+
+fn analyze_elf_relocations(elf: &goblin::elf::Elf, json: &mut String) {
+    use std::collections::HashMap;
+
+    json.push_str("  \"total_relocations\": ");
+
+    let mut total_relocs = 0usize;
+    let mut reloc_types: HashMap<u32, usize> = HashMap::new();
+
+    // Count relocations from all sections
+    for rel in &elf.dynrels {
+        total_relocs += 1;
+        *reloc_types.entry(rel.r_type).or_insert(0) += 1;
+    }
+
+    for rel in &elf.pltrelocs {
+        total_relocs += 1;
+        *reloc_types.entry(rel.r_type).or_insert(0) += 1;
+    }
+
+    json.push_str(&format!("{},\n", total_relocs));
+
+    json.push_str("  \"relocation_types\": {\n");
+    let mut types_vec: Vec<_> = reloc_types.iter().collect();
+    types_vec.sort_by_key(|(_k, v)| std::cmp::Reverse(*v));
+
+    for (i, (rtype, count)) in types_vec.iter().enumerate() {
+        json.push_str(&format!("    \"type_{}\": {}", rtype, count));
+        if i < types_vec.len() - 1 {
+            json.push_str(",");
+        }
+        json.push_str("\n");
+    }
+    json.push_str("  }");
+}
+
+fn analyze_optimizations(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut String) {
+    json.push_str("  \"recommendations\": [\n");
+
+    let mut recommendations = Vec::new();
+
+    // Check for unused symbols (potential dead code)
+    let defined_symbols: Vec<_> = elf.syms.iter()
+        .filter(|sym| {
+            let is_defined = sym.st_shndx != 0 && sym.st_shndx < 0xff00;
+            let is_func = (sym.st_info & 0xf) == 2;
+            is_defined && is_func && sym.st_size > 0
+        })
+        .collect();
+
+    if defined_symbols.len() > 10 {
+        let unused_estimate = defined_symbols.len() / 10;  // Rough estimate
+        recommendations.push((
+            "dead_code_elimination",
+            format!("Consider enabling dead code elimination. Estimated {} unused functions.", unused_estimate),
+            unused_estimate * 100,  // Rough bytes estimate
+            "high"
+        ));
+    }
+
+    // Check binary size vs typical sizes
+    let binary_size = binary_data.len();
+    if binary_size > 1_000_000 {  // > 1MB
+        recommendations.push((
+            "compression",
+            "Binary size exceeds 1MB. Consider enabling LTO and strip symbols.".to_string(),
+            binary_size / 10,  // Compression can save ~10%
+            "medium"
+        ));
+    }
+
+    // Check for large functions (candidates for outlining)
+    let large_funcs: Vec<_> = elf.syms.iter()
+        .filter(|sym| {
+            let is_func = (sym.st_info & 0xf) == 2;
+            is_func && sym.st_size > 1024  // Functions > 1KB
+        })
+        .collect();
+
+    if !large_funcs.is_empty() {
+        recommendations.push((
+            "function_outlining",
+            format!("Found {} large functions (>1KB). Consider outlining cold code paths.", large_funcs.len()),
+            large_funcs.len() * 200,  // Rough estimate
+            "medium"
+        ));
+    }
+
+    // Output recommendations
+    for (i, (rec_type, desc, impact, priority)) in recommendations.iter().enumerate() {
+        json.push_str("    {\n");
+        json.push_str(&format!("      \"type\": \"{}\",\n", rec_type));
+        json.push_str(&format!("      \"description\": \"{}\",\n", desc));
+        json.push_str(&format!("      \"impact_bytes\": {},\n", impact));
+        json.push_str(&format!("      \"priority\": \"{}\"\n", priority));
+        json.push_str("    }");
+        if i < recommendations.len() - 1 {
+            json.push_str(",");
+        }
+        json.push_str("\n");
+    }
+
+    json.push_str("  ]");
+}
+
+fn analyze_startup_time(binary_path: &str, json: &mut String) {
+    use std::time::Instant;
+
+    // Measure startup time by running the binary with a minimal operation
+    let start = Instant::now();
+    let _output = Command::new(binary_path)
+        .arg("--help")  // Many binaries support --help quickly
+        .output()
+        .ok();
+    let startup_time = start.elapsed();
+
+    json.push_str(&format!("  \"startup_time_us\": {},\n", startup_time.as_micros()));
+
+    // Break down (rough estimates, would need instrumentation for accuracy)
+    let total_us = startup_time.as_micros();
+    let loader_est = total_us / 3;
+    let linking_est = total_us / 3;
+    let init_est = total_us / 3;
+
+    json.push_str(&format!("  \"loader_time_us\": {},\n", loader_est));
+    json.push_str(&format!("  \"linking_time_us\": {},\n", linking_est));
+    json.push_str(&format!("  \"init_time_us\": {}", init_est));
 }

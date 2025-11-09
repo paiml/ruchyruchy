@@ -133,10 +133,11 @@
 
 # Phase 6: Compiled Instrumentation - IN PROGRESS! 🚀
 
-## Extreme Profiling for World-Class Performance (2/3) ⏳
+## Extreme Profiling for World-Class Performance (3/3) ⏳
 
 - [COMPILED-INST-001: AST-Level Instrumentation Hooks](./phase6_compiled_instrumentation/compiled-inst-001-ast-instrumentation.md)
 - [COMPILED-INST-002: perf_event_open Integration](./phase6_compiled_instrumentation/compiled-inst-002-perf-event-integration.md)
+- [COMPILED-INST-003: Binary Analysis Tooling](./phase6_compiled_instrumentation/compiled-inst-003-binary-analysis.md)
 
 # Discoveries
 
