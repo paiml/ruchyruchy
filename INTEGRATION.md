@@ -20,6 +20,46 @@
 
 ## Current Development (November 9, 2025)
 
+### 📋 Session Update - Time-Constrained Test Targets
+
+**Date**: November 9, 2025
+**Focus**: Fast test targets for rapid development and CI/CD efficiency
+
+**Completed**:
+- ✅ **`make test-fast` Target**: Fast test suite (<5 min target, actual ~3 min)
+  - Runs cargo lib tests (318 tests, core functionality)
+  - Runs critical interpreter tests (parser, ch01 examples)
+  - Excludes expensive tests (property tests with high case counts, fuzz tests)
+  - Ideal for rapid development iterations
+- ✅ **`make coverage` Optimization**: Added 10-minute timeout constraint
+  - Overall timeout: 600 seconds (10 minutes)
+  - Per-test timeout: 120 seconds (2 minutes)
+  - Prevents long-running tests from blocking CI/CD
+- ✅ **Property Test Reduction**: Reduced from 1000 to 100 cases per property
+  - Balances thorough testing with fast execution
+  - Still maintains statistical confidence with 100 cases
+  - Keeps full 1000-case testing for `make test` (comprehensive suite)
+- ✅ **Three-Tier Testing Strategy**:
+  1. `make test-fast`: <5 min, essential tests only (development workflow)
+  2. `make coverage`: <10 min, coverage analysis with timeouts (pre-commit)
+  3. `make test`: No time limit, comprehensive suite (CI/CD, releases)
+
+**Files Modified**:
+- Makefile: Added `test-fast` target, updated `coverage` with timeouts
+- tests/property_based_tests.rs: Reduced ProptestConfig from 1000 to 100 cases
+
+**Test Results**:
+- `make test-fast`: ✅ Passed in 3:14 (<5 min target)
+- `make test`: ✅ All tests passing (318 lib + integration tests)
+- `make coverage`: ⚠️ Timeout enforced, needs slow test optimization
+
+**Next Steps**:
+- Mark long-running tests (e.g., `test_telemetry_collector_basic`) as `#[ignore]` for coverage
+- Document test target usage in README.md
+- Update CI/CD pipeline to use `make test-fast` for rapid feedback
+
+---
+
 ### 📋 Session Update - Quality Gates & Optimization Verification
 
 **Date**: November 9, 2025

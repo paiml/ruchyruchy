@@ -466,7 +466,21 @@ lint:
 		(echo "❌ BLOCKED: SATD comments found" && exit 1)
 	@echo "✅ Lint checks passed"
 
-# All test suites
+# Fast test suite (<5 min) - essential tests only
+test-fast:
+	@echo "⚡ Running fast test suite (<5 min)..."
+	@if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
+		echo "Running cargo lib tests (core functionality)..."; \
+		cargo test --lib --quiet; \
+		echo "Running critical interpreter tests..."; \
+		cargo test --test test_interp_001_parser --quiet; \
+		cargo test --test test_interp_011_ch01_examples --quiet; \
+		echo "✅ Fast test suite passed (~3 min, <5 min target)"; \
+	else \
+		echo "⚠️  Cargo tests skipped (no Cargo.toml found yet)"; \
+	fi
+
+# All test suites (comprehensive, no time limit)
 test:
 	@echo "🧪 Running all test suites..."
 	@if [ -d bootstrap/stage0 ]; then $(MAKE) test-stage0; fi
@@ -505,11 +519,11 @@ complexity:
 	fi
 	@echo "✅ Complexity analysis passed"
 
-# Test coverage analysis
+# Test coverage analysis (<10 min)
 coverage:
-	@echo "☂️  Analyzing test coverage..."
+	@echo "☂️  Analyzing test coverage (<10 min)..."
 	@if command -v cargo-tarpaulin >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
-		cargo tarpaulin --target-dir target/tarpaulin --out Html --output-dir coverage/ --fail-under 80; \
+		timeout 600 cargo tarpaulin --target-dir target/tarpaulin --out Html --output-dir coverage/ --fail-under 80 --timeout 120; \
 	else \
 		echo "⚠️  Coverage analysis skipped (cargo-tarpaulin not available)"; \
 	fi

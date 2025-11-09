@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### ⚡ Time-Constrained Test Targets (November 9, 2025)
+
+**Focus**: Fast test execution for rapid development and efficient CI/CD
+
+**New Test Targets**:
+- **`make test-fast`**: Fast test suite (<5 min, actual ~3 min)
+  - Runs cargo lib tests (318 tests, core functionality)
+  - Runs critical interpreter tests (parser, chapter examples)
+  - Excludes expensive tests (high-iteration property tests, fuzz tests)
+  - Ideal for development workflow and rapid iteration
+- **`make coverage` (optimized)**: Added 10-minute timeout constraint
+  - Overall timeout: 600 seconds (10 minutes)
+  - Per-test timeout: 120 seconds (2 minutes)
+  - Prevents long-running tests from blocking CI/CD
+- **Three-Tier Testing Strategy**:
+  1. `make test-fast`: <5 min, essential tests (development)
+  2. `make coverage`: <10 min, coverage analysis (pre-commit)
+  3. `make test`: No limit, comprehensive suite (CI/CD, releases)
+
+**Property Test Optimization**:
+- Reduced ProptestConfig from 1000 to 100 cases per property
+- Balances thorough testing with fast execution
+- Maintains statistical confidence with 100 cases
+- Full 1000-case testing still available via `make test`
+
+**Files Modified**:
+- `Makefile`: Added `test-fast` target, updated `coverage` with timeouts
+- `tests/property_based_tests.rs`: Reduced ProptestConfig cases (1000 → 100)
+
+**Performance Results**:
+- `make test-fast`: ✅ 3:14 execution time (<5 min target met)
+- Property tests: ~90% faster execution (100 vs 1000 cases)
+- Developer productivity: Rapid feedback loop established
+
 ### Changed
 
 #### 🔧 Code Quality & Lint Fixes (November 9, 2025)

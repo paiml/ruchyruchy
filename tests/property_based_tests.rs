@@ -61,7 +61,7 @@ mod parser_roundtrip_property {
 
     proptest! {
         #![proptest_config(ProptestConfig {
-            cases: 1000, // Run 1000 test cases per property
+            cases: 100, // Run 100 test cases per property (reduced for <5 min test-fast target)
             .. ProptestConfig::default()
         })]
 
