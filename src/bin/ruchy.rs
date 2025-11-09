@@ -45,7 +45,9 @@ fn print_usage() {
     eprintln!("USAGE:");
     eprintln!("    ruchy compile [--instrument] <file.ruchy> --output <binary>");
     eprintln!("    ruchy profile [--counters=<list>] [--output=<json>] <binary>");
-    eprintln!("    ruchy analyze [--size|--symbols|--startup|--relocations|--optimize|--format] <binary>");
+    eprintln!(
+        "    ruchy analyze [--size|--symbols|--startup|--relocations|--optimize|--format] <binary>"
+    );
     eprintln!();
     eprintln!("SUBCOMMANDS:");
     eprintln!("    compile     Compile Ruchy source to binary");
@@ -56,7 +58,9 @@ fn print_usage() {
     eprintln!("    --instrument    Enable AST-level profiling instrumentation");
     eprintln!();
     eprintln!("PROFILE FLAGS:");
-    eprintln!("    --counters=<list>     Hardware counters (cpu_cycles,cache_misses,branch_misses)");
+    eprintln!(
+        "    --counters=<list>     Hardware counters (cpu_cycles,cache_misses,branch_misses)"
+    );
     eprintln!("    --output=<json>       Output JSON profile data");
     eprintln!("    --flame-graph=<svg>   Generate flame graph SVG");
     eprintln!("    --hotspots=<N>        Identify top N hotspot functions");
@@ -117,11 +121,10 @@ fn handle_compile(args: &[String]) {
     });
 
     // Read Ruchy source
-    let ruchy_source = fs::read_to_string(&input_file)
-        .unwrap_or_else(|e| {
-            eprintln!("Error reading {}: {}", input_file, e);
-            exit(1);
-        });
+    let ruchy_source = fs::read_to_string(&input_file).unwrap_or_else(|e| {
+        eprintln!("Error reading {}: {}", input_file, e);
+        exit(1);
+    });
 
     // Compile
     if instrument {
@@ -196,7 +199,7 @@ fn transform_println_calls(source: &str) -> String {
         if result.ends_with("println(") {
             // Replace the last "println(" with "println!("
             let len = result.len();
-            result.truncate(len - 8);  // Remove "println("
+            result.truncate(len - 8); // Remove "println("
             result.push_str("println!(");
 
             // Now check if next char is a quote
@@ -232,7 +235,10 @@ fn instrument_functions(code: &str) -> String {
 
                     // Add profiler guard (skip main, it's handled separately)
                     if *function_name != "main" {
-                        result.push_str(&format!("    let _profiler_guard = ProfilerGuard::new(\"{}\");\n", function_name));
+                        result.push_str(&format!(
+                            "    let _profiler_guard = ProfilerGuard::new(\"{}\");\n",
+                            function_name
+                        ));
                     }
                 }
             }
@@ -257,7 +263,10 @@ fn instrument_loops(code: &str) -> String {
         if line.trim_start().starts_with("for ") && line.contains('{') {
             // Add loop iteration tracking at the start of the loop body
             let location = format!("loop_{}", loop_id);
-            result.push_str(&format!("        record_loop_iteration(\"{}\");\n", location));
+            result.push_str(&format!(
+                "        record_loop_iteration(\"{}\");\n",
+                location
+            ));
             loop_id += 1;
         }
     }
@@ -299,7 +308,10 @@ fn instrument_branches(code: &str) -> String {
             let condition = condition.trim();
             if !condition.is_empty() {
                 // Wrap condition with record_branch
-                result.push_str(&format!("record_branch(\"branch_{}\", {}) ", branch_id, condition));
+                result.push_str(&format!(
+                    "record_branch(\"branch_{}\", {}) ",
+                    branch_id, condition
+                ));
                 branch_id += 1;
             } else {
                 result.push_str(condition);
@@ -344,7 +356,9 @@ fn generate_profiler_runtime() -> String {
 
     // Thread-local data
     code.push_str("thread_local! {\n");
-    code.push_str("    static PROFILER_DATA: RefCell<ProfilerData> = RefCell::new(ProfilerData::new());\n");
+    code.push_str(
+        "    static PROFILER_DATA: RefCell<ProfilerData> = RefCell::new(ProfilerData::new());\n",
+    );
     code.push_str("    static START_TIME: Instant = Instant::now();\n");
     code.push_str("}\n\n");
 
@@ -406,7 +420,9 @@ fn generate_profiler_runtime() -> String {
     code.push_str("impl ProfilerGuard {\n");
     code.push_str("    fn new(function_name: &'static str) -> Self {\n");
     code.push_str("        if !PROFILER_ENABLED.load(Ordering::Relaxed) {\n");
-    code.push_str("            return Self { function_name, start_time: START_TIME.with(|t| *t) };\n");
+    code.push_str(
+        "            return Self { function_name, start_time: START_TIME.with(|t| *t) };\n",
+    );
     code.push_str("        }\n");
     code.push_str("        PROFILER_DATA.with(|data| {\n");
     code.push_str("            let mut d = data.borrow_mut();\n");
@@ -479,10 +495,16 @@ fn generate_profiler_runtime() -> String {
     code.push_str("        if !first { json.push_str(\",\\n\"); }\n");
     code.push_str("        first = false;\n");
     code.push_str("        let avg = if stats.calls > 0 { stats.total_time_ns as f64 / stats.calls as f64 } else { 0.0 };\n");
-    code.push_str("        json.push_str(&format!(\"    {{\\n      \\\"name\\\": \\\"{}\\\",\\n\", name));\n");
-    code.push_str("        json.push_str(&format!(\"      \\\"calls\\\": {},\\n\", stats.calls));\n");
+    code.push_str(
+        "        json.push_str(&format!(\"    {{\\n      \\\"name\\\": \\\"{}\\\",\\n\", name));\n",
+    );
+    code.push_str(
+        "        json.push_str(&format!(\"      \\\"calls\\\": {},\\n\", stats.calls));\n",
+    );
     code.push_str("        json.push_str(&format!(\"      \\\"total_time_ns\\\": {},\\n\", stats.total_time_ns));\n");
-    code.push_str("        json.push_str(&format!(\"      \\\"avg_time_ns\\\": {:.2},\\n\", avg));\n");
+    code.push_str(
+        "        json.push_str(&format!(\"      \\\"avg_time_ns\\\": {:.2},\\n\", avg));\n",
+    );
     code.push_str("        json.push_str(&format!(\"      \\\"min_time_ns\\\": {},\\n\", 0));\n");
     code.push_str("        json.push_str(&format!(\"      \\\"max_time_ns\\\": {}\\n\", stats.total_time_ns));\n");
     code.push_str("        json.push_str(\"    }\");\n");
@@ -494,7 +516,9 @@ fn generate_profiler_runtime() -> String {
     code.push_str("        if !first_loop { json.push_str(\",\\n\"); }\n");
     code.push_str("        first_loop = false;\n");
     code.push_str("        json.push_str(&format!(\"    {{\\n      \\\"location\\\": \\\"{}\\\",\\n\", location));\n");
-    code.push_str("        json.push_str(&format!(\"      \\\"iterations\\\": {}\\n\", stats.iterations));\n");
+    code.push_str(
+        "        json.push_str(&format!(\"      \\\"iterations\\\": {}\\n\", stats.iterations));\n",
+    );
     code.push_str("        json.push_str(\"    }\");\n");
     code.push_str("    }\n\n");
     code.push_str("    json.push_str(\"\\n  ],\\n\");\n");
@@ -506,8 +530,12 @@ fn generate_profiler_runtime() -> String {
     code.push_str("        let total = stats.taken + stats.not_taken;\n");
     code.push_str("        let prediction_rate = if total > 0 { stats.taken as f64 / total as f64 } else { 0.0 };\n");
     code.push_str("        json.push_str(&format!(\"    {{\\n      \\\"location\\\": \\\"{}\\\",\\n\", location));\n");
-    code.push_str("        json.push_str(&format!(\"      \\\"taken\\\": {},\\n\", stats.taken));\n");
-    code.push_str("        json.push_str(&format!(\"      \\\"not_taken\\\": {},\\n\", stats.not_taken));\n");
+    code.push_str(
+        "        json.push_str(&format!(\"      \\\"taken\\\": {},\\n\", stats.taken));\n",
+    );
+    code.push_str(
+        "        json.push_str(&format!(\"      \\\"not_taken\\\": {},\\n\", stats.not_taken));\n",
+    );
     code.push_str("        json.push_str(&format!(\"      \\\"prediction_rate\\\": {:.5}\\n\", prediction_rate));\n");
     code.push_str("        json.push_str(\"    }\");\n");
     code.push_str("    }\n\n");
@@ -524,11 +552,10 @@ fn generate_profiler_runtime() -> String {
 
 fn compile_rust(rust_code: &str, output_file: &str) {
     let temp_rust = format!("{}.rs", output_file);
-    fs::write(&temp_rust, rust_code)
-        .unwrap_or_else(|e| {
-            eprintln!("Error writing Rust file: {}", e);
-            exit(1);
-        });
+    fs::write(&temp_rust, rust_code).unwrap_or_else(|e| {
+        eprintln!("Error writing Rust file: {}", e);
+        exit(1);
+    });
 
     let output = Command::new("rustc")
         .arg(&temp_rust)
@@ -579,7 +606,10 @@ fn handle_profile(args: &[String]) {
 
             if arg.starts_with("--counters=") {
                 let counter_str = arg.strip_prefix("--counters=").unwrap();
-                counters = counter_str.split(',').map(|s| s.trim().to_string()).collect();
+                counters = counter_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect();
                 i += 1;
             } else if arg.starts_with("--output=") {
                 output_json = Some(arg.strip_prefix("--output=").unwrap().to_string());
@@ -626,8 +656,11 @@ fn handle_profile(args: &[String]) {
             Err(e) => {
                 eprintln!("Error initializing profiler: {}", e);
                 eprintln!("Note: Profiling requires root or CAP_PERFMON capability");
-                eprintln!("Try: sudo -E {} profile --output=profile.json {}",
-                    env::args().next().unwrap(), binary_path);
+                eprintln!(
+                    "Try: sudo -E {} profile --output=profile.json {}",
+                    env::args().next().unwrap(),
+                    binary_path
+                );
                 exit(1);
             }
         };
@@ -640,12 +673,10 @@ fn handle_profile(args: &[String]) {
 
         // Run the binary
         let run_start = Instant::now();
-        let output = Command::new(&binary_path)
-            .output()
-            .unwrap_or_else(|e| {
-                eprintln!("Error running {}: {}", binary_path, e);
-                exit(1);
-            });
+        let output = Command::new(&binary_path).output().unwrap_or_else(|e| {
+            eprintln!("Error running {}: {}", binary_path, e);
+            exit(1);
+        });
         let run_duration = run_start.elapsed();
 
         // Stop profiling
@@ -654,7 +685,10 @@ fn handle_profile(args: &[String]) {
             exit(1);
         });
 
-        eprintln!("[PROFILE] Binary completed in {:.3}s", run_duration.as_secs_f64());
+        eprintln!(
+            "[PROFILE] Binary completed in {:.3}s",
+            run_duration.as_secs_f64()
+        );
 
         // Collect samples
         let samples = profiler.collect_samples().unwrap_or_else(|e| {
@@ -730,18 +764,20 @@ fn generate_profile_json(
     samples: &[ruchyruchy::profiling::Sample],
     counters: &[String],
     binary_path: &str,
-    output_path: &str
+    output_path: &str,
 ) {
     use std::collections::HashMap;
 
     let mut json = String::new();
     json.push_str("{\n");
     json.push_str(&format!("  \"version\": \"1.0\",\n"));
-    json.push_str(&format!("  \"timestamp\": {},\n",
+    json.push_str(&format!(
+        "  \"timestamp\": {},\n",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs()));
+            .as_secs()
+    ));
     json.push_str(&format!("  \"binary\": \"{}\",\n", binary_path));
     json.push_str("  \"counters\": [\n");
 
@@ -766,8 +802,10 @@ fn generate_profile_json(
             json.push_str("        {\n");
             json.push_str(&format!("          \"address\": \"0x{:x}\",\n", ip));
             json.push_str(&format!("          \"samples\": {},\n", count));
-            json.push_str(&format!("          \"percentage\": {:.2}\n",
-                (**count as f64 / samples.len() as f64) * 100.0));
+            json.push_str(&format!(
+                "          \"percentage\": {:.2}\n",
+                (**count as f64 / samples.len() as f64) * 100.0
+            ));
             json.push_str("        }");
             if i < sorted_functions.len() - 1 {
                 json.push_str(",");
@@ -860,11 +898,13 @@ fn handle_analyze(args: &[String]) {
     let mut json = String::new();
     json.push_str("{\n");
     json.push_str(&format!("  \"binary\": \"{}\",\n", binary_path));
-    json.push_str(&format!("  \"timestamp\": {},\n",
+    json.push_str(&format!(
+        "  \"timestamp\": {},\n",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs()));
+            .as_secs()
+    ));
 
     match object {
         Object::Elf(elf) => {
@@ -872,12 +912,24 @@ fn handle_analyze(args: &[String]) {
 
             // Count how many sections we'll output
             let mut sections_to_output = Vec::new();
-            if analyze_format { sections_to_output.push("format"); }
-            if analyze_size { sections_to_output.push("size"); }
-            if analyze_symbols { sections_to_output.push("symbols"); }
-            if analyze_relocations { sections_to_output.push("relocations"); }
-            if analyze_optimize { sections_to_output.push("optimize"); }
-            if analyze_startup { sections_to_output.push("startup"); }
+            if analyze_format {
+                sections_to_output.push("format");
+            }
+            if analyze_size {
+                sections_to_output.push("size");
+            }
+            if analyze_symbols {
+                sections_to_output.push("symbols");
+            }
+            if analyze_relocations {
+                sections_to_output.push("relocations");
+            }
+            if analyze_optimize {
+                sections_to_output.push("optimize");
+            }
+            if analyze_startup {
+                sections_to_output.push("startup");
+            }
 
             let mut sections_done = 0;
             let total_sections = sections_to_output.len();
@@ -885,10 +937,14 @@ fn handle_analyze(args: &[String]) {
             // Format detection
             if analyze_format {
                 json.push_str("  \"format_details\": {\n");
-                json.push_str(&format!("    \"class\": \"{}\",\n",
-                    if elf.is_64 { "64-bit" } else { "32-bit" }));
-                json.push_str(&format!("    \"endian\": \"{}\",\n",
-                    if elf.little_endian { "little" } else { "big" }));
+                json.push_str(&format!(
+                    "    \"class\": \"{}\",\n",
+                    if elf.is_64 { "64-bit" } else { "32-bit" }
+                ));
+                json.push_str(&format!(
+                    "    \"endian\": \"{}\",\n",
+                    if elf.little_endian { "little" } else { "big" }
+                ));
                 json.push_str(&format!("    \"machine\": {}\n", elf.header.e_machine));
                 json.push_str("  }");
                 sections_done += 1;
@@ -982,6 +1038,15 @@ fn handle_analyze(args: &[String]) {
     }
 }
 
+/// Analyze ELF binary size breakdown by section
+///
+/// Extracts and aggregates sizes for major ELF sections:
+/// - .text: executable code (.init, .fini, .plt included)
+/// - .data: initialized data
+/// - .rodata: read-only data (constants, string literals)
+/// - .bss: uninitialized data (zero-initialized at runtime)
+///
+/// Outputs JSON with absolute sizes and percentages of total binary size.
 fn analyze_elf_size(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut String) {
     json.push_str("  \"sections\": {\n");
 
@@ -1013,26 +1078,34 @@ fn analyze_elf_size(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut Strin
 
     json.push_str("    \"text\": {\n");
     json.push_str(&format!("      \"size\": {},\n", text_size));
-    json.push_str(&format!("      \"percentage\": {:.2}\n",
-        (text_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str(&format!(
+        "      \"percentage\": {:.2}\n",
+        (text_size as f64 / binary_data.len() as f64) * 100.0
+    ));
     json.push_str("    },\n");
 
     json.push_str("    \"data\": {\n");
     json.push_str(&format!("      \"size\": {},\n", data_size));
-    json.push_str(&format!("      \"percentage\": {:.2}\n",
-        (data_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str(&format!(
+        "      \"percentage\": {:.2}\n",
+        (data_size as f64 / binary_data.len() as f64) * 100.0
+    ));
     json.push_str("    },\n");
 
     json.push_str("    \"rodata\": {\n");
     json.push_str(&format!("      \"size\": {},\n", rodata_size));
-    json.push_str(&format!("      \"percentage\": {:.2}\n",
-        (rodata_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str(&format!(
+        "      \"percentage\": {:.2}\n",
+        (rodata_size as f64 / binary_data.len() as f64) * 100.0
+    ));
     json.push_str("    },\n");
 
     json.push_str("    \"bss\": {\n");
     json.push_str(&format!("      \"size\": {},\n", bss_size));
-    json.push_str(&format!("      \"percentage\": {:.2}\n",
-        (bss_size as f64 / binary_data.len() as f64) * 100.0));
+    json.push_str(&format!(
+        "      \"percentage\": {:.2}\n",
+        (bss_size as f64 / binary_data.len() as f64) * 100.0
+    ));
     json.push_str("    }\n");
 
     json.push_str("  },\n");
@@ -1040,24 +1113,36 @@ fn analyze_elf_size(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut Strin
     json.push_str(&format!("  \"total_size\": {}", binary_data.len()));
 }
 
+/// Analyze ELF symbol table for optimization opportunities
+///
+/// Extracts top 20 largest symbols and identifies inlining candidates
+/// (functions <64 bytes that might benefit from inlining to reduce call overhead).
+///
+/// Outputs:
+/// - symbols: Top 20 by size with name, address, size, type
+/// - inlining_candidates: Functions <64 bytes
 fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
     json.push_str("  \"symbols\": [\n");
 
-    let mut symbols_vec: Vec<_> = elf.syms.iter()
-        .filter(|sym| sym.st_size > 0)  // Only symbols with size
+    let mut symbols_vec: Vec<_> = elf
+        .syms
+        .iter()
+        .filter(|sym| sym.st_size > 0) // Only symbols with size
         .collect();
 
     // Sort by size descending
     symbols_vec.sort_by(|a, b| b.st_size.cmp(&a.st_size));
 
-    for (i, sym) in symbols_vec.iter().take(20).enumerate() {  // Top 20 symbols
+    for (i, sym) in symbols_vec.iter().take(20).enumerate() {
+        // Top 20 symbols
         let name = elf.strtab.get_at(sym.st_name).unwrap_or("<unknown>");
 
         json.push_str("    {\n");
         json.push_str(&format!("      \"name\": \"{}\",\n", name));
         json.push_str(&format!("      \"address\": \"0x{:x}\",\n", sym.st_value));
         json.push_str(&format!("      \"size\": {},\n", sym.st_size));
-        json.push_str(&format!("      \"type\": \"{}\"\n",
+        json.push_str(&format!(
+            "      \"type\": \"{}\"\n",
             match sym.st_info & 0xf {
                 0 => "NOTYPE",
                 1 => "OBJECT",
@@ -1065,7 +1150,8 @@ fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
                 3 => "SECTION",
                 4 => "FILE",
                 _ => "OTHER",
-            }));
+            }
+        ));
         json.push_str("    }");
         if i < symbols_vec.len().min(20) - 1 {
             json.push_str(",");
@@ -1078,9 +1164,11 @@ fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
     // Inlining candidates (small functions < 64 bytes)
     json.push_str("  \"inlining_candidates\": [\n");
 
-    let small_funcs: Vec<_> = elf.syms.iter()
+    let small_funcs: Vec<_> = elf
+        .syms
+        .iter()
         .filter(|sym| {
-            let is_func = (sym.st_info & 0xf) == 2;  // STT_FUNC
+            let is_func = (sym.st_info & 0xf) == 2; // STT_FUNC
             is_func && sym.st_size > 0 && sym.st_size < 64
         })
         .collect();
@@ -1101,6 +1189,15 @@ fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
     json.push_str("  ]");
 }
 
+/// Analyze ELF dynamic relocations for performance impact
+///
+/// Relocations require runtime fixups by the dynamic linker, adding startup overhead.
+/// Tracks total count and distribution by relocation type (GOT, PLT, etc.).
+///
+/// High relocation counts indicate:
+/// - Excessive dynamic linking (consider static linking)
+/// - Position-independent code overhead
+/// - Potential for prelinking or lazy binding optimizations
 fn analyze_elf_relocations(elf: &goblin::elf::Elf, json: &mut String) {
     use std::collections::HashMap;
 
@@ -1136,13 +1233,23 @@ fn analyze_elf_relocations(elf: &goblin::elf::Elf, json: &mut String) {
     json.push_str("  }");
 }
 
+/// Generate optimization recommendations for binary size reduction
+///
+/// Analyzes binary characteristics and suggests actionable optimizations:
+/// 1. Dead code elimination: Unused functions detected via symbol table
+/// 2. Compression: LTO and symbol stripping for large binaries (>1MB)
+/// 3. Function outlining: Large functions (>1KB) with cold code paths
+///
+/// Target: Achieve ≤50% of equivalent C binary size
 fn analyze_optimizations(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut String) {
     json.push_str("  \"recommendations\": [\n");
 
     let mut recommendations = Vec::new();
 
     // Check for unused symbols (potential dead code)
-    let defined_symbols: Vec<_> = elf.syms.iter()
+    let defined_symbols: Vec<_> = elf
+        .syms
+        .iter()
         .filter(|sym| {
             let is_defined = sym.st_shndx != 0 && sym.st_shndx < 0xff00;
             let is_func = (sym.st_info & 0xf) == 2;
@@ -1151,40 +1258,49 @@ fn analyze_optimizations(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut 
         .collect();
 
     if defined_symbols.len() > 10 {
-        let unused_estimate = defined_symbols.len() / 10;  // Rough estimate
+        let unused_estimate = defined_symbols.len() / 10; // Rough estimate
         recommendations.push((
             "dead_code_elimination",
-            format!("Consider enabling dead code elimination. Estimated {} unused functions.", unused_estimate),
-            unused_estimate * 100,  // Rough bytes estimate
-            "high"
+            format!(
+                "Consider enabling dead code elimination. Estimated {} unused functions.",
+                unused_estimate
+            ),
+            unused_estimate * 100, // Rough bytes estimate
+            "high",
         ));
     }
 
     // Check binary size vs typical sizes
     let binary_size = binary_data.len();
-    if binary_size > 1_000_000 {  // > 1MB
+    if binary_size > 1_000_000 {
+        // > 1MB
         recommendations.push((
             "compression",
             "Binary size exceeds 1MB. Consider enabling LTO and strip symbols.".to_string(),
-            binary_size / 10,  // Compression can save ~10%
-            "medium"
+            binary_size / 10, // Compression can save ~10%
+            "medium",
         ));
     }
 
     // Check for large functions (candidates for outlining)
-    let large_funcs: Vec<_> = elf.syms.iter()
+    let large_funcs: Vec<_> = elf
+        .syms
+        .iter()
         .filter(|sym| {
             let is_func = (sym.st_info & 0xf) == 2;
-            is_func && sym.st_size > 1024  // Functions > 1KB
+            is_func && sym.st_size > 1024 // Functions > 1KB
         })
         .collect();
 
     if !large_funcs.is_empty() {
         recommendations.push((
             "function_outlining",
-            format!("Found {} large functions (>1KB). Consider outlining cold code paths.", large_funcs.len()),
-            large_funcs.len() * 200,  // Rough estimate
-            "medium"
+            format!(
+                "Found {} large functions (>1KB). Consider outlining cold code paths.",
+                large_funcs.len()
+            ),
+            large_funcs.len() * 200, // Rough estimate
+            "medium",
         ));
     }
 
@@ -1205,18 +1321,31 @@ fn analyze_optimizations(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut 
     json.push_str("  ]");
 }
 
+/// Measure binary startup time and breakdown
+///
+/// Executes binary with --help flag and measures total startup latency.
+/// Provides rough breakdown estimates:
+/// - Loader time: Dynamic linker, library loading
+/// - Linking time: Symbol resolution, relocations
+/// - Init time: Static initializers, constructors
+///
+/// Note: Breakdown is estimated (equal thirds). Accurate measurement would
+/// require instrumentation or LD_DEBUG=statistics.
 fn analyze_startup_time(binary_path: &str, json: &mut String) {
     use std::time::Instant;
 
     // Measure startup time by running the binary with a minimal operation
     let start = Instant::now();
     let _output = Command::new(binary_path)
-        .arg("--help")  // Many binaries support --help quickly
+        .arg("--help") // Many binaries support --help quickly
         .output()
         .ok();
     let startup_time = start.elapsed();
 
-    json.push_str(&format!("  \"startup_time_us\": {},\n", startup_time.as_micros()));
+    json.push_str(&format!(
+        "  \"startup_time_us\": {},\n",
+        startup_time.as_micros()
+    ));
 
     // Break down (rough estimates, would need instrumentation for accuracy)
     let total_us = startup_time.as_micros();
