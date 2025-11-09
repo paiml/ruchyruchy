@@ -870,19 +870,9 @@ fn handle_analyze(args: &[String]) {
         Object::Elf(elf) => {
             json.push_str("  \"format\": \"ELF\",\n");
 
-            // Format detection
-            if analyze_format {
-                json.push_str("  \"format_details\": {\n");
-                json.push_str(&format!("    \"class\": \"{}\",\n",
-                    if elf.is_64 { "64-bit" } else { "32-bit" }));
-                json.push_str(&format!("    \"endian\": \"{}\",\n",
-                    if elf.little_endian { "little" } else { "big" }));
-                json.push_str(&format!("    \"machine\": {},\n", elf.header.e_machine));
-                json.push_str("  },\n");
-            }
-
             // Count how many sections we'll output
             let mut sections_to_output = Vec::new();
+            if analyze_format { sections_to_output.push("format"); }
             if analyze_size { sections_to_output.push("size"); }
             if analyze_symbols { sections_to_output.push("symbols"); }
             if analyze_relocations { sections_to_output.push("relocations"); }
@@ -891,6 +881,23 @@ fn handle_analyze(args: &[String]) {
 
             let mut sections_done = 0;
             let total_sections = sections_to_output.len();
+
+            // Format detection
+            if analyze_format {
+                json.push_str("  \"format_details\": {\n");
+                json.push_str(&format!("    \"class\": \"{}\",\n",
+                    if elf.is_64 { "64-bit" } else { "32-bit" }));
+                json.push_str(&format!("    \"endian\": \"{}\",\n",
+                    if elf.little_endian { "little" } else { "big" }));
+                json.push_str(&format!("    \"machine\": {}\n", elf.header.e_machine));
+                json.push_str("  }");
+                sections_done += 1;
+                if sections_done < total_sections {
+                    json.push_str(",\n");
+                } else {
+                    json.push_str("\n");
+                }
+            }
 
             // Size analysis
             if analyze_size {
@@ -1066,7 +1073,7 @@ fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
         json.push_str("\n");
     }
 
-    json.push_str("  ]");
+    json.push_str("  ],\n");
 
     // Inlining candidates (small functions < 64 bytes)
     json.push_str("  \"inlining_candidates\": [\n");
@@ -1126,7 +1133,7 @@ fn analyze_elf_relocations(elf: &goblin::elf::Elf, json: &mut String) {
         }
         json.push_str("\n");
     }
-    json.push_str("  },\n");
+    json.push_str("  }");
 }
 
 fn analyze_optimizations(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut String) {
@@ -1219,5 +1226,5 @@ fn analyze_startup_time(binary_path: &str, json: &mut String) {
 
     json.push_str(&format!("  \"loader_time_us\": {},\n", loader_est));
     json.push_str(&format!("  \"linking_time_us\": {},\n", linking_est));
-    json.push_str(&format!("  \"init_time_us\": {},\n", init_est));
+    json.push_str(&format!("  \"init_time_us\": {}", init_est));
 }
