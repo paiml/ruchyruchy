@@ -130,6 +130,9 @@ fn compile_instrumented(ruchy_source: &str, output_file: &str) {
     // Instrument loops with iteration tracking
     transformed = instrument_loops(&transformed);
 
+    // Instrument branches with taken/not-taken tracking
+    transformed = instrument_branches(&transformed);
+
     // Instrument main function with init/export calls
     transformed = instrument_main(&transformed);
 
@@ -237,6 +240,51 @@ fn instrument_loops(code: &str) -> String {
     result
 }
 
+fn instrument_branches(code: &str) -> String {
+    // Insert branch tracking for if statements
+    // Pattern: if CONDITION { → if record_branch("branch_N", CONDITION) {
+    let mut result = String::new();
+    let mut branch_id = 0;
+    let mut chars = code.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        result.push(c);
+
+        // Look for "if " pattern
+        if result.ends_with("if ") {
+            // Collect the condition until we hit '{'
+            let mut condition = String::new();
+            let mut depth = 0;
+
+            while let Some(ch) = chars.peek() {
+                if *ch == '(' {
+                    depth += 1;
+                    condition.push(chars.next().unwrap());
+                } else if *ch == ')' {
+                    depth -= 1;
+                    condition.push(chars.next().unwrap());
+                } else if *ch == '{' && depth == 0 {
+                    // Found the opening brace
+                    break;
+                } else {
+                    condition.push(chars.next().unwrap());
+                }
+            }
+
+            let condition = condition.trim();
+            if !condition.is_empty() {
+                // Wrap condition with record_branch
+                result.push_str(&format!("record_branch(\"branch_{}\", {}) ", branch_id, condition));
+                branch_id += 1;
+            } else {
+                result.push_str(condition);
+            }
+        }
+    }
+
+    result
+}
+
 fn instrument_main(code: &str) -> String {
     // Find main() and add profiler calls
     if let Some(main_pos) = code.find("fn main()") {
@@ -280,11 +328,12 @@ fn generate_profiler_runtime() -> String {
     code.push_str("struct ProfilerData {\n");
     code.push_str("    functions: HashMap<String, FunctionStats>,\n");
     code.push_str("    loops: HashMap<String, LoopStats>,\n");
+    code.push_str("    branches: HashMap<String, BranchStats>,\n");
     code.push_str("}\n\n");
 
     code.push_str("impl ProfilerData {\n");
     code.push_str("    fn new() -> Self {\n");
-    code.push_str("        Self { functions: HashMap::new(), loops: HashMap::new() }\n");
+    code.push_str("        Self { functions: HashMap::new(), loops: HashMap::new(), branches: HashMap::new() }\n");
     code.push_str("    }\n");
     code.push_str("}\n\n");
 
@@ -308,6 +357,18 @@ fn generate_profiler_runtime() -> String {
     code.push_str("impl LoopStats {\n");
     code.push_str("    fn new() -> Self {\n");
     code.push_str("        Self { iterations: 0 }\n");
+    code.push_str("    }\n");
+    code.push_str("}\n\n");
+
+    code.push_str("#[derive(Debug, Clone)]\n");
+    code.push_str("struct BranchStats {\n");
+    code.push_str("    taken: u64,\n");
+    code.push_str("    not_taken: u64,\n");
+    code.push_str("}\n\n");
+
+    code.push_str("impl BranchStats {\n");
+    code.push_str("    fn new() -> Self {\n");
+    code.push_str("        Self { taken: 0, not_taken: 0 }\n");
     code.push_str("    }\n");
     code.push_str("}\n\n");
 
@@ -360,6 +421,17 @@ fn generate_profiler_runtime() -> String {
     code.push_str("    });\n");
     code.push_str("}\n\n");
 
+    // Branch recording
+    code.push_str("fn record_branch(location: &str, outcome: bool) -> bool {\n");
+    code.push_str("    if !PROFILER_ENABLED.load(Ordering::Relaxed) { return outcome; }\n");
+    code.push_str("    PROFILER_DATA.with(|data| {\n");
+    code.push_str("        let mut d = data.borrow_mut();\n");
+    code.push_str("        let stats = d.branches.entry(location.to_string()).or_insert(BranchStats::new());\n");
+    code.push_str("        if outcome { stats.taken += 1; } else { stats.not_taken += 1; }\n");
+    code.push_str("    });\n");
+    code.push_str("    outcome\n");
+    code.push_str("}\n\n");
+
     // Export function (simplified JSON generation)
     code.push_str("fn export_profile_data() {\n");
     code.push_str("    if !PROFILER_ENABLED.load(Ordering::Relaxed) { return; }\n\n");
@@ -401,7 +473,20 @@ fn generate_profiler_runtime() -> String {
     code.push_str("        json.push_str(\"    }\");\n");
     code.push_str("    }\n\n");
     code.push_str("    json.push_str(\"\\n  ],\\n\");\n");
-    code.push_str("    json.push_str(\"  \\\"branches\\\": [],\\n\");\n");
+    code.push_str("    json.push_str(\"  \\\"branches\\\": [\\n\");\n\n");
+    code.push_str("    let mut first_branch = true;\n");
+    code.push_str("    for (location, stats) in &data.branches {\n");
+    code.push_str("        if !first_branch { json.push_str(\",\\n\"); }\n");
+    code.push_str("        first_branch = false;\n");
+    code.push_str("        let total = stats.taken + stats.not_taken;\n");
+    code.push_str("        let prediction_rate = if total > 0 { stats.taken as f64 / total as f64 } else { 0.0 };\n");
+    code.push_str("        json.push_str(&format!(\"    {{\\n      \\\"location\\\": \\\"{}\\\",\\n\", location));\n");
+    code.push_str("        json.push_str(&format!(\"      \\\"taken\\\": {},\\n\", stats.taken));\n");
+    code.push_str("        json.push_str(&format!(\"      \\\"not_taken\\\": {},\\n\", stats.not_taken));\n");
+    code.push_str("        json.push_str(&format!(\"      \\\"prediction_rate\\\": {:.5}\\n\", prediction_rate));\n");
+    code.push_str("        json.push_str(\"    }\");\n");
+    code.push_str("    }\n\n");
+    code.push_str("    json.push_str(\"\\n  ],\\n\");\n");
     code.push_str("    json.push_str(\"  \\\"allocations\\\": {\\\"total_allocs\\\": 0, \\\"total_bytes\\\": 0, \\\"peak_memory_bytes\\\": 0, \\\"by_size\\\": {\\\"small\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}, \\\"medium\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}, \\\"large\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}}},\\n\");\n");
     code.push_str("    json.push_str(\"  \\\"statistics\\\": {\\\"total_runtime_ns\\\": 0, \\\"instrumentation_overhead_percent\\\": 0.0}\\n\");\n");
     code.push_str("    json.push_str(\"}\\n\");\n\n");
