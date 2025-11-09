@@ -162,6 +162,156 @@ ruchy profile --hotspots=10 --output=hotspots.json ./my_binary
 
 ---
 
+**COMPILED-INST-003: Binary Analysis Tooling** (GREEN Phase Complete)
+
+**Status**: ✅ GREEN phase complete (6/6 tests passing)
+**Branch**: `claude/instrument-ruchy-compile-*`
+**Tests**: 6/6 passing (100%)
+
+**Delivered**:
+- ✅ **`analyze` subcommand**: `ruchy analyze --size --symbols --optimize --startup --relocations --format <binary>`
+- ✅ **Binary size breakdown**: Section analysis (.text, .data, .rodata, .bss) with percentages
+- ✅ **Symbol table extraction**: Top 20 symbols by size + inlining candidates (<64 bytes)
+- ✅ **Optimization recommendations**: Dead code elimination, compression, function outlining
+- ✅ **Startup time profiling**: Total time, loader overhead, linking time, initialization time
+- ✅ **Relocation analysis**: Total relocations, type distribution (GOT, PLT, etc.)
+- ✅ **Format detection**: ELF/Mach-O/PE auto-detection with architecture details
+- ✅ **JSON export**: Complete structured output for all analysis modes
+
+**Files Created**:
+- Implementation: `src/bin/ruchy.rs` (extended by 400 LOC, total 1,182 LOC)
+- Tests: `tests/test_compiled_inst_003_binary_analysis.rs` (473 LOC, 6 tests)
+- Book chapter: `book/src/phase6_compiled_instrumentation/compiled-inst-003-binary-analysis.md` (650 LOC)
+- Reproducibility: `scripts/reproduce-compiled-inst-003.sh` (251 LOC, executable)
+
+**Analysis Capabilities**:
+```bash
+# Binary size breakdown
+ruchy analyze --size --output=size.json ./my_binary
+# Outputs: .text, .data, .rodata, .bss sections with sizes and percentages
+
+# Symbol table with inlining candidates
+ruchy analyze --symbols --output=symbols.json ./my_binary
+# Outputs: Top 20 symbols by size + functions <64 bytes (inline candidates)
+
+# Optimization recommendations
+ruchy analyze --optimize --output=optim.json ./my_binary
+# Outputs: DCE, compression, outlining suggestions with impact estimates
+
+# Startup time profiling
+ruchy analyze --startup --output=startup.json ./my_binary
+# Outputs: Loader time, linking time, init time breakdown
+
+# Relocation overhead
+ruchy analyze --relocations --output=reloc.json ./my_binary
+# Outputs: Total relocations, type distribution (GOT, PLT, etc.)
+
+# Format detection
+ruchy analyze --format --output=format.json ./my_binary
+# Outputs: ELF/Mach-O/PE with class, endian, machine type
+```
+
+**Performance Characteristics**:
+```
+Analysis time: <10ms for typical binaries (<1MB)
+Format detection: Instant (goblin parser)
+Symbol extraction: O(n) where n = symbol count
+Section analysis: O(n) where n = section count
+Overhead: Zero (static analysis, no execution)
+```
+
+**Binary Analysis Features**:
+| Feature | Status | Output |
+|---------|--------|--------|
+| Section size breakdown | ✅ | .text, .data, .rodata, .bss |
+| Symbol table | ✅ | Top 20 + inlining candidates |
+| Optimization advice | ✅ | DCE, compression, outlining |
+| Startup profiling | ✅ | Loader, linking, init times |
+| Relocation analysis | ✅ | Total count + type distribution |
+| Format detection | ✅ | ELF/Mach-O/PE auto-detect |
+| JSON export | ✅ | Complete structured output |
+| Multi-platform | 🟡 | ELF full, Mach-O/PE detection only |
+
+**Test Coverage** (6/6 tests passing):
+1. ✅ `test_binary_size_breakdown`: Section analysis with percentages
+2. ✅ `test_symbol_table_analysis`: Symbol extraction + inlining candidates
+3. ✅ `test_startup_time_profiling`: Performance measurement (<100ms threshold)
+4. ✅ `test_relocation_overhead`: Relocation counting and type distribution
+5. ✅ `test_optimization_recommendations`: DCE, compression, outlining advice
+6. ✅ `test_elf_format_support`: Format auto-detection (ELF on Linux)
+
+**Example Output** (Binary Size Analysis):
+```json
+{
+  "sections": {
+    "text": {"size": 2891776, "percentage": 74.16},
+    "data": {"size": 12288, "percentage": 0.32},
+    "rodata": {"size": 995072, "percentage": 25.52},
+    "bss": {"size": 80, "percentage": 0.00}
+  },
+  "total_size": 3899216
+}
+```
+
+**Example Output** (Symbol Table):
+```json
+{
+  "symbols": [
+    {"name": "large_function", "address": "0x4000", "size": 4096, "type": "FUNC"},
+    {"name": "fibonacci", "address": "0x5000", "size": 256, "type": "FUNC"}
+  ],
+  "inlining_candidates": [
+    {"name": "small_helper", "address": "0x6000", "size": 32, "type": "FUNC"}
+  ]
+}
+```
+
+**Example Output** (Optimization Recommendations):
+```json
+{
+  "recommendations": [
+    {
+      "type": "dead_code_elimination",
+      "description": "Remove unused functions: unused_function",
+      "impact_bytes": 100,
+      "priority": "high"
+    },
+    {
+      "type": "compression",
+      "description": "Binary size exceeds 1MB. Consider LTO and strip symbols.",
+      "impact_bytes": 389921,
+      "priority": "medium"
+    },
+    {
+      "type": "function_outlining",
+      "description": "Large functions found: 2 functions >1KB",
+      "impact_bytes": 200,
+      "priority": "medium"
+    }
+  ]
+}
+```
+
+**Impact**:
+- ✅ Developers can identify binary size optimization opportunities
+- ✅ Symbol table reveals inlining candidates for performance
+- ✅ Optimization recommendations provide actionable advice
+- ✅ Startup time profiling helps reduce cold start latency
+- ✅ Relocation analysis identifies dynamic linking overhead
+- 🎯 Enables path to ≤50% of C binary size (world-class size goal)
+
+**Next Steps**:
+1. REFACTOR: Add Mach-O full analysis support (currently detection only)
+2. REFACTOR: Add PE full analysis support (currently detection only)
+3. Implement DWARF symbol resolution (show demangled names)
+4. Add size comparison with C equivalent (baseline benchmarking)
+5. Generate visualization outputs (treemaps, graphs for binary size)
+6. Combine with COMPILED-INST-002 for comprehensive performance analysis
+
+**Commits**: 3 commits, ~1,774 LOC total
+
+---
+
 ## Current Status
 
 **Last Updated**: November 9, 2025
