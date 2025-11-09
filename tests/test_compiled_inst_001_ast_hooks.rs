@@ -23,8 +23,17 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 fn get_ruchy_path() -> PathBuf {
-    // Use system ruchy for compiled mode
-    PathBuf::from("ruchy")
+    // Look for ruchy in target/release first, then fall back to PATH
+    let target_release = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("release")
+        .join("ruchy");
+
+    if target_release.exists() {
+        target_release
+    } else {
+        PathBuf::from("ruchy")
+    }
 }
 
 #[test]
