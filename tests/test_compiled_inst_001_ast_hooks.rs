@@ -87,7 +87,7 @@ fun main() {
     let compile_output = Command::new(get_ruchy_path())
         .args(&[
             "compile",
-            "--instrument",  // RED: This flag doesn't exist yet
+            "--instrument", // RED: This flag doesn't exist yet
             "--output=/tmp/test_function_timing",
             test_file,
         ])
@@ -103,7 +103,7 @@ fun main() {
 
     // Run instrumented binary with profiling enabled
     let run_output = Command::new("/tmp/test_function_timing")
-        .env("RUCHY_PROFILE", "1")  // RED: Environment variable not supported
+        .env("RUCHY_PROFILE", "1") // RED: Environment variable not supported
         .env("RUCHY_PROFILE_OUTPUT", "/tmp/profile.json")
         .output()
         .expect("Failed to run");
@@ -115,31 +115,34 @@ fun main() {
     );
 
     // Parse profile output (RED: file won't exist)
-    let profile_data = fs::read_to_string("/tmp/profile.json")
-        .expect("Failed to read profile output");
+    let profile_data =
+        fs::read_to_string("/tmp/profile.json").expect("Failed to read profile output");
 
     // Validate JSON structure (RED: will fail - no JSON output)
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON output");
+    let profile: serde_json::Value =
+        serde_json::from_str(&profile_data).expect("Invalid JSON output");
 
     // Validate function timing data
-    let functions = profile["functions"].as_array()
+    let functions = profile["functions"]
+        .as_array()
         .expect("Missing functions array");
 
-    assert!(
-        !functions.is_empty(),
-        "No function timing data collected"
-    );
+    assert!(!functions.is_empty(), "No function timing data collected");
 
     // Find fibonacci function
-    let fibonacci_data = functions.iter()
+    let fibonacci_data = functions
+        .iter()
         .find(|f| f["name"].as_str() == Some("fibonacci"))
         .expect("fibonacci function not found in profile");
 
     // Validate timing metrics
     let calls = fibonacci_data["calls"].as_u64().expect("Missing calls");
-    let total_time = fibonacci_data["total_time_ns"].as_u64().expect("Missing total_time_ns");
-    let avg_time = fibonacci_data["avg_time_ns"].as_f64().expect("Missing avg_time_ns");
+    let total_time = fibonacci_data["total_time_ns"]
+        .as_u64()
+        .expect("Missing total_time_ns");
+    let avg_time = fibonacci_data["avg_time_ns"]
+        .as_f64()
+        .expect("Missing avg_time_ns");
 
     // fibonacci(20) should call fibonacci 21891 times
     assert_eq!(calls, 21891, "Incorrect call count");
@@ -212,20 +215,20 @@ fun main() {
     assert!(run_output.status.success());
 
     // Parse profile
-    let profile_data = fs::read_to_string("/tmp/profile_loop.json")
-        .expect("Failed to read profile output");
+    let profile_data =
+        fs::read_to_string("/tmp/profile_loop.json").expect("Failed to read profile output");
 
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
     // Validate loop data
-    let loops = profile["loops"].as_array()
-        .expect("Missing loops array");
+    let loops = profile["loops"].as_array().expect("Missing loops array");
 
     assert!(!loops.is_empty(), "No loop data collected");
 
     let loop_data = &loops[0];
-    let iterations = loop_data["iterations"].as_u64().expect("Missing iterations");
+    let iterations = loop_data["iterations"]
+        .as_u64()
+        .expect("Missing iterations");
 
     assert_eq!(iterations, 1000000, "Incorrect iteration count");
 
@@ -311,14 +314,14 @@ fun main() {
     assert!(run_output.status.success());
 
     // Parse profile
-    let profile_data = fs::read_to_string("/tmp/profile_branch.json")
-        .expect("Failed to read profile output");
+    let profile_data =
+        fs::read_to_string("/tmp/profile_branch.json").expect("Failed to read profile output");
 
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
     // Validate branch data
-    let branches = profile["branches"].as_array()
+    let branches = profile["branches"]
+        .as_array()
         .expect("Missing branches array");
 
     assert!(!branches.is_empty(), "No branch data collected");
@@ -331,7 +334,8 @@ fun main() {
 
         assert!(total > 0, "No branch executions recorded");
 
-        let prediction_rate = branch["prediction_rate"].as_f64()
+        let prediction_rate = branch["prediction_rate"]
+            .as_f64()
             .expect("Missing prediction_rate");
 
         assert!(
@@ -413,20 +417,20 @@ fun main() {
     assert!(run_output.status.success());
 
     // Parse profile
-    let profile_data = fs::read_to_string("/tmp/profile_alloc.json")
-        .expect("Failed to read profile output");
+    let profile_data =
+        fs::read_to_string("/tmp/profile_alloc.json").expect("Failed to read profile output");
 
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
     // Validate allocation data
     let allocs = &profile["allocations"];
 
-    let total_allocs = allocs["total_allocs"].as_u64()
+    let total_allocs = allocs["total_allocs"]
+        .as_u64()
         .expect("Missing total_allocs");
-    let total_bytes = allocs["total_bytes"].as_u64()
-        .expect("Missing total_bytes");
-    let peak_memory = allocs["peak_memory_bytes"].as_u64()
+    let total_bytes = allocs["total_bytes"].as_u64().expect("Missing total_bytes");
+    let peak_memory = allocs["peak_memory_bytes"]
+        .as_u64()
         .expect("Missing peak_memory_bytes");
 
     assert!(total_allocs > 0, "No allocations tracked");
@@ -434,12 +438,22 @@ fun main() {
     assert!(peak_memory > 0, "No peak memory tracked");
 
     // Verify size categorization
-    let by_size = allocs["by_size"].as_object()
+    let by_size = allocs["by_size"]
+        .as_object()
         .expect("Missing by_size breakdown");
 
-    assert!(by_size.contains_key("small"), "Missing small allocation category");
-    assert!(by_size.contains_key("medium"), "Missing medium allocation category");
-    assert!(by_size.contains_key("large"), "Missing large allocation category");
+    assert!(
+        by_size.contains_key("small"),
+        "Missing small allocation category"
+    );
+    assert!(
+        by_size.contains_key("medium"),
+        "Missing medium allocation category"
+    );
+    assert!(
+        by_size.contains_key("large"),
+        "Missing large allocation category"
+    );
 
     // Cleanup
     let _ = fs::remove_file(test_file);
@@ -480,11 +494,7 @@ fun main() {
 
     // Compile without instrumentation (baseline)
     let compile_baseline = Command::new(get_ruchy_path())
-        .args(&[
-            "compile",
-            "--output=/tmp/test_overhead_baseline",
-            test_file,
-        ])
+        .args(&["compile", "--output=/tmp/test_overhead_baseline", test_file])
         .output()
         .expect("Failed to compile baseline");
 
@@ -535,13 +545,17 @@ fun main() {
     }
 
     // Calculate statistics
-    let baseline_mean = baseline_times.iter()
+    let baseline_mean = baseline_times
+        .iter()
         .map(|d| d.as_nanos() as f64)
-        .sum::<f64>() / N as f64;
+        .sum::<f64>()
+        / N as f64;
 
-    let instrumented_mean = instrumented_times.iter()
+    let instrumented_mean = instrumented_times
+        .iter()
         .map(|d| d.as_nanos() as f64)
-        .sum::<f64>() / N as f64;
+        .sum::<f64>()
+        / N as f64;
 
     let overhead_percent = ((instrumented_mean - baseline_mean) / baseline_mean) * 100.0;
 
@@ -626,21 +640,32 @@ fun main() {
     assert!(run_output.status.success());
 
     // Parse and validate complete schema
-    let profile_data = fs::read_to_string("/tmp/profile_format.json")
-        .expect("Failed to read profile output");
+    let profile_data =
+        fs::read_to_string("/tmp/profile_format.json").expect("Failed to read profile output");
 
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
     // Validate top-level fields
     assert!(profile.get("version").is_some(), "Missing version field");
-    assert!(profile.get("timestamp").is_some(), "Missing timestamp field");
+    assert!(
+        profile.get("timestamp").is_some(),
+        "Missing timestamp field"
+    );
     assert!(profile.get("binary").is_some(), "Missing binary field");
-    assert!(profile.get("functions").is_some(), "Missing functions array");
+    assert!(
+        profile.get("functions").is_some(),
+        "Missing functions array"
+    );
     assert!(profile.get("loops").is_some(), "Missing loops array");
     assert!(profile.get("branches").is_some(), "Missing branches array");
-    assert!(profile.get("allocations").is_some(), "Missing allocations object");
-    assert!(profile.get("statistics").is_some(), "Missing statistics object");
+    assert!(
+        profile.get("allocations").is_some(),
+        "Missing allocations object"
+    );
+    assert!(
+        profile.get("statistics").is_some(),
+        "Missing statistics object"
+    );
 
     // Validate version
     let version = profile["version"].as_str().expect("Invalid version");
@@ -648,8 +673,14 @@ fun main() {
 
     // Validate statistics
     let stats = &profile["statistics"];
-    assert!(stats.get("total_runtime_ns").is_some(), "Missing total_runtime_ns");
-    assert!(stats.get("instrumentation_overhead_percent").is_some(), "Missing overhead metric");
+    assert!(
+        stats.get("total_runtime_ns").is_some(),
+        "Missing total_runtime_ns"
+    );
+    assert!(
+        stats.get("instrumentation_overhead_percent").is_some(),
+        "Missing overhead metric"
+    );
 
     // Cleanup
     let _ = fs::remove_file(test_file);
@@ -660,16 +691,16 @@ fun main() {
 // Helper function for standard deviation calculation
 fn calculate_std_dev(times: &[Duration]) -> f64 {
     let n = times.len() as f64;
-    let mean = times.iter()
-        .map(|d| d.as_nanos() as f64)
-        .sum::<f64>() / n;
+    let mean = times.iter().map(|d| d.as_nanos() as f64).sum::<f64>() / n;
 
-    let variance = times.iter()
+    let variance = times
+        .iter()
         .map(|d| {
             let diff = d.as_nanos() as f64 - mean;
             diff * diff
         })
-        .sum::<f64>() / n;
+        .sum::<f64>()
+        / n;
 
     variance.sqrt()
 }
