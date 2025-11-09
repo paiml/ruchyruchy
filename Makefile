@@ -533,15 +533,25 @@ complexity:
 	fi
 	@echo "✅ Complexity analysis passed"
 
-# Test coverage analysis (<10 min)
+# Test coverage analysis (<5 min)
 coverage:
-	@echo "☂️  Analyzing test coverage (<10 min)..."
-	@if command -v cargo-tarpaulin >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
-		timeout 600 cargo tarpaulin --target-dir target/tarpaulin --out Html --output-dir coverage/ --fail-under 80 --timeout 120; \
-	else \
-		echo "⚠️  Coverage analysis skipped (cargo-tarpaulin not available)"; \
-	fi
-	@echo "✅ Coverage analysis complete"
+	@echo "📊 Running test coverage analysis (<5 min)..."
+	@echo "🔍 Checking for cargo-llvm-cov..."
+	@which cargo-llvm-cov > /dev/null 2>&1 || (echo "📦 Installing cargo-llvm-cov..." && cargo install cargo-llvm-cov --locked)
+	@echo "🧹 Cleaning old coverage data..."
+	@cargo llvm-cov clean --workspace
+	@mkdir -p target/coverage
+	@echo "🧪 Phase 1: Running tests with instrumentation (lib tests only, no report)..."
+	@cargo llvm-cov --no-report test --lib 2>&1 | tee target/coverage/test-output.txt
+	@echo "📊 Phase 2: Generating coverage reports..."
+	@cargo llvm-cov report --html --output-dir target/coverage/html
+	@cargo llvm-cov report --lcov --output-path target/coverage/lcov.info
+	@echo ""
+	@echo "📊 Coverage Summary:"
+	@echo "=================="
+	@cargo llvm-cov report --summary-only
+	@echo ""
+	@echo "✅ Coverage analysis complete (HTML: target/coverage/html/index.html)"
 
 # Security vulnerability scan
 security:

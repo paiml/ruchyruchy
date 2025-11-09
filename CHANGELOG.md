@@ -24,14 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Runs critical interpreter tests (parser, chapter examples)
   - Excludes expensive tests (high-iteration property tests, fuzz tests)
   - Ideal for development workflow and rapid iteration
-- **`make coverage` (optimized)**: Added 10-minute timeout constraint
-  - Overall timeout: 600 seconds (10 minutes)
-  - Per-test timeout: 120 seconds (2 minutes)
-  - Prevents long-running tests from blocking CI/CD
+- **`make coverage` (optimized)**: Switched to cargo-llvm-cov (ruchy-style)
+  - Replaced cargo-tarpaulin with cargo-llvm-cov for faster execution
+  - Tests only lib tests (318 tests, no integration tests)
+  - Completes in ~18 seconds (<5 min target, **94% faster**)
+  - Generates HTML and LCOV reports automatically
+  - Matches ../ruchy coverage implementation style
 - **Four-Tier Testing Strategy**:
-  1. `make test-pre-commit-fast`: <30 sec, smoke tests (pre-commit hook)
-  2. `make test-fast`: <5 min, essential tests (development)
-  3. `make coverage`: <10 min, coverage analysis (validation)
+  1. `make test-pre-commit-fast`: <30 sec (actual 0.1s), smoke tests (pre-commit hook)
+  2. `make test-fast`: <5 min (actual 3:14), essential tests (development)
+  3. `make coverage`: <5 min (actual 18s), coverage analysis (validation)
   4. `make test`: No limit, comprehensive suite (CI/CD, releases)
 
 **Property Test Optimization**:
@@ -48,8 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Performance Results**:
 - `make test-pre-commit-fast`: ✅ 0.099s execution time (<30 sec target met, 71 tests)
 - `make test-fast`: ✅ 3:14 execution time (<5 min target met, 318+ tests)
-- `make coverage`: ✅ 10-minute timeout enforced
+- `make coverage`: ✅ 18.6s execution time (<5 min target met, 318 lib tests, 45.93% coverage)
 - Pre-commit hook: 99.97% faster (300s → 0.1s, **3000x speedup**)
+- Coverage analysis: 94% faster (cargo-llvm-cov vs cargo-tarpaulin)
 - Property tests: 90% faster execution (100 vs 1000 cases)
 - Developer productivity: **Instant commit feedback** established
 
