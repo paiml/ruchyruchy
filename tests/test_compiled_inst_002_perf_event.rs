@@ -55,7 +55,9 @@ fn get_ruchy_path() -> PathBuf {
 fn test_compile_and_profile_cpu_cycles() {
     // Step 1: Create test Ruchy program
     let test_file = "/tmp/test_cpu_cycles.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun fibonacci(n: i64) -> i64 {
     if n <= 1 { return n; }
     return fibonacci(n - 1) + fibonacci(n - 2);
@@ -65,7 +67,9 @@ fun main() {
     let result = fibonacci(20);
     println(result);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     // Step 2: Compile WITHOUT instrumentation (just regular compile)
     let binary_path = "/tmp/test_cpu_cycles_bin";
@@ -87,12 +91,20 @@ fun main() {
         .expect("Failed to run baseline");
     let baseline_time = baseline_start.elapsed();
 
-    assert!(baseline_output.status.success(), "Baseline execution failed");
+    assert!(
+        baseline_output.status.success(),
+        "Baseline execution failed"
+    );
 
     // Step 4: Profile execution with hardware counters
     let profile_start = Instant::now();
     let profile_output = Command::new(get_ruchy_path())
-        .args(&["profile", "--counters=cpu_cycles", "--output=/tmp/cpu_profile.json", binary_path])
+        .args(&[
+            "profile",
+            "--counters=cpu_cycles",
+            "--output=/tmp/cpu_profile.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to profile");
     let profile_time = profile_start.elapsed();
@@ -112,27 +124,33 @@ fun main() {
     );
 
     // Step 6: Verify profile data exists
-    let profile_data = fs::read_to_string("/tmp/cpu_profile.json")
-        .expect("Failed to read profile data");
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile_data =
+        fs::read_to_string("/tmp/cpu_profile.json").expect("Failed to read profile data");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
     // Verify structure
     assert!(profile["counters"].is_array(), "Missing counters array");
     let counters = profile["counters"].as_array().unwrap();
 
     // Should have CPU_CYCLES counter with function breakdown
-    let cpu_cycles = counters.iter()
+    let cpu_cycles = counters
+        .iter()
         .find(|c| c["name"] == "cpu_cycles")
         .expect("Missing cpu_cycles counter");
 
-    assert!(cpu_cycles["functions"].is_array(), "Missing function breakdown");
+    assert!(
+        cpu_cycles["functions"].is_array(),
+        "Missing function breakdown"
+    );
     assert!(
         cpu_cycles["functions"].as_array().unwrap().len() > 0,
         "No function-level CPU cycle data"
     );
 
-    println!("✅ CPU cycles profiling: overhead={:.2}%", (overhead - 1.0) * 100.0);
+    println!(
+        "✅ CPU cycles profiling: overhead={:.2}%",
+        (overhead - 1.0) * 100.0
+    );
 }
 
 /// Test 2: Profile cache misses
@@ -152,7 +170,9 @@ fun main() {
 #[ignore] // RED phase
 fn test_profile_cache_misses() {
     let test_file = "/tmp/test_cache.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun array_sum(size: i64) -> i64 {
     let mut sum = 0;
     for i in 0..size {
@@ -165,7 +185,9 @@ fun main() {
     let result = array_sum(1000000);
     println(result);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_cache_bin";
     Command::new(get_ruchy_path())
@@ -174,24 +196,36 @@ fun main() {
         .expect("Compilation failed");
 
     let profile_output = Command::new(get_ruchy_path())
-        .args(&["profile", "--counters=cache_misses", "--output=/tmp/cache_profile.json", binary_path])
+        .args(&[
+            "profile",
+            "--counters=cache_misses",
+            "--output=/tmp/cache_profile.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to profile");
 
     assert!(profile_output.status.success(), "Profiling failed");
 
-    let profile_data = fs::read_to_string("/tmp/cache_profile.json")
-        .expect("Failed to read profile");
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile_data =
+        fs::read_to_string("/tmp/cache_profile.json").expect("Failed to read profile");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
-    let cache_misses = profile["counters"].as_array().unwrap()
+    let cache_misses = profile["counters"]
+        .as_array()
+        .unwrap()
         .iter()
         .find(|c| c["name"] == "cache_misses")
         .expect("Missing cache_misses counter");
 
-    assert!(cache_misses["total_misses"].is_number(), "Missing total_misses");
-    assert!(cache_misses["functions"].is_array(), "Missing function breakdown");
+    assert!(
+        cache_misses["total_misses"].is_number(),
+        "Missing total_misses"
+    );
+    assert!(
+        cache_misses["functions"].is_array(),
+        "Missing function breakdown"
+    );
 
     println!("✅ Cache miss profiling working");
 }
@@ -213,7 +247,9 @@ fun main() {
 #[ignore] // RED phase
 fn test_profile_branch_mispredictions() {
     let test_file = "/tmp/test_branches.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun unpredictable_sum(n: i64) -> i64 {
     let mut sum = 0;
     for i in 0..n {
@@ -228,7 +264,9 @@ fun main() {
     let result = unpredictable_sum(100000);
     println(result);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_branches_bin";
     Command::new(get_ruchy_path())
@@ -237,24 +275,36 @@ fun main() {
         .expect("Compilation failed");
 
     let profile_output = Command::new(get_ruchy_path())
-        .args(&["profile", "--counters=branch_misses", "--output=/tmp/branch_profile.json", binary_path])
+        .args(&[
+            "profile",
+            "--counters=branch_misses",
+            "--output=/tmp/branch_profile.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to profile");
 
     assert!(profile_output.status.success(), "Profiling failed");
 
-    let profile_data = fs::read_to_string("/tmp/branch_profile.json")
-        .expect("Failed to read profile");
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile_data =
+        fs::read_to_string("/tmp/branch_profile.json").expect("Failed to read profile");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
-    let branch_misses = profile["counters"].as_array().unwrap()
+    let branch_misses = profile["counters"]
+        .as_array()
+        .unwrap()
         .iter()
         .find(|c| c["name"] == "branch_misses")
         .expect("Missing branch_misses counter");
 
-    assert!(branch_misses["total_misses"].is_number(), "Missing total_misses");
-    assert!(branch_misses["functions"].is_array(), "Missing function breakdown");
+    assert!(
+        branch_misses["total_misses"].is_number(),
+        "Missing total_misses"
+    );
+    assert!(
+        branch_misses["functions"].is_array(),
+        "Missing function breakdown"
+    );
 
     println!("✅ Branch misprediction profiling working");
 }
@@ -277,7 +327,9 @@ fun main() {
 #[ignore] // RED phase
 fn test_generate_flame_graph() {
     let test_file = "/tmp/test_flamegraph.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun compute_a(n: i64) -> i64 {
     let mut sum = 0;
     for i in 0..n { sum = sum + i; }
@@ -295,7 +347,9 @@ fun main() {
     let b = compute_b(200000);
     println(a + b);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_flamegraph_bin";
     Command::new(get_ruchy_path())
@@ -308,21 +362,26 @@ fun main() {
             "profile",
             "--flame-graph=/tmp/flamegraph.svg",
             "--sampling-rate=1000",
-            binary_path
+            binary_path,
         ])
         .output()
         .expect("Failed to profile");
 
-    assert!(profile_output.status.success(), "Flame graph generation failed");
+    assert!(
+        profile_output.status.success(),
+        "Flame graph generation failed"
+    );
 
     // Verify SVG file exists
-    let svg_content = fs::read_to_string("/tmp/flamegraph.svg")
-        .expect("Flame graph SVG not generated");
+    let svg_content =
+        fs::read_to_string("/tmp/flamegraph.svg").expect("Flame graph SVG not generated");
 
     // Basic validation
     assert!(svg_content.contains("<svg"), "Invalid SVG format");
-    assert!(svg_content.contains("compute_a") || svg_content.contains("compute_b"),
-        "Flame graph missing function names");
+    assert!(
+        svg_content.contains("compute_a") || svg_content.contains("compute_b"),
+        "Flame graph missing function names"
+    );
 
     println!("✅ Flame graph generated ({} bytes)", svg_content.len());
 }
@@ -345,7 +404,9 @@ fun main() {
 #[ignore] // RED phase
 fn test_identify_hotspots() {
     let test_file = "/tmp/test_hotspots.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun hot_function(n: i64) -> i64 {
     let mut sum = 0;
     for i in 0..n { sum = sum + i; }
@@ -361,7 +422,9 @@ fun main() {
     let cold = cold_function(10);
     println(hot + cold);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_hotspots_bin";
     Command::new(get_ruchy_path())
@@ -374,17 +437,15 @@ fun main() {
             "profile",
             "--hotspots=10",
             "--output=/tmp/hotspots.json",
-            binary_path
+            binary_path,
         ])
         .output()
         .expect("Failed to profile");
 
     assert!(profile_output.status.success(), "Hotspot analysis failed");
 
-    let hotspot_data = fs::read_to_string("/tmp/hotspots.json")
-        .expect("Failed to read hotspots");
-    let hotspots: serde_json::Value = serde_json::from_str(&hotspot_data)
-        .expect("Invalid JSON");
+    let hotspot_data = fs::read_to_string("/tmp/hotspots.json").expect("Failed to read hotspots");
+    let hotspots: serde_json::Value = serde_json::from_str(&hotspot_data).expect("Invalid JSON");
 
     assert!(hotspots["hotspots"].is_array(), "Missing hotspots array");
     let top_functions = hotspots["hotspots"].as_array().unwrap();
@@ -400,11 +461,17 @@ fun main() {
 
     // hot_function should be the top hotspot
     assert!(
-        top_fn["function"].as_str().unwrap().contains("hot_function"),
+        top_fn["function"]
+            .as_str()
+            .unwrap()
+            .contains("hot_function"),
         "Expected hot_function to be top hotspot"
     );
 
-    println!("✅ Hotspot identification: {} functions", top_functions.len());
+    println!(
+        "✅ Hotspot identification: {} functions",
+        top_functions.len()
+    );
 }
 
 /// Test 6: Multi-counter profiling (CPU + cache + branches)
@@ -424,7 +491,9 @@ fun main() {
 #[ignore] // RED phase
 fn test_multi_counter_profiling() {
     let test_file = "/tmp/test_multi.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun compute(n: i64) -> i64 {
     let mut sum = 0;
     for i in 0..n {
@@ -437,7 +506,9 @@ fun main() {
     let result = compute(500000);
     println(result);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_multi_bin";
     Command::new(get_ruchy_path())
@@ -450,37 +521,55 @@ fun main() {
             "profile",
             "--counters=cpu_cycles,cache_misses,branch_misses",
             "--output=/tmp/multi_profile.json",
-            binary_path
+            binary_path,
         ])
         .output()
         .expect("Failed to profile");
 
-    assert!(profile_output.status.success(), "Multi-counter profiling failed");
+    assert!(
+        profile_output.status.success(),
+        "Multi-counter profiling failed"
+    );
 
-    let profile_data = fs::read_to_string("/tmp/multi_profile.json")
-        .expect("Failed to read profile");
-    let profile: serde_json::Value = serde_json::from_str(&profile_data)
-        .expect("Invalid JSON");
+    let profile_data =
+        fs::read_to_string("/tmp/multi_profile.json").expect("Failed to read profile");
+    let profile: serde_json::Value = serde_json::from_str(&profile_data).expect("Invalid JSON");
 
     let counters = profile["counters"].as_array().unwrap();
     assert_eq!(counters.len(), 3, "Expected 3 counters");
 
     // Verify all counters present
-    let counter_names: Vec<&str> = counters.iter()
+    let counter_names: Vec<&str> = counters
+        .iter()
         .map(|c| c["name"].as_str().unwrap())
         .collect();
 
     assert!(counter_names.contains(&"cpu_cycles"), "Missing cpu_cycles");
-    assert!(counter_names.contains(&"cache_misses"), "Missing cache_misses");
-    assert!(counter_names.contains(&"branch_misses"), "Missing branch_misses");
+    assert!(
+        counter_names.contains(&"cache_misses"),
+        "Missing cache_misses"
+    );
+    assert!(
+        counter_names.contains(&"branch_misses"),
+        "Missing branch_misses"
+    );
 
     // Verify derived metrics
-    assert!(profile["derived_metrics"].is_object(), "Missing derived metrics");
+    assert!(
+        profile["derived_metrics"].is_object(),
+        "Missing derived metrics"
+    );
     let metrics = profile["derived_metrics"].as_object().unwrap();
 
     assert!(metrics.contains_key("ipc"), "Missing IPC metric");
-    assert!(metrics.contains_key("cache_miss_rate"), "Missing cache miss rate");
-    assert!(metrics.contains_key("branch_miss_rate"), "Missing branch miss rate");
+    assert!(
+        metrics.contains_key("cache_miss_rate"),
+        "Missing cache miss rate"
+    );
+    assert!(
+        metrics.contains_key("branch_miss_rate"),
+        "Missing branch miss rate"
+    );
 
     println!("✅ Multi-counter profiling with derived metrics working");
 }

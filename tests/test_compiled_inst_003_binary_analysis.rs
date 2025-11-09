@@ -50,7 +50,9 @@ fn get_ruchy_path() -> PathBuf {
 fn test_binary_size_breakdown() {
     // Create test Ruchy program
     let test_file = "/tmp/test_size.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun fibonacci(n: i64) -> i64 {
     if n <= 1 { return n; }
     return fibonacci(n - 1) + fibonacci(n - 2);
@@ -60,7 +62,9 @@ fun main() {
     let result = fibonacci(20);
     println(result);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     // Compile to binary
     let binary_path = "/tmp/test_size_bin";
@@ -73,7 +77,12 @@ fun main() {
 
     // Analyze binary size
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&["analyze", "--size", "--output=/tmp/size_analysis.json", binary_path])
+        .args(&[
+            "analyze",
+            "--size",
+            "--output=/tmp/size_analysis.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to analyze");
 
@@ -84,10 +93,8 @@ fun main() {
     );
 
     // Verify JSON structure
-    let analysis = fs::read_to_string("/tmp/size_analysis.json")
-        .expect("Failed to read analysis");
-    let json: serde_json::Value = serde_json::from_str(&analysis)
-        .expect("Invalid JSON");
+    let analysis = fs::read_to_string("/tmp/size_analysis.json").expect("Failed to read analysis");
+    let json: serde_json::Value = serde_json::from_str(&analysis).expect("Invalid JSON");
 
     // Verify sections
     assert!(json["sections"].is_object(), "Missing sections object");
@@ -99,8 +106,14 @@ fun main() {
     assert!(sections.contains_key("bss"), "Missing .bss section");
 
     // Verify sizes are numbers
-    assert!(sections["text"]["size"].is_number(), ".text size not a number");
-    assert!(sections["data"]["size"].is_number(), ".data size not a number");
+    assert!(
+        sections["text"]["size"].is_number(),
+        ".text size not a number"
+    );
+    assert!(
+        sections["data"]["size"].is_number(),
+        ".data size not a number"
+    );
 
     // Verify total size
     let total_size = json["total_size"].as_u64().expect("Missing total_size");
@@ -109,7 +122,8 @@ fun main() {
         .len();
 
     // Total should match file size (±10% for headers)
-    let diff_percent = ((total_size as f64 - actual_size as f64).abs() / actual_size as f64) * 100.0;
+    let diff_percent =
+        ((total_size as f64 - actual_size as f64).abs() / actual_size as f64) * 100.0;
     assert!(
         diff_percent < 10.0,
         "Total size {} differs too much from actual size {} ({:.1}%)",
@@ -139,7 +153,9 @@ fun main() {
 #[test]
 fn test_symbol_table_analysis() {
     let test_file = "/tmp/test_symbols.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun small_helper(x: i64) -> i64 {
     x + 1
 }
@@ -156,7 +172,9 @@ fun main() {
     let result = large_function(1000);
     println(result);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_symbols_bin";
     Command::new(get_ruchy_path())
@@ -165,16 +183,20 @@ fun main() {
         .expect("Compilation failed");
 
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&["analyze", "--symbols", "--output=/tmp/symbols_analysis.json", binary_path])
+        .args(&[
+            "analyze",
+            "--symbols",
+            "--output=/tmp/symbols_analysis.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to analyze");
 
     assert!(analyze_output.status.success(), "Symbol analysis failed");
 
-    let analysis = fs::read_to_string("/tmp/symbols_analysis.json")
-        .expect("Failed to read analysis");
-    let json: serde_json::Value = serde_json::from_str(&analysis)
-        .expect("Invalid JSON");
+    let analysis =
+        fs::read_to_string("/tmp/symbols_analysis.json").expect("Failed to read analysis");
+    let json: serde_json::Value = serde_json::from_str(&analysis).expect("Invalid JSON");
 
     // Verify symbol table structure
     assert!(json["symbols"].is_array(), "Missing symbols array");
@@ -191,7 +213,10 @@ fun main() {
     }
 
     // Verify inlining candidates identified
-    assert!(json["inlining_candidates"].is_array(), "Missing inlining candidates");
+    assert!(
+        json["inlining_candidates"].is_array(),
+        "Missing inlining candidates"
+    );
     let candidates = json["inlining_candidates"].as_array().unwrap();
 
     // Should have at least some inlining candidates
@@ -206,7 +231,10 @@ fun main() {
         assert!(size < 64, "Candidate size {} exceeds 64 bytes", size);
     }
 
-    println!("✅ Symbol table analysis working: {} inlining candidates", candidates.len());
+    println!(
+        "✅ Symbol table analysis working: {} inlining candidates",
+        candidates.len()
+    );
 }
 
 /// Test 3: Startup time profiling
@@ -226,11 +254,15 @@ fun main() {
 #[test]
 fn test_startup_time_profiling() {
     let test_file = "/tmp/test_startup.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     println(42);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_startup_bin";
     Command::new(get_ruchy_path())
@@ -240,16 +272,20 @@ fun main() {
 
     // Profile startup time
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&["analyze", "--startup", "--output=/tmp/startup_analysis.json", binary_path])
+        .args(&[
+            "analyze",
+            "--startup",
+            "--output=/tmp/startup_analysis.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to analyze");
 
     assert!(analyze_output.status.success(), "Startup analysis failed");
 
-    let analysis = fs::read_to_string("/tmp/startup_analysis.json")
-        .expect("Failed to read analysis");
-    let json: serde_json::Value = serde_json::from_str(&analysis)
-        .expect("Invalid JSON");
+    let analysis =
+        fs::read_to_string("/tmp/startup_analysis.json").expect("Failed to read analysis");
+    let json: serde_json::Value = serde_json::from_str(&analysis).expect("Invalid JSON");
 
     // Verify startup breakdown
     assert!(json["startup_time_us"].is_number(), "Missing startup time");
@@ -287,7 +323,9 @@ fun main() {
 #[test]
 fn test_relocation_overhead() {
     let test_file = "/tmp/test_reloc.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun call_many_functions() {
     println(1);
     println(2);
@@ -299,7 +337,9 @@ fun call_many_functions() {
 fun main() {
     call_many_functions();
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_reloc_bin";
     Command::new(get_ruchy_path())
@@ -308,29 +348,47 @@ fun main() {
         .expect("Compilation failed");
 
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&["analyze", "--relocations", "--output=/tmp/reloc_analysis.json", binary_path])
+        .args(&[
+            "analyze",
+            "--relocations",
+            "--output=/tmp/reloc_analysis.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to analyze");
 
-    assert!(analyze_output.status.success(), "Relocation analysis failed");
+    assert!(
+        analyze_output.status.success(),
+        "Relocation analysis failed"
+    );
 
-    let analysis = fs::read_to_string("/tmp/reloc_analysis.json")
-        .expect("Failed to read analysis");
-    let json: serde_json::Value = serde_json::from_str(&analysis)
-        .expect("Invalid JSON");
+    let analysis = fs::read_to_string("/tmp/reloc_analysis.json").expect("Failed to read analysis");
+    let json: serde_json::Value = serde_json::from_str(&analysis).expect("Invalid JSON");
 
     // Verify relocation stats
-    assert!(json["total_relocations"].is_number(), "Missing total relocations");
-    assert!(json["relocation_types"].is_object(), "Missing relocation types");
+    assert!(
+        json["total_relocations"].is_number(),
+        "Missing total relocations"
+    );
+    assert!(
+        json["relocation_types"].is_object(),
+        "Missing relocation types"
+    );
 
     let total_relocs = json["total_relocations"].as_u64().unwrap();
-    assert!(total_relocs > 0, "Expected some relocations for println calls");
+    assert!(
+        total_relocs > 0,
+        "Expected some relocations for println calls"
+    );
 
     // Verify types breakdown (GOT, PLT, etc.)
     let types = json["relocation_types"].as_object().unwrap();
     assert!(types.len() > 0, "No relocation types found");
 
-    println!("✅ Relocation analysis working: {} relocations", total_relocs);
+    println!(
+        "✅ Relocation analysis working: {} relocations",
+        total_relocs
+    );
 }
 
 /// Test 5: Optimization recommendations
@@ -351,7 +409,9 @@ fun main() {
 #[test]
 fn test_optimization_recommendations() {
     let test_file = "/tmp/test_optim.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun unused_function(x: i64) -> i64 {
     x * 2
 }
@@ -370,7 +430,9 @@ fun main() {
     let result = large_repetitive_function(100);
     println(result);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_optim_bin";
     Command::new(get_ruchy_path())
@@ -379,19 +441,28 @@ fun main() {
         .expect("Compilation failed");
 
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&["analyze", "--optimize", "--output=/tmp/optim_analysis.json", binary_path])
+        .args(&[
+            "analyze",
+            "--optimize",
+            "--output=/tmp/optim_analysis.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to analyze");
 
-    assert!(analyze_output.status.success(), "Optimization analysis failed");
+    assert!(
+        analyze_output.status.success(),
+        "Optimization analysis failed"
+    );
 
-    let analysis = fs::read_to_string("/tmp/optim_analysis.json")
-        .expect("Failed to read analysis");
-    let json: serde_json::Value = serde_json::from_str(&analysis)
-        .expect("Invalid JSON");
+    let analysis = fs::read_to_string("/tmp/optim_analysis.json").expect("Failed to read analysis");
+    let json: serde_json::Value = serde_json::from_str(&analysis).expect("Invalid JSON");
 
     // Verify recommendations structure
-    assert!(json["recommendations"].is_array(), "Missing recommendations");
+    assert!(
+        json["recommendations"].is_array(),
+        "Missing recommendations"
+    );
     let recommendations = json["recommendations"].as_array().unwrap();
 
     assert!(recommendations.len() > 0, "No recommendations generated");
@@ -399,18 +470,30 @@ fun main() {
     // Verify each recommendation has required fields
     for rec in recommendations {
         assert!(rec["type"].is_string(), "Recommendation missing type");
-        assert!(rec["description"].is_string(), "Recommendation missing description");
-        assert!(rec["impact_bytes"].is_number(), "Recommendation missing impact");
-        assert!(rec["priority"].is_string(), "Recommendation missing priority");
+        assert!(
+            rec["description"].is_string(),
+            "Recommendation missing description"
+        );
+        assert!(
+            rec["impact_bytes"].is_number(),
+            "Recommendation missing impact"
+        );
+        assert!(
+            rec["priority"].is_string(),
+            "Recommendation missing priority"
+        );
     }
 
     // Should have dead code elimination recommendation for unused_function
-    let has_dce = recommendations.iter().any(|r|
-        r["type"].as_str().unwrap() == "dead_code_elimination"
-    );
+    let has_dce = recommendations
+        .iter()
+        .any(|r| r["type"].as_str().unwrap() == "dead_code_elimination");
     assert!(has_dce, "No DCE recommendation found");
 
-    println!("✅ Optimization recommendations working: {} suggestions", recommendations.len());
+    println!(
+        "✅ Optimization recommendations working: {} suggestions",
+        recommendations.len()
+    );
 }
 
 /// Test 6: Multi-platform binary format support
@@ -431,11 +514,15 @@ fun main() {
 #[test]
 fn test_elf_format_support() {
     let test_file = "/tmp/test_elf.ruchy";
-    fs::write(test_file, r#"
+    fs::write(
+        test_file,
+        r#"
 fun main() {
     println(42);
 }
-"#).expect("Failed to write test file");
+"#,
+    )
+    .expect("Failed to write test file");
 
     let binary_path = "/tmp/test_elf_bin";
     Command::new(get_ruchy_path())
@@ -445,16 +532,20 @@ fun main() {
 
     // Analyze should auto-detect ELF format
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&["analyze", "--format", "--output=/tmp/format_analysis.json", binary_path])
+        .args(&[
+            "analyze",
+            "--format",
+            "--output=/tmp/format_analysis.json",
+            binary_path,
+        ])
         .output()
         .expect("Failed to analyze");
 
     assert!(analyze_output.status.success(), "Format detection failed");
 
-    let analysis = fs::read_to_string("/tmp/format_analysis.json")
-        .expect("Failed to read analysis");
-    let json: serde_json::Value = serde_json::from_str(&analysis)
-        .expect("Invalid JSON");
+    let analysis =
+        fs::read_to_string("/tmp/format_analysis.json").expect("Failed to read analysis");
+    let json: serde_json::Value = serde_json::from_str(&analysis).expect("Invalid JSON");
 
     // Verify format detection
     assert!(json["format"].is_string(), "Missing format field");
