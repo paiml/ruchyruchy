@@ -131,6 +131,12 @@
 - [INTERP-099: Comprehensive Integration Test Suite](./phase5_interpreter/interp-099-integration.md)
 - [QUALITY-001: Test Infrastructure Meta-Validation](./phase5_interpreter/quality-001-meta-tests.md)
 
+# Phase 6: Compiled Instrumentation - IN PROGRESS! 🚀
+
+## Extreme Profiling for World-Class Performance (1/3) ⏳
+
+- [COMPILED-INST-001: AST-Level Instrumentation Hooks](./phase6_compiled_instrumentation/compiled-inst-001-ast-instrumentation.md)
+
 # Discoveries
 
 - [Runtime Enhancements](./discoveries/runtime-enhancements.md)
