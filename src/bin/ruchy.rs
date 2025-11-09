@@ -252,10 +252,10 @@ fn instrument_loops(code: &str) -> String {
     // Insert loop iteration tracking for each for loop
     // Pattern: for VAR in RANGE { → for VAR in RANGE { record_loop_iter(...);
     let mut result = String::new();
-    let mut lines: Vec<&str> = code.lines().collect();
+    let lines: Vec<&str> = code.lines().collect();
     let mut loop_id = 0;
 
-    for (line_num, line) in lines.iter().enumerate() {
+    for line in lines.iter() {
         result.push_str(line);
         result.push('\n');
 
@@ -581,7 +581,7 @@ fn compile_rust(rust_code: &str, output_file: &str) {
     fs::remove_file(&temp_rust).ok();
 }
 
-fn handle_profile(args: &[String]) {
+fn handle_profile(_args: &[String]) {
     #[cfg(not(feature = "profiling"))]
     {
         eprintln!("Error: profiling feature not enabled");
@@ -839,9 +839,7 @@ fn generate_profile_json(
 }
 
 fn handle_analyze(args: &[String]) {
-    use goblin::elf::Elf;
     use goblin::Object;
-    use std::time::Instant;
 
     let mut analyze_size = false;
     let mut analyze_symbols = false;
@@ -951,7 +949,7 @@ fn handle_analyze(args: &[String]) {
                 if sections_done < total_sections {
                     json.push_str(",\n");
                 } else {
-                    json.push_str("\n");
+                    json.push('\n');
                 }
             }
 
@@ -962,7 +960,7 @@ fn handle_analyze(args: &[String]) {
                 if sections_done < total_sections {
                     json.push_str(",\n");
                 } else {
-                    json.push_str("\n");
+                    json.push('\n');
                 }
             }
 
@@ -973,7 +971,7 @@ fn handle_analyze(args: &[String]) {
                 if sections_done < total_sections {
                     json.push_str(",\n");
                 } else {
-                    json.push_str("\n");
+                    json.push('\n');
                 }
             }
 
@@ -984,7 +982,7 @@ fn handle_analyze(args: &[String]) {
                 if sections_done < total_sections {
                     json.push_str(",\n");
                 } else {
-                    json.push_str("\n");
+                    json.push('\n');
                 }
             }
 
@@ -995,7 +993,7 @@ fn handle_analyze(args: &[String]) {
                 if sections_done < total_sections {
                     json.push_str(",\n");
                 } else {
-                    json.push_str("\n");
+                    json.push('\n');
                 }
             }
 
@@ -1006,7 +1004,7 @@ fn handle_analyze(args: &[String]) {
                 if sections_done < total_sections {
                     json.push_str(",\n");
                 } else {
-                    json.push_str("\n");
+                    json.push('\n');
                 }
             }
         }
@@ -1154,9 +1152,9 @@ fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
         ));
         json.push_str("    }");
         if i < symbols_vec.len().min(20) - 1 {
-            json.push_str(",");
+            json.push(',');
         }
-        json.push_str("\n");
+        json.push('\n');
     }
 
     json.push_str("  ],\n");
@@ -1181,9 +1179,9 @@ fn analyze_elf_symbols(elf: &goblin::elf::Elf, json: &mut String) {
         json.push_str(&format!("      \"size\": {}\n", sym.st_size));
         json.push_str("    }");
         if i < small_funcs.len() - 1 {
-            json.push_str(",");
+            json.push(',');
         }
-        json.push_str("\n");
+        json.push('\n');
     }
 
     json.push_str("  ]");
@@ -1226,9 +1224,9 @@ fn analyze_elf_relocations(elf: &goblin::elf::Elf, json: &mut String) {
     for (i, (rtype, count)) in types_vec.iter().enumerate() {
         json.push_str(&format!("    \"type_{}\": {}", rtype, count));
         if i < types_vec.len() - 1 {
-            json.push_str(",");
+            json.push(',');
         }
-        json.push_str("\n");
+        json.push('\n');
     }
     json.push_str("  }");
 }
@@ -1313,9 +1311,9 @@ fn analyze_optimizations(elf: &goblin::elf::Elf, binary_data: &[u8], json: &mut 
         json.push_str(&format!("      \"priority\": \"{}\"\n", priority));
         json.push_str("    }");
         if i < recommendations.len() - 1 {
-            json.push_str(",");
+            json.push(',');
         }
-        json.push_str("\n");
+        json.push('\n');
     }
 
     json.push_str("  ]");

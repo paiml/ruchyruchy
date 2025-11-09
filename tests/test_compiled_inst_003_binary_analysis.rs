@@ -15,7 +15,6 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::Instant;
 
 /// Helper: Find ruchy binary in target/release or PATH
 fn get_ruchy_path() -> PathBuf {
@@ -69,7 +68,7 @@ fun main() {
     // Compile to binary
     let binary_path = "/tmp/test_size_bin";
     let compile_output = Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .output()
         .expect("Failed to compile");
 
@@ -77,7 +76,7 @@ fun main() {
 
     // Analyze binary size
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "analyze",
             "--size",
             "--output=/tmp/size_analysis.json",
@@ -178,12 +177,12 @@ fun main() {
 
     let binary_path = "/tmp/test_symbols_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "analyze",
             "--symbols",
             "--output=/tmp/symbols_analysis.json",
@@ -202,7 +201,7 @@ fun main() {
     assert!(json["symbols"].is_array(), "Missing symbols array");
     let symbols = json["symbols"].as_array().unwrap();
 
-    assert!(symbols.len() > 0, "No symbols found");
+    assert!(!symbols.is_empty(), "No symbols found");
 
     // Verify each symbol has required fields
     for symbol in symbols {
@@ -220,7 +219,7 @@ fun main() {
     let candidates = json["inlining_candidates"].as_array().unwrap();
 
     // Should have at least some inlining candidates
-    assert!(candidates.len() > 0, "No inlining candidates found");
+    assert!(!candidates.is_empty(), "No inlining candidates found");
 
     // Verify all candidates are small functions (<64 bytes)
     for candidate in candidates {
@@ -266,13 +265,13 @@ fun main() {
 
     let binary_path = "/tmp/test_startup_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     // Profile startup time
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "analyze",
             "--startup",
             "--output=/tmp/startup_analysis.json",
@@ -343,12 +342,12 @@ fun main() {
 
     let binary_path = "/tmp/test_reloc_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "analyze",
             "--relocations",
             "--output=/tmp/reloc_analysis.json",
@@ -383,7 +382,7 @@ fun main() {
 
     // Verify types breakdown (GOT, PLT, etc.)
     let types = json["relocation_types"].as_object().unwrap();
-    assert!(types.len() > 0, "No relocation types found");
+    assert!(!types.is_empty(), "No relocation types found");
 
     println!(
         "✅ Relocation analysis working: {} relocations",
@@ -436,12 +435,12 @@ fun main() {
 
     let binary_path = "/tmp/test_optim_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "analyze",
             "--optimize",
             "--output=/tmp/optim_analysis.json",
@@ -465,7 +464,7 @@ fun main() {
     );
     let recommendations = json["recommendations"].as_array().unwrap();
 
-    assert!(recommendations.len() > 0, "No recommendations generated");
+    assert!(!recommendations.is_empty(), "No recommendations generated");
 
     // Verify each recommendation has required fields
     for rec in recommendations {
@@ -526,13 +525,13 @@ fun main() {
 
     let binary_path = "/tmp/test_elf_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     // Analyze should auto-detect ELF format
     let analyze_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "analyze",
             "--format",
             "--output=/tmp/format_analysis.json",
