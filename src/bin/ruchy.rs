@@ -21,6 +21,7 @@ fn main() {
 
     match args[1].as_str() {
         "compile" => handle_compile(&args[2..]),
+        "profile" => handle_profile(&args[2..]),
         "version" | "--version" | "-v" => {
             println!("ruchy (RuchyRuchy prototype) {}", VERSION);
             exit(0);
@@ -38,13 +39,25 @@ fn main() {
 }
 
 fn print_usage() {
-    eprintln!("ruchy (RuchyRuchy COMPILED-INST-001 Prototype)");
+    eprintln!("ruchy (RuchyRuchy COMPILED-INST-001/002 Prototype)");
     eprintln!();
     eprintln!("USAGE:");
     eprintln!("    ruchy compile [--instrument] <file.ruchy> --output <binary>");
+    eprintln!("    ruchy profile [--counters=<list>] [--output=<json>] <binary>");
     eprintln!();
-    eprintln!("FLAGS:");
-    eprintln!("    --instrument    Enable profiling instrumentation");
+    eprintln!("SUBCOMMANDS:");
+    eprintln!("    compile     Compile Ruchy source to binary");
+    eprintln!("    profile     Profile compiled binary with hardware counters");
+    eprintln!();
+    eprintln!("COMPILE FLAGS:");
+    eprintln!("    --instrument    Enable AST-level profiling instrumentation");
+    eprintln!();
+    eprintln!("PROFILE FLAGS:");
+    eprintln!("    --counters=<list>     Hardware counters (cpu_cycles,cache_misses,branch_misses)");
+    eprintln!("    --output=<json>       Output JSON profile data");
+    eprintln!("    --flame-graph=<svg>   Generate flame graph SVG");
+    eprintln!("    --hotspots=<N>        Identify top N hotspot functions");
+    eprintln!("    --sampling-rate=<Hz>  Sampling frequency (default: 1000Hz)");
 }
 
 fn handle_compile(args: &[String]) {
@@ -129,6 +142,9 @@ fn compile_instrumented(ruchy_source: &str, output_file: &str) {
 
     // Instrument loops with iteration tracking
     transformed = instrument_loops(&transformed);
+
+    // Instrument branches with taken/not-taken tracking
+    transformed = instrument_branches(&transformed);
 
     // Instrument main function with init/export calls
     transformed = instrument_main(&transformed);
@@ -237,6 +253,51 @@ fn instrument_loops(code: &str) -> String {
     result
 }
 
+fn instrument_branches(code: &str) -> String {
+    // Insert branch tracking for if statements
+    // Pattern: if CONDITION { → if record_branch("branch_N", CONDITION) {
+    let mut result = String::new();
+    let mut branch_id = 0;
+    let mut chars = code.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        result.push(c);
+
+        // Look for "if " pattern
+        if result.ends_with("if ") {
+            // Collect the condition until we hit '{'
+            let mut condition = String::new();
+            let mut depth = 0;
+
+            while let Some(ch) = chars.peek() {
+                if *ch == '(' {
+                    depth += 1;
+                    condition.push(chars.next().unwrap());
+                } else if *ch == ')' {
+                    depth -= 1;
+                    condition.push(chars.next().unwrap());
+                } else if *ch == '{' && depth == 0 {
+                    // Found the opening brace
+                    break;
+                } else {
+                    condition.push(chars.next().unwrap());
+                }
+            }
+
+            let condition = condition.trim();
+            if !condition.is_empty() {
+                // Wrap condition with record_branch
+                result.push_str(&format!("record_branch(\"branch_{}\", {}) ", branch_id, condition));
+                branch_id += 1;
+            } else {
+                result.push_str(condition);
+            }
+        }
+    }
+
+    result
+}
+
 fn instrument_main(code: &str) -> String {
     // Find main() and add profiler calls
     if let Some(main_pos) = code.find("fn main()") {
@@ -280,11 +341,12 @@ fn generate_profiler_runtime() -> String {
     code.push_str("struct ProfilerData {\n");
     code.push_str("    functions: HashMap<String, FunctionStats>,\n");
     code.push_str("    loops: HashMap<String, LoopStats>,\n");
+    code.push_str("    branches: HashMap<String, BranchStats>,\n");
     code.push_str("}\n\n");
 
     code.push_str("impl ProfilerData {\n");
     code.push_str("    fn new() -> Self {\n");
-    code.push_str("        Self { functions: HashMap::new(), loops: HashMap::new() }\n");
+    code.push_str("        Self { functions: HashMap::new(), loops: HashMap::new(), branches: HashMap::new() }\n");
     code.push_str("    }\n");
     code.push_str("}\n\n");
 
@@ -308,6 +370,18 @@ fn generate_profiler_runtime() -> String {
     code.push_str("impl LoopStats {\n");
     code.push_str("    fn new() -> Self {\n");
     code.push_str("        Self { iterations: 0 }\n");
+    code.push_str("    }\n");
+    code.push_str("}\n\n");
+
+    code.push_str("#[derive(Debug, Clone)]\n");
+    code.push_str("struct BranchStats {\n");
+    code.push_str("    taken: u64,\n");
+    code.push_str("    not_taken: u64,\n");
+    code.push_str("}\n\n");
+
+    code.push_str("impl BranchStats {\n");
+    code.push_str("    fn new() -> Self {\n");
+    code.push_str("        Self { taken: 0, not_taken: 0 }\n");
     code.push_str("    }\n");
     code.push_str("}\n\n");
 
@@ -360,6 +434,17 @@ fn generate_profiler_runtime() -> String {
     code.push_str("    });\n");
     code.push_str("}\n\n");
 
+    // Branch recording
+    code.push_str("fn record_branch(location: &str, outcome: bool) -> bool {\n");
+    code.push_str("    if !PROFILER_ENABLED.load(Ordering::Relaxed) { return outcome; }\n");
+    code.push_str("    PROFILER_DATA.with(|data| {\n");
+    code.push_str("        let mut d = data.borrow_mut();\n");
+    code.push_str("        let stats = d.branches.entry(location.to_string()).or_insert(BranchStats::new());\n");
+    code.push_str("        if outcome { stats.taken += 1; } else { stats.not_taken += 1; }\n");
+    code.push_str("    });\n");
+    code.push_str("    outcome\n");
+    code.push_str("}\n\n");
+
     // Export function (simplified JSON generation)
     code.push_str("fn export_profile_data() {\n");
     code.push_str("    if !PROFILER_ENABLED.load(Ordering::Relaxed) { return; }\n\n");
@@ -401,7 +486,20 @@ fn generate_profiler_runtime() -> String {
     code.push_str("        json.push_str(\"    }\");\n");
     code.push_str("    }\n\n");
     code.push_str("    json.push_str(\"\\n  ],\\n\");\n");
-    code.push_str("    json.push_str(\"  \\\"branches\\\": [],\\n\");\n");
+    code.push_str("    json.push_str(\"  \\\"branches\\\": [\\n\");\n\n");
+    code.push_str("    let mut first_branch = true;\n");
+    code.push_str("    for (location, stats) in &data.branches {\n");
+    code.push_str("        if !first_branch { json.push_str(\",\\n\"); }\n");
+    code.push_str("        first_branch = false;\n");
+    code.push_str("        let total = stats.taken + stats.not_taken;\n");
+    code.push_str("        let prediction_rate = if total > 0 { stats.taken as f64 / total as f64 } else { 0.0 };\n");
+    code.push_str("        json.push_str(&format!(\"    {{\\n      \\\"location\\\": \\\"{}\\\",\\n\", location));\n");
+    code.push_str("        json.push_str(&format!(\"      \\\"taken\\\": {},\\n\", stats.taken));\n");
+    code.push_str("        json.push_str(&format!(\"      \\\"not_taken\\\": {},\\n\", stats.not_taken));\n");
+    code.push_str("        json.push_str(&format!(\"      \\\"prediction_rate\\\": {:.5}\\n\", prediction_rate));\n");
+    code.push_str("        json.push_str(\"    }\");\n");
+    code.push_str("    }\n\n");
+    code.push_str("    json.push_str(\"\\n  ],\\n\");\n");
     code.push_str("    json.push_str(\"  \\\"allocations\\\": {\\\"total_allocs\\\": 0, \\\"total_bytes\\\": 0, \\\"peak_memory_bytes\\\": 0, \\\"by_size\\\": {\\\"small\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}, \\\"medium\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}, \\\"large\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}}},\\n\");\n");
     code.push_str("    json.push_str(\"  \\\"statistics\\\": {\\\"total_runtime_ns\\\": 0, \\\"instrumentation_overhead_percent\\\": 0.0}\\n\");\n");
     code.push_str("    json.push_str(\"}\\n\");\n\n");
@@ -442,4 +540,250 @@ fn compile_rust(rust_code: &str, output_file: &str) {
     }
 
     fs::remove_file(&temp_rust).ok();
+}
+
+fn handle_profile(args: &[String]) {
+    #[cfg(not(feature = "profiling"))]
+    {
+        eprintln!("Error: profiling feature not enabled");
+        eprintln!("Rebuild with: cargo build --features profiling --bin ruchy --release");
+        exit(1);
+    }
+
+    #[cfg(feature = "profiling")]
+    {
+        use std::time::Instant;
+
+        let mut counters: Vec<String> = vec!["cpu_cycles".to_string()];
+        let mut output_json: Option<String> = None;
+        let mut flame_graph_svg: Option<String> = None;
+        let mut hotspots_count: Option<usize> = None;
+        let mut sampling_rate: u64 = 1000; // Default 1000Hz
+        let mut binary_path: Option<String> = None;
+
+        let mut i = 0;
+        while i < args.len() {
+            let arg = &args[i];
+
+            if arg.starts_with("--counters=") {
+                let counter_str = arg.strip_prefix("--counters=").unwrap();
+                counters = counter_str.split(',').map(|s| s.trim().to_string()).collect();
+                i += 1;
+            } else if arg.starts_with("--output=") {
+                output_json = Some(arg.strip_prefix("--output=").unwrap().to_string());
+                i += 1;
+            } else if arg.starts_with("--flame-graph=") {
+                flame_graph_svg = Some(arg.strip_prefix("--flame-graph=").unwrap().to_string());
+                i += 1;
+            } else if arg.starts_with("--hotspots=") {
+                let count_str = arg.strip_prefix("--hotspots=").unwrap();
+                hotspots_count = Some(count_str.parse().unwrap_or_else(|_| {
+                    eprintln!("Error: --hotspots must be a number");
+                    exit(1);
+                }));
+                i += 1;
+            } else if arg.starts_with("--sampling-rate=") {
+                let rate_str = arg.strip_prefix("--sampling-rate=").unwrap();
+                sampling_rate = rate_str.parse().unwrap_or_else(|_| {
+                    eprintln!("Error: --sampling-rate must be a number");
+                    exit(1);
+                });
+                i += 1;
+            } else if !arg.starts_with("--") {
+                binary_path = Some(arg.to_string());
+                i += 1;
+            } else {
+                eprintln!("Unknown argument: {}", arg);
+                exit(1);
+            }
+        }
+
+        let binary_path = binary_path.unwrap_or_else(|| {
+            eprintln!("Error: No binary path specified");
+            exit(1);
+        });
+
+        // Initialize profiler from DEBUGGER-016
+        use ruchyruchy::profiling::Profiler;
+
+        eprintln!("[PROFILE] Starting profiler at {}Hz...", sampling_rate);
+        eprintln!("[PROFILE] Counters: {}", counters.join(", "));
+
+        let mut profiler = match Profiler::new() {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("Error initializing profiler: {}", e);
+                eprintln!("Note: Profiling requires root or CAP_PERFMON capability");
+                eprintln!("Try: sudo -E {} profile --output=profile.json {}",
+                    env::args().next().unwrap(), binary_path);
+                exit(1);
+            }
+        };
+
+        // Start profiling
+        profiler.start().unwrap_or_else(|e| {
+            eprintln!("Error starting profiler: {}", e);
+            exit(1);
+        });
+
+        // Run the binary
+        let run_start = Instant::now();
+        let output = Command::new(&binary_path)
+            .output()
+            .unwrap_or_else(|e| {
+                eprintln!("Error running {}: {}", binary_path, e);
+                exit(1);
+            });
+        let run_duration = run_start.elapsed();
+
+        // Stop profiling
+        profiler.stop().unwrap_or_else(|e| {
+            eprintln!("Error stopping profiler: {}", e);
+            exit(1);
+        });
+
+        eprintln!("[PROFILE] Binary completed in {:.3}s", run_duration.as_secs_f64());
+
+        // Collect samples
+        let samples = profiler.collect_samples().unwrap_or_else(|e| {
+            eprintln!("Error collecting samples: {}", e);
+            exit(1);
+        });
+
+        eprintln!("[PROFILE] Collected {} samples", samples.len());
+
+        // Generate JSON output
+        if let Some(ref output_path) = output_json {
+            generate_profile_json(&samples, &counters, &binary_path, output_path);
+            eprintln!("[PROFILE] Wrote profile to: {}", output_path);
+        }
+
+        // Generate flame graph
+        if let Some(svg_path) = flame_graph_svg {
+            use ruchyruchy::profiling::FlameGraph;
+            let flame_graph = FlameGraph::from_samples(&samples);
+            let flamegraph_data = flame_graph.to_string();
+            fs::write(&svg_path, flamegraph_data).unwrap_or_else(|e| {
+                eprintln!("Error writing flame graph: {}", e);
+                exit(1);
+            });
+            eprintln!("[PROFILE] Wrote flame graph to: {}", svg_path);
+        }
+
+        // Generate hotspots
+        if let Some(count) = hotspots_count {
+            use ruchyruchy::profiling::Hotspot;
+            let hotspots = Hotspot::analyze(&samples, count);
+
+            if let Some(output_path) = output_json.as_ref() {
+                // Already generated JSON above, append hotspots
+                let hotspot_path = output_path.replace(".json", "_hotspots.json");
+
+                // Manually generate JSON (HotspotEntry doesn't derive Serialize)
+                let mut json = String::from("{\n  \"hotspots\": [\n");
+                for (i, entry) in hotspots.iter().enumerate() {
+                    json.push_str("    {\n");
+                    json.push_str(&format!("      \"function\": \"{}\",\n", entry.function));
+                    json.push_str(&format!("      \"samples\": {},\n", entry.count));
+                    json.push_str(&format!("      \"percentage\": {:.2}\n", entry.percentage));
+                    json.push_str("    }");
+                    if i < hotspots.len() - 1 {
+                        json.push_str(",");
+                    }
+                    json.push_str("\n");
+                }
+                json.push_str("  ]\n}\n");
+
+                fs::write(&hotspot_path, json).unwrap_or_else(|e| {
+                    eprintln!("Error writing hotspots: {}", e);
+                    exit(1);
+                });
+                eprintln!("[PROFILE] Wrote hotspots to: {}", hotspot_path);
+            }
+        }
+
+        // Print binary output
+        if output.status.success() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+        } else {
+            eprintln!("Binary exited with error:");
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+            exit(output.status.code().unwrap_or(1));
+        }
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn generate_profile_json(
+    samples: &[ruchyruchy::profiling::Sample],
+    counters: &[String],
+    binary_path: &str,
+    output_path: &str
+) {
+    use std::collections::HashMap;
+
+    let mut json = String::new();
+    json.push_str("{\n");
+    json.push_str(&format!("  \"version\": \"1.0\",\n"));
+    json.push_str(&format!("  \"timestamp\": {},\n",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()));
+    json.push_str(&format!("  \"binary\": \"{}\",\n", binary_path));
+    json.push_str("  \"counters\": [\n");
+
+    // Aggregate samples by instruction pointer (function)
+    let mut function_samples: HashMap<u64, usize> = HashMap::new();
+    for sample in samples {
+        *function_samples.entry(sample.ip).or_insert(0) += 1;
+    }
+
+    // For each counter, generate data
+    for (idx, counter_name) in counters.iter().enumerate() {
+        json.push_str("    {\n");
+        json.push_str(&format!("      \"name\": \"{}\",\n", counter_name));
+        json.push_str(&format!("      \"total_samples\": {},\n", samples.len()));
+        json.push_str("      \"functions\": [\n");
+
+        // Sort functions by sample count
+        let mut sorted_functions: Vec<_> = function_samples.iter().collect();
+        sorted_functions.sort_by(|a, b| b.1.cmp(a.1));
+
+        for (i, (ip, count)) in sorted_functions.iter().enumerate() {
+            json.push_str("        {\n");
+            json.push_str(&format!("          \"address\": \"0x{:x}\",\n", ip));
+            json.push_str(&format!("          \"samples\": {},\n", count));
+            json.push_str(&format!("          \"percentage\": {:.2}\n",
+                (**count as f64 / samples.len() as f64) * 100.0));
+            json.push_str("        }");
+            if i < sorted_functions.len() - 1 {
+                json.push_str(",");
+            }
+            json.push_str("\n");
+        }
+
+        json.push_str("      ]\n");
+        json.push_str("    }");
+        if idx < counters.len() - 1 {
+            json.push_str(",");
+        }
+        json.push_str("\n");
+    }
+
+    json.push_str("  ],\n");
+
+    // Derived metrics (placeholder for now)
+    json.push_str("  \"derived_metrics\": {\n");
+    json.push_str("    \"ipc\": 0.0,\n");
+    json.push_str("    \"cache_miss_rate\": 0.0,\n");
+    json.push_str("    \"branch_miss_rate\": 0.0\n");
+    json.push_str("  }\n");
+
+    json.push_str("}\n");
+
+    fs::write(output_path, json).unwrap_or_else(|e| {
+        eprintln!("Error writing JSON: {}", e);
+        exit(1);
+    });
 }
