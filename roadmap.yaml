@@ -6312,3 +6312,217 @@ future_roadmap:
           - "Jidoka: Stop and fix problems immediately"
           - "Kaizen: Continuous improvement through learning"
           - "Hansei: Reflect on failures to prevent recurrence"
+
+      # Phase 1: Extreme Instrumentation (Weeks 1-4)
+      # Goal: Make Ruchy the world's fastest compiled language (≥105% of C)
+
+      - id: COMPILED-INST-001
+        title: "AST-Level Instrumentation Hooks"
+        priority: critical
+        status: in_progress
+        started_date: 2025-11-09
+        blocked_by: []
+        spec_reference: "ruchy-compiled-profiler-optimizer-spec.md#phase1-extreme-instrumentation"
+        description: |
+          Insert profiling instrumentation at AST/IR level to track function entry/exit timing,
+          loop iteration counts, branch taken/not-taken statistics, and memory allocation patterns.
+          This provides source-level hot path identification for optimization targeting.
+        requirements:
+          - Function entry/exit timing instrumentation
+          - Loop iteration counters
+          - Branch taken/not-taken statistics
+          - Memory allocation tracking
+          - Zero runtime overhead when instrumentation disabled
+          - JSON output format for analysis
+        features:
+          - "ProfileHooks: Insert timing markers at function boundaries"
+          - "LoopCounters: Track iteration counts per loop"
+          - "BranchStats: Record branch outcomes (taken/not-taken)"
+          - "AllocTracker: Monitor memory allocation patterns"
+          - "DataAggregation: Statistical analysis of profiling data"
+        tests:
+          - test_function_timing_instrumentation: Measure entry/exit overhead
+          - test_loop_iteration_counting: Validate iteration tracking
+          - test_branch_statistics: Track branch prediction accuracy
+          - test_memory_allocation_tracking: Monitor allocation patterns
+          - test_instrumentation_overhead: Verify <1% overhead
+        notes: |
+          ✅ GREEN Phase Partial: Core instrumentation working (2/6 tests passing)
+          ✅ File: src/bin/ruchy.rs (387 LOC)
+          ✅ Architecture: Ruchy → Rust transpiler with instrumentation hooks
+          ✅ Profiler: ProfilerGuard RAII pattern for function timing
+          ✅ Tests Passing (33%):
+            - test_json_output_format: JSON schema validated
+            - test_function_timing_instrumentation: Function profiling works
+          ⏳ Tests Pending (67%):
+            - test_loop_iteration_counting: Requires loop AST analysis
+            - test_branch_statistics: Requires branch AST analysis
+            - test_memory_allocation_tracking: Requires allocator hooks
+            - test_instrumentation_overhead: 4.17% measured (target: <1%)
+          ✅ Performance: Fibonacci(10) profiled successfully
+            - Calls: 177 (correct recursive count)
+            - Total time: ~209µs
+            - Avg time: ~1.2µs per call
+          ⚠️ Overhead: 4.17% (baseline: 11.1ms, instrumented: 11.6ms)
+            - Target: <1% (requires optimization)
+            - Current: Acceptable for prototype validation
+            - Future: Sampling-based profiling, hardware counters
+          ✅ Validation: Approach validated for production implementation
+            - Compiler wrapper mechanism works
+            - RAII instrumentation pattern works
+            - JSON export mechanism works
+            - Test infrastructure validates requirements
+          📋 Next Steps: File production Ruchy feature request
+            - Request: Add --profile flag to ruchy compile
+            - Integrate: Leverage existing ruchy AST/IR infrastructure
+            - Optimize: Use production compiler optimizations for <1% overhead
+            - Complete: Implement loop/branch/allocation tracking with full AST access
+          - test_json_output_format: Validate data serialization
+        acceptance:
+          - All 6 tests passing
+          - Instrumentation overhead <1% (p < 0.05, N≥30 runs)
+          - JSON output with timing, loop, branch, allocation data
+          - Statistical validation: 95% confidence intervals
+          - Coefficient of variation <5%
+        deliverables:
+          - src/compiler/instrumentation/ast_profiler.rs: AST instrumentation (~500 LOC)
+          - src/compiler/instrumentation/profile_data.rs: Data structures (~200 LOC)
+          - tests/test_compiled_inst_001_ast_hooks.rs: 6 comprehensive tests (~400 LOC)
+          - validation/compiled/inst_001_timing.ruchy: Timing validation script
+          - book/src/phase_compiled/tickets/compiled-inst-001.md: Book chapter
+        extreme_tdd_phases:
+          - RED: Write 6 failing tests for instrumentation
+          - GREEN: Implement minimal AST profiling hooks
+          - REFACTOR: Optimize for <1% overhead
+          - TOOL: Validate with ruchy lint (A+ grade)
+          - MUTATION: Achieve ≥95% mutation kill rate
+          - PROPERTY: Prove timing accuracy properties
+          - FUZZ: Test with 100K+ code variations
+          - PORTFOLIO: Validate all optimizations together
+        performance_targets:
+          - Instrumentation overhead: <1%
+          - Data collection rate: >10K samples/second
+          - Memory overhead: <10MB
+          - Statistical significance: p < 0.05
+        research_foundation:
+          - "Georges et al. (2007): Statistical rigor (N≥30, p<0.05)"
+          - "Julia (SIAM 2017): Type specialization for low overhead"
+          - "Profile-Guided Optimization survey (arXiv 2025)"
+
+      - id: COMPILED-INST-002
+        title: "perf_event_open Integration"
+        priority: critical
+        status: pending
+        blocked_by: [COMPILED-INST-001]
+        spec_reference: "ruchy-compiled-profiler-optimizer-spec.md#phase1-extreme-instrumentation"
+        description: |
+          Integrate hardware performance counters via perf_event_open (DEBUGGER-016) to profile
+          CPU cycles, cache misses, branch mispredictions at <1% overhead. Generate flame graphs
+          for hotspot visualization and micro-architectural bottleneck identification.
+        requirements:
+          - Integration with DEBUGGER-016 (perf_event_open)
+          - CPU cycles, cache misses, branch misprediction counters
+          - Stack trace sampling at 1000Hz
+          - Flame graph generation (brendangregg format)
+          - <1% overhead at 1000Hz sampling
+        features:
+          - "HardwareCounters: CPU_CYCLES, CACHE_MISSES, BRANCH_MISPREDICT"
+          - "StackSampling: 1000Hz sampling with stack unwinding"
+          - "FlameGraphGen: SVG output compatible with brendangregg/FlameGraph"
+          - "HotspotAnalysis: Top N functions by time"
+          - "DEBUGGER-016 integration: Use existing profiler infrastructure"
+        tests:
+          - test_perf_event_setup: Initialize hardware counters
+          - test_hardware_counter_sampling: Sample at 1000Hz
+          - test_stack_unwinding: Capture call stacks
+          - test_flame_graph_generation: Generate SVG output
+          - test_overhead_under_1_percent: Verify <1% overhead
+          - test_hotspot_identification: Find top N functions
+        acceptance:
+          - All 6 tests passing (reuse DEBUGGER-016 tests)
+          - <1% overhead at 1000Hz (p < 0.05, N≥30 runs)
+          - Flame graphs generated for compiled binaries
+          - Hotspot identification: top 10 functions by time
+          - Stack unwinding with DWARF support
+        deliverables:
+          - src/compiler/instrumentation/hardware_profiler.rs: perf_event integration (~300 LOC)
+          - src/compiler/instrumentation/flame_graph.rs: Flame graph generation (~200 LOC)
+          - tests/test_compiled_inst_002_perf_event.rs: 6 tests (reuse DEBUGGER-016)
+          - validation/compiled/inst_002_flamegraph.ruchy: Validation script
+          - book/src/phase_compiled/tickets/compiled-inst-002.md: Book chapter
+        extreme_tdd_phases:
+          - RED: Write 6 failing tests (reuse DEBUGGER-016)
+          - GREEN: Integrate perf_event_open
+          - REFACTOR: Add flame graph generation
+          - TOOL: Validate with ruchy lint (A+ grade)
+          - MUTATION: Achieve ≥95% mutation kill rate
+          - PROPERTY: Prove sampling accuracy properties
+          - FUZZ: Test with varied workloads
+          - PORTFOLIO: Validate with AST instrumentation
+        performance_targets:
+          - Sampling overhead: <1% at 1000Hz
+          - Stack unwinding: <0.1µs per sample
+          - Flame graph generation: <1s for 10K samples
+        research_foundation:
+          - "DEBUGGER-016: Statistical Profiling Architecture"
+          - "Gregg (2019): BPF Performance Tools"
+          - "Levinthal (2020): Intel optimization guide"
+
+      - id: COMPILED-INST-003
+        title: "Binary Analysis Tooling"
+        priority: high
+        status: pending
+        blocked_by: [COMPILED-INST-001]
+        spec_reference: "ruchy-compiled-profiler-optimizer-spec.md#phase1-extreme-instrumentation"
+        description: |
+          Measure binary size breakdown (text, data, rodata sections), symbol table analysis,
+          startup time profiling, and relocation overhead. Provide recommendations for binary
+          size optimization targeting ≤50% of C equivalent size.
+        requirements:
+          - Binary size breakdown (text, data, rodata, bss)
+          - Symbol table analysis (function sizes, inlining candidates)
+          - Startup time profiling (loader overhead, initialization)
+          - Relocation overhead measurement
+          - Optimization recommendations based on analysis
+        features:
+          - "BinaryParser: ELF/Mach-O/PE binary format parsing"
+          - "SectionAnalyzer: .text, .data, .rodata size breakdown"
+          - "SymbolTable: Function sizes and call frequencies"
+          - "StartupProfiler: Measure loader and init overhead"
+          - "OptimizationRecommendations: DCE, outlining, compression"
+        tests:
+          - test_binary_size_breakdown: Parse sections correctly
+          - test_symbol_table_analysis: Extract function sizes
+          - test_startup_time_profiling: Measure initialization
+          - test_relocation_overhead: Track relocation costs
+          - test_optimization_recommendations: Generate actionable advice
+          - test_elf_macho_pe_support: Multi-platform support
+        acceptance:
+          - All 6 tests passing
+          - Binary size breakdown accurate to byte level
+          - Startup time profiling <0.1ms overhead
+          - Optimization recommendations with expected gains
+          - Support for ELF (Linux), Mach-O (macOS), PE (Windows)
+        deliverables:
+          - src/compiler/instrumentation/binary_analyzer.rs: Binary analysis (~400 LOC)
+          - src/compiler/instrumentation/startup_profiler.rs: Startup timing (~200 LOC)
+          - tests/test_compiled_inst_003_binary_analysis.rs: 6 tests (~350 LOC)
+          - validation/compiled/inst_003_binary_size.ruchy: Validation script
+          - book/src/phase_compiled/tickets/compiled-inst-003.md: Book chapter
+        extreme_tdd_phases:
+          - RED: Write 6 failing tests for binary analysis
+          - GREEN: Implement ELF parsing and size analysis
+          - REFACTOR: Add Mach-O and PE support
+          - TOOL: Validate with ruchy lint (A+ grade)
+          - MUTATION: Achieve ≥95% mutation kill rate
+          - PROPERTY: Prove parsing correctness properties
+          - FUZZ: Test with malformed binaries
+          - PORTFOLIO: Validate with AST and hardware profiling
+        performance_targets:
+          - Binary parsing: <10ms for 10MB binary
+          - Startup profiling overhead: <0.1ms
+          - Symbol table extraction: <5ms
+        research_foundation:
+          - "Survey on Code Size Reduction (ACM 2003)"
+          - "UPX compression: 50-70% size reduction"
+          - "Dead code elimination: 20-40% savings"
