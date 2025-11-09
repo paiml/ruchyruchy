@@ -36,33 +36,36 @@
   - Runs critical interpreter tests (parser, ch01 examples)
   - Excludes expensive tests (property tests with high case counts, fuzz tests)
   - Ideal for rapid development iterations
-- ✅ **`make coverage` Optimization**: Added 10-minute timeout constraint
-  - Overall timeout: 600 seconds (10 minutes)
-  - Per-test timeout: 120 seconds (2 minutes)
-  - Prevents long-running tests from blocking CI/CD
+- ✅ **`make coverage` Optimization**: Switched to cargo-llvm-cov (ruchy-style)
+  - Uses cargo-llvm-cov instead of cargo-tarpaulin
+  - Tests only lib tests (318 tests, no integration tests)
+  - Completes in ~18 seconds (<5 min target, 94% faster)
+  - Generates HTML and LCOV reports
+  - 45.93% total code coverage
 - ✅ **Property Test Reduction**: Reduced from 1000 to 100 cases per property
   - Balances thorough testing with fast execution
   - Still maintains statistical confidence with 100 cases
   - Keeps full 1000-case testing for `make test` (comprehensive suite)
 - ✅ **Four-Tier Testing Strategy**:
-  1. `make test-pre-commit-fast`: <30 sec, smoke tests (pre-commit hook)
-  2. `make test-fast`: <5 min, essential tests (development workflow)
-  3. `make coverage`: <10 min, coverage analysis (pre-commit validation)
+  1. `make test-pre-commit-fast`: <30 sec (actual 0.1s), smoke tests (pre-commit hook)
+  2. `make test-fast`: <5 min (actual 3:14), essential tests (development workflow)
+  3. `make coverage`: <5 min (actual 18s), coverage analysis (validation)
   4. `make test`: No time limit, comprehensive suite (CI/CD, releases)
 
 **Files Modified**:
-- Makefile: Added `test-pre-commit-fast` and `test-fast` targets, updated `coverage` with timeouts
+- Makefile: Added `test-pre-commit-fast` and `test-fast` targets, switched `coverage` to cargo-llvm-cov
 - tests/property_based_tests.rs: Reduced ProptestConfig from 1000 to 100 cases
 - .git/hooks/pre-commit: Updated to use `make test-pre-commit-fast` instead of `cargo test`
 
 **Test Results**:
 - `make test-pre-commit-fast`: ✅ Passed in 0.099s (71 tests, <30 sec target met)
 - `make test-fast`: ✅ Passed in 3:14 (318 lib tests + 2 integration tests, <5 min target met)
-- `make coverage`: ⚠️ Timeout enforced (10 min)
+- `make coverage`: ✅ Passed in 18.6s (318 lib tests, 45.93% coverage, <5 min target met)
 - `make test`: ✅ All tests passing (comprehensive suite)
 
 **Performance Gains**:
 - Pre-commit hook: 300s → 0.1s (99.97% faster, 3000x speedup)
+- Coverage analysis: cargo-llvm-cov (18s) vs cargo-tarpaulin (300s+), 94% faster
 - Developer productivity: Instant commit feedback
 - Property tests: 90% faster (100 vs 1000 cases)
 
