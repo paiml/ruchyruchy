@@ -446,6 +446,12 @@ sprint-commit: tdd-quality-gates validate-100-coverage
 lint:
 	@echo "🔍 Running zero-warning linting..."
 	@if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
+		if [ -d target ] && find target -type f ! -user $$USER -print -quit 2>/dev/null | grep -q .; then \
+			echo "❌ ERROR: target/ directory contains files owned by another user"; \
+			echo "Fix with: sudo chown -R $$USER:$$USER target/"; \
+			echo "Or manually remove and rebuild: sudo rm -rf target/ && cargo build"; \
+			exit 1; \
+		fi; \
 		if [ -f target/bpfel-unknown-none/release/syscall_tracer ]; then \
 			cargo clippy --all-targets --all-features -- -D warnings; \
 		else \
@@ -503,7 +509,7 @@ complexity:
 coverage:
 	@echo "☂️  Analyzing test coverage..."
 	@if command -v cargo-tarpaulin >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
-		cargo tarpaulin --min 80 --fail-under --out Html --output-dir coverage/; \
+		cargo tarpaulin --target-dir target/tarpaulin --out Html --output-dir coverage/ --fail-under 80; \
 	else \
 		echo "⚠️  Coverage analysis skipped (cargo-tarpaulin not available)"; \
 	fi

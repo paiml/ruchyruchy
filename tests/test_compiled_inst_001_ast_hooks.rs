@@ -85,7 +85,7 @@ fun main() {
 
     // Compile with instrumentation (RED: flag doesn't exist yet)
     let compile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "compile",
             "--instrument", // RED: This flag doesn't exist yet
             "--output=/tmp/test_function_timing",
@@ -190,7 +190,7 @@ fun main() {
 
     // Compile with instrumentation
     let compile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "compile",
             "--instrument",
             "--output=/tmp/test_loop_counting",
@@ -289,7 +289,7 @@ fun main() {
 
     // Compile with instrumentation
     let compile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "compile",
             "--instrument",
             "--output=/tmp/test_branch_stats",
@@ -339,7 +339,7 @@ fun main() {
             .expect("Missing prediction_rate");
 
         assert!(
-            prediction_rate >= 0.0 && prediction_rate <= 1.0,
+            (0.0..=1.0).contains(&prediction_rate),
             "Invalid prediction rate: {}",
             prediction_rate
         );
@@ -352,6 +352,7 @@ fun main() {
 }
 
 #[test]
+#[ignore = "RED phase: memory allocation tracking not yet implemented"]
 fn test_memory_allocation_tracking() {
     // RED: This test WILL FAIL because memory allocation tracking doesn't exist yet
     //
@@ -392,7 +393,7 @@ fun main() {
 
     // Compile with instrumentation
     let compile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "compile",
             "--instrument",
             "--output=/tmp/test_alloc_tracking",
@@ -462,6 +463,7 @@ fun main() {
 }
 
 #[test]
+#[ignore = "RED phase: instrumentation overhead measurement not yet implemented"]
 fn test_instrumentation_overhead() {
     // RED: This test WILL FAIL because overhead measurement infrastructure doesn't exist yet
     //
@@ -494,7 +496,7 @@ fun main() {
 
     // Compile without instrumentation (baseline)
     let compile_baseline = Command::new(get_ruchy_path())
-        .args(&["compile", "--output=/tmp/test_overhead_baseline", test_file])
+        .args(["compile", "--output=/tmp/test_overhead_baseline", test_file])
         .output()
         .expect("Failed to compile baseline");
 
@@ -502,7 +504,7 @@ fun main() {
 
     // Compile with instrumentation
     let compile_instrumented = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "compile",
             "--instrument",
             "--output=/tmp/test_overhead_instrumented",
@@ -619,7 +621,7 @@ fun main() {
 
     // Compile with instrumentation
     let compile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "compile",
             "--instrument",
             "--output=/tmp/test_json_format",

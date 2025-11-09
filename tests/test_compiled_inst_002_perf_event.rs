@@ -19,7 +19,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Helper: Find ruchy binary in target/release or PATH
 fn get_ruchy_path() -> PathBuf {
@@ -74,7 +74,7 @@ fun main() {
     // Step 2: Compile WITHOUT instrumentation (just regular compile)
     let binary_path = "/tmp/test_cpu_cycles_bin";
     let compile_output = Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .output()
         .expect("Failed to compile");
 
@@ -99,7 +99,7 @@ fun main() {
     // Step 4: Profile execution with hardware counters
     let profile_start = Instant::now();
     let profile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "profile",
             "--counters=cpu_cycles",
             "--output=/tmp/cpu_profile.json",
@@ -143,7 +143,7 @@ fun main() {
         "Missing function breakdown"
     );
     assert!(
-        cpu_cycles["functions"].as_array().unwrap().len() > 0,
+        !cpu_cycles["functions"].as_array().unwrap().is_empty(),
         "No function-level CPU cycle data"
     );
 
@@ -191,12 +191,12 @@ fun main() {
 
     let binary_path = "/tmp/test_cache_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let profile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "profile",
             "--counters=cache_misses",
             "--output=/tmp/cache_profile.json",
@@ -270,12 +270,12 @@ fun main() {
 
     let binary_path = "/tmp/test_branches_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let profile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "profile",
             "--counters=branch_misses",
             "--output=/tmp/branch_profile.json",
@@ -353,12 +353,12 @@ fun main() {
 
     let binary_path = "/tmp/test_flamegraph_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let profile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "profile",
             "--flame-graph=/tmp/flamegraph.svg",
             "--sampling-rate=1000",
@@ -428,12 +428,12 @@ fun main() {
 
     let binary_path = "/tmp/test_hotspots_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let profile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "profile",
             "--hotspots=10",
             "--output=/tmp/hotspots.json",
@@ -451,7 +451,7 @@ fun main() {
     let top_functions = hotspots["hotspots"].as_array().unwrap();
 
     // Should have at least 1 function
-    assert!(top_functions.len() > 0, "No hotspots identified");
+    assert!(!top_functions.is_empty(), "No hotspots identified");
 
     // Verify structure
     let top_fn = &top_functions[0];
@@ -512,12 +512,12 @@ fun main() {
 
     let binary_path = "/tmp/test_multi_bin";
     Command::new(get_ruchy_path())
-        .args(&["compile", "--output", binary_path, test_file])
+        .args(["compile", "--output", binary_path, test_file])
         .status()
         .expect("Compilation failed");
 
     let profile_output = Command::new(get_ruchy_path())
-        .args(&[
+        .args([
             "profile",
             "--counters=cpu_cycles,cache_misses,branch_misses",
             "--output=/tmp/multi_profile.json",
