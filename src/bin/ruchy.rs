@@ -127,6 +127,9 @@ fn compile_instrumented(ruchy_source: &str, output_file: &str) {
     // Instrument all functions with ProfilerGuard
     transformed = instrument_functions(&transformed);
 
+    // Instrument loops with iteration tracking
+    transformed = instrument_loops(&transformed);
+
     // Instrument main function with init/export calls
     transformed = instrument_main(&transformed);
 
@@ -141,6 +144,9 @@ fn transform_ruchy_to_rust(source: &str) -> String {
 
     // Transform function keyword
     result = result.replace("fun ", "fn ");
+
+    // Transform for loops: for i in 0..N → for i in 0..N (same in Rust)
+    // Ruchy uses same syntax as Rust for ranges
 
     // Transform println/print calls
     // This is a simplified approach - full implementation would need proper parsing
@@ -208,6 +214,29 @@ fn instrument_functions(code: &str) -> String {
     result
 }
 
+fn instrument_loops(code: &str) -> String {
+    // Insert loop iteration tracking for each for loop
+    // Pattern: for VAR in RANGE { → for VAR in RANGE { record_loop_iter(...);
+    let mut result = String::new();
+    let mut lines: Vec<&str> = code.lines().collect();
+    let mut loop_id = 0;
+
+    for (line_num, line) in lines.iter().enumerate() {
+        result.push_str(line);
+        result.push('\n');
+
+        // Detect for loops
+        if line.trim_start().starts_with("for ") && line.contains('{') {
+            // Add loop iteration tracking at the start of the loop body
+            let location = format!("loop_{}", loop_id);
+            result.push_str(&format!("        record_loop_iteration(\"{}\");\n", location));
+            loop_id += 1;
+        }
+    }
+
+    result
+}
+
 fn instrument_main(code: &str) -> String {
     // Find main() and add profiler calls
     if let Some(main_pos) = code.find("fn main()") {
@@ -250,11 +279,12 @@ fn generate_profiler_runtime() -> String {
     code.push_str("#[derive(Debug, Clone)]\n");
     code.push_str("struct ProfilerData {\n");
     code.push_str("    functions: HashMap<String, FunctionStats>,\n");
+    code.push_str("    loops: HashMap<String, LoopStats>,\n");
     code.push_str("}\n\n");
 
     code.push_str("impl ProfilerData {\n");
     code.push_str("    fn new() -> Self {\n");
-    code.push_str("        Self { functions: HashMap::new() }\n");
+    code.push_str("        Self { functions: HashMap::new(), loops: HashMap::new() }\n");
     code.push_str("    }\n");
     code.push_str("}\n\n");
 
@@ -267,6 +297,17 @@ fn generate_profiler_runtime() -> String {
     code.push_str("impl FunctionStats {\n");
     code.push_str("    fn new() -> Self {\n");
     code.push_str("        Self { calls: 0, total_time_ns: 0 }\n");
+    code.push_str("    }\n");
+    code.push_str("}\n\n");
+
+    code.push_str("#[derive(Debug, Clone)]\n");
+    code.push_str("struct LoopStats {\n");
+    code.push_str("    iterations: u64,\n");
+    code.push_str("}\n\n");
+
+    code.push_str("impl LoopStats {\n");
+    code.push_str("    fn new() -> Self {\n");
+    code.push_str("        Self { iterations: 0 }\n");
     code.push_str("    }\n");
     code.push_str("}\n\n");
 
@@ -310,6 +351,15 @@ fn generate_profiler_runtime() -> String {
     code.push_str("    }\n");
     code.push_str("}\n\n");
 
+    // Loop iteration recording
+    code.push_str("fn record_loop_iteration(location: &str) {\n");
+    code.push_str("    if !PROFILER_ENABLED.load(Ordering::Relaxed) { return; }\n");
+    code.push_str("    PROFILER_DATA.with(|data| {\n");
+    code.push_str("        let mut d = data.borrow_mut();\n");
+    code.push_str("        d.loops.entry(location.to_string()).or_insert(LoopStats::new()).iterations += 1;\n");
+    code.push_str("    });\n");
+    code.push_str("}\n\n");
+
     // Export function (simplified JSON generation)
     code.push_str("fn export_profile_data() {\n");
     code.push_str("    if !PROFILER_ENABLED.load(Ordering::Relaxed) { return; }\n\n");
@@ -341,7 +391,16 @@ fn generate_profiler_runtime() -> String {
     code.push_str("        json.push_str(\"    }\");\n");
     code.push_str("    }\n\n");
     code.push_str("    json.push_str(\"\\n  ],\\n\");\n");
-    code.push_str("    json.push_str(\"  \\\"loops\\\": [],\\n\");\n");
+    code.push_str("    json.push_str(\"  \\\"loops\\\": [\\n\");\n\n");
+    code.push_str("    let mut first_loop = true;\n");
+    code.push_str("    for (location, stats) in &data.loops {\n");
+    code.push_str("        if !first_loop { json.push_str(\",\\n\"); }\n");
+    code.push_str("        first_loop = false;\n");
+    code.push_str("        json.push_str(&format!(\"    {{\\n      \\\"location\\\": \\\"{}\\\",\\n\", location));\n");
+    code.push_str("        json.push_str(&format!(\"      \\\"iterations\\\": {}\\n\", stats.iterations));\n");
+    code.push_str("        json.push_str(\"    }\");\n");
+    code.push_str("    }\n\n");
+    code.push_str("    json.push_str(\"\\n  ],\\n\");\n");
     code.push_str("    json.push_str(\"  \\\"branches\\\": [],\\n\");\n");
     code.push_str("    json.push_str(\"  \\\"allocations\\\": {\\\"total_allocs\\\": 0, \\\"total_bytes\\\": 0, \\\"peak_memory_bytes\\\": 0, \\\"by_size\\\": {\\\"small\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}, \\\"medium\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}, \\\"large\\\": {\\\"count\\\": 0, \\\"bytes\\\": 0}}},\\n\");\n");
     code.push_str("    json.push_str(\"  \\\"statistics\\\": {\\\"total_runtime_ns\\\": 0, \\\"instrumentation_overhead_percent\\\": 0.0}\\n\");\n");
