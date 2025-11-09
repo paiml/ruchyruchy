@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Focus**: Fast test execution for rapid development and efficient CI/CD
 
 **New Test Targets**:
+- **`make test-pre-commit-fast`**: Ultra-fast smoke tests (<30 sec, actual ~0.1 sec)
+  - Runs 71 core tests (parser, lexer, evaluator, interpreter)
+  - Excludes expensive tests (soak, profiling, bug discovery, JIT)
+  - Integrated into pre-commit hook for instant feedback
+  - **3000x faster** than previous pre-commit tests (300s → 0.1s)
 - **`make test-fast`**: Fast test suite (<5 min, actual ~3 min)
   - Runs cargo lib tests (318 tests, core functionality)
   - Runs critical interpreter tests (parser, chapter examples)
@@ -23,10 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Overall timeout: 600 seconds (10 minutes)
   - Per-test timeout: 120 seconds (2 minutes)
   - Prevents long-running tests from blocking CI/CD
-- **Three-Tier Testing Strategy**:
-  1. `make test-fast`: <5 min, essential tests (development)
-  2. `make coverage`: <10 min, coverage analysis (pre-commit)
-  3. `make test`: No limit, comprehensive suite (CI/CD, releases)
+- **Four-Tier Testing Strategy**:
+  1. `make test-pre-commit-fast`: <30 sec, smoke tests (pre-commit hook)
+  2. `make test-fast`: <5 min, essential tests (development)
+  3. `make coverage`: <10 min, coverage analysis (validation)
+  4. `make test`: No limit, comprehensive suite (CI/CD, releases)
 
 **Property Test Optimization**:
 - Reduced ProptestConfig from 1000 to 100 cases per property
@@ -35,13 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full 1000-case testing still available via `make test`
 
 **Files Modified**:
-- `Makefile`: Added `test-fast` target, updated `coverage` with timeouts
+- `Makefile`: Added `test-pre-commit-fast` and `test-fast` targets, updated `coverage` with timeouts
 - `tests/property_based_tests.rs`: Reduced ProptestConfig cases (1000 → 100)
+- `.git/hooks/pre-commit`: Updated to use `make test-pre-commit-fast` instead of `cargo test`
 
 **Performance Results**:
-- `make test-fast`: ✅ 3:14 execution time (<5 min target met)
-- Property tests: ~90% faster execution (100 vs 1000 cases)
-- Developer productivity: Rapid feedback loop established
+- `make test-pre-commit-fast`: ✅ 0.099s execution time (<30 sec target met, 71 tests)
+- `make test-fast`: ✅ 3:14 execution time (<5 min target met, 318+ tests)
+- `make coverage`: ✅ 10-minute timeout enforced
+- Pre-commit hook: 99.97% faster (300s → 0.1s, **3000x speedup**)
+- Property tests: 90% faster execution (100 vs 1000 cases)
+- Developer productivity: **Instant commit feedback** established
 
 ### Changed
 
