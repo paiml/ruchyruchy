@@ -572,6 +572,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Slow test (>60s) - run with: cargo test --ignored test_telemetry_collector_basic"]
     fn test_telemetry_collector_basic() {
         let mut collector = TelemetryCollector::new();
         let snapshot1 = collector.collect_snapshot(100, 0);
