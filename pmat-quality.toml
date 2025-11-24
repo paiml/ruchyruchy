@@ -1,0 +1,161 @@
+# RuchyRuchy Quality Configuration
+# Phase 2: Validation & Robustness - Pure Ruchy Tooling Dogfooding
+# Educational compiler infrastructure with EXTREME TDD
+
+[complexity]
+# CLAUDE.md requirement: All functions <20 cyclomatic complexity
+cyclomatic_threshold = 20
+cognitive_threshold = 15  # Educational clarity
+max_nesting_depth = 5
+max_function_lines = 100  # Bootstrap stages: 1K, 3K, 5K, 6K LOC total
+max_file_lines = 500      # Educational focus on small, understandable modules
+
+[entropy]
+# Detect code duplication and patterns (minimize for educational clarity)
+enabled = true
+min_pattern_occurrences = 10
+min_pattern_lines = 8
+max_violations_to_report = 50
+pattern_similarity_threshold = 0.90
+ignore_test_files = true
+ignore_generated_files = true
+ignore_patterns = [
+    "*/target/*",
+    "*/build/*",
+    "*/validation/**/*.ruchy",  # Pure Ruchy test files
+    "*/bootstrap/**/*.ruchy"     # Pure Ruchy implementation files
+]
+
+[satd]
+# Zero tolerance for technical debt (CLAUDE.md requirement)
+enabled = true
+zero_tolerance = true
+patterns = [
+    "TODO",
+    "FIXME",
+    "HACK",
+    "XXX",
+    "REFACTOR",
+    "OPTIMIZE",
+    "WORKAROUND"
+]
+
+[dead_code]
+# No unused code allowed (educational project)
+enabled = true
+ignore_test_functions = true
+ignore_cfg_test = true
+threshold_percentage = 0.5  # Flag if more than 0.5% dead code
+
+[coverage]
+# CLAUDE.md requirement: >80% test coverage via ruchy score
+minimum_coverage = 80.0
+enforce_on_new_code = true
+ignore_test_files = true
+
+[documentation]
+# Book chapters MUST document all tickets with EXTREME TDD
+minimum_doc_coverage = 90.0  # Educational project requires high documentation
+require_examples = true
+require_safety_docs = false  # Rust infrastructure handles safety
+
+# Book validation requirements
+book_chapter_required = true
+require_red_phase = true        # Test first
+require_green_phase = true      # Minimal implementation
+require_refactor_phase = true   # Code improvements
+require_tool_validation = true  # All 16 Ruchy tools
+require_debugger_validation = true  # All ruchyruchy debuggers
+require_reproducibility = true  # Executable script
+require_debuggability = true    # Debug session
+
+[security]
+# Security scanning (Rust infrastructure)
+enabled = true
+scan_dependencies = true
+check_unsafe_code = false  # Not using unsafe in educational project
+max_unsafe_blocks = 0
+
+[quality_gate]
+# Overall quality gate configuration (Toyota Way: Jidoka - Built-in Quality)
+fail_on_any_violation = true  # Zero tolerance enforcement
+aggregate_scoring = true
+weights = {
+    complexity = 0.25,      # Educational clarity
+    entropy = 0.10,         # Minimize duplication
+    satd = 0.25,            # Zero tolerance for debt
+    dead_code = 0.10,       # Clean codebase
+    coverage = 0.20,        # High coverage via ruchy score
+    documentation = 0.10    # Book chapters required
+}
+
+# Grade thresholds (A+ required for releases)
+[grades]
+a_plus = 95
+a = 90
+a_minus = 85
+b_plus = 80
+b = 75
+b_minus = 70
+c_plus = 65
+c = 60
+d = 50
+f = 0
+
+[ruchy_tooling_validation]
+# MANDATORY: All validation via Ruchy binary tools (dogfooding)
+# These checks are IN ADDITION to Rust infrastructure quality gates
+
+[ruchy_tooling_validation.ruchy_test]
+enabled = true
+min_test_cases_per_property = 10000  # Property testing requirement
+require_shrinking = true              # Minimal failure cases
+timeout_seconds = 600                 # 10 minutes for fuzz tests
+
+[ruchy_tooling_validation.ruchy_lint]
+enabled = true
+require_grade = "A+"  # A+ grade required
+fail_on_warnings = true
+
+[ruchy_tooling_validation.ruchy_prove]
+enabled = true
+require_proof_success = true  # Mathematical properties MUST be proven
+timeout_seconds = 300         # 5 minutes for formal verification
+
+[ruchy_tooling_validation.ruchy_score]
+enabled = true
+min_score = 0.8  # CLAUDE.md requirement: >0.8 quality score
+
+[ruchy_tooling_validation.ruchy_runtime]
+enabled = true
+# Performance targets from CLAUDE.md:
+max_lexer_throughput_loc_per_sec = 10000   # Stage 0: >10K LOC/s
+max_parser_throughput_loc_per_sec = 5000   # Stage 1: >5K LOC/s
+max_codegen_throughput_loc_per_sec = 10000 # Stage 3: >10K LOC/s
+# Stage 2 Type Inference: O(n log n) complexity target
+
+[ruchyruchy_debugger_validation]
+# Dogfooding: Validate our own debugging tools
+
+[ruchyruchy_debugger_validation.ruchydbg]
+enabled = true
+max_validation_time_sec = 6  # Target: 0.013s, allow 6s with margin
+require_source_maps = true    # 1:1 line mapping
+require_time_travel = true    # Backward stepping
+require_performance_benchmarks = true
+
+[renacer_validation]
+# Performance validation with golden tracing
+enabled = true
+
+[renacer_validation.performance_budgets]
+jit_compilation_ms = 1000      # Cranelift code generation
+interpreter_execution_ms = 500  # Validation tests
+debugger_attach_ms = 100        # DAP server startup
+max_syscalls = 10000            # Cranelift + eBPF + file I/O
+max_memory_mb = 512             # JIT buffers + debug symbols
+
+[renacer_validation.golden_traces]
+enabled = true
+trace_dir = "golden_traces/"
+require_validation_before_commit = true

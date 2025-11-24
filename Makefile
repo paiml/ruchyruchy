@@ -418,6 +418,43 @@ validate: quality-gate tdd-harness verify-all
 quality-gate: tdd-quality-gates lint test complexity coverage
 	@echo "🎯 All quality gates passed!"
 
+# O(1) Quality Gate Validation (Instant <30ms validation)
+# Toyota Way: Muda (Waste Elimination) - No slow re-runs needed
+validate-metrics:
+	@./scripts/validate-metrics.sh
+
+# Comprehensive Quality Gate with O(1) Validation
+# Phase 1: Run full quality checks (lint, test-fast, coverage)
+# Phase 2: Instant O(1) validation of cached metrics
+quality-gate-o1: lint test-fast coverage
+	@echo "🔍 Running O(1) quality gate validation..."
+	@./scripts/validate-metrics.sh
+	@echo "✅ All quality gates passed with O(1) validation!"
+
+# Renacer Performance Validation
+# Validates performance budgets against golden traces
+renacer-validate:
+	@echo "⚡ Validating performance with renacer..."
+	@if command -v renacer >/dev/null 2>&1; then \
+		renacer validate --all || (echo "❌ Performance regression detected" && exit 1); \
+		echo "✅ All performance budgets met"; \
+	else \
+		echo "⚠️  renacer not installed (cargo install renacer)"; \
+		echo "⚠️  Skipping performance validation"; \
+	fi
+
+# Capture Golden Traces for Renacer
+# Creates baseline performance traces for validation
+renacer-capture:
+	@echo "📸 Capturing golden traces with renacer..."
+	@if command -v renacer >/dev/null 2>&1; then \
+		./scripts/capture-golden-traces.sh; \
+	else \
+		echo "❌ renacer not installed"; \
+		echo "Install: cargo install renacer"; \
+		exit 1; \
+	fi
+
 # TDD Quality Gates (Following ../ruchy-book pattern - MANDATORY)
 tdd-quality-gates:
 	@echo "🚀 Running ../ruchy-book TDD Quality Gates (BLOCKING)"
@@ -442,8 +479,10 @@ sprint-commit: tdd-quality-gates validate-100-coverage
 	@echo "🎯 All quality gates passed - ready for commit"
 	@echo "Use: git commit -m 'VALID-XXX: Sprint completion with 100% test coverage'"
 
-# Zero-warning linting
+# Zero-warning linting (with O(1) metrics recording)
 lint:
+	@mkdir -p .pmat-metrics
+	@date +%s%3N > .pmat-metrics/lint.start
 	@echo "🔍 Running zero-warning linting..."
 	@if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
 		if [ -d target ] && find target -type f ! -user $$USER -print -quit 2>/dev/null | grep -q .; then \
@@ -465,6 +504,7 @@ lint:
 	@! find bootstrap -name "*.ruchy" -exec grep -l "TODO\|FIXME\|HACK" {} \; | head -1 | grep -q . || \
 		(echo "❌ BLOCKED: SATD comments found" && exit 1)
 	@echo "✅ Lint checks passed"
+	@./scripts/record-metric.sh lint
 
 # Pre-commit fast test suite (<30 sec) - smoke tests only
 test-pre-commit-fast:
@@ -480,8 +520,10 @@ test-pre-commit-fast:
 		echo "⚠️  Cargo tests skipped (no Cargo.toml found yet)"; \
 	fi
 
-# Fast test suite (<5 min) - essential tests only
+# Fast test suite (<5 min) - essential tests only (with O(1) metrics recording)
 test-fast:
+	@mkdir -p .pmat-metrics
+	@date +%s%3N > .pmat-metrics/test-fast.start
 	@echo "⚡ Running fast test suite (<5 min)..."
 	@if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then \
 		echo "Running cargo lib tests (core functionality)..."; \
@@ -493,6 +535,7 @@ test-fast:
 	else \
 		echo "⚠️  Cargo tests skipped (no Cargo.toml found yet)"; \
 	fi
+	@./scripts/record-metric.sh test-fast
 
 # All test suites (comprehensive, no time limit)
 test:
@@ -533,8 +576,10 @@ complexity:
 	fi
 	@echo "✅ Complexity analysis passed"
 
-# Test coverage analysis (<5 min)
+# Test coverage analysis (<5 min) (with O(1) metrics recording)
 coverage:
+	@mkdir -p .pmat-metrics
+	@date +%s%3N > .pmat-metrics/coverage.start
 	@echo "📊 Running test coverage analysis (<5 min)..."
 	@echo "🔍 Checking for cargo-llvm-cov..."
 	@which cargo-llvm-cov > /dev/null 2>&1 || (echo "📦 Installing cargo-llvm-cov..." && cargo install cargo-llvm-cov --locked)
@@ -552,6 +597,7 @@ coverage:
 	@cargo llvm-cov report --summary-only
 	@echo ""
 	@echo "✅ Coverage analysis complete (HTML: target/coverage/html/index.html)"
+	@./scripts/record-metric.sh coverage
 
 # Security vulnerability scan
 security:
