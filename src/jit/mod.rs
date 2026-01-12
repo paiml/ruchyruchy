@@ -13,6 +13,7 @@
 // - JIT compilation techniques: Aycock (2003) "A Brief History of Just-In-Time"
 // - SSA form: Cytron et al. (1991) "Efficiently computing static single assignment form"
 
+use cranelift::codegen::ir::BlockArg;
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module};
@@ -360,6 +361,7 @@ impl JitCompiler {
 
     /// Compile AST expression to Cranelift IR value (with full context)
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::only_used_in_recursion)]
     fn compile_expr_with_context(
         ast: &AstNode,
         builder: &mut FunctionBuilder,
@@ -443,13 +445,9 @@ impl JitCompiler {
                     struct_defs,
                 )?;
 
-                // Create a new Cranelift variable with the correct type
-                let var = Variable::new(*var_counter);
-                *var_counter += 1;
-
-                // Declare it with the type matching the initial value
+                // Declare variable with the type matching the initial value
                 let value_type = builder.func.dfg.value_type(init_value);
-                builder.declare_var(var, value_type);
+                let var = builder.declare_var(value_type);
 
                 // Define the variable with the initial value
                 builder.def_var(var, init_value);
@@ -892,9 +890,7 @@ impl JitCompiler {
                 )?;
 
                 // Create loop variable and initialize it
-                let loop_var = Variable::new(*var_counter);
-                *var_counter += 1;
-                builder.declare_var(loop_var, types::I64);
+                let loop_var = builder.declare_var(types::I64);
                 builder.def_var(loop_var, start_value);
                 local_vars.insert(var.clone(), loop_var);
 
@@ -1035,7 +1031,9 @@ impl JitCompiler {
                 let then_has_return = !then_branch.is_empty()
                     && matches!(then_branch.last().unwrap(), AstNode::Return { .. });
                 if !then_has_return {
-                    builder.ins().jump(merge_block, &[then_result]);
+                    builder
+                        .ins()
+                        .jump(merge_block, &[BlockArg::Value(then_result)]);
                 }
 
                 // Compile else branch
@@ -1073,7 +1071,9 @@ impl JitCompiler {
                     false
                 };
                 if !else_has_return {
-                    builder.ins().jump(merge_block, &[else_result]);
+                    builder
+                        .ins()
+                        .jump(merge_block, &[BlockArg::Value(else_result)]);
                 }
 
                 // Continue at merge block
@@ -1295,7 +1295,7 @@ impl JitCompiler {
 
                     // Jump to loop with i=0
                     let i_init = builder.ins().iconst(types::I64, 0);
-                    builder.ins().jump(loop_header, &[i_init]);
+                    builder.ins().jump(loop_header, &[BlockArg::Value(i_init)]);
 
                     // Loop header: check if i < count
                     builder.switch_to_block(loop_header);
@@ -1343,13 +1343,15 @@ impl JitCompiler {
                         builder
                             .ins()
                             .load(types::I64, MemFlags::trusted(), val_addr, 0);
-                    builder.ins().jump(merge_block, &[found_value]);
+                    builder
+                        .ins()
+                        .jump(merge_block, &[BlockArg::Value(found_value)]);
 
                     // Continue: increment i and loop
                     builder.switch_to_block(continue_block);
                     builder.seal_block(continue_block);
                     let i_next = builder.ins().iadd(i, one);
-                    builder.ins().jump(loop_header, &[i_next]);
+                    builder.ins().jump(loop_header, &[BlockArg::Value(i_next)]);
 
                     // Seal loop header now that all predecessors are known
                     builder.seal_block(loop_header);
@@ -1358,7 +1360,9 @@ impl JitCompiler {
                     builder.switch_to_block(loop_exit);
                     builder.seal_block(loop_exit);
                     let not_found = builder.ins().iconst(types::I64, 0);
-                    builder.ins().jump(merge_block, &[not_found]);
+                    builder
+                        .ins()
+                        .jump(merge_block, &[BlockArg::Value(not_found)]);
                 }
 
                 // ARRAY PATH: Simple index-based access
@@ -1371,7 +1375,7 @@ impl JitCompiler {
                     let value = builder
                         .ins()
                         .load(types::I64, MemFlags::trusted(), elem_addr, 0);
-                    builder.ins().jump(merge_block, &[value]);
+                    builder.ins().jump(merge_block, &[BlockArg::Value(value)]);
                 }
 
                 // Merge block: get result from either path
@@ -1840,12 +1844,9 @@ impl JitCompiler {
 
                     // For Identifier pattern, bind the variable
                     if let Pattern::Identifier(name) = &arm.pattern {
-                        // Create a new Cranelift variable
-                        let var = Variable::new(*var_counter);
-                        *var_counter += 1;
-                        // Declare it with the type matching the match value
+                        // Declare variable with the type matching the match value
                         let value_type = builder.func.dfg.value_type(match_value);
-                        builder.declare_var(var, value_type);
+                        let var = builder.declare_var(value_type);
                         // Define the variable with the match value
                         builder.def_var(var, match_value);
                         // Store in local variables map
@@ -1873,7 +1874,9 @@ impl JitCompiler {
                     };
 
                     // Jump to merge with result
-                    builder.ins().jump(merge_block, &[arm_result]);
+                    builder
+                        .ins()
+                        .jump(merge_block, &[BlockArg::Value(arm_result)]);
 
                     // Move to next arm block
                     current_block = next_arm_block;
@@ -1971,13 +1974,9 @@ impl JitCompiler {
                             .ins()
                             .load(types::I64, MemFlags::trusted(), tuple_addr, offset);
 
-                    // Create a new Cranelift variable for this pattern name
-                    let var = Variable::new(*var_counter);
-                    *var_counter += 1;
-
-                    // Declare it with the type matching the field value
+                    // Declare variable with the type matching the field value
                     let value_type = builder.func.dfg.value_type(field_value);
-                    builder.declare_var(var, value_type);
+                    let var = builder.declare_var(value_type);
 
                     // Define the variable with the field value
                     builder.def_var(var, field_value);
@@ -2158,7 +2157,7 @@ impl JitCompiler {
 
                         // Initialize i = 0 and jump to loop header
                         let i_init = builder.ins().iconst(types::I64, 0);
-                        builder.ins().jump(loop_header, &[i_init]);
+                        builder.ins().jump(loop_header, &[BlockArg::Value(i_init)]);
 
                         // Loop header: check if i < count
                         builder.switch_to_block(loop_header);
@@ -2185,7 +2184,7 @@ impl JitCompiler {
                         // Increment i and jump back to loop header
                         let one = builder.ins().iconst(types::I64, 1);
                         let i_next = builder.ins().iadd(i, one);
-                        builder.ins().jump(loop_header, &[i_next]);
+                        builder.ins().jump(loop_header, &[BlockArg::Value(i_next)]);
 
                         // Now seal loop_header after all predecessors are known
                         builder.seal_block(loop_header);
