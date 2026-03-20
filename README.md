@@ -12,6 +12,17 @@
 
 > **🏆 IMPORTANT**: The main [Ruchy project](https://github.com/paiml/ruchy) achieved **real self-hosting** in August 2025. This project serves as **bootstrap infrastructure and education** to support that ecosystem.
 
+## Table of Contents
+
+- [Project Purpose](#-project-purpose-bootstrap-education--tooling)
+- [Quick Start](#-quick-start)
+- [JIT Compiler](#-jit-compiler-new-in-v1230)
+- [Integration with Ruchy Projects](#-integration-with-ruchy-projects)
+- [Educational Architecture](#-educational-architecture)
+- [Development Commands](#️-development-commands)
+- [Contributing](#-contributing)
+- [License](#-license)
+
 ## 🎯 **Project Purpose: Bootstrap Education & Tooling**
 
 **Objective**: Provide educational resources and development tools for understanding how bootstrap compilers work, complementing the production Ruchy compiler with:
@@ -127,7 +138,7 @@ ruchydbg validate     # Validate debugging tools
 
 📝 **[Pre-Commit Hook Integration](./docs/integration/RUCHY_PRE_COMMIT_HOOK_INTEGRATION.md)** - Fast-feedback validation (<6s)
 
-💡 **[Integration Demo Example](./examples/integration_demo.rs)** - Practical code examples
+💡 **[JIT Benchmark Demo](./examples/jit_benchmark_demo.rs)** - Practical code examples
 
 ### Workflow Scripts
 
