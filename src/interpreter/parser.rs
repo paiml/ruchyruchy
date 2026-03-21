@@ -215,57 +215,87 @@ impl Parser {
 
         while let Some(&ch) = chars.peek() {
             match ch {
-                // Whitespace
-                ' ' | '\t' | '\n' | '\r' => {
-                    chars.next();
-                }
+                ' ' | '\t' | '\n' | '\r' => { chars.next(); }
+                '/' if chars.clone().nth(1) == Some('/') => Self::scan_comment(&mut chars),
+                '"' => Self::scan_string(&mut chars, &mut tokens),
+                '\'' => Self::scan_char(&mut chars, &mut tokens),
+                '0'..='9' => Self::scan_number(&mut chars, &mut tokens),
+                'f' if chars.clone().nth(1) == Some('"') => Self::scan_fstring(&mut chars, &mut tokens),
+                'a'..='z' | 'A'..='Z' | '_' => Self::scan_identifier(&mut chars, &mut tokens),
+                _ => Self::scan_operator(&mut chars, &mut tokens),
+            }
+        }
 
-                // Comments
-                '/' if chars.clone().nth(1) == Some('/') => {
-                    // Skip until end of line
-                    chars.next(); // /
-                    chars.next(); // /
-                    while let Some(&ch) = chars.peek() {
-                        chars.next();
-                        if ch == '\n' {
-                            break;
-                        }
-                    }
-                }
+        tokens.push(Token::Eof);
+        self.tokens = tokens;
+        Ok(())
+    }
 
-                // String literals
-                '"' => {
-                    chars.next(); // Opening "
-                    let mut string = String::new();
-                    while let Some(&ch) = chars.peek() {
-                        chars.next();
-                        if ch == '"' {
-                            break;
-                        }
-                        string.push(ch);
-                    }
-                    tokens.push(Token::StringLit(string));
-                }
+    /// Skip a line comment (// ... \n)
+    fn scan_comment(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) {
+        chars.next(); // /
+        chars.next(); // /
+        while let Some(&ch) = chars.peek() {
+            chars.next();
+            if ch == '\n' {
+                break;
+            }
+        }
+    }
 
-                // Character literals: 'a', '!', etc.
-                '\'' => {
-                    chars.next(); // Opening '
-                    if let Some(&ch) = chars.peek() {
-                        let character = ch;
-                        chars.next(); // consume character
-                        if chars.peek() == Some(&'\'') {
-                            chars.next(); // consume closing '
-                            tokens.push(Token::CharLit(character));
-                        }
-                    }
-                }
+    /// Scan a double-quoted string literal
+    fn scan_string(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+        chars.next(); // Opening "
+        let mut string = String::new();
+        while let Some(&ch) = chars.peek() {
+            chars.next();
+            if ch == '"' {
+                break;
+            }
+            string.push(ch);
+        }
+        tokens.push(Token::StringLit(string));
+    }
 
-                // Numbers (integers and floats)
-                '0'..='9' => {
-                    let mut num = String::new();
-                    let mut is_float = false;
+    /// Scan a character literal: 'a', '!', etc.
+    fn scan_char(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+        chars.next(); // Opening '
+        if let Some(&ch) = chars.peek() {
+            let character = ch;
+            chars.next(); // consume character
+            if chars.peek() == Some(&'\'') {
+                chars.next(); // consume closing '
+                tokens.push(Token::CharLit(character));
+            }
+        }
+    }
 
-                    // Parse integer part
+    /// Scan a numeric literal (integer or float)
+    fn scan_number(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+        let mut num = String::new();
+        let mut is_float = false;
+
+        // Parse integer part
+        while let Some(&ch) = chars.peek() {
+            if ch.is_ascii_digit() {
+                num.push(ch);
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        // Check for decimal point
+        if chars.peek() == Some(&'.') {
+            // Look ahead to see if next char is a digit (not a method call like "42.abs()")
+            let mut chars_clone = chars.clone();
+            if let Some(next_ch) = chars_clone.nth(1) {
+                if next_ch.is_ascii_digit() {
+                    is_float = true;
+                    num.push('.');
+                    chars.next(); // consume '.'
+
+                    // Parse fractional part
                     while let Some(&ch) = chars.peek() {
                         if ch.is_ascii_digit() {
                             num.push(ch);
@@ -274,263 +304,118 @@ impl Parser {
                             break;
                         }
                     }
-
-                    // Check for decimal point
-                    if chars.peek() == Some(&'.') {
-                        // Look ahead to see if next char is a digit (not a method call like "42.abs()")
-                        let mut chars_clone = chars.clone();
-                        if let Some(next_ch) = chars_clone.nth(1) {
-                            if next_ch.is_ascii_digit() {
-                                is_float = true;
-                                num.push('.');
-                                chars.next(); // consume '.'
-
-                                // Parse fractional part
-                                while let Some(&ch) = chars.peek() {
-                                    if ch.is_ascii_digit() {
-                                        num.push(ch);
-                                        chars.next();
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Create appropriate token
-                    if is_float {
-                        if let Ok(f) = num.parse::<f64>() {
-                            tokens.push(Token::Float(f));
-                        }
-                    } else if let Ok(n) = num.parse::<i64>() {
-                        tokens.push(Token::Integer(n));
-                    }
-                }
-
-                // F-strings: f"text {expr} more"
-                'f' if chars.clone().nth(1) == Some('"') => {
-                    chars.next(); // consume 'f'
-                    chars.next(); // consume opening "
-
-                    let mut content = String::new();
-                    while let Some(&ch) = chars.peek() {
-                        chars.next();
-                        if ch == '"' {
-                            break;
-                        }
-                        content.push(ch);
-                    }
-                    tokens.push(Token::FString(content));
-                }
-
-                // Identifiers and keywords
-                'a'..='z' | 'A'..='Z' | '_' => {
-                    let mut ident = String::new();
-                    while let Some(&ch) = chars.peek() {
-                        if ch.is_alphanumeric() || ch == '_' {
-                            ident.push(ch);
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
-
-                    let token = match ident.as_str() {
-                        "fun" => Token::Fun,
-                        "let" => Token::Let,
-                        "mut" => Token::Mut,
-                        "if" => Token::If,
-                        "else" => Token::Else,
-                        "while" => Token::While,
-                        "for" => Token::For,
-                        "in" => Token::In,
-                        "match" => Token::Match,
-                        "return" => Token::Return,
-                        "struct" => Token::Struct,
-                        "as" => Token::As,
-                        "use" => Token::Use,
-                        "move" => Token::Move,
-                        "true" => Token::True,
-                        "false" => Token::False,
-                        _ => Token::Identifier(ident),
-                    };
-                    tokens.push(token);
-                }
-
-                // Operators and delimiters
-                '+' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::PlusEqual);
-                }
-                '+' => {
-                    chars.next();
-                    tokens.push(Token::Plus);
-                }
-                '-' if chars.clone().nth(1) == Some('>') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::Arrow);
-                }
-                '-' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::MinusEqual);
-                }
-                '-' => {
-                    chars.next();
-                    tokens.push(Token::Minus);
-                }
-                '*' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::StarEqual);
-                }
-                '*' => {
-                    chars.next();
-                    tokens.push(Token::Star);
-                }
-                '/' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::SlashEqual);
-                }
-                '/' => {
-                    chars.next();
-                    tokens.push(Token::Slash);
-                }
-                '%' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::PercentEqual);
-                }
-                '%' => {
-                    chars.next();
-                    tokens.push(Token::Percent);
-                }
-                '(' => {
-                    chars.next();
-                    tokens.push(Token::LeftParen);
-                }
-                ')' => {
-                    chars.next();
-                    tokens.push(Token::RightParen);
-                }
-                '{' => {
-                    chars.next();
-                    tokens.push(Token::LeftBrace);
-                }
-                '}' => {
-                    chars.next();
-                    tokens.push(Token::RightBrace);
-                }
-                '[' => {
-                    chars.next();
-                    tokens.push(Token::LeftBracket);
-                }
-                ']' => {
-                    chars.next();
-                    tokens.push(Token::RightBracket);
-                }
-                ',' => {
-                    chars.next();
-                    tokens.push(Token::Comma);
-                }
-                ';' => {
-                    chars.next();
-                    tokens.push(Token::Semicolon);
-                }
-                ':' if chars.clone().nth(1) == Some(':') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::ColonColon);
-                }
-                ':' => {
-                    chars.next();
-                    tokens.push(Token::Colon);
-                }
-                '.' if chars.clone().nth(1) == Some('.') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::DotDot);
-                }
-                '.' => {
-                    chars.next();
-                    tokens.push(Token::Dot);
-                }
-
-                '=' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::EqualEqual);
-                }
-                '=' if chars.clone().nth(1) == Some('>') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::FatArrow);
-                }
-                '=' => {
-                    chars.next();
-                    tokens.push(Token::Equal);
-                }
-
-                '!' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::NotEqual);
-                }
-                '!' => {
-                    chars.next();
-                    tokens.push(Token::Not);
-                }
-
-                '<' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::LessEqual);
-                }
-                '<' => {
-                    chars.next();
-                    tokens.push(Token::LessThan);
-                }
-
-                '>' if chars.clone().nth(1) == Some('=') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::GreaterEqual);
-                }
-                '>' => {
-                    chars.next();
-                    tokens.push(Token::GreaterThan);
-                }
-
-                '&' if chars.clone().nth(1) == Some('&') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::AndAnd);
-                }
-
-                '|' if chars.clone().nth(1) == Some('|') => {
-                    chars.next();
-                    chars.next();
-                    tokens.push(Token::OrOr);
-                }
-                '|' => {
-                    chars.next();
-                    tokens.push(Token::Pipe);
-                }
-
-                _ => {
-                    // Unknown character - skip
-                    chars.next();
                 }
             }
         }
 
-        tokens.push(Token::Eof);
-        self.tokens = tokens;
-        Ok(())
+        // Create appropriate token
+        if is_float {
+            if let Ok(f) = num.parse::<f64>() {
+                tokens.push(Token::Float(f));
+            }
+        } else if let Ok(n) = num.parse::<i64>() {
+            tokens.push(Token::Integer(n));
+        }
+    }
+
+    /// Scan an f-string: f"text {expr} more"
+    fn scan_fstring(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+        chars.next(); // consume 'f'
+        chars.next(); // consume opening "
+
+        let mut content = String::new();
+        while let Some(&ch) = chars.peek() {
+            chars.next();
+            if ch == '"' {
+                break;
+            }
+            content.push(ch);
+        }
+        tokens.push(Token::FString(content));
+    }
+
+    /// Scan an identifier or keyword
+    fn scan_identifier(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+        let mut ident = String::new();
+        while let Some(&ch) = chars.peek() {
+            if ch.is_alphanumeric() || ch == '_' {
+                ident.push(ch);
+                chars.next();
+            } else {
+                break;
+            }
+        }
+
+        let token = match ident.as_str() {
+            "fun" => Token::Fun,
+            "let" => Token::Let,
+            "mut" => Token::Mut,
+            "if" => Token::If,
+            "else" => Token::Else,
+            "while" => Token::While,
+            "for" => Token::For,
+            "in" => Token::In,
+            "match" => Token::Match,
+            "return" => Token::Return,
+            "struct" => Token::Struct,
+            "as" => Token::As,
+            "use" => Token::Use,
+            "move" => Token::Move,
+            "true" => Token::True,
+            "false" => Token::False,
+            _ => Token::Identifier(ident),
+        };
+        tokens.push(token);
+    }
+
+    /// Scan an operator, delimiter, or skip unknown character
+    fn scan_operator(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, tokens: &mut Vec<Token>) {
+        let ch = *chars.peek().unwrap();
+        let next = chars.clone().nth(1);
+
+        match (ch, next) {
+            // Two-character operators (check first)
+            ('+', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::PlusEqual); }
+            ('-', Some('>')) => { chars.next(); chars.next(); tokens.push(Token::Arrow); }
+            ('-', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::MinusEqual); }
+            ('*', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::StarEqual); }
+            ('/', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::SlashEqual); }
+            ('%', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::PercentEqual); }
+            (':', Some(':')) => { chars.next(); chars.next(); tokens.push(Token::ColonColon); }
+            ('.', Some('.')) => { chars.next(); chars.next(); tokens.push(Token::DotDot); }
+            ('=', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::EqualEqual); }
+            ('=', Some('>')) => { chars.next(); chars.next(); tokens.push(Token::FatArrow); }
+            ('!', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::NotEqual); }
+            ('<', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::LessEqual); }
+            ('>', Some('=')) => { chars.next(); chars.next(); tokens.push(Token::GreaterEqual); }
+            ('&', Some('&')) => { chars.next(); chars.next(); tokens.push(Token::AndAnd); }
+            ('|', Some('|')) => { chars.next(); chars.next(); tokens.push(Token::OrOr); }
+
+            // Single-character operators and delimiters
+            ('+', _) => { chars.next(); tokens.push(Token::Plus); }
+            ('-', _) => { chars.next(); tokens.push(Token::Minus); }
+            ('*', _) => { chars.next(); tokens.push(Token::Star); }
+            ('/', _) => { chars.next(); tokens.push(Token::Slash); }
+            ('%', _) => { chars.next(); tokens.push(Token::Percent); }
+            ('(', _) => { chars.next(); tokens.push(Token::LeftParen); }
+            (')', _) => { chars.next(); tokens.push(Token::RightParen); }
+            ('{', _) => { chars.next(); tokens.push(Token::LeftBrace); }
+            ('}', _) => { chars.next(); tokens.push(Token::RightBrace); }
+            ('[', _) => { chars.next(); tokens.push(Token::LeftBracket); }
+            (']', _) => { chars.next(); tokens.push(Token::RightBracket); }
+            (',', _) => { chars.next(); tokens.push(Token::Comma); }
+            (';', _) => { chars.next(); tokens.push(Token::Semicolon); }
+            (':', _) => { chars.next(); tokens.push(Token::Colon); }
+            ('.', _) => { chars.next(); tokens.push(Token::Dot); }
+            ('=', _) => { chars.next(); tokens.push(Token::Equal); }
+            ('!', _) => { chars.next(); tokens.push(Token::Not); }
+            ('<', _) => { chars.next(); tokens.push(Token::LessThan); }
+            ('>', _) => { chars.next(); tokens.push(Token::GreaterThan); }
+            ('|', _) => { chars.next(); tokens.push(Token::Pipe); }
+
+            // Unknown character - skip
+            _ => { chars.next(); }
+        }
     }
 
     /// Parse a top-level item (function, struct, use statement, or statement)

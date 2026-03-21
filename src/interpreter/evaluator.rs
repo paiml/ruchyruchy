@@ -80,7 +80,7 @@
 // - Prevents Rust stack overflow in test threads (2MB stack limit)
 // - Ensures interpreter catches overflow before Rust runtime crashes
 
-use crate::interpreter::parser::{AstNode, Parser, UnaryOperator};
+use crate::interpreter::parser::AstNode;
 use crate::interpreter::scope::Scope;
 use crate::interpreter::value::{Value, ValueError};
 use std::collections::HashMap;
@@ -516,57 +516,10 @@ impl Evaluator {
             AstNode::CharLiteral(c) => Ok(ControlFlow::Value(Value::string(c.to_string()))),
             AstNode::BooleanLiteral(b) => Ok(ControlFlow::Value(Value::boolean(*b))),
 
-            // F-string with interpolation: f"text {expr} more"
-            // Parse the content to extract {expr} parts and evaluate them
-            AstNode::FString { content } => {
-                let mut result = String::new();
-                let mut chars = content.chars().peekable();
+            // F-string with interpolation
+            AstNode::FString { content } => self.eval_fstring(content),
 
-                while let Some(ch) = chars.next() {
-                    if ch == '{' {
-                        // Extract expression until '}'
-                        let mut expr_str = String::new();
-                        let mut depth = 1;
-                        for ch in chars.by_ref() {
-                            if ch == '{' {
-                                depth += 1;
-                                expr_str.push(ch);
-                            } else if ch == '}' {
-                                depth -= 1;
-                                if depth == 0 {
-                                    break;
-                                }
-                                expr_str.push(ch);
-                            } else {
-                                expr_str.push(ch);
-                            }
-                        }
-
-                        // Parse and evaluate the expression
-                        let mut parser = Parser::new(&expr_str);
-                        let ast = parser
-                            .parse()
-                            .map_err(|e| EvalError::UnsupportedOperation {
-                                operation: format!(
-                                    "Failed to parse f-string expression '{}': {:?}",
-                                    expr_str, e
-                                ),
-                            })?;
-
-                        // Evaluate the expression
-                        if let Some(node) = ast.nodes().first() {
-                            let value = self.eval(node)?;
-                            result.push_str(&value.to_println_string());
-                        }
-                    } else {
-                        result.push(ch);
-                    }
-                }
-
-                Ok(ControlFlow::Value(Value::string(result)))
-            }
-
-            // Binary operations - evaluate operands then apply operator
+            // Binary operations
             AstNode::BinaryOp { op, left, right } => {
                 let left_val = self.eval(left)?;
                 let right_val = self.eval(right)?;
@@ -574,14 +527,14 @@ impl Evaluator {
                 Ok(ControlFlow::Value(result))
             }
 
-            // Unary operations - evaluate operand then apply operator
+            // Unary operations
             AstNode::UnaryOp { op, operand } => {
                 let operand_val = self.eval(operand)?;
                 let result = self.eval_unary_op(*op, operand_val)?;
                 Ok(ControlFlow::Value(result))
             }
 
-            // Type cast - convert value to target type
+            // Type cast
             AstNode::TypeCast { expr, target_type } => {
                 let value = self.eval(expr)?;
                 let result = self.eval_type_cast(value, target_type)?;
@@ -589,38 +542,7 @@ impl Evaluator {
             }
 
             // Range expression: start..end
-            // Creates a vector of integers from start to end (inclusive)
-            AstNode::Range { start, end } => {
-                let start_val = self.eval(start)?;
-                let end_val = self.eval(end)?;
-
-                let start_int =
-                    start_val
-                        .as_integer()
-                        .map_err(|_| EvalError::UnsupportedOperation {
-                            operation: format!(
-                                "range start must be integer, got {}",
-                                start_val.type_name()
-                            ),
-                        })?;
-                let end_int =
-                    end_val
-                        .as_integer()
-                        .map_err(|_| EvalError::UnsupportedOperation {
-                            operation: format!(
-                                "range end must be integer, got {}",
-                                end_val.type_name()
-                            ),
-                        })?;
-
-                // Create vector of integers from start to end (exclusive)
-                let mut elements = Vec::new();
-                for i in start_int..end_int {
-                    elements.push(Value::integer(i));
-                }
-
-                Ok(ControlFlow::Value(Value::vector(elements)))
-            }
+            AstNode::Range { start, end } => self.eval_range(start, end),
 
             // Function definition - register function
             AstNode::FunctionDef { name, params, body } => {
@@ -629,271 +551,18 @@ impl Evaluator {
                 Ok(ControlFlow::Value(Value::nil()))
             }
 
-            // Function call - evaluate arguments and call function
+            // Function call
             AstNode::FunctionCall { name, args } => {
                 let result = self.call_function(name, args)?;
                 Ok(ControlFlow::Value(result))
             }
 
-            // Method call - evaluate receiver and call method on it
+            // Method call (mutating + immutable dispatch)
             AstNode::MethodCall {
                 receiver,
                 method,
                 args,
-            } => {
-                // Special handling for push() - it mutates the array
-                if method == "push" {
-                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
-                        // Get current array
-                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
-                            EvalError::UndefinedVariable {
-                                name: var_name.clone(),
-                            }
-                        })?;
-
-                        // Evaluate argument
-                        if args.len() != 1 {
-                            return Err(EvalError::ArgumentCountMismatch {
-                                function: "push".to_string(),
-                                expected: 1,
-                                actual: args.len(),
-                            });
-                        }
-                        let arg_val = self.eval(&args[0])?;
-
-                        // Mutate array or string
-                        match current_val {
-                            Value::Vector(ref mut arr) => {
-                                arr.push(arg_val);
-
-                                // DEBUGGER-047: Track memory allocation for push
-                                if let Some(ref profiler) = self.performance_profiler {
-                                    let bytes = std::mem::size_of::<Value>();
-                                    profiler.record_memory_allocation(bytes);
-                                }
-
-                                // Update scope with mutated array
-                                self.scope.assign(var_name, current_val).map_err(|_| {
-                                    EvalError::UndefinedVariable {
-                                        name: var_name.clone(),
-                                    }
-                                })?;
-                                return Ok(ControlFlow::Value(Value::nil()));
-                            }
-                            Value::String(ref mut s) => {
-                                // String::push(char) - append character to string
-                                let char_str = arg_val.as_string().map_err(|_| {
-                                    EvalError::UnsupportedOperation {
-                                        operation: "push() on String requires char argument"
-                                            .to_string(),
-                                    }
-                                })?;
-                                s.push_str(char_str);
-
-                                // Update scope with mutated string
-                                self.scope.assign(var_name, current_val).map_err(|_| {
-                                    EvalError::UndefinedVariable {
-                                        name: var_name.clone(),
-                                    }
-                                })?;
-                                return Ok(ControlFlow::Value(Value::nil()));
-                            }
-                            _ => {
-                                return Err(EvalError::UnsupportedOperation {
-                                    operation: format!(
-                                        "push() requires array or String, got {}",
-                                        current_val.type_name()
-                                    ),
-                                });
-                            }
-                        }
-                    }
-                }
-
-                // Special handling for push_str() - appends string to string
-                if method == "push_str" {
-                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
-                        // Get current string
-                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
-                            EvalError::UndefinedVariable {
-                                name: var_name.clone(),
-                            }
-                        })?;
-
-                        // Evaluate argument
-                        if args.len() != 1 {
-                            return Err(EvalError::ArgumentCountMismatch {
-                                function: "push_str".to_string(),
-                                expected: 1,
-                                actual: args.len(),
-                            });
-                        }
-                        let arg_val = self.eval(&args[0])?;
-
-                        // Mutate string
-                        if let Value::String(ref mut s) = current_val {
-                            let str_arg = arg_val.as_string().map_err(|_| {
-                                EvalError::UnsupportedOperation {
-                                    operation: "push_str() requires String argument".to_string(),
-                                }
-                            })?;
-                            s.push_str(str_arg);
-
-                            // Update scope with mutated string
-                            self.scope.assign(var_name, current_val).map_err(|_| {
-                                EvalError::UndefinedVariable {
-                                    name: var_name.clone(),
-                                }
-                            })?;
-                            return Ok(ControlFlow::Value(Value::nil()));
-                        } else {
-                            return Err(EvalError::UnsupportedOperation {
-                                operation: format!(
-                                    "push_str() requires String, got {}",
-                                    current_val.type_name()
-                                ),
-                            });
-                        }
-                    }
-                }
-
-                // Special handling for pop() - it mutates the array
-                if method == "pop" {
-                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
-                        // Get current array
-                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
-                            EvalError::UndefinedVariable {
-                                name: var_name.clone(),
-                            }
-                        })?;
-
-                        // pop() takes no arguments
-                        if !args.is_empty() {
-                            return Err(EvalError::ArgumentCountMismatch {
-                                function: "pop".to_string(),
-                                expected: 0,
-                                actual: args.len(),
-                            });
-                        }
-
-                        // Mutate array
-                        if let Value::Vector(ref mut arr) = current_val {
-                            let popped = arr.pop().unwrap_or(Value::nil());
-
-                            // Update scope with mutated array
-                            self.scope.assign(var_name, current_val).map_err(|_| {
-                                EvalError::UndefinedVariable {
-                                    name: var_name.clone(),
-                                }
-                            })?;
-                            return Ok(ControlFlow::Value(popped));
-                        } else {
-                            return Err(EvalError::UnsupportedOperation {
-                                operation: format!(
-                                    "pop() requires array, got {}",
-                                    current_val.type_name()
-                                ),
-                            });
-                        }
-                    }
-                }
-
-                // Special handling for push_str() - it mutates the string
-                if method == "push_str" {
-                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
-                        // Get current string
-                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
-                            EvalError::UndefinedVariable {
-                                name: var_name.clone(),
-                            }
-                        })?;
-
-                        // push_str() takes exactly one argument (string to append)
-                        if args.len() != 1 {
-                            return Err(EvalError::ArgumentCountMismatch {
-                                function: "push_str".to_string(),
-                                expected: 1,
-                                actual: args.len(),
-                            });
-                        }
-
-                        // Evaluate the argument
-                        let arg_val = self.eval(&args[0])?;
-                        let to_append = arg_val.as_string()?;
-
-                        // Mutate string
-                        if let Value::String(ref mut s) = current_val {
-                            s.push_str(to_append);
-
-                            // Update scope with mutated string
-                            self.scope.assign(var_name, current_val).map_err(|_| {
-                                EvalError::UndefinedVariable {
-                                    name: var_name.clone(),
-                                }
-                            })?;
-                            return Ok(ControlFlow::Value(Value::nil()));
-                        } else {
-                            return Err(EvalError::UnsupportedOperation {
-                                operation: format!(
-                                    "push_str() requires string, got {}",
-                                    current_val.type_name()
-                                ),
-                            });
-                        }
-                    }
-                }
-
-                // Special handling for insert() - it mutates the HashMap
-                if method == "insert" {
-                    if let AstNode::Identifier(var_name) = receiver.as_ref() {
-                        // Get current HashMap
-                        let mut current_val = self.scope.get_cloned(var_name).map_err(|_| {
-                            EvalError::UndefinedVariable {
-                                name: var_name.clone(),
-                            }
-                        })?;
-
-                        // insert() takes exactly two arguments (key, value)
-                        if args.len() != 2 {
-                            return Err(EvalError::ArgumentCountMismatch {
-                                function: "insert".to_string(),
-                                expected: 2,
-                                actual: args.len(),
-                            });
-                        }
-
-                        // Evaluate the arguments
-                        let key_val = self.eval(&args[0])?;
-                        let key = key_val.as_string()?;
-                        let value_val = self.eval(&args[1])?;
-
-                        // Mutate HashMap
-                        if let Value::HashMap(ref mut map) = current_val {
-                            map.insert(key.to_string(), value_val);
-
-                            // Update scope with mutated HashMap
-                            self.scope.assign(var_name, current_val).map_err(|_| {
-                                EvalError::UndefinedVariable {
-                                    name: var_name.clone(),
-                                }
-                            })?;
-                            return Ok(ControlFlow::Value(Value::nil()));
-                        } else {
-                            return Err(EvalError::UnsupportedOperation {
-                                operation: format!(
-                                    "insert() requires HashMap, got {}",
-                                    current_val.type_name()
-                                ),
-                            });
-                        }
-                    }
-                }
-
-                // Default method call handling
-                let receiver_val = self.eval(receiver)?;
-                let result = self.call_method(receiver_val, method, args)?;
-                Ok(ControlFlow::Value(result))
-            }
+            } => self.eval_method_call(receiver, method, args),
 
             // Identifier - lookup variable in scope
             AstNode::Identifier(name) => {
@@ -904,7 +573,7 @@ impl Evaluator {
                 Ok(ControlFlow::Value(value))
             }
 
-            // Return statement - early return from function
+            // Return statement
             AstNode::Return { value } => {
                 let return_val = if let Some(expr) = value {
                     self.eval(expr)?
@@ -914,45 +583,17 @@ impl Evaluator {
                 Ok(ControlFlow::Return(return_val))
             }
 
-            // If expression - conditional branching
+            // If expression
             AstNode::IfExpr {
                 condition,
                 then_branch,
                 else_branch,
             } => self.eval_if(condition, then_branch, else_branch),
 
-            // Block expression - creates a new scope (INTERP-043)
-            AstNode::Block { statements } => {
-                // Create child scope for block
-                let child_scope = self.scope.create_child();
-                let parent_scope = std::mem::replace(&mut self.scope, child_scope);
+            // Block expression (INTERP-043)
+            AstNode::Block { statements } => self.eval_block(statements),
 
-                // Evaluate all statements in block scope
-                let mut last_value = Value::nil();
-                let mut early_exit = None; // Track early return or error
-
-                for stmt in statements {
-                    match self.eval_internal(stmt) {
-                        Ok(ControlFlow::Value(v)) => last_value = v,
-                        Ok(ControlFlow::Return(v)) => {
-                            early_exit = Some(Ok(ControlFlow::Return(v)));
-                            break;
-                        }
-                        Err(e) => {
-                            early_exit = Some(Err(e));
-                            break;
-                        }
-                    }
-                }
-
-                // Restore parent scope
-                self.scope = parent_scope;
-
-                // Return early exit if any, otherwise return last value
-                early_exit.unwrap_or(Ok(ControlFlow::Value(last_value)))
-            }
-
-            // Let declaration - variable binding
+            // Let declaration
             AstNode::LetDecl { name, value } => {
                 let val = self.eval(value)?;
                 self.scope.define(name.clone(), val).map_err(|e| {
@@ -964,60 +605,22 @@ impl Evaluator {
             }
 
             // Tuple destructuring: let (a, b, c) = expr
-            AstNode::TupleDestruct { names, value } => {
-                // Evaluate RHS to get tuple
-                let tuple_val = self.eval(value)?;
+            AstNode::TupleDestruct { names, value } => self.eval_tuple_destruct(names, value),
 
-                // Extract tuple elements
-                let elements = match tuple_val {
-                    Value::Tuple(ref elems) => elems.clone(),
-                    _ => {
-                        return Err(EvalError::UnsupportedOperation {
-                            operation: format!(
-                                "tuple destructuring requires tuple, got {}",
-                                tuple_val.type_name()
-                            ),
-                        })
-                    }
-                };
-
-                // Check arity match
-                if names.len() != elements.len() {
-                    return Err(EvalError::UnsupportedOperation {
-                        operation: format!(
-                            "tuple destructuring: expected {} elements, got {}",
-                            names.len(),
-                            elements.len()
-                        ),
-                    });
-                }
-
-                // Bind each element to corresponding pattern variable
-                for (name, elem) in names.iter().zip(elements.iter()) {
-                    self.scope.define(name.clone(), elem.clone()).map_err(|e| {
-                        EvalError::UnsupportedOperation {
-                            operation: format!("define variable in tuple destructuring: {}", e),
-                        }
-                    })?;
-                }
-
-                Ok(ControlFlow::Value(Value::nil()))
-            }
-
-            // While loop - execute body while condition is true
+            // While loop
             AstNode::WhileLoop { condition, body } => self.eval_while(condition, body),
 
-            // For loop - iterate over elements
+            // For loop
             AstNode::ForLoop {
                 var,
                 iterable,
                 body,
             } => self.eval_for(var, iterable, body),
 
-            // Match expression - pattern matching
+            // Match expression
             AstNode::MatchExpr { expr, arms } => self.eval_match(expr, arms),
 
-            // Assignment - reassign existing variable
+            // Assignment
             AstNode::Assignment { name, value } => {
                 let val = self.eval(value)?;
                 self.scope
@@ -1027,83 +630,11 @@ impl Evaluator {
             }
 
             // Compound assignment: x += 5, *num -= 1
-            // Desugar to: lhs = lhs op rhs
             AstNode::CompoundAssignment { lhs, op, rhs } => {
-                // Evaluate current value of LHS
-                let current_val = self.eval(lhs)?;
-
-                // Evaluate RHS
-                let rhs_val = self.eval(rhs)?;
-
-                // Apply operation
-                // INTERP-OPT-002: Move current_val instead of cloning (not used after binary op)
-                let new_val = self.eval_binary_op(*op, current_val, rhs_val)?;
-
-                // Update the variable
-                // For simple identifiers: x += 1
-                if let AstNode::Identifier(name) = lhs.as_ref() {
-                    self.scope
-                        .assign(name, new_val)
-                        .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
-                    Ok(ControlFlow::Value(Value::nil()))
-                } else if let AstNode::UnaryOp {
-                    op: UnaryOperator::Dereference,
-                    operand,
-                } = lhs.as_ref()
-                {
-                    // For dereference: *num += 1
-                    // INTERP-041: Support both _arc_id (shared ref) and _inner (local)
-                    if let AstNode::Identifier(name) = operand.as_ref() {
-                        // Get the wrapper object
-                        let wrapper = self
-                            .scope
-                            .get_cloned(name)
-                            .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
-
-                        // Update the value (arc_store or _inner)
-                        if let Value::HashMap(map) = wrapper {
-                            // INTERP-041: Check for _arc_id first (shared reference model)
-                            if let Some(Value::Integer(arc_id)) = map.get("_arc_id") {
-                                // Re-wrap new_val in Mutex HashMap structure before storing
-                                // This preserves the Mutex::new wrapper when updating
-                                use std::collections::HashMap;
-                                let mut mutex_wrapper = HashMap::new();
-                                mutex_wrapper.insert("_inner".to_string(), new_val.clone());
-                                self.arc_store
-                                    .insert(*arc_id as usize, Value::HashMap(mutex_wrapper));
-                                Ok(ControlFlow::Value(Value::nil()))
-                            } else {
-                                // Fallback: _inner model (local reference)
-                                let mut new_map = map.clone();
-                                new_map.insert("_inner".to_string(), new_val);
-                                self.scope
-                                    .assign(name, Value::HashMap(new_map))
-                                    .map_err(|_| EvalError::UndefinedVariable {
-                                        name: name.clone(),
-                                    })?;
-                                Ok(ControlFlow::Value(Value::nil()))
-                            }
-                        } else {
-                            // Not a wrapper, just update the variable directly
-                            self.scope
-                                .assign(name, new_val)
-                                .map_err(|_| EvalError::UndefinedVariable { name: name.clone() })?;
-                            Ok(ControlFlow::Value(Value::nil()))
-                        }
-                    } else {
-                        Err(EvalError::UnsupportedOperation {
-                            operation: "compound assignment to complex dereference expression"
-                                .to_string(),
-                        })
-                    }
-                } else {
-                    Err(EvalError::UnsupportedOperation {
-                        operation: format!("compound assignment to {}", "complex expression"),
-                    })
-                }
+                self.eval_compound_assignment(lhs, *op, rhs)
             }
 
-            // Vector literal - create vector value
+            // Vector literal
             AstNode::VectorLiteral { elements } => {
                 let mut values = Vec::new();
                 for elem in elements {
@@ -1112,24 +643,10 @@ impl Evaluator {
                 Ok(ControlFlow::Value(Value::vector(values)))
             }
 
-            // HashMap literal - create hashmap value
-            // Syntax: {key1: val1, key2: val2, ...}
-            // Keys must evaluate to strings, values can be any type
-            AstNode::HashMapLiteral { pairs } => {
-                use std::collections::HashMap;
-                let mut map = HashMap::new();
-                for (key_node, val_node) in pairs {
-                    let key_val = self.eval(key_node)?;
-                    let key_str = key_val.as_string()?.to_string();
-                    let value = self.eval(val_node)?;
-                    map.insert(key_str, value);
-                }
-                Ok(ControlFlow::Value(Value::HashMap(map)))
-            }
+            // HashMap literal
+            AstNode::HashMapLiteral { pairs } => self.eval_hashmap_literal(pairs),
 
-            // Tuple literal - create tuple value
-            // Syntax: (elem1, elem2, ...)
-            // Elements can be heterogeneous types
+            // Tuple literal
             AstNode::TupleLiteral { elements } => {
                 let mut values = Vec::new();
                 for elem in elements {
@@ -1138,75 +655,24 @@ impl Evaluator {
                 Ok(ControlFlow::Value(Value::tuple(values)))
             }
 
-            // Index access - vec[i], map[key]
-            // For vectors: index must be non-negative integer
-            // For hashmaps: key can be any Value (converted to string internally)
-            // Errors: IndexOutOfBounds (vec), KeyNotFound (map), TypeMismatch (non-indexable)
-            AstNode::IndexAccess { expr, index } => {
-                let container = self.eval(expr)?;
-                let index_val = self.eval(index)?;
+            // Index access: vec[i], map[key]
+            AstNode::IndexAccess { expr, index } => self.eval_index_access(expr, index),
 
-                match &container {
-                    Value::Vector(_) => {
-                        let idx = index_val.as_integer()?;
-                        if idx < 0 {
-                            return Err(EvalError::ValueError(
-                                crate::interpreter::value::ValueError::InvalidOperation {
-                                    operation: "vector index".to_string(),
-                                    message: "index cannot be negative".to_string(),
-                                },
-                            ));
-                        }
-                        let result = container.index(idx as usize)?.clone();
-                        Ok(ControlFlow::Value(result))
-                    }
-                    Value::HashMap(_) => {
-                        let result = container.get(&index_val)?.clone();
-                        Ok(ControlFlow::Value(result))
-                    }
-                    _ => Err(EvalError::ValueError(
-                        crate::interpreter::value::ValueError::TypeMismatch {
-                            expected: "Vector or HashMap".to_string(),
-                            found: container.type_name().to_string(),
-                            operation: "index access".to_string(),
-                        },
-                    )),
-                }
-            }
+            // Use declaration - no-op (no module system yet)
+            AstNode::UseDecl { path: _ } => Ok(ControlFlow::Value(Value::nil())),
 
-            // Use declaration - ignored for now (no module system yet)
-            // In a full implementation, this would import modules/symbols
-            AstNode::UseDecl { path: _ } => {
-                // For now, just acknowledge the use statement without error
-                // Path like ["std", "sync", "Mutex"] is noted but not imported
-                Ok(ControlFlow::Value(Value::nil()))
-            }
-
-            // Grouped use declaration - ignored for now (no module system yet)
-            // Examples: use std::sync::{Arc, Mutex};
+            // Grouped use declaration - no-op (no module system yet)
             AstNode::GroupedUseDecl {
                 base_path: _,
                 items: _,
-            } => {
-                // For now, just acknowledge the grouped use statement without error
-                // Base path like ["std", "sync"] and items like ["Arc", "Mutex"]
-                // Would expand to: use std::sync::Arc; use std::sync::Mutex;
-                Ok(ControlFlow::Value(Value::nil()))
-            }
+            } => Ok(ControlFlow::Value(Value::nil())),
 
-            // Path expression - convert to identifier or function lookup
-            // Examples: Arc::new, thread::spawn
+            // Path expression: Arc::new, thread::spawn
             AstNode::PathExpr { segments } => {
-                // Join path segments into a single identifier
-                // This allows treating "thread::spawn" as a function name
                 let name = segments.join("::");
-
-                // Try to look up as variable first, then as function
                 if let Ok(value) = self.scope.get_cloned(&name) {
                     Ok(ControlFlow::Value(value))
                 } else {
-                    // Path expressions without calls evaluate to a placeholder
-                    // In a full implementation, this would be a function reference
                     Ok(ControlFlow::Value(Value::string(format!(
                         "<path: {}>",
                         name
@@ -1214,16 +680,13 @@ impl Evaluator {
                 }
             }
 
-            // Closure - create closure value with captured environment
+            // Closure - capture environment
             AstNode::Closure {
-                is_move: _, // TODO: Implement move semantics in future
+                is_move: _,
                 params,
                 body,
             } => {
-                // Capture current environment for closure
                 let captured_env = self.scope.capture();
-
-                // Return closure value with captured environment
                 Ok(ControlFlow::Value(Value::Closure {
                     params: params.clone(),
                     body: body.clone(),
@@ -1231,88 +694,20 @@ impl Evaluator {
                 }))
             }
 
-            // Struct definition - register struct schema
-            AstNode::StructDef { .. } => {
-                // Struct definitions are currently no-ops
-                // Full implementation would register struct schemas
-                Ok(ControlFlow::Value(Value::nil()))
-            }
+            // Struct definition - no-op
+            AstNode::StructDef { .. } => Ok(ControlFlow::Value(Value::nil())),
 
-            // Struct literal - create struct instance
-            AstNode::StructLiteral { name: _, fields } => {
-                // For now, represent structs as hashmaps
-                use std::collections::HashMap;
-                let mut map = HashMap::new();
-                for (field_name, field_val_node) in fields {
-                    let field_val = self.eval(field_val_node)?;
-                    map.insert(field_name.clone(), field_val);
-                }
-                Ok(ControlFlow::Value(Value::HashMap(map)))
-            }
+            // Struct literal - create as HashMap
+            AstNode::StructLiteral { name: _, fields } => self.eval_struct_literal(fields),
 
-            // Field access - get field from struct/object
-            AstNode::FieldAccess { expr, field } => {
-                let value = self.eval(expr)?;
-                // Treat as hashmap field access for struct-like values
-                match &value {
-                    Value::HashMap(_) => {
-                        let key = Value::string(field.clone());
-                        let result = value.get(&key)?.clone();
-                        Ok(ControlFlow::Value(result))
-                    }
-                    _ => Err(EvalError::UnsupportedOperation {
-                        operation: format!("field access on {}", value.type_name()),
-                    }),
-                }
-            }
+            // Field access
+            AstNode::FieldAccess { expr, field } => self.eval_field_access(expr, field),
 
-            // vec! macro - create array
-            // Forms: vec![], vec![1, 2, 3], vec![0; 10]
+            // vec! macro
             AstNode::VecMacro {
                 elements,
                 repeat_count,
-            } => {
-                if let Some(count_expr) = repeat_count {
-                    // Repeat form: vec![expr; count]
-                    let element_value = self.eval(&elements[0])?;
-                    let count_value = self.eval(count_expr)?;
-                    let count = match count_value {
-                        Value::Integer(n) if n >= 0 => n as usize,
-                        _ => {
-                            return Err(EvalError::UnsupportedOperation {
-                                operation: "vec! repeat count must be non-negative integer"
-                                    .to_string(),
-                            })
-                        }
-                    };
-                    let repeated_array = vec![element_value; count];
-
-                    // DEBUGGER-047: Track memory allocation for vector
-                    if let Some(ref profiler) = self.performance_profiler {
-                        // Estimate: each Value is ~32 bytes
-                        let bytes = count * std::mem::size_of::<Value>();
-                        profiler.record_memory_allocation(bytes);
-                    }
-
-                    Ok(ControlFlow::Value(Value::Vector(repeated_array)))
-                } else {
-                    // Elements form: vec![1, 2, 3] or vec![]
-                    let mut array = Vec::new();
-                    for elem in elements {
-                        let val = self.eval(elem)?;
-                        array.push(val);
-                    }
-
-                    // DEBUGGER-047: Track memory allocation for vector
-                    if let Some(ref profiler) = self.performance_profiler {
-                        // Estimate: each Value is ~32 bytes
-                        let bytes = array.len() * std::mem::size_of::<Value>();
-                        profiler.record_memory_allocation(bytes);
-                    }
-
-                    Ok(ControlFlow::Value(Value::Vector(array)))
-                }
-            }
+            } => self.eval_vec_macro(elements, repeat_count.as_deref()),
 
             // Empty node - no-op
             AstNode::Empty => Ok(ControlFlow::Value(Value::nil())),

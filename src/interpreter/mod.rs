@@ -19,6 +19,8 @@ pub mod bug_discovery;
 pub mod evaluator;
 /// Evaluator helper methods (binary ops, calls, control flow)
 mod eval_helpers;
+/// Evaluator dispatch helpers (per-node-type evaluators)
+mod eval_dispatch;
 /// AST type definitions (AstNode, Ast, operators, patterns, errors)
 pub mod ast;
 /// Parser and AST definitions
