@@ -453,10 +453,165 @@ impl Evaluator {
         Ok(result)
     }
 
+    /// Call a method on a string receiver
+    ///
+    /// Handles: len, is_empty, contains, to_string
+    fn call_string_method(
+        s: &str,
+        method: &str,
+        arg_values: &[Value],
+    ) -> Result<Option<Value>, EvalError> {
+        match method {
+            "len" => {
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "String.len()".to_string(),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+                Ok(Some(Value::integer(s.len() as i64)))
+            }
+            "is_empty" => {
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "String.is_empty()".to_string(),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+                Ok(Some(Value::boolean(s.is_empty())))
+            }
+            "contains" => {
+                if arg_values.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "String.contains()".to_string(),
+                        expected: 1,
+                        actual: arg_values.len(),
+                    });
+                }
+                let needle = arg_values[0].as_string()?;
+                Ok(Some(Value::boolean(s.contains(needle))))
+            }
+            "to_string" => {
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "to_string".to_string(),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+                Ok(Some(Value::string(s.to_string())))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Call a method on an array receiver
+    ///
+    /// Handles: len, is_empty, push
+    fn call_array_method(
+        arr: &[Value],
+        method: &str,
+        arg_values: &[Value],
+    ) -> Result<Option<Value>, EvalError> {
+        match method {
+            "len" => {
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "Array.len()".to_string(),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+                Ok(Some(Value::integer(arr.len() as i64)))
+            }
+            "is_empty" => {
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "Array.is_empty()".to_string(),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+                Ok(Some(Value::boolean(arr.is_empty())))
+            }
+            "push" => {
+                // Vec::push(value) -> ()
+                // This is a mutating operation, which is tricky in our immutable design
+                // For now, just return nil
+                if arg_values.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "push".to_string(),
+                        expected: 1,
+                        actual: arg_values.len(),
+                    });
+                }
+                Ok(Some(Value::nil()))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Call a method on a map receiver
+    ///
+    /// Handles: get, lock (INTERP-041 arc_store lookup)
+    fn call_map_method(
+        &self,
+        map: &std::collections::HashMap<String, Value>,
+        method: &str,
+        arg_values: &[Value],
+    ) -> Result<Option<Value>, EvalError> {
+        match method {
+            "get" => {
+                if arg_values.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "get".to_string(),
+                        expected: 1,
+                        actual: arg_values.len(),
+                    });
+                }
+                let key = arg_values[0].as_string()?;
+                match map.get(key) {
+                    Some(value) => Ok(Some(value.clone())),
+                    None => Ok(Some(Value::nil())),
+                }
+            }
+            "lock" => {
+                // Mutex::lock() -> LockGuard
+                // INTERP-041: Look up value in arc_store if _arc_id exists
+                if !arg_values.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "lock".to_string(),
+                        expected: 0,
+                        actual: arg_values.len(),
+                    });
+                }
+                // Check for _arc_id first (new shared ref model)
+                if let Some(Value::Integer(arc_id)) = map.get("_arc_id") {
+                    if let Some(stored_value) = self.arc_store.get(&(*arc_id as usize)) {
+                        use std::collections::HashMap;
+                        let mut wrapper = HashMap::new();
+                        wrapper.insert("_arc_id".to_string(), Value::integer(*arc_id));
+                        wrapper.insert("_locked_value".to_string(), stored_value.clone());
+                        return Ok(Some(Value::HashMap(wrapper)));
+                    }
+                }
+                // Fallback: old _inner approach (backwards compatibility)
+                if let Some(inner) = map.get("_inner") {
+                    Ok(Some(inner.clone()))
+                } else {
+                    Ok(None) // Not handled here, fall through to shared lock
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
     /// Call a method on a receiver value
     ///
     /// Implements basic method call syntax: receiver.method(args)
-    /// Currently supports string methods: len(), contains()
+    /// Dispatches to type-specific handlers first, then shared methods.
     pub(crate) fn call_method(
         &mut self,
         receiver: Value,
@@ -469,80 +624,36 @@ impl Evaluator {
             arg_values.push(self.eval(arg)?);
         }
 
-        // Dispatch based on method name
+        // Try type-specific dispatch first
+        if let Ok(s) = receiver.as_string() {
+            if let Some(result) = Self::call_string_method(s, method, &arg_values)? {
+                return Ok(result);
+            }
+        }
+        if let Ok(arr) = receiver.as_vector() {
+            if let Some(result) = Self::call_array_method(arr, method, &arg_values)? {
+                return Ok(result);
+            }
+        }
+        if let Value::HashMap(ref map) = receiver {
+            if let Some(result) = self.call_map_method(map, method, &arg_values)? {
+                return Ok(result);
+            }
+        }
+
+        // Shared methods that work across types
         match method {
-            "len" => {
-                // String or Array length: "hello".len() => 5, [1,2,3].len() => 3
-                if !arg_values.is_empty() {
-                    return Err(EvalError::ArgumentCountMismatch {
-                        function: format!("{}.len()", receiver.type_name()),
-                        expected: 0,
-                        actual: arg_values.len(),
-                    });
-                }
-
-                if let Ok(s) = receiver.as_string() {
-                    Ok(Value::integer(s.len() as i64))
-                } else if let Ok(arr) = receiver.as_vector() {
-                    Ok(Value::integer(arr.len() as i64))
-                } else {
-                    Err(EvalError::UnsupportedOperation {
-                        operation: format!(
-                            "method 'len' not supported on type {}",
-                            receiver.type_name()
-                        ),
-                    })
-                }
-            }
-            "is_empty" => {
-                // String or Array is_empty: "".is_empty() => true, [].is_empty() => true
-                if !arg_values.is_empty() {
-                    return Err(EvalError::ArgumentCountMismatch {
-                        function: format!("{}.is_empty()", receiver.type_name()),
-                        expected: 0,
-                        actual: arg_values.len(),
-                    });
-                }
-
-                if let Ok(s) = receiver.as_string() {
-                    Ok(Value::boolean(s.is_empty()))
-                } else if let Ok(arr) = receiver.as_vector() {
-                    Ok(Value::boolean(arr.is_empty()))
-                } else {
-                    Err(EvalError::UnsupportedOperation {
-                        operation: format!(
-                            "method 'is_empty' not supported on type {}",
-                            receiver.type_name()
-                        ),
-                    })
-                }
-            }
-            "contains" => {
-                // String contains: "hello".contains('e') => true
-                if arg_values.len() != 1 {
-                    return Err(EvalError::ArgumentCountMismatch {
-                        function: format!("{}.contains()", receiver.type_name()),
-                        expected: 1,
-                        actual: arg_values.len(),
-                    });
-                }
-
-                if let (Ok(haystack), Ok(needle)) =
-                    (receiver.as_string(), arg_values[0].as_string())
-                {
-                    Ok(Value::boolean(haystack.contains(needle)))
-                } else {
-                    Err(EvalError::UnsupportedOperation {
-                        operation: format!(
-                            "method 'contains' not supported on types {} and {}",
-                            receiver.type_name(),
-                            arg_values[0].type_name()
-                        ),
-                    })
-                }
+            "len" | "is_empty" | "contains" | "get" => {
+                // These were not handled by a type-specific handler above
+                Err(EvalError::UnsupportedOperation {
+                    operation: format!(
+                        "method '{}' not supported on type {}",
+                        method,
+                        receiver.type_name()
+                    ),
+                })
             }
             "round" => {
-                // Float rounding: 3.7.round() => 4.0
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: format!("{}.round()", receiver.type_name()),
@@ -550,7 +661,6 @@ impl Evaluator {
                         actual: arg_values.len(),
                     });
                 }
-
                 if let Ok(f) = receiver.as_float() {
                     Ok(Value::float(f.round()))
                 } else {
@@ -562,11 +672,8 @@ impl Evaluator {
                     })
                 }
             }
-
-            // Mock concurrency methods
             "lock" => {
-                // Mutex::lock() -> LockGuard
-                // INTERP-041: Look up value in arc_store if _arc_id exists
+                // Non-map lock: just return the receiver clone
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "lock".to_string(),
@@ -574,35 +681,9 @@ impl Evaluator {
                         actual: arg_values.len(),
                     });
                 }
-
-                // INTERP-041: Look up in arc_store if _arc_id exists, otherwise use _inner
-                match &receiver {
-                    Value::HashMap(map) => {
-                        // Check for _arc_id first (new shared ref model)
-                        if let Some(Value::Integer(arc_id)) = map.get("_arc_id") {
-                            if let Some(stored_value) = self.arc_store.get(&(*arc_id as usize)) {
-                                // Return wrapper with _arc_id so dereference can update it
-                                use std::collections::HashMap;
-                                let mut wrapper = HashMap::new();
-                                wrapper.insert("_arc_id".to_string(), Value::integer(*arc_id));
-                                wrapper.insert("_locked_value".to_string(), stored_value.clone());
-                                return Ok(Value::HashMap(wrapper));
-                            }
-                        }
-                        // Fallback: old _inner approach (backwards compatibility)
-                        if let Some(inner) = map.get("_inner") {
-                            Ok(inner.clone())
-                        } else {
-                            Ok(receiver.clone())
-                        }
-                    }
-                    _ => Ok(receiver.clone()),
-                }
+                Ok(receiver.clone())
             }
-
             "unwrap" => {
-                // Result::unwrap() or Option::unwrap()
-                // Mock: just return the receiver
                 // INTERP-OPT-002: Return receiver directly, no need to clone (we own it)
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
@@ -613,10 +694,7 @@ impl Evaluator {
                 }
                 Ok(receiver)
             }
-
             "join" => {
-                // ThreadHandle::join() -> Result<(), ()>
-                // Mock: just return nil
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "join".to_string(),
@@ -626,11 +704,8 @@ impl Evaluator {
                 }
                 Ok(Value::nil())
             }
-
             "push" => {
-                // Vec::push(value) -> ()
-                // This is a mutating operation, which is tricky in our immutable design
-                // For now, just return nil
+                // Non-array push fallback
                 if arg_values.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "push".to_string(),
@@ -640,10 +715,7 @@ impl Evaluator {
                 }
                 Ok(Value::nil())
             }
-
             "send" => {
-                // Sender::send(value) -> Result<(), SendError>
-                // Mock: just return nil
                 if arg_values.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "send".to_string(),
@@ -653,10 +725,7 @@ impl Evaluator {
                 }
                 Ok(Value::nil())
             }
-
             "recv" => {
-                // Receiver::recv() -> Result<T, RecvError>
-                // Mock: just return a placeholder value
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "recv".to_string(),
@@ -666,10 +735,7 @@ impl Evaluator {
                 }
                 Ok(Value::string("Hello from thread!".to_string()))
             }
-
             "to_string" => {
-                // "value".to_string() -> String
-                // Convert any value to a String
                 if !arg_values.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "to_string".to_string(),
@@ -677,44 +743,8 @@ impl Evaluator {
                         actual: arg_values.len(),
                     });
                 }
-
-                // For strings, just return as-is (already a String)
-                // For other types, convert to their string representation
-                if let Ok(s) = receiver.as_string() {
-                    Ok(Value::string(s.to_string()))
-                } else {
-                    Ok(Value::string(receiver.to_println_string()))
-                }
+                Ok(Value::string(receiver.to_println_string()))
             }
-
-            "get" => {
-                // HashMap.get(key) -> Option<Value>
-                // Get value from HashMap by key
-                if arg_values.len() != 1 {
-                    return Err(EvalError::ArgumentCountMismatch {
-                        function: "get".to_string(),
-                        expected: 1,
-                        actual: arg_values.len(),
-                    });
-                }
-
-                match receiver {
-                    Value::HashMap(ref map) => {
-                        let key = arg_values[0].as_string()?;
-                        match map.get(key) {
-                            Some(value) => Ok(value.clone()),
-                            None => Ok(Value::nil()),
-                        }
-                    }
-                    _ => Err(EvalError::UnsupportedOperation {
-                        operation: format!(
-                            "method 'get' not supported on type {}",
-                            receiver.type_name()
-                        ),
-                    }),
-                }
-            }
-
             _ => Err(EvalError::UnsupportedOperation {
                 operation: format!(
                     "unknown method '{}' on type {}",
@@ -725,30 +755,14 @@ impl Evaluator {
         }
     }
 
-    /// Try to call a built-in function
-    ///
-    /// Built-in functions are checked before user-defined functions, allowing
-    /// core functionality like I/O to be available without explicit imports.
-    ///
-    /// # Built-in Functions
-    ///
-    /// - `read_file(path: String) -> String` - Reads file content
-    /// - `write_file(path: String, content: String) -> nil` - Writes to file
-    /// - `println(msg: String) -> nil` - Prints message to stdout
-    ///
-    /// # Return Values
-    ///
-    /// - `Ok(Some(Value))` - Built-in function executed successfully
-    /// - `Ok(None)` - Not a built-in, should try user-defined functions
-    /// - `Err(EvalError)` - Built-in function call failed (I/O error, wrong args, etc.)
-    pub(crate) fn try_call_builtin(
+    /// I/O and diagnostic builtins: read_file, write_file, println, assert
+    fn call_io_builtin(
         &mut self,
         name: &str,
         args: &[AstNode],
     ) -> Result<Option<Value>, EvalError> {
         match name {
             "read_file" => {
-                // read_file(path: String) -> String
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "read_file".to_string(),
@@ -756,10 +770,8 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 let path_val = self.eval(&args[0])?;
                 let path = path_val.as_string()?;
-
                 match std::fs::read_to_string(path) {
                     Ok(content) => Ok(Some(Value::string(content))),
                     Err(e) => Err(EvalError::ValueError(ValueError::InvalidOperation {
@@ -768,9 +780,7 @@ impl Evaluator {
                     })),
                 }
             }
-
             "write_file" => {
-                // write_file(path: String, content: String) -> nil
                 if args.len() != 2 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "write_file".to_string(),
@@ -778,13 +788,10 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 let path_val = self.eval(&args[0])?;
                 let path = path_val.as_string()?;
-
                 let content_val = self.eval(&args[1])?;
                 let content = content_val.as_string()?;
-
                 match std::fs::write(path, content) {
                     Ok(_) => Ok(Some(Value::nil())),
                     Err(e) => Err(EvalError::ValueError(ValueError::InvalidOperation {
@@ -793,10 +800,7 @@ impl Evaluator {
                     })),
                 }
             }
-
             "println" => {
-                // println(value: Any) -> nil
-                // Prints any value (strings without quotes, other types with their display format)
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "println".to_string(),
@@ -804,17 +808,12 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 let msg_val = self.eval(&args[0])?;
                 let msg = msg_val.to_println_string();
-
                 println!("{}", msg);
                 Ok(Some(Value::nil()))
             }
-
             "assert" => {
-                // assert(condition: Boolean) -> nil
-                // Panics if condition is false
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "assert".to_string(),
@@ -822,23 +821,78 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 let cond_val = self.eval(&args[0])?;
                 let cond_bool = cond_val.as_boolean()?;
-
                 if !cond_bool {
                     return Err(EvalError::UnsupportedOperation {
                         operation: "assertion failed".to_string(),
                     });
                 }
-
                 Ok(Some(Value::nil()))
             }
+            _ => Ok(None),
+        }
+    }
 
-            // Mock concurrency primitives for testing
-            // These are simplified stubs that don't actually spawn threads
+    /// Collection constructor builtins: vec, String::new, String::from, HashMap::new
+    fn call_collection_builtin(
+        &mut self,
+        name: &str,
+        args: &[AstNode],
+    ) -> Result<Option<Value>, EvalError> {
+        match name {
+            "vec" => {
+                let mut elements = Vec::new();
+                for arg in args {
+                    elements.push(self.eval(arg)?);
+                }
+                Ok(Some(Value::vector(elements)))
+            }
+            "String::new" => {
+                if !args.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "String::new".to_string(),
+                        expected: 0,
+                        actual: args.len(),
+                    });
+                }
+                Ok(Some(Value::string(String::new())))
+            }
+            "String::from" => {
+                if args.len() != 1 {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "String::from".to_string(),
+                        expected: 1,
+                        actual: args.len(),
+                    });
+                }
+                let val = self.eval(&args[0])?;
+                let s = val.as_string()?;
+                Ok(Some(Value::string(s.to_string())))
+            }
+            "HashMap::new" => {
+                if !args.is_empty() {
+                    return Err(EvalError::ArgumentCountMismatch {
+                        function: "HashMap::new".to_string(),
+                        expected: 0,
+                        actual: args.len(),
+                    });
+                }
+                use std::collections::HashMap;
+                Ok(Some(Value::HashMap(HashMap::new())))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Concurrency builtins: thread::spawn, Mutex::new, Arc::new, Arc::clone, mpsc::channel
+    fn call_concurrency_builtin(
+        &mut self,
+        name: &str,
+        args: &[AstNode],
+    ) -> Result<Option<Value>, EvalError> {
+        match name {
             "thread::spawn" => {
-                // thread::spawn(closure) -> ThreadHandle
                 // INTERP-042: Mock implementation - execute closure synchronously
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
@@ -847,15 +901,12 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
-                // Extract closure body and execute it
                 let result = match &args[0] {
                     AstNode::Closure {
                         is_move: _,
                         params,
                         body,
                     } => {
-                        // For mock threading, closures should have no parameters
                         if !params.is_empty() {
                             return Err(EvalError::UnsupportedOperation {
                                 operation: format!(
@@ -864,8 +915,6 @@ impl Evaluator {
                                 ),
                             });
                         }
-
-                        // Execute closure body synchronously
                         let mut last_value = Value::nil();
                         for stmt in body {
                             last_value = self.eval(stmt)?;
@@ -878,17 +927,13 @@ impl Evaluator {
                         });
                     }
                 };
-
-                // Return mock thread handle with result
                 use std::collections::HashMap;
                 let mut handle = HashMap::new();
                 handle.insert("_thread_id".to_string(), Value::integer(1));
                 handle.insert("_result".to_string(), result);
                 Ok(Some(Value::HashMap(handle)))
             }
-
             "Mutex::new" => {
-                // Mutex::new(value) -> Mutex<T>
                 // INTERP-041: Just wrap locally, NO arc_store (only Arc uses arc_store)
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
@@ -897,18 +942,13 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 let val = self.eval(&args[0])?;
-
-                // Wrap in HashMap with _inner (local wrapper, not shared)
                 use std::collections::HashMap;
                 let mut wrapper = HashMap::new();
                 wrapper.insert("_inner".to_string(), val);
                 Ok(Some(Value::HashMap(wrapper)))
             }
-
             "Arc::new" => {
-                // Arc::new(value) -> Arc<T>
                 // INTERP-041: Store value in arc_store for shared references
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
@@ -917,23 +957,16 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 let val = self.eval(&args[0])?;
-
-                // Store value in arc_store
                 let arc_id = self.next_arc_id;
                 self.arc_store.insert(arc_id, val);
                 self.next_arc_id += 1;
-
-                // Return HashMap with _arc_id for Arc::clone to reference
                 use std::collections::HashMap;
                 let mut wrapper = HashMap::new();
                 wrapper.insert("_arc_id".to_string(), Value::integer(arc_id as i64));
                 Ok(Some(Value::HashMap(wrapper)))
             }
-
             "Arc::clone" => {
-                // Arc::clone(&arc) -> Arc<T>
                 // INTERP-041: Return HashMap with same _arc_id (shared reference!)
                 if args.len() != 1 {
                     return Err(EvalError::ArgumentCountMismatch {
@@ -942,11 +975,7 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 let val = self.eval(&args[0])?;
-
-                // Extract _arc_id from the HashMap and return same ID
-                // This makes Arc::clone share the reference instead of deep cloning
                 if let Value::HashMap(ref map) = val {
                     if let Some(Value::Integer(arc_id)) = map.get("_arc_id") {
                         use std::collections::HashMap;
@@ -955,14 +984,10 @@ impl Evaluator {
                         return Ok(Some(Value::HashMap(wrapper)));
                     }
                 }
-
                 // Fallback: if not an Arc, just clone (for backwards compatibility)
                 Ok(Some(val.clone()))
             }
-
             "mpsc::channel" => {
-                // mpsc::channel() -> (Sender, Receiver)
-                // Mock: return a tuple of two hashmaps
                 if !args.is_empty() {
                     return Err(EvalError::ArgumentCountMismatch {
                         function: "mpsc::channel".to_string(),
@@ -970,77 +995,46 @@ impl Evaluator {
                         actual: args.len(),
                     });
                 }
-
                 use std::collections::HashMap;
                 let mut sender = HashMap::new();
                 sender.insert("_type".to_string(), Value::string("Sender".to_string()));
                 let mut receiver = HashMap::new();
                 receiver.insert("_type".to_string(), Value::string("Receiver".to_string()));
-
                 Ok(Some(Value::tuple(vec![
                     Value::HashMap(sender),
                     Value::HashMap(receiver),
                 ])))
             }
-
-            "vec" => {
-                // vec![] or vec![elements] -> Vector
-                // Create a vector from arguments
-                let mut elements = Vec::new();
-                for arg in args {
-                    elements.push(self.eval(arg)?);
-                }
-                Ok(Some(Value::vector(elements)))
-            }
-
-            "String::new" => {
-                // String::new() -> String
-                // Create an empty string
-                if !args.is_empty() {
-                    return Err(EvalError::ArgumentCountMismatch {
-                        function: "String::new".to_string(),
-                        expected: 0,
-                        actual: args.len(),
-                    });
-                }
-                Ok(Some(Value::string(String::new())))
-            }
-
-            "String::from" => {
-                // String::from(s: &str) -> String
-                // Convert string slice to String
-                if args.len() != 1 {
-                    return Err(EvalError::ArgumentCountMismatch {
-                        function: "String::from".to_string(),
-                        expected: 1,
-                        actual: args.len(),
-                    });
-                }
-
-                let val = self.eval(&args[0])?;
-                let s = val.as_string()?;
-                Ok(Some(Value::string(s.to_string())))
-            }
-
-            "HashMap::new" => {
-                // HashMap::new() -> HashMap<K, V>
-                // Create an empty HashMap
-                if !args.is_empty() {
-                    return Err(EvalError::ArgumentCountMismatch {
-                        function: "HashMap::new".to_string(),
-                        expected: 0,
-                        actual: args.len(),
-                    });
-                }
-                use std::collections::HashMap;
-                Ok(Some(Value::HashMap(HashMap::new())))
-            }
-
-            _ => {
-                // Not a built-in function, return None to try user-defined functions
-                Ok(None)
-            }
+            _ => Ok(None),
         }
+    }
+
+    /// Try to call a built-in function
+    ///
+    /// Built-in functions are checked before user-defined functions, allowing
+    /// core functionality like I/O to be available without explicit imports.
+    /// Dispatches to group-specific handlers: I/O, collection, concurrency.
+    ///
+    /// # Return Values
+    ///
+    /// - `Ok(Some(Value))` - Built-in function executed successfully
+    /// - `Ok(None)` - Not a built-in, should try user-defined functions
+    /// - `Err(EvalError)` - Built-in function call failed (I/O error, wrong args, etc.)
+    pub(crate) fn try_call_builtin(
+        &mut self,
+        name: &str,
+        args: &[AstNode],
+    ) -> Result<Option<Value>, EvalError> {
+        if let Some(result) = self.call_io_builtin(name, args)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.call_collection_builtin(name, args)? {
+            return Ok(Some(result));
+        }
+        if let Some(result) = self.call_concurrency_builtin(name, args)? {
+            return Ok(Some(result));
+        }
+        Ok(None)
     }
 
     /// Evaluate if expression with conditional branching
