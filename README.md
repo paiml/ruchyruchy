@@ -1,4 +1,4 @@
-# RuchyRuchy - Bootstrap Infrastructure & Educational Resource 🛠️
+<h1 align="center">RuchyRuchy - Bootstrap Infrastructure & Educational Resource</h1>
 [![CI](https://github.com/paiml/ruchyruchy/actions/workflows/ci.yml/badge.svg)](https://github.com/paiml/ruchyruchy/actions/workflows/ci.yml)
 
 [![Version](https://img.shields.io/badge/Version-v1.23.0-brightgreen.svg)](https://crates.io/crates/ruchyruchy)
