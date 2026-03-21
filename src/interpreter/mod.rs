@@ -17,6 +17,10 @@
 pub mod bug_discovery;
 /// Expression evaluator
 pub mod evaluator;
+/// Evaluator helper methods (binary ops, calls, control flow)
+mod eval_helpers;
+/// AST type definitions (AstNode, Ast, operators, patterns, errors)
+pub mod ast;
 /// Parser and AST definitions
 pub mod parser;
 /// Pathological input detector (DEBUGGER-042: Performance cliff detection)
