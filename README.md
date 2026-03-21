@@ -24,7 +24,15 @@
 - [Contributing](#-contributing)
 - [License](#-license)
 
-## 🎯 **Project Purpose: Bootstrap Education & Tooling**
+## Features
+
+- Multi-stage bootstrap compiler (Lexer → Parser → TypeCheck → CodeGen)
+- JIT compiler with Cranelift backend
+- LSP server for IDE integration
+- Interactive debugger (ruchydbg)
+- 730+ tests with EXTREME TDD methodology
+
+## Project Purpose: Bootstrap Education & Tooling
 
 **Objective**: Provide educational resources and development tools for understanding how bootstrap compilers work, complementing the production Ruchy compiler with:
 
