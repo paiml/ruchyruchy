@@ -1,4 +1,5 @@
 # RuchyRuchy - Bootstrap Infrastructure & Educational Resource 🛠️
+[![CI](https://github.com/paiml/ruchyruchy/actions/workflows/ci.yml/badge.svg)](https://github.com/paiml/ruchyruchy/actions/workflows/ci.yml)
 
 [![Version](https://img.shields.io/badge/Version-v1.23.0-brightgreen.svg)](https://crates.io/crates/ruchyruchy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -578,3 +579,6 @@ MIT License - See [LICENSE](./LICENSE) for details.
 **🎓 Educational Excellence in Compiler Construction**
 
 **Supporting the Ruchy Ecosystem**: *While the main Ruchy project delivers production self-hosting capability, RuchyRuchy provides the educational foundation and development tools to understand and contribute to that remarkable achievement.*
+## License
+
+MIT
