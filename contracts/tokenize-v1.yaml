@@ -1,0 +1,42 @@
+metadata:
+  version: "1.0.0"
+  author: "Sovereign AI Stack"
+  description: "Tokenization contract for ruchyruchy"
+  crate: "ruchyruchy"
+  references:
+    - "Sennrich et al., Neural Machine Translation of Rare Words with Subword Units, ACL 2016"
+
+equations:
+  tokenize_roundtrip:
+    formula: "detokenize(tokenize(text)) ≈ text"
+    domain: "text ∈ String"
+    invariants:
+      - "No information loss for ASCII input"
+
+proof_obligations:
+  - type: roundtrip
+    property: "Tokenization preserves content"
+    formal: "|detokenize(tokenize(s)) - s| = 0 for ASCII"
+    applies_to: all
+
+falsification_tests:
+  - id: FALSIFY-TOKEN-001
+    rule: "Tokenize roundtrip"
+    test: "test_minimize_token_based"
+    prediction: "verified"
+    if_fails: "Contract violation — tokens don't reconstruct input"
+
+kani_harnesses:
+  - id: KANI-TOKEN-001
+    obligation: PO-TOKEN-001
+    property: "Roundtrip fidelity"
+    bound: 8
+    strategy: bounded_int
+    harness: verify_tokenize
+
+qa_gate:
+  id: QA-TOKEN
+  name: "tokenize contract"
+  min_coverage: 0.90
+  max_complexity: 20
+  required_tests: ["test_minimize_token_based"]

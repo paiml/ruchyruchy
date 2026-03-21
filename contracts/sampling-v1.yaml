@@ -1,0 +1,42 @@
+metadata:
+  version: "1.0.0"
+  author: "Sovereign AI Stack"
+  description: "Token sampling contract for ruchyruchy JIT"
+  crate: "ruchyruchy"
+  references:
+    - "Holkner & Harland, Evaluating the Dynamic Behaviour of Python Applications, 2009"
+
+equations:
+  sampling_distribution:
+    formula: "P(token) = softmax(logits / temperature)"
+    domain: "logits ∈ R^V, temperature > 0"
+    invariants:
+      - "Sum of probabilities = 1"
+
+proof_obligations:
+  - type: invariant
+    property: "Sampling produces valid tokens"
+    formal: "sampled_token ∈ vocabulary"
+    applies_to: all
+
+falsification_tests:
+  - id: FALSIFY-SAMPLE-001
+    rule: "Token validity"
+    test: "test_bug_issue_tokens"
+    prediction: "verified"
+    if_fails: "Contract violation — invalid token sampled"
+
+kani_harnesses:
+  - id: KANI-SAMPLE-001
+    obligation: PO-SAMPLE-001
+    property: "Token validity"
+    bound: 8
+    strategy: bounded_int
+    harness: verify_sampling
+
+qa_gate:
+  id: QA-SAMPLE
+  name: "sampling contract"
+  min_coverage: 0.90
+  max_complexity: 20
+  required_tests: ["test_bug_issue_tokens"]
