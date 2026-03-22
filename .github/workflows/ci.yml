@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, clean-room]
     strategy:
       fail-fast: false
       matrix:
@@ -60,3 +60,15 @@ jobs:
         run: cargo install cargo-audit --locked || true
       - name: Security audit
         run: cargo audit || true
+
+  gate:
+    name: gate
+    runs-on: [self-hosted, clean-room]
+    if: always()
+    needs: [test, security]
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.test.result }}" = "failure" ]; then
+            exit 1
+          fi
