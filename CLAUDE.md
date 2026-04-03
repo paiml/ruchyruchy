@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Contract-First Design
+
+This project follows contract-first development with provable-contracts.
+Contracts live in `../provable-contracts/contracts/ruchyruchy/`.
+Run `pmat comply check` to validate contract compliance.
+
 ## 🚨 P0 CRITICAL: Understanding RuchyRuchy Architecture
 
 **MANDATORY - ZERO TOLERANCE - BLOCKING - P0 PRIORITY**
